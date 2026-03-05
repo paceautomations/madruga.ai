@@ -4,6 +4,7 @@
 
 > **Versao**: 1.0.0 | **Data**: 2026-03-01 | **Status**: RFC (Request for Comments)
 
+"Ships code while you sleep."
 Agente autonomo que evolui produto de software 24/7 usando Spec-Driven Development, debate loops adversariais, stress testing progressivo e framework de decisao 1-Way/2-Way Door.
 
 **Madruga pra voce nao precisar.**
