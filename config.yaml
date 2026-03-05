@@ -1,0 +1,64 @@
+# Madruga — Configuration
+# git blame: madruga, 04:32am
+
+# Model routing
+models:
+  strategic: opus    # Vision, Specify, Plan, Review, Retro, Personas
+  operational: sonnet # Tasks, Builder, Code Critics, Orchestrator
+
+# Throttle caps (avoid hitting Max plan rate limits)
+throttle:
+  max_parallel_claude_p: 3
+  max_parallel_epics: 2
+  delay_between_critics_ms: 500
+  backoff_on_throttle_s: 30
+
+# Debate settings
+debate:
+  max_rounds: 3
+  convergence_threshold: ["critical", "high"]  # no issues at these levels = converged
+
+# Health check
+health:
+  port: 8040
+
+# Kanban
+kanban:
+  poll_interval_s: 30
+  board_path: "obsidian-vault/Agent24-7/_Madruga_Board.md"
+  tag: "#madruga"
+
+# 2-Way Door allowlist (agent decides without asking human)
+always_2way:
+  - "file naming and folder structure"
+  - "utility function extraction"
+  - "CSS and styling changes"
+  - "test file creation"
+  - "refactoring without API change"
+  - "logging and error messages"
+  - "code comments and docstrings"
+  - "dependency version bumps (patch)"
+  - "feature flag implementation"
+  - "cache strategy (in-memory)"
+
+# Repo registry
+repos:
+  general:
+    github: paceautomations/general
+    path: ~/repos/paceautomations/general
+    description: "Automacoes pessoais, scripts, skills Claude Code"
+    domains: [automacao, scripts, skills, infra]
+    keywords: [booking, tennis, pdf, document, metrics, github, dora, agent]
+    personas_dir: .madruga/personas/
+    setup: pip install -r requirements.txt
+    test: pytest
+
+  resenhai-expo:
+    github: paceautomations/resenhai-expo
+    path: ~/repos/paceautomations/resenhai-expo
+    description: "App mobile React Native/Expo"
+    domains: [mobile, app, frontend, area-logada, usuario]
+    keywords: [login, signup, perfil, resenha, feed, chat, notificacao, expo, react-native, tela]
+    personas_dir: .madruga/personas/
+    setup: npm install
+    test: npm test
