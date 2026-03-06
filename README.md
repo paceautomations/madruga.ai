@@ -171,7 +171,7 @@ flowchart TD
         TC -->|Nao| CODE["<b>Builder</b>: TDD no worktree\n<i>phases/implement.py</i>\nAgent SDK . Sonnet\ncwd = target repo worktree"]
         TC -->|Sim| IH["WhatsApp: humano aprova"]
         IH --> CODE
-        CODE --> CRIT["<b>4 Code Critics</b>\n<i>debate/runner.py</i> . Sonnet paralelo\n<i>prompts/code_critics/*.md</i>"]
+        CODE --> CRIT["<b>4 Code Critics</b>\n<i>debate/runner.py</i> . Sonnet paralelo\n<i>prompts/code_critics/*.md</i>\nmax_turns: 40"]
         CRIT --> CFIX{Issues criticas?}
         CFIX -->|Sim| CODE
         CFIX -->|Nao| UTEST["Unit + lint\n<i>stress/test_runner.py</i>"]
@@ -311,7 +311,7 @@ Todos rodam via Claude Code Max (`claude -p --model X` ou Agent SDK). Apenas **O
 | **Retro Agent** | **Opus** | `claude -p` | Extrair patterns requer visao estrategica |
 | **Persona Generator** | **Opus** | `claude -p` | Criar personas requer entender produto, users e contexto |
 | **Task Agent** | Sonnet | `claude -p` | Decomposicao operacional de tasks |
-| **Builder** | Sonnet | Agent SDK `query()` | Execucao: TDD, implementar, refatorar |
+| **Builder** | Sonnet | Agent SDK `query()` | Execucao: TDD, implementar, refatorar. **max_turns: 40** |
 | **Code Critics (Implement)** | Sonnet | `claude -p` paralelo | Review operacional: naming, SRP, security |
 | **Orchestrator** | Sonnet | `claude -p` | Coordenacao operacional do pipeline |
 
@@ -432,8 +432,13 @@ throttle:
   max_parallel_claude_p: 3
   max_parallel_epics: 2
   delay_between_critics_ms: 500
-  backoff_on_throttle_s: 30
+  backoff_initial_s: 5
+  backoff_max_s: 300
+  backoff_multiplier: 2
+  backoff_jitter: true
 ```
+
+**Backoff:** Exponencial com jitter. Comeca em 5s, dobra a cada throttle, max 5min. Jitter evita thundering herd quando multiplos processos `claude -p` sao throttled simultaneamente.
 
 ---
 
@@ -503,6 +508,7 @@ CREATE TABLE usage_log (
     call_type TEXT NOT NULL,
     duration_ms INTEGER,
     throttled BOOLEAN DEFAULT FALSE,
+    prompt_hash TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -513,6 +519,8 @@ CREATE TABLE task_progress (
     task_title TEXT NOT NULL,
     status TEXT DEFAULT 'pending',
     worktree_path TEXT,
+    turns_used INTEGER DEFAULT 0,
+    progress_log TEXT,
     started_at TIMESTAMP,
     completed_at TIMESTAMP
 );
@@ -521,6 +529,10 @@ CREATE TABLE task_progress (
 ### Crash Recovery
 
 Cada mudanca de fase atualiza o SQLite ANTES de iniciar a proxima. Se o daemon crashar, ele retoma da ultima fase completa.
+
+### Progress Tracking Intra-Task
+
+Progresso granular de cada task fica no SQLite (coluna `progress_log` em `task_progress`), nao em arquivos no worktree. Evita sujar o repo e mantem o SQLite como unica fonte de verdade.
 
 ---
 
@@ -627,3 +639,89 @@ repos:
 ```
 
 Match por `epic_type` + `phase` + tags com scoring. Sem ML, sem embeddings.
+
+---
+
+## 12. Guardrails de Qualidade
+
+### Timeouts e Limites
+
+| Guardrail | Valor | Escopo |
+|-----------|-------|--------|
+| **max_turns Builder** | 40 turns | Por task |
+| **Timeout por fase** | Specify: 30min, Plan: 45min, Tasks: 20min, Implement: 60min/task, Review: 30min | Global |
+| **Debate rounds** | Max 3 | Por debate loop |
+| **Retry apos falha** | Max 3 tentativas | Por task/fase |
+
+Se qualquer limite for atingido, escala para humano via WhatsApp.
+
+### Coverage Obrigatorio
+
+```yaml
+quality:
+  coverage_threshold: 80          # pytest --cov, bloqueia se abaixo
+  mutation_testing: optional       # mutmut, roda so na fase Review
+  mutation_threshold: 70           # mutation score minimo (quando habilitado)
+```
+
+- `pytest --cov` roda em **toda task** da fase Implement. Threshold 80% e blocker.
+- Mutation testing (mutmut) roda **somente na fase Review** como stress test opcional. E lento (roda suite N vezes) e com Max plan rate limits nao pode ser blocker em cada task.
+- Mutation threshold 70% (nao 80% — mutation score 80% e agressivo para um projeto em crescimento).
+
+### Diversidade de Critics
+
+Em vez de adicionar modelo externo (custo extra, dependencia de API), diversidade vem dos **prompts**:
+
+- Cada critic tem persona com perspectiva extrema (pessimista, paranoico de seguranca, minimalista, advogado do usuario)
+- Prompts em `prompts/code_critics/*.md` e `prompts/specialists/*.md` forcam angulos diferentes
+- Se no futuro blind spots compartilhados forem um problema real, adicionar 1 critic DeepSeek V3.2 via API (~R$2/mes)
+
+### Prompt Versioning
+
+Hash SHA-256 do prompt e gravado no `usage_log` a cada chamada. Permite correlacionar qualidade de output com versao do prompt sem precisar de sistema de versioning separado.
+
+```sql
+ALTER TABLE usage_log ADD COLUMN prompt_hash TEXT;
+```
+
+---
+
+## 13. Roadmap de Melhorias
+
+Baseado em pesquisa de estado da arte (VSDD, AdverTest, SWE-bench trends 2026).
+
+### Prioridade Imediata (implementar na estrutura base)
+
+| # | Melhoria | Impacto | Esforco |
+|---|----------|---------|---------|
+| 1 | `max_turns` no Builder + timeout por fase | Evita loops infinitos | 1 linha config + wrapper |
+| 2 | Coverage obrigatorio (`pytest --cov >= 80%`) | Qualidade minima garantida | Integrar no `test_runner.py` |
+| 3 | Exponential backoff com jitter no throttle | Estabilidade com Max plan limits | Refatorar `throttle.py` |
+| 4 | Progress tracking via SQLite | Crash recovery granular | Coluna em `task_progress` |
+
+### Fase 5+ (apos pipeline base funcional)
+
+| # | Melhoria | Impacto | Esforco |
+|---|----------|---------|---------|
+| 5 | Mutation testing opcional na Review | Qualidade de testes | 1-2 dias |
+| 6 | Prompt versioning (hash no usage_log) | Observabilidade | 0.5 dia |
+| 7 | Diversidade de critics via prompts extremos | Reduz blind spots | 1 dia (prompt engineering) |
+| 8 | Worktree cleanup policy (max disco, TTL) | Estabilidade 24/7 | 0.5 dia |
+
+### Futuro (fase 8+, quando houver evidencia de necessidade)
+
+| # | Melhoria | Quando considerar |
+|---|----------|-------------------|
+| 9 | Property-based testing (Hypothesis) | Se houver muitas funcoes puras com dominio rico |
+| 10 | Network sandbox (Docker/firejail) | Se Builder gerar codigo que faz requests inesperados |
+| 11 | Critic com modelo externo (DeepSeek) | Se blind spots de mesmo-modelo forem problema real |
+| 12 | Dashboard de metricas test health | Quando houver dados suficientes para visualizar |
+
+### Decisoes Descartadas (e por que)
+
+| Proposta | Motivo do descarte |
+|----------|-------------------|
+| Gemini 2.5 Pro como critic ($15-30/mes) | Quebra principio "custo extra = R$0". Diversidade via prompts e suficiente |
+| Progress file no worktree | Suja o target repo. SQLite ja e fonte de verdade |
+| Mutation testing como blocker por task | Lento demais para fase Implement com rate limits Max |
+| OpenHands como fallback | Complexidade de manter 2 harnesses. Daemon para e espera se throttled |
