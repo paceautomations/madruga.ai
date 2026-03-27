@@ -1,0 +1,10 @@
+model {
+
+  agent = person 'Agente WhatsApp' {
+    description 'Usuario final que interage com o Fulano via WhatsApp. Envia mensagens individuais (1:1) ou em grupos (@mention). Pode solicitar handoff para atendimento humano.'
+  }
+
+  admin = person 'Admin / Operador' {
+    description 'Operador humano que gerencia o Fulano via admin panel (Next.js). Visualiza dashboards, configura prompts, gerencia fila de handoff, e monitora conversas em tempo real.'
+  }
+}

@@ -1,0 +1,149 @@
+model {
+
+  channel = boundedContext 'Channel' {
+    #supporting
+    description 'Ingestao, buffering, roteamento e entrega de mensagens'
+
+    m1 = module 'M1 Recepcao' {
+      technology 'Whisper / Vision'
+      description 'Normaliza webhooks WhatsApp em InboundMessage padronizado (text, image, audio, document, sticker, contact, location, event). Valida HMAC-SHA256.'
+      metadata {
+        file 'fulano/modules/m1_reception.py'
+        inputs 'Webhook POST do Evolution API (JSON cru), Headers de autenticacao'
+        outputs 'InboundMessage normalizado, message_type classificado'
+      }
+    }
+
+    m2 = module 'M2 Debounce' {
+      description 'Buffer 3s via Redis Lua para agrupar mensagens rapidas do mesmo usuario. Evita processar cada mensagem individualmente.'
+      metadata {
+        file 'fulano/modules/m2_debounce.py'
+        inputs 'InboundMessage do M1'
+        outputs 'BufferedBatch com array de mensagens ordenadas'
+      }
+    }
+
+    m3 = module 'M3 Smart Router' {
+      description '5 paths de roteamento: SUPPORT (pipeline completo 1:1), GROUP_RESPOND (grupo com @mention), GROUP_SAVE_ONLY (grupo sem @mention), HANDOFF (conversa ja escalada), IGNORE (duplicatas, eventos internos).'
+      metadata {
+        file 'fulano/modules/m3_router.py'
+        decisions 'SUPPORT -> M4, GROUP_SAVE_ONLY -> SAVE, IGNORE -> IGNORE, HANDOFF_ATIVO -> M12, TRIGGER -> M13'
+      }
+    }
+
+    m11 = module 'M11 Entrega' {
+      description 'Envia resposta formatada via Evolution API (sendText/sendMedia). Persiste mensagem com role=assistant. Retry com backoff exponencial (1s, 4s, 16s), max 3 tentativas.'
+      metadata {
+        file 'fulano/modules/m11_delivery.py'
+      }
+    }
+  }
+
+  conversation = boundedContext 'Conversation (Core)' {
+    #core
+    description 'CORE: gestao de clientes, contexto, classificacao, agentes e avaliacao'
+
+    m4 = module 'M4 Clientes' {
+      description 'Busca ou cria registro do cliente no Supabase, carrega perfil completo (dados, preferencias, historico de conversas), e persiste mensagens recebidas.'
+      metadata {
+        file 'fulano/modules/m4_customers.py'
+        outputs 'CustomerContext, conversation_id, Mensagens persistidas'
+      }
+    }
+
+    m5 = module 'M5 Contexto' {
+      description 'Monta contexto completo para o agente em 3 camadas: perfil do cliente (longo prazo), estado da conversa (sessao), e working memory (ultimas interacoes). Inclui RAG results quando disponivel.'
+      metadata {
+        file 'fulano/modules/m5_context.py'
+        outputs 'AgentContext completo, Historico formatado (Human/Assistant), RAG results (v2)'
+      }
+    }
+
+    m7 = module 'M7 Classificador' {
+      technology 'Claude Haiku'
+      description 'Classifica a intencao do usuario via Claude Haiku (rapido e barato). Determina intent, confidence score, stage sugerido para o agente, e features/tools a habilitar.'
+      metadata {
+        file 'fulano/modules/m7_classifier.py'
+        decisions 'SUPPORT -> M8S, GROUP -> M8G'
+      }
+    }
+
+    m8 = module 'M8 Agente IA' {
+      technology 'Claude Sonnet'
+      description 'Executa agente principal via Claude Sonnet com tools habilitados (ResenhAI data, knowledge base, handoff trigger). Gera resposta contextualizada.'
+      metadata {
+        file 'fulano/modules/m8_agent_support.py'
+        outputs 'AgentResponse com answer + reasoning, Tool calls executadas, Tokens consumidos'
+      }
+    }
+
+    m9 = module 'M9 Avaliador' {
+      technology 'Heuristica + Claude Haiku'
+      description 'Avalia qualidade da resposta do agente via heuristicas + Claude Haiku. Decide entre APPROVE (seguir), RETRY (voltar para M8, max 2x) ou ESCALATE (handoff para humano). Gera score de qualidade 0-1.'
+      link ../decisions/ADR-008-eval-stack.md 'ADR-008: Eval Stack'
+      metadata {
+        file 'fulano/modules/m9_evaluator.py'
+        decisions 'APPROVE -> M10, RETRY -> M8 (max 2x), ESCALATE -> M12'
+      }
+    }
+  }
+
+  safety = boundedContext 'Safety' {
+    #supporting
+    description 'Guardrails de entrada e saida'
+
+    m6 = module 'M6 Guardrails Entrada' {
+      technology 'Regex + classificador'
+      description 'Filtra conteudo toxico, detecta PII (CPF, telefone, email), bloqueia prompt injection. Retorna pass (seguir), block (rejeitar com msg padrao) ou flag (seguir com alerta).'
+      link ../decisions/ADR-016-agent-runtime-safety.md 'ADR-016: Runtime Safety'
+      metadata {
+        file 'fulano/modules/m6_guardrails_in.py'
+        decisions 'PASS -> M7, BLOCK -> resposta padrao, FLAG -> M7 com alerta'
+      }
+    }
+
+    m10 = module 'M10 Guardrails Saida' {
+      technology 'Regex + template'
+      description 'Valida resposta final contra guardrails de saida (conteudo proibido, limites de tamanho) e formata para WhatsApp (markdown compativel, emojis, limites de caracteres, quebra de mensagens longas).'
+      metadata {
+        file 'fulano/modules/m10_guardrails_out.py'
+      }
+    }
+  }
+
+  operations = boundedContext 'Operations' {
+    #supporting
+    description 'Handoff para humano e triggers proativos'
+
+    m12 = module 'M12 Handoff' {
+      description 'Maquina de estados para transferencia IA -> humano: AGENT_ACTIVE -> PENDING (5min timeout) -> ASSIGNED (2min) -> HUMAN_ACTIVE (30min inatividade) -> COMPLETED (5min cooldown) -> AGENT_ACTIVE. Gera resumo via Haiku para contexto do atendente.'
+      link ../decisions/ADR-009-human-gated-flywheel.md 'ADR-009: Human-Gated Flywheel'
+      metadata {
+        file 'fulano/modules/m12_handoff.py'
+        decisions 'PENDING -> ASSIGNED (atendente aceita), PENDING -> AGENT_ACTIVE (timeout 5min), HUMAN_ACTIVE -> COMPLETED (encerrar/inatividade)'
+      }
+    }
+
+    m13 = module 'M13 Trigger Engine' {
+      description 'Escuta eventos via PG LISTEN/NOTIFY + cron schedule. Match contra trigger rules do tenant, aplica cooldown por cliente, renderiza template Jinja2, envia via M11. Sem LLM por padrao (templates estaticos).'
+      metadata {
+        file 'fulano/modules/m13_triggers.py'
+        decisions 'Match rule -> render template -> enviar, Cooldown ativo -> pular, Fora do active_hours -> enfileirar'
+      }
+    }
+  }
+
+  observability = boundedContext 'Observability' {
+    #generic
+    description 'Tracing, metricas de qualidade e uso'
+
+    m14 = module 'M14 Observabilidade' {
+      technology 'LangFuse + DeepEval + Promptfoo'
+      description 'Coleta traces de todos os modulos (M1-M13) via LangFuse SDK. Armazena spans por modulo, scores de eval (online + offline), usage events. trace_id = conversation_id. Fire-and-forget (falha nao bloqueia pipeline).'
+      link ../decisions/ADR-007-langfuse-observability.md 'ADR-007: LangFuse'
+      metadata {
+        file 'fulano/modules/m14_observability.py'
+      }
+    }
+  }
+}

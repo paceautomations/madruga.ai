@@ -1,0 +1,29 @@
+model {
+
+  evolutionApi = externalService 'Evolution API' {
+    technology 'Evolution API (cloud mode)'
+    description 'WhatsApp gateway externo. Recebe mensagens via webhook POST e envia respostas via REST. Suporte a multiplas instancias (multi-tenant). Validacao HMAC-SHA256 obrigatoria.'
+    link ../decisions/ADR-005-evolution-api-cloud-mode.md 'ADR-005: Evolution API'
+    metadata {
+      endpoints '/message/sendText/{instance}, /message/sendMedia/{instance}'
+    }
+  }
+
+  supabaseResenhai = database 'Supabase ResenhAI' {
+    technology 'PostgreSQL 15'
+    description 'Banco externo do ResenhAI. Acesso read-only via asyncpg para consultar dados de jogos, estatisticas, ranking. Usado por tool calls dos agentes (get_group_ranking, get_game_stats, get_player_stats).'
+    metadata {
+      port '5433'
+    }
+  }
+
+  claudeSonnet = externalService 'Claude Sonnet' {
+    technology 'Anthropic Claude Sonnet'
+    description 'LLM primario para geracao de respostas dos agentes (support e group). Acessado exclusivamente via Bifrost proxy. ~2-5 calls por conversa ativa.'
+  }
+
+  claudeHaiku = externalService 'Claude Haiku' {
+    technology 'Anthropic Claude Haiku'
+    description 'LLM secundario usado para classificacao rapida de intent, avaliacao pos-resposta, e como fallback quando Sonnet falha. Custo significativamente menor.'
+  }
+}

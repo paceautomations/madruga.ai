@@ -1,0 +1,10 @@
+---
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+import LikeC4Diagram from '../../components/viewers/LikeC4Diagram';
+---
+
+<StarlightPage frontmatter={{ title: 'Business Process — Pipeline Completo', tableOfContents: false }}>
+  <div class="diagram-fullscreen">
+    <LikeC4Diagram viewId="businessFlow" client:only="react" />
+  </div>
+</StarlightPage>

@@ -1,0 +1,10 @@
+---
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+import LikeC4Diagram from '../../components/viewers/LikeC4Diagram';
+---
+
+<StarlightPage frontmatter={{ title: 'Safety — Guardrails', tableOfContents: false }}>
+  <div class="diagram-fullscreen">
+    <LikeC4Diagram viewId="safetyDetail" client:only="react" />
+  </div>
+</StarlightPage>

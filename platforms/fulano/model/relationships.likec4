@@ -1,0 +1,232 @@
+model {
+
+  // ── C4 Container Level ──
+
+  agent -> fulano.fulanoApi 'HTTPS webhook' {
+    technology 'HTTPS'
+    metadata {
+      endpoint '/webhook/whatsapp/{instance}'
+      frequency 'per-message'
+      data 'Mensagens WhatsApp (texto, audio, imagem, video, documento)'
+      criticality 'high'
+    }
+  }
+
+  evolutionApi -> fulano.fulanoApi 'webhook POST' {
+    technology 'HTTPS'
+    metadata {
+      endpoint '/api/v1/webhook/{instance_id}'
+      validation 'HMAC-SHA256 obrigatorio'
+    }
+  }
+
+  fulano.fulanoApi -[sync]-> redis 'XADD stream:messages' {
+    technology 'Redis protocol'
+    metadata {
+      endpoint 'XADD stream:messages:{tenant_id}'
+      frequency 'per-message'
+    }
+  }
+
+  fulano.fulanoApi -> redis 'GET/SET cache' {
+    technology 'Redis protocol'
+    metadata {
+      endpoint 'cache:*, buf:*'
+      frequency 'per-request'
+      data 'Cache de sessao, debounce state, dedup message_id'
+    }
+  }
+
+  redis -[async]-> fulano.fulanoWorker 'XREADGROUP' {
+    technology 'Redis Streams'
+    metadata {
+      endpoint 'XREADGROUP BLOCK 5000ms'
+      frequency 'per-message'
+      dlq 'XCLAIM apos 5min sem ACK, max 3 retries'
+    }
+  }
+
+  fulano.fulanoWorker -[sync]-> bifrost 'POST /v1/chat/completions' {
+    technology 'HTTP POST'
+    metadata {
+      frequency 'per-message'
+      fallback 'retry 3x'
+    }
+  }
+
+  bifrost -> claudeSonnet 'Anthropic API' {
+    technology 'Anthropic API'
+  }
+
+  bifrost -> claudeHaiku 'Anthropic API (fallback)' {
+    technology 'Anthropic API'
+    metadata {
+      frequency 'per-classification'
+    }
+  }
+
+  fulano.fulanoWorker -> evolutionApi 'POST sendText/{instance}' {
+    technology 'HTTP POST'
+    metadata {
+      frequency 'per-response'
+      fallback '3 retries com backoff exponencial'
+    }
+  }
+
+  fulano.fulanoWorker -[sync]-> supabaseFulano 'asyncpg SQL' {
+    technology 'asyncpg'
+    metadata {
+      frequency 'per-message'
+      data 'Mensagens, conversas, clientes, prompts, evals'
+    }
+  }
+
+  fulano.fulanoWorker -> supabaseResenhai 'asyncpg read-only' {
+    technology 'asyncpg'
+    metadata {
+      frequency 'per-tool-call'
+      data 'Dados de jogos, estatisticas, ranking'
+    }
+  }
+
+  fulano.fulanoWorker -[async]-> langfuse 'HTTPS SDK traces' {
+    technology 'HTTPS SDK'
+    metadata {
+      frequency 'per-message'
+      fallback 'Fire-and-forget; buffer local em Redis'
+    }
+  }
+
+  supabaseFulano -[async]-> fulano.fulanoWorker 'PG LISTEN/NOTIFY' {
+    technology 'PostgreSQL'
+    metadata {
+      channels 'games, group_members'
+      frequency 'event-driven'
+      fallback 'Polling fallback a cada 5s se LISTEN desconectar'
+    }
+  }
+
+  fulano.fulanoApi -> fulano.fulanoAdmin 'Socket.io WebSocket' {
+    technology 'Socket.io'
+    metadata {
+      frequency 'per-event'
+      data 'Novas mensagens, status conversas, alertas handoff'
+      fallback 'Long-polling automatico (fallback nativo Socket.io)'
+    }
+  }
+
+  admin -> fulano.fulanoAdmin 'HTTPS + JWT' {
+    technology 'HTTPS'
+    metadata {
+      frequency 'per-session'
+      data 'Autenticacao Supabase Auth, gerenciamento via dashboard'
+    }
+  }
+
+  fulano.fulanoAdmin -> fulano.fulanoApi 'REST API calls' {
+    technology 'HTTPS REST'
+    metadata {
+      endpoint '/api/v1/*'
+      data 'CRUD prompts, handoff actions, conversation queries'
+    }
+  }
+
+  fulano.fulanoAdmin -> supabaseFulano 'Supabase Auth + queries' {
+    technology 'Supabase JS client'
+    metadata {
+      data 'JWT tokens, dashboard queries, realtime subscriptions'
+    }
+  }
+
+  fulano.fulanoWorker -[async]-> redis 'PUBLISH events' {
+    technology 'Redis PubSub'
+    metadata {
+      endpoint 'PUBLISH ps:events:{tenant_id}'
+      data 'Notificacoes: nova resposta, handoff status, eval scores'
+    }
+  }
+
+  fulano.fulanoWorker -> infisical 'SDK secret read' {
+    technology 'HTTPS REST (SDK)'
+    metadata {
+      frequency 'per-request (cached 5min)'
+      data 'Tenant credentials, API keys, webhook secrets'
+    }
+  }
+
+  // ── DDD Context Map ──
+
+  channel.m3 -[acl]-> conversation.m4 'ACL' {
+    description 'Anti-Corruption Layer: Channel traduz InboundMessage para ConversationRequest, isolando o core do formato de canal'
+  }
+
+  conversation.m8 -[acl]-> bifrost 'ACL' {
+    description 'Conversation usa Bifrost como proxy para LLMs, traduzindo para formato OpenAI-compatible'
+  }
+
+  conversation.m8 -[acl]-> supabaseResenhai 'ACL' {
+    description 'Agente IA acessa Supabase ResenhAI via tools (read-only) com ACL para isolar schema externo'
+  }
+
+  conversation.m4 -[acl]-> supabaseFulano 'ACL' {
+    description 'Conversation acessa Supabase Fulano via repositories com ACL (domain models isolados do schema SQL)'
+  }
+
+  channel.m2 -[acl]-> redis 'ACL' {
+    description 'Channel usa Redis para debounce (Lua scripts) e streams, com ACL isolando detalhes de implementacao'
+  }
+
+  safety.m6 -[customerSupplier]-> conversation.m7 'Customer-Supplier' {
+    description 'Conversation (customer) consome Safety (supplier) para validacao de entrada — Safety define contrato de guardrails'
+  }
+
+  conversation.m9 -[customerSupplier]-> safety.m10 'Customer-Supplier' {
+    description 'Conversation (customer) consome Safety (supplier) para validacao de saida — Safety define contrato de formatacao'
+  }
+
+  conversation.m9 -[customerSupplier]-> operations.m12 'Customer-Supplier' {
+    description 'Conversation (customer) solicita handoff a Operations (supplier) quando avaliador decide escalar'
+  }
+
+  operations.m13 -[customerSupplier]-> channel.m11 'Customer-Supplier' {
+    description 'Operations (supplier) envia triggers proativos via Channel (customer) para entrega'
+  }
+
+  channel.m1 -[pubSub]-> observability.m14 'Pub-Sub'
+  conversation.m5 -[pubSub]-> observability.m14 'Pub-Sub'
+  conversation.m8 -[pubSub]-> observability.m14 'Pub-Sub'
+  conversation.m9 -[pubSub]-> observability.m14 'Pub-Sub'
+  operations.m12 -[pubSub]-> observability.m14 'Pub-Sub'
+  operations.m13 -[pubSub]-> observability.m14 'Pub-Sub'
+
+  evolutionApi -[conformist]-> channel.m1 'Conformist' {
+    description 'Channel se conforma ao schema de webhooks da Evolution API — sem traducao, aceita o formato externo'
+  }
+
+  observability.m14 -[conformist]-> langfuse 'Conformist' {
+    description 'Observability se conforma ao SDK/API do LangFuse para envio de traces e scores'
+  }
+
+  agent -[conformist]-> channel.m1 'Conformist' {
+    description 'Agente interage via WhatsApp — Channel aceita o formato do usuario sem traducao'
+  }
+
+  admin -> operations.m12 'Gerencia handoffs' {
+    description 'Admin acessa Operations diretamente via admin panel (Next.js + Socket.io)'
+  }
+
+  // ── Pipeline Flow ──
+
+  channel.m1 -> channel.m2 'InboundMessage'
+  channel.m2 -> channel.m3 'BufferedBatch'
+  channel.m3 -> conversation.m4 'SUPPORT / GROUP'
+  conversation.m4 -> conversation.m5 'CustomerContext'
+  conversation.m5 -> safety.m6 'AgentContext'
+  safety.m6 -> conversation.m7 'Mensagem sanitizada'
+  conversation.m7 -> conversation.m8 'IntentClassification'
+  conversation.m8 -> conversation.m9 'AgentResponse'
+  conversation.m9 -> safety.m10 'APPROVE'
+  safety.m10 -> channel.m11 'Payload formatado'
+  conversation.m9 -> operations.m12 'ESCALATE'
+  operations.m13 -> channel.m11 'Mensagem proativa'
+}

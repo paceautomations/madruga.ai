@@ -1,0 +1,34 @@
+model {
+
+  fulano = platform 'Fulano Platform' {
+    description 'Plataforma multi-tenant de agentes conversacionais WhatsApp'
+
+    fulanoApi = api 'fulano-api' {
+      technology 'Python 3.12 + FastAPI'
+      description 'Webhook receiver (Evolution API), REST endpoints para CRUD, Socket.io gateway para realtime push ao admin panel. Valida HMAC-SHA256, dedup por message_id (Redis TTL 24h), enqueue no Redis Streams.'
+      link ../decisions/ADR-001-pydantic-ai.md 'ADR-001: Pydantic AI'
+      metadata {
+        port '8040'
+        components 'Webhook receiver, REST endpoints, Socket.io gateway'
+      }
+    }
+
+    fulanoWorker = worker 'fulano-worker' {
+      technology 'Python 3.12 + ARQ'
+      description 'Worker async via ARQ sobre Redis. Processa pipeline completa: debounce flush, orquestracao LLM (via Bifrost), delivery de respostas (via Evolution API), eval batch jobs, e trigger evaluator. Escalavel horizontalmente.'
+      metadata {
+        components 'Debounce flush, LLM orchestration, Delivery + retry, Eval batch jobs, Trigger evaluator'
+      }
+    }
+
+    fulanoAdmin = frontend 'fulano-admin' {
+      technology 'Next.js 15 + shadcn/ui'
+      description 'Admin panel com dashboard de metricas, conversation viewer em tempo real, prompt manager com versionamento, e fila de handoff para agentes humanos. Autenticacao via Supabase Auth (JWT).'
+      link ../decisions/ADR-010-nextjs-admin.md 'ADR-010: Next.js Admin'
+      metadata {
+        port '3000'
+        components 'Dashboard, Conversation viewer, Prompt manager, Handoff queue'
+      }
+    }
+  }
+}

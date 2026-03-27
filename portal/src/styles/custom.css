@@ -1,0 +1,265 @@
+/* ══════════════════════════════════════════════════
+   Vision Architecture Portal — Custom Styles
+   ══════════════════════════════════════════════════ */
+
+/* ── 1. Theme Variables ── */
+:root {
+  --sl-font: 'Poppins', 'Inter', system-ui, sans-serif;
+  --sl-font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  --sl-color-accent-low: #e0f2fe;
+  --sl-color-accent: #0284c7;
+  --sl-color-accent-high: #0c4a6e;
+  --sl-content-width: 100%;
+  --sl-content-pad-x: 2rem;
+}
+
+/* ── 2. Layout (hide right sidebar, full width) ── */
+.right-sidebar-container,
+starlight-toc,
+mobile-starlight-toc {
+  display: none !important;
+}
+
+.main-frame {
+  grid-template-columns: 1fr !important;
+}
+
+.content-panel {
+  max-width: none !important;
+}
+
+/* ── 3. Sidebar Scroll ── */
+.sidebar-pane {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* ── 4. Icon Rail (collapsed sidebar) ── */
+.sidebar-icon-rail {
+  position: fixed;
+  top: var(--sl-nav-height, 3.5rem);
+  left: 0;
+  bottom: 0;
+  width: 48px;
+  background: var(--sl-color-bg-sidebar, #fff);
+  border-right: 1px solid var(--sl-color-hairline-shade, #e2e8f0);
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 58px;
+  gap: 4px;
+  z-index: 50;
+}
+
+body.sidebar-collapsed .sidebar-icon-rail {
+  display: flex;
+}
+
+.sidebar-icon-rail::before {
+  content: '';
+  position: absolute;
+  top: 52px;
+  left: 12px;
+  right: 12px;
+  height: 1px;
+  background: var(--sl-color-hairline-shade, #e2e8f0);
+}
+
+.rail-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  position: relative;
+  border: none;
+  background: transparent;
+  padding: 0;
+}
+
+.rail-icon:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.rail-icon svg {
+  width: 20px;
+  height: 20px;
+  stroke: currentColor;
+  stroke-width: 2;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.rail-icon::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+  background: #1e293b;
+  color: #f8fafc;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: 6px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+  z-index: 100;
+}
+
+.rail-icon:hover::after {
+  opacity: 1;
+}
+
+body.sidebar-collapsed .sidebar-pane {
+  width: 0 !important;
+  min-width: 0 !important;
+  opacity: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+body.sidebar-collapsed .main-pane {
+  --sl-sidebar-width: 48px;
+  --sl-content-inline-start: 48px;
+}
+
+body.sidebar-collapsed .main-frame {
+  padding-inline-start: 48px !important;
+}
+
+/* ── 5. Toggle Button ── */
+.sidebar-toggle-btn {
+  position: fixed;
+  top: calc(var(--sl-nav-height, 3.5rem) + 10px);
+  left: calc(var(--sl-sidebar-width, 18.75rem) - 38px);
+  z-index: 200;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #94a3b8;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  transition: left 0.2s ease, background 0.15s, color 0.15s;
+}
+
+.sidebar-toggle-btn svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  stroke-width: 2;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+body.sidebar-collapsed .sidebar-toggle-btn {
+  left: 9px;
+}
+
+.sidebar-toggle-btn:hover {
+  background: #f1f5f9;
+  color: #334155;
+  border-color: #cbd5e1;
+}
+
+/* ── 6. Resize Handle ── */
+.sidebar-resize-handle {
+  position: fixed;
+  top: var(--sl-nav-height, 3.5rem);
+  left: calc(var(--sl-sidebar-width, 18.75rem) - 2px);
+  bottom: 0;
+  width: 4px;
+  cursor: col-resize;
+  z-index: 100;
+  background: transparent;
+  transition: background 0.15s;
+}
+
+.sidebar-resize-handle:hover,
+.sidebar-resize-handle:active {
+  background: var(--sl-color-accent, #0284c7);
+}
+
+body.sidebar-collapsed .sidebar-resize-handle {
+  display: none;
+}
+
+/* ── 7. Diagram Fullscreen Mode ── */
+main:has(.diagram-fullscreen) h1#_top,
+main:has(.diagram-fullscreen) footer {
+  display: none !important;
+}
+
+main:has(.diagram-fullscreen) .content-panel {
+  padding: 0 !important;
+}
+
+main:has(.diagram-fullscreen) .content-panel .sl-container {
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+main:has(.diagram-fullscreen) .sl-markdown-content {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+main:has(.diagram-fullscreen) {
+  overflow: hidden !important;
+}
+
+.sl-markdown-content > .diagram-fullscreen {
+  height: calc(100vh - 64px);
+  width: 100%;
+  margin: 0 !important;
+  padding: 0;
+  position: relative;
+}
+
+/* ── 8. Typography ── */
+.content-panel h1#_top {
+  font-size: 1.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.content-panel > .sl-markdown-content > hr:first-of-type,
+.content-panel header + hr {
+  display: none;
+}
+
+.sl-markdown-content h1 { font-size: 1.75rem; }
+.sl-markdown-content h2 { font-size: 1.35rem; margin-top: 1.5rem; }
+.sl-markdown-content h3 { font-size: 1.1rem; }
+
+.sl-markdown-content > :first-child {
+  margin-top: 0.25rem;
+}
+
+.sl-markdown-content .heading-wrapper a.anchor-link {
+  display: none !important;
+}
+
+.sl-markdown-content > .sl-heading-wrapper.level-h1:first-child,
+.sl-markdown-content > h1:first-of-type {
+  display: none;
+}
+
+/* ── 9. Navigation Overrides ── */
+.pagination-links {
+  display: none !important;
+}
