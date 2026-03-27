@@ -1,0 +1,67 @@
+_min_copier_version: "9.4.0"
+_subdirectory: template
+_templates_suffix: .jinja
+_answers_file: .copier-answers.yml
+
+_skip_if_exists:
+  - "decisions/*"
+  - "epics/*"
+  - "research/*"
+  - "business/vision.md"
+  - "business/solution-overview.md"
+  - "engineering/domain-model.md"
+  - "model/actors.likec4"
+  - "model/platform.likec4"
+  - "model/externals.likec4"
+  - "model/infrastructure.likec4"
+  - "model/ddd-contexts.likec4"
+  - "model/relationships.likec4"
+  - "model/views.likec4"
+
+_exclude:
+  - tests/
+  - "*.pyc"
+  - __pycache__
+
+_tasks:
+  - command: "python3 ../../.specify/scripts/platform.py register {{ platform_name }}"
+    when: "{{ _copier_operation == 'copy' and register_portal }}"
+
+# ── Questions ──
+
+platform_name:
+  type: str
+  help: "Nome da plataforma em kebab-case (ex: fulano, meu-saas)"
+  validator: >-
+    {% if not platform_name | regex_search('^[a-z][a-z0-9-]*$') %}
+    Deve ser kebab-case (minusculas, hifens, comeca com letra)
+    {% endif %}
+
+platform_title:
+  type: str
+  help: "Titulo legivel (ex: 'Fulano — Agentes WhatsApp')"
+  default: "{{ platform_name | title }}"
+
+platform_description:
+  type: str
+  help: "Descricao em uma linha"
+  default: "Plataforma {{ platform_name }}"
+
+lifecycle:
+  type: str
+  help: "Fase atual do ciclo de vida"
+  choices:
+    Design: design
+    Development: development
+    Production: production
+  default: design
+
+include_business_flow:
+  type: bool
+  help: "Incluir view de fluxo de negocio?"
+  default: true
+
+register_portal:
+  type: bool
+  help: "Registrar no portal Astro automaticamente?"
+  default: true

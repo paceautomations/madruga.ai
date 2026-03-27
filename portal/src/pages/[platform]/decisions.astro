@@ -1,0 +1,57 @@
+---
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+import { discoverPlatforms } from '../../lib/platforms.mjs';
+
+export function getStaticPaths() {
+  return discoverPlatforms().map((p) => ({
+    params: { platform: p.name },
+    props: { platform: p.name },
+  }));
+}
+
+const { platform } = Astro.props;
+
+const allAdrFiles = import.meta.glob(
+  '/src/content/docs/*/decisions/ADR-*.md',
+  { eager: true },
+);
+
+const adrs = Object.entries(allAdrFiles)
+  .filter(([path]) => path.includes(`/${platform}/`))
+  .map(([path, mod]) => {
+    const fm = (mod as any).frontmatter ?? {};
+    const slug = path.split('/').pop()!.replace('.md', '');
+    const num = slug.match(/ADR-(\d+)/)?.[1] ?? '000';
+    return { slug, num, ...fm };
+  })
+  .sort((a, b) => a.num.localeCompare(b.num));
+---
+
+<StarlightPage frontmatter={{ title: 'Decision Overviews', tableOfContents: false }}>
+  <table>
+    <thead>
+      <tr>
+        <th>ADR</th>
+        <th>Decisao</th>
+        <th>Alternativa descartada</th>
+        <th>Motivo</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {adrs.map((adr) => (
+        <tr>
+          <td>
+            <a href={`/${platform}/decisions/${adr.slug.toLowerCase()}/`}>ADR-{adr.num}</a>
+          </td>
+          <td>
+            <strong>{adr.decision ?? '—'}</strong>
+          </td>
+          <td>{adr.alternatives ?? '—'}</td>
+          <td>{adr.rationale ?? '—'}</td>
+          <td>{adr.status ?? '—'}</td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+</StarlightPage>

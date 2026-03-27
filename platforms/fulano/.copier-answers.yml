@@ -1,0 +1,8 @@
+# Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
+_src_path: ../../.specify/templates/platform
+platform_name: fulano
+platform_title: "Fulano — Agentes WhatsApp"
+platform_description: "Plataforma multi-tenant de agentes conversacionais WhatsApp"
+lifecycle: design
+include_business_flow: true
+register_portal: false

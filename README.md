@@ -13,7 +13,7 @@ npm install                    # roda setup.sh automaticamente (postinstall)
 npm run dev                    # http://localhost:4321
 
 # Build script — popula tabelas AUTO nos markdowns a partir do modelo LikeC4
-python3 scripts/vision-build.py fulano
+python3 .specify/scripts/vision-build.py fulano
 
 # LikeC4 dev server — editar modelo com hot reload (sem portal)
 cd services/vision/platforms/fulano/model
@@ -179,5 +179,5 @@ serve:
 build:
   command: "likec4 build -o dist/"
   export_json: "likec4 export json --pretty --skip-layout -o model/output/likec4.json"
-  markdown: "python3 scripts/vision-build.py fulano"
+  markdown: "python3 .specify/scripts/vision-build.py fulano"
 ```

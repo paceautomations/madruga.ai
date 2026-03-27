@@ -1,0 +1,7 @@
+node_modules/
+dist/
+platforms/dist/
+.playwright-mcp/
+__pycache__/
+*.pyc
+*.log

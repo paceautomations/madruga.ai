@@ -1,0 +1,25 @@
+name: {{ platform_name }}
+title: "{{ platform_title }}"
+description: "{{ platform_description }}"
+lifecycle: {{ lifecycle }}
+version: "0.1.0"
+model: model/
+views:
+  structural:
+    - id: index
+      label: "System Landscape"
+    - id: containers
+      label: "C4 L2 — Containers"
+    - id: contextMap
+      label: "DDD Context Map"
+  flows:
+{%- if include_business_flow %}
+    - id: businessFlow
+      label: "Business Process"
+{%- endif %}
+serve:
+  command: "likec4 serve"
+  port: 5173
+build:
+  command: "likec4 build -o dist/"
+  export_json: "likec4 export json --pretty --skip-layout -o model/output/likec4.json"

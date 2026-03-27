@@ -1,3 +1,36 @@
 ---
-return Astro.redirect('/fulano/business/vision/');
+import { discoverPlatforms } from '../lib/platforms.mjs';
+
+const platforms = discoverPlatforms();
+
+// If only one platform, redirect directly to it
+if (platforms.length === 1) {
+  return Astro.redirect(`/${platforms[0].name}/business/vision/`);
+}
 ---
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Madruga-AI — Plataformas</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem; }
+      .card { border: 1px solid #ddd; border-radius: 8px; padding: 1.5rem; text-decoration: none; color: inherit; transition: box-shadow 0.2s; }
+      .card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+      .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.8em; background: #e8e8e8; }
+    </style>
+  </head>
+  <body>
+    <h1>Madruga-AI — Plataformas</h1>
+    <div class="grid">
+      {platforms.map((p) => (
+        <a href={`/${p.name}/business/vision/`} class="card">
+          <h2>{p.title}</h2>
+          <p>{p.description}</p>
+          <span class="badge">{p.lifecycle}</span>
+        </a>
+      ))}
+    </div>
+  </body>
+</html>

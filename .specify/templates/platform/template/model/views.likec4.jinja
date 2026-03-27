@@ -1,0 +1,29 @@
+views {
+
+  view index {
+    title '{{ platform_title }} — System Landscape'
+    description 'Visao geral da plataforma e sistemas externos'
+    include *
+  }
+
+  view containers of {{ platform_name }} {
+    title 'C4 L2 — Containers & Integrations'
+    description 'Containers deployaveis, storage, sistemas externos'
+    include *
+  }
+
+  view contextMap {
+    title 'DDD Context Map'
+    description 'Bounded contexts e relacoes DDD'
+    include *
+  }
+{%- if include_business_flow %}
+
+  dynamic view businessFlow {
+    title 'Business Process'
+    description 'Fluxo de negocio completo'
+    autoLayout TopBottom
+    // Definir steps aqui
+  }
+{%- endif %}
+}
