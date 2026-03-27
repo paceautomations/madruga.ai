@@ -4,6 +4,7 @@ import { lazy, Suspense, useMemo } from 'react';
 // Add new platforms here when they are created.
 const platformLoaders: Record<string, () => Promise<any>> = {
   fulano: () => import('likec4:react/fulano'),
+  'madruga-ai': () => import('likec4:react/madruga-ai'),
 };
 
 interface Props {

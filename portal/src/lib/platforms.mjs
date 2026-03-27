@@ -48,6 +48,7 @@ export function discoverPlatforms(platformsDir) {
 export function buildSidebar(platforms) {
   return platforms.map((p) => ({
     label: p.title || p.name,
+    collapsed: true,
     items: [
       {
         label: 'Business',
@@ -78,6 +79,7 @@ export function buildSidebar(platforms) {
           },
           { slug: `${p.name}/engineering/domain-model` },
           { slug: `${p.name}/engineering/integrations` },
+          { slug: `${p.name}/engineering/blueprint` },
         ],
       },
       {

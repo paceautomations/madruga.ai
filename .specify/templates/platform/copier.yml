@@ -10,6 +10,7 @@ _skip_if_exists:
   - "business/vision.md"
   - "business/solution-overview.md"
   - "engineering/domain-model.md"
+  - "engineering/blueprint.md"
   - "model/actors.likec4"
   - "model/platform.likec4"
   - "model/externals.likec4"

@@ -38,6 +38,7 @@ REQUIRED_FILES = [
     "engineering/containers.md",
     "engineering/context-map.md",
     "engineering/integrations.md",
+    "engineering/blueprint.md",
     "model/spec.likec4",
     "model/likec4.config.json",
 ]
@@ -335,11 +336,14 @@ def cmd_sync(name: str | None) -> None:
 
 
 def cmd_register(name: str) -> None:
-    """Re-run portal setup.sh and validate model."""
+    """Inject LikeC4 loader, re-run portal setup.sh, and validate model."""
     pdir = PLATFORMS_DIR / name
     if not pdir.exists():
         _error(f"Platform '{name}' not found")
         sys.exit(1)
+
+    # Inject LikeC4 loader import (idempotent — skips if already present)
+    _inject_platform_loader(name)
 
     # Re-run setup.sh
     setup_sh = PORTAL_DIR / "setup.sh"

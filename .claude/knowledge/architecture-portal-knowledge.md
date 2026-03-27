@@ -353,6 +353,9 @@ graph LR
 ### Template: ADR
 
 ```markdown
+---
+title: "ADR-NNN: [Titulo curto]"
+---
 # ADR-NNN: [Titulo curto]
 **Status:** Accepted | **Data:** YYYY-MM-DD
 
@@ -399,9 +402,12 @@ serve:
   command: "likec4 serve"
   port: 5173
 build:
-  command: "likec4 build -o dist/"
-  export_json: "likec4 export json --pretty --skip-layout -o model/output/likec4.json"
+  command: "likec4 build"
+  export_json: "likec4 export json --pretty --skip-layout -o output/likec4.json"
+  cwd: "model/"
 ```
+
+> **Nota:** O build estatico para o portal e feito pelo Vite plugin (`LikeC4VitePlugin`), nao pelo `likec4 build` CLI. O comando `build` no manifest serve apenas para validacao do modelo.
 
 ## Exemplo de Referencia
 

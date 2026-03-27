@@ -1,0 +1,272 @@
+views {
+
+  // ══════════════════════════════════════
+  //  STRUCTURAL VIEWS (o que existe)
+  // ══════════════════════════════════════
+
+  view index {
+    title 'Madruga AI — System Landscape'
+    description 'Visao geral: atores, plataforma, sistemas externos e infraestrutura'
+
+    include architect, daemon
+    include madrugaAi
+    include claudeApi, obsidianVault, whatsappNotif, githubApi, likec4Cli
+    include sqliteDb, gitFs
+  }
+
+  view containers of madrugaAi {
+    title 'C4 L2 — Containers & Integrations'
+    description 'Containers deployaveis, storage, sistemas externos e mapa completo de integracoes'
+
+    include *
+    include architect, daemon
+    include claudeApi, obsidianVault, whatsappNotif, githubApi, likec4Cli
+    include sqliteDb, gitFs
+  }
+
+  view contextMap {
+    title 'DDD Context Map'
+    description 'Bounded contexts, relacoes DDD (ACL, Conformist, Customer-Supplier, Pub-Sub)'
+
+    include documentation, documentation.*
+    include specDomain, specDomain.*
+    include execution, execution.*
+    include intelligence, intelligence.*
+    include integration, integration.*
+    include observability, observability.*
+    include architect, daemon
+    include claudeApi, obsidianVault, whatsappNotif, githubApi, likec4Cli
+    include sqliteDb, gitFs
+  }
+
+  // ── Scoped Views (zoom por bounded context) ──
+
+  view documentationDetail of documentation {
+    title 'Documentation — Core Domain'
+    description 'Bounded context Documentation: scaffold, portal, model pipeline, AUTO markers'
+
+    include *
+    include likec4Cli, gitFs
+  }
+
+  view specificationDetail of specDomain {
+    title 'Specification — Core Domain'
+    description 'Bounded context Specification: specify, plan, tasks, clarify, analyze'
+
+    include *
+    include intelligence.debateModule, intelligence.decisionModule
+  }
+
+  view executionDetail of execution {
+    title 'Execution — Supporting Domain'
+    description 'Bounded context Execution: daemon, orchestrator, kanban poller, pipeline runner'
+
+    include *
+    include integration.obsidianCrud, integration.claudeClient
+    include sqliteDb
+    include obsidianVault
+  }
+
+  view intelligenceDetail of intelligence {
+    title 'Intelligence — Supporting Domain'
+    description 'Bounded context Intelligence: debate, decisions, stress test'
+
+    include *
+    include claudeApi
+  }
+
+  // ══════════════════════════════════════
+  //  FLUXO DE NEGOCIO (pipeline spec-to-code)
+  // ══════════════════════════════════════
+
+  dynamic view businessFlow {
+    title 'Spec-to-Code Pipeline — Fluxo Completo'
+    description 'Pipeline autonomo: epic no kanban → specify → clarify → debate → plan → tasks → implement → reconcile. 7 fases, 2 loops de feedback, 1 reconciliation final.'
+
+    autoLayout TopBottom
+
+    // ════════════════════════════════════
+    //  FASE 1: TRIGGER (Kanban → Daemon)
+    // ════════════════════════════════════
+
+    obsidianVault -> execution.kanbanPoller 'Epic movido para "Ready"' {
+      notes '''
+        **Trigger do pipeline**
+        - Daemon monitora Obsidian vault via filesystem polling
+        - Detecta epic movido para coluna "Ready"
+        - Le pitch.md (frontmatter YAML + corpo Shape Up)
+      '''
+    }
+
+    execution.kanbanPoller -> execution.orchestratorSlots 'EpicRequest (pitch parsed)' {
+      notes '''
+        **Slot allocation**
+        - Orchestrator verifica slots disponiveis
+        - Se slot livre: aloca e inicia pipeline
+        - Se cheio: enfileira com prioridade (now > next > later)
+      '''
+    }
+
+    execution.orchestratorSlots -> execution.pipelineRunner 'Slot alocado, pipeline inicia' {
+      notes '''
+        **Pipeline Runner**
+        - Executa fases em sequencia
+        - Cada fase e um subagent fresco (anti-context-rot)
+        - Resultado de cada fase alimenta a proxima
+      '''
+    }
+
+    // ════════════════════════════════════
+    //  FASE 2: SPECIFY (pitch → spec.md)
+    // ════════════════════════════════════
+
+    execution.pipelineRunner -> specDomain.specifyPhase 'Pitch + constitution' {
+      notes '''
+        **Specify Phase**
+        - SpeckitBridge monta prompt com pitch + constitution + templates
+        - Claude gera spec.md estruturada
+        - Artefato MECE: owner = specifyPhase, purpose = "o que construir"
+      '''
+    }
+
+    // ════════════════════════════════════
+    //  FASE 3: CLARIFY (spec → perguntas → spec atualizada)
+    // ════════════════════════════════════
+
+    specDomain.specifyPhase -> specDomain.clarifyEngine 'spec.md draft' {
+      notes '''
+        **Clarify Loop**
+        - Identifica ate 5 areas sub-especificadas
+        - Gera perguntas targetadas
+        - Encoda respostas de volta na spec
+        - Loop ate spec estar "complete"
+      '''
+    }
+
+    // ════════════════════════════════════
+    //  FASE 4: DEBATE (spec → review → spec melhorada)
+    // ════════════════════════════════════
+
+    specDomain.clarifyEngine -> intelligence.debateModule 'spec.md clarificada' {
+      notes '''
+        **Debate Engine**
+        - 3-5 personas sinteticas (arquiteto, dev senior, PM, security)
+        - N rounds de critica estruturada
+        - Output: BLOCKER / WARNING / NIT
+        - BLOCKERs devem ser resolvidos antes de prosseguir
+      '''
+    }
+
+    // ════════════════════════════════════
+    //  FASE 5: PLAN (spec → plan.md)
+    // ════════════════════════════════════
+
+    intelligence.debateModule -> specDomain.planPhase 'spec.md aprovada (sem BLOCKERs)' {
+      notes '''
+        **Plan Phase**
+        - Gera plan.md com design detalhado
+        - Componentes, interfaces, fluxos, decisoes tecnicas
+        - Decision System classifica 1-way/2-way doors
+        - ADRs gerados automaticamente para 1-way doors
+      '''
+    }
+
+    specDomain.planPhase -> intelligence.decisionModule 'Decisoes detectadas no plan' {
+      notes '''
+        **Decision Classification**
+        - 1-way door: irreversivel, requer ADR formal
+        - 2-way door: reversivel, documenta inline
+        - Auto-gera ADRs no formato Nygard
+      '''
+    }
+
+    // ════════════════════════════════════
+    //  FASE 6: TASKS (plan → tasks.md)
+    // ════════════════════════════════════
+
+    intelligence.decisionModule -> specDomain.tasksPhase 'plan.md + ADRs' {
+      notes '''
+        **Tasks Phase**
+        - Gera tasks.md com tarefas ordenadas por dependencia
+        - Cada task: descricao, estimativa, acceptance criteria
+        - Analyze verifica consistencia spec ↔ plan ↔ tasks
+      '''
+    }
+
+    specDomain.tasksPhase -> specDomain.analyzeEngine 'tasks.md gerado' {
+      notes '''
+        **Cross-artifact analysis**
+        - Verifica consistencia entre spec.md, plan.md, tasks.md
+        - Detecta gaps, contradicoes, requirements nao cobertos
+        - Output: lista de issues com severidade
+      '''
+    }
+
+    // ════════════════════════════════════
+    //  FASE 7: IMPLEMENT + RECONCILE
+    // ════════════════════════════════════
+
+    specDomain.analyzeEngine -> execution.pipelineRunner 'tasks.md validado' {
+      notes '''
+        **Implement Phase**
+        - Executa tasks em ordem de dependencia
+        - Cada task e um subagent fresco (wave)
+        - Commit por task, PR ao final
+      '''
+    }
+
+    execution.pipelineRunner -> integration.githubOps 'Cria PR com implementacao' {
+      notes '''
+        **GitHub Integration**
+        - Cria branch feature/NNN-slug
+        - Issues criados a partir de tasks.md
+        - PR com referencia ao epic e spec
+      '''
+    }
+
+    execution.pipelineRunner -> documentation.autoMarkers 'RECONCILE: atualiza Vision' {
+      notes '''
+        **Reconcile Phase**
+        - Auto-update de Vision docs apos implementacao
+        - vision-build.py re-exporta LikeC4 JSON
+        - Popula AUTO markers com dados atualizados
+        - Garante que docs refletem o estado real do codigo
+      '''
+    }
+
+    // ════════════════════════════════════
+    //  NOTIFICACAO (fim do pipeline)
+    // ════════════════════════════════════
+
+    execution.pipelineRunner -> integration.whatsappBridge 'Pipeline concluido' {
+      notes '''
+        **Notificacao critica**
+        - WhatsApp: pipeline concluido com sucesso/falha
+        - Inclui: epic name, PR link, metricas (duracao, tokens)
+        - Apenas notificacoes criticas (nao spam)
+      '''
+    }
+
+    integration.whatsappBridge -> whatsappNotif 'Envia mensagem via Evolution API'
+
+    // ════════════════════════════════════
+    //  OBSERVABILIDADE (passiva)
+    // ════════════════════════════════════
+
+    parallel {
+      execution.pipelineRunner -> observability.metricsCollector 'Trace pipeline execution'
+      intelligence.debateModule -> observability.metricsCollector 'Trace debate rounds'
+      specDomain.specifyPhase -> observability.metricsCollector 'Trace spec generation'
+    }
+
+    observability.metricsCollector -> observability.dashboardWeb 'Metricas consolidadas' {
+      notes '''
+        **Dashboard de Observabilidade**
+        - Duracao de pipelines por fase
+        - Tokens consumidos por epic
+        - Taxa de sucesso (specs aprovadas no debate)
+        - Patterns detectados e aprendidos
+      '''
+    }
+  }
+}

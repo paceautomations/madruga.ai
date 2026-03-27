@@ -59,13 +59,28 @@ Se o usuario forneceu contexto parcial, usar subagent para pesquisar o dominio:
 
 Consolidar tudo num entendimento completo antes de gerar.
 
-### 3. Criar Estrutura de Diretorios
+### 3. Garantir que a Plataforma Existe
 
-Se a plataforma ainda nao existe, usar Copier para scaffoldar:
+Se a plataforma ainda nao existe (`platforms/<ProjectName>/` nao existe), scaffoldar usando o script unificado que ja faz tudo (copier + inject LikeC4 + symlinks portal):
 
 ```bash
-copier copy .specify/templates/platform/ platforms/<ProjectName>/ --trust
+python3 .specify/scripts/platform.py new <ProjectName>
 ```
+
+**Em contexto nao-interativo** (copier nao consegue fazer perguntas), usar:
+
+```bash
+copier copy .specify/templates/platform/ platforms/<ProjectName>/ --trust --defaults \
+  -d platform_name=<ProjectName> \
+  -d "platform_title=<titulo>" \
+  -d "platform_description=<descricao>" \
+  -d lifecycle=design \
+  -d include_business_flow=true \
+  -d register_portal=false
+python3 .specify/scripts/platform.py register <ProjectName>
+```
+
+O `register` cuida do inject no LikeC4Diagram.tsx e dos symlinks do portal.
 
 Se ja existe (scaffold anterior), pular este passo.
 
@@ -98,37 +113,21 @@ Lancar 3 subagents em paralelo:
 - Portugues BR para prosa, ingles para codigo/termos tecnicos
 - Usar `platforms/fulano/` como referencia de estrutura
 
-### 5. Validar Artefatos
+### 5. Validar e Registrar no Portal
 
-Apos geracao, verificar:
+Apos geracao, validar e garantir integracao com o portal:
 
-| Check | Como |
-|-------|------|
-| Vision e solution-overview existem | `ls platforms/<ProjectName>/business/` |
-| Engineering docs existem | `ls platforms/<ProjectName>/engineering/` |
-| ADRs existem | `ls platforms/<ProjectName>/decisions/ADR-*.md` |
-| LikeC4 model valida | `cd platforms/<ProjectName>/model && likec4 build .` |
-| platform.yaml existe | `ls platforms/<ProjectName>/platform.yaml` |
-| Mermaid syntax valida | Verificar que code blocks usam ` ```mermaid ` |
+```bash
+python3 .specify/scripts/platform.py lint <ProjectName>
+python3 .specify/scripts/platform.py register <ProjectName>
+```
 
-### 6. Integrar no Portal (se desejado)
+O `lint` verifica: estrutura de diretorios, arquivos obrigatorios, AUTO markers, frontmatter de ADRs/epics.
+O `register` faz: inject no LikeC4Diagram.tsx (idempotente), symlinks do portal via setup.sh, validacao do modelo LikeC4.
 
-Para adicionar a nova plataforma ao portal Astro:
+**NOTA:** O portal e 100% auto-descoberto — `setup.sh` cria symlinks para TODAS as plataformas com `platform.yaml`, `platforms.mjs` gera sidebar dinamicamente, e as paginas Astro usam rotas dinamicas `[platform]/`. NAO e necessario editar manualmente `setup.sh`, `astro.config.mjs` ou criar paginas Astro.
 
-1. Adicionar symlink em `portal/setup.sh`:
-   ```bash
-   ln -sfn ../../../../platforms/<ProjectName> src/content/docs/<projectname>
-   ```
-
-2. Adicionar sidebar entries em `portal/astro.config.mjs`
-
-3. Criar paginas Astro em `portal/src/pages/<projectname>/` (usar `portal/src/pages/fulano/` como referencia)
-
-4. Atualizar `astro.config.mjs` Vite plugin workspace se necessario
-
-5. Testar: `cd portal && npm run dev`
-
-### 7. Apresentar Resultado
+### 6. Apresentar Resultado
 
 ```
 ## Portal de Arquitetura Criado

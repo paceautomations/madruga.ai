@@ -177,7 +177,8 @@ serve:
   command: "likec4 serve"
   port: 5173
 build:
-  command: "likec4 build -o dist/"
-  export_json: "likec4 export json --pretty --skip-layout -o model/output/likec4.json"
+  command: "likec4 build"
+  export_json: "likec4 export json --pretty --skip-layout -o output/likec4.json"
+  cwd: "model/"
   markdown: "python3 .specify/scripts/vision-build.py fulano"
 ```

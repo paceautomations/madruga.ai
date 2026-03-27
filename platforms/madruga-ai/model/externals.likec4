@@ -1,0 +1,27 @@
+model {
+
+  claudeApi = externalService 'Claude API' {
+    technology 'Anthropic API (claude -p subprocess)'
+    description 'LLM backend para geracao de specs, debate, decisoes, e implementacao. Invocado via claude -p subprocess pelo SpeckitBridge e daemon'
+  }
+
+  obsidianVault = externalService 'Obsidian Vault' {
+    technology 'Obsidian (filesystem + kanban plugin)'
+    description 'Kanban board para gestao visual de epics. Daemon monitora mudancas via filesystem polling'
+  }
+
+  whatsappNotif = externalService 'WhatsApp' {
+    technology 'Evolution API'
+    description 'Canal de notificacoes criticas: pipeline concluido, erros, decisoes que requerem atencao humana'
+  }
+
+  githubApi = externalService 'GitHub' {
+    technology 'GitHub API (gh CLI)'
+    description 'PRs, issues, code review. taskstoissues converte tasks.md em GitHub issues com dependencias'
+  }
+
+  likec4Cli = externalService 'LikeC4 CLI' {
+    technology 'likec4 (npm)'
+    description 'CLI para servir, buildar, e exportar modelos de arquitetura. Usado por vision-build.py e portal'
+  }
+}

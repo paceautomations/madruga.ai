@@ -1,0 +1,138 @@
+specification {
+
+  // ── Element Kinds (Ubiquitous Language) ──
+
+  element person {
+    notation 'Ator / Usuario'
+    style {
+      shape person
+      color muted
+    }
+  }
+
+  element platform {
+    notation 'Plataforma (System Boundary)'
+    style {
+      color green
+      border solid
+      opacity 10%
+    }
+  }
+
+  element api {
+    notation 'API Service'
+    style {
+      shape rectangle
+      color secondary
+    }
+  }
+
+  element worker {
+    notation 'Worker (Async Jobs)'
+    style {
+      shape rectangle
+      color indigo
+    }
+  }
+
+  element frontend {
+    notation 'Frontend (Web App)'
+    style {
+      shape browser
+      color primary
+    }
+  }
+
+  element database {
+    notation 'Database / Storage'
+    style {
+      shape storage
+      color amber
+    }
+  }
+
+  element cache {
+    notation 'Cache / Queue'
+    style {
+      shape storage
+      color red
+    }
+  }
+
+  element proxy {
+    notation 'Proxy / Gateway'
+    style {
+      shape rectangle
+      color amber
+    }
+  }
+
+  element externalService {
+    notation 'Sistema Externo'
+    style {
+      shape rectangle
+      color secondary
+    }
+  }
+
+  element boundedContext {
+    notation 'Bounded Context (DDD)'
+    style {
+      opacity 10%
+      border dashed
+    }
+  }
+
+  element module {
+    notation 'Modulo (Pipeline Step)'
+    style {
+      shape component
+      color green
+    }
+  }
+
+  // ── Relationship Kinds (DDD Context Map Patterns) ──
+
+  relationship acl {
+    notation 'ACL (Anti-Corruption Layer)'
+    color green
+    line solid
+  }
+
+  relationship conformist {
+    notation 'Conformist'
+    color amber
+    line dashed
+  }
+
+  relationship customerSupplier {
+    notation 'Customer-Supplier'
+    color primary
+    line solid
+  }
+
+  relationship pubSub {
+    notation 'Pub-Sub (async, desacoplado)'
+    color muted
+    line dotted
+  }
+
+  relationship sync {
+    notation 'Sincrono'
+    color secondary
+    line solid
+  }
+
+  relationship async {
+    notation 'Assincrono'
+    color indigo
+    line dashed
+  }
+
+  // ── Tags ──
+
+  tag critical
+  tag core
+  tag supporting
+  tag generic
+}

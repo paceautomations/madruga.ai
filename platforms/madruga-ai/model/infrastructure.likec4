@@ -1,0 +1,12 @@
+model {
+
+  sqliteDb = database 'SQLite' {
+    technology 'SQLite 3 (madruga.db)'
+    description 'Banco leve para estado operacional: epics em andamento, patterns aprendidos, metricas de execucao, cache de decisoes'
+  }
+
+  gitFs = database 'Git Filesystem' {
+    technology 'Git (local + remote)'
+    description 'Storage primario para todos os artefatos de documentacao: specs, plans, ADRs, epics, modelos LikeC4, markdown. Versionado com historico completo'
+  }
+}

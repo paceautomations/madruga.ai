@@ -61,10 +61,9 @@ copier copy .specify/templates/platform/ platforms/<nome>/ --trust --defaults \
   -d register_portal=false
 ```
 
-E depois rodar os steps manuais:
+E depois registrar no portal (inject LikeC4 + symlinks):
 ```bash
-python3 -c "import sys; sys.path.insert(0, '.specify/scripts'); from platform import _inject_platform_loader; _inject_platform_loader('<nome>')"
-bash portal/setup.sh
+python3 .specify/scripts/platform.py register <nome>
 ```
 
 ### 3. Verificar
@@ -126,6 +125,6 @@ platforms/<nome>/
 |----------|------|
 | copier nao instalado | `pip install copier` |
 | Plataforma ja existe | Perguntar: sobrescrever ou escolher outro nome |
-| Scaffold OK mas inject falha | Rodar manualmente: adicionar `'<nome>': () => import('likec4:react/<nome>'),` em `portal/src/components/viewers/LikeC4Diagram.tsx` no objeto `platformLoaders` |
-| Portal nao mostra a plataforma | Rodar `bash portal/setup.sh` e reiniciar `npm run dev` |
+| Scaffold OK mas inject/symlinks falham | Rodar `python3 .specify/scripts/platform.py register <nome>` (faz inject + symlinks + validacao) |
+| Portal nao mostra a plataforma | Rodar `python3 .specify/scripts/platform.py register <nome>` e reiniciar `npm run dev` |
 | likec4 build falha no modelo vazio | Normal — o scaffold gera um `dynamic view businessFlow` vazio que da warning. Preencher o conteudo resolve. |

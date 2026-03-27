@@ -1,0 +1,71 @@
+model {
+
+  madrugaAi = platform 'Madruga AI' {
+    description 'Sistema de documentacao arquitetural e pipeline spec-to-code para plataformas digitais'
+
+    portal = frontend 'Portal' {
+      technology 'Astro + Starlight + LikeC4 React'
+      description 'Portal de documentacao que auto-descobre plataformas, renderiza markdown e embeda diagramas LikeC4 interativos'
+    }
+
+    platformCli = api 'Platform CLI' {
+      technology 'Python 3.11+ (platform.py)'
+      description 'CLI para gestao de plataformas: new, lint, sync, register, list. Encapsula Copier e validacao estrutural'
+    }
+
+    visionBuild = worker 'Vision Build Pipeline' {
+      technology 'Python 3.11+ (vision-build.py)'
+      description 'Exporta LikeC4 JSON e popula tabelas markdown via AUTO markers em engineering docs'
+    }
+
+    speckitBridge = worker 'SpeckitBridge' {
+      technology 'Python 3.11+'
+      description 'Compositor que le .claude/commands/ e .specify/templates/, monta prompts contextuais com constitution + memory, e executa via claude -p'
+    }
+
+    runtimeDaemon = worker 'Runtime Daemon' {
+      technology 'Python 3.11+ asyncio'
+      description 'Daemon 24/7 com slot-based orchestrator: monitora kanban, executa pipelines, gerencia waves de subagents'
+    }
+
+    orchestrator = worker 'Orchestrator' {
+      technology 'Python 3.11+'
+      description 'Slot-based scheduler que controla paralelismo de pipelines, gerencia filas e prioridades'
+    }
+
+    pipelinePhases = worker 'Pipeline Phases' {
+      technology 'Python 3.11+ (7 modulos)'
+      description 'Fases do pipeline spec-to-code: specify, clarify, plan, tasks, implement, reconcile, analyze'
+    }
+
+    debateEngine = worker 'Debate Engine' {
+      technology 'Python 3.11+'
+      description 'Multi-persona debate com 3-5 reviewers sinteticos que criticam specs em rounds estruturados (BLOCKER/WARNING/NIT)'
+    }
+
+    decisionSystem = worker 'Decision System' {
+      technology 'Python 3.11+'
+      description 'Classificador 1-way/2-way door para decisoes arquiteturais, com registro automatico de ADRs'
+    }
+
+    memoryStore = database 'Memory Store' {
+      technology 'SQLite (madruga.db)'
+      description 'Persistencia leve para epics, patterns aprendidos, metricas de execucao, e estado do kanban'
+    }
+
+    dashboard = frontend 'Dashboard' {
+      technology 'FastAPI + HTMX'
+      description 'Dashboard de observabilidade: health check, metricas de pipeline, status de epics, historico de execucoes'
+    }
+
+    speckitSkills = worker 'SpecKit Skills' {
+      technology '13 .claude/commands/ (Markdown)'
+      description 'Skills do pipeline spec-to-code: specify, clarify, plan, tasks, implement, analyze, taskstoissues, constitution, checklist, e mais'
+    }
+
+    copierTemplates = worker 'Copier Templates' {
+      technology 'Jinja2 + copier.yml'
+      description 'Template Copier para scaffolding de novas plataformas com estrutura padrao (business/, engineering/, decisions/, epics/, model/)'
+    }
+  }
+}

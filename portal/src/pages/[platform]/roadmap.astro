@@ -24,7 +24,7 @@ const epics = Object.entries(allEpicFiles)
     const epicDir = segments[segments.length - 2];
     return { dir: epicDir, ...fm };
   })
-  .sort((a, b) => (a.id ?? '').localeCompare(b.id ?? ''));
+  .sort((a, b) => String(a.id ?? '').localeCompare(String(b.id ?? '')));
 
 const phases = [
   { key: 'now', label: 'Now' },

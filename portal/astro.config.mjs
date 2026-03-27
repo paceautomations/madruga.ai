@@ -22,6 +22,7 @@ export default defineConfig({
   integrations: [
     starlight({
       title: 'Madruga-AI',
+      routeMiddleware: './src/routeData.ts',
       customCss: ['./src/styles/custom.css'],
       components: {
         TableOfContents: './src/components/Empty.astro',

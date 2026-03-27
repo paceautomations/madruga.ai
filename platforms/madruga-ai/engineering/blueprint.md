@@ -1,0 +1,110 @@
+---
+title: "Blueprint"
+---
+# Blueprint de Engenharia
+
+Referencia tecnica consolidada da plataforma **Madruga AI — Architecture Documentation & Spec-to-Code System**: concerns transversais, requisitos de qualidade, topologia de deploy, mapa de dados e glossario.
+
+> **Convencao**: esta pagina consolida o **O QUE** e **COMO**. Para o **POR QUE** de cada decisao, consulte os [ADRs](../decisions/).
+
+---
+
+## 1. Concerns Transversais
+
+### 1.1 Autenticacao & Autorizacao
+
+| Aspecto | Mecanismo | ADR |
+|---------|-----------|-----|
+| <!-- Preencher --> | | |
+
+### 1.2 Seguranca & Safety
+
+| Camada | Mecanismo | Latencia | ADR |
+|--------|-----------|----------|-----|
+| <!-- Preencher --> | | | |
+
+### 1.3 Secrets & Encryption
+
+| Aspecto | Mecanismo | ADR |
+|---------|-----------|-----|
+| <!-- Preencher --> | | |
+
+### 1.4 Observabilidade
+
+| Ferramenta | Papel | Integracao |
+|------------|-------|------------|
+| <!-- Preencher --> | | |
+
+### 1.5 Multi-Tenancy
+
+| Mecanismo | Descricao | ADR |
+|-----------|-----------|-----|
+| <!-- Preencher --> | | |
+
+### 1.6 Error Handling
+
+| Cenario | Estrategia | Fallback |
+|---------|------------|----------|
+| <!-- Preencher --> | | |
+
+---
+
+## 2. Qualidade & NFRs
+
+| # | Cenario | Metrica | Target | Mecanismo | Prioridade |
+|---|---------|---------|--------|-----------|------------|
+| Q1 | <!-- Preencher --> | | | | |
+
+---
+
+## 3. Deploy & Infraestrutura
+
+### 3.1 Topologia
+
+| Componente | Runtime | Porta/Protocolo | Scaling |
+|------------|---------|-----------------|---------|
+| <!-- Preencher --> | | | |
+
+### 3.2 Ambientes
+
+| Ambiente | Finalidade | Infra |
+|----------|------------|-------|
+| local | Desenvolvimento | <!-- Preencher --> |
+| staging | QA | <!-- Preencher --> |
+| production | Tenants reais | <!-- Preencher --> |
+
+### 3.3 CI/CD
+
+| Etapa | Ferramenta | Gate |
+|-------|------------|------|
+| <!-- Preencher --> | | |
+
+---
+
+## 4. Mapa de Dados & Privacidade
+
+### 4.1 Fluxo de Dados Pessoais
+
+| Dado | Origem | Storage | Retention | PII? | Base Legal |
+|------|--------|---------|-----------|------|------------|
+| <!-- Preencher --> | | | | | |
+
+### 4.2 Direitos do Titular
+
+| Direito | Mecanismo | SLA | ADR |
+|---------|-----------|-----|-----|
+| <!-- Preencher --> | | | |
+
+### 4.3 Compliance Checklist
+
+| Item | Status | Nota |
+|------|--------|------|
+| <!-- Preencher --> | | |
+
+---
+
+## 5. Glossario
+
+| Termo | Definicao | Dominio |
+|-------|-----------|---------|
+| <!-- Preencher --> | | |

@@ -1,0 +1,10 @@
+model {
+
+  architect = person 'Arquiteto / Engenheiro' {
+    description 'Usa skills interativamente via Claude Code para documentar arquitetura, gerar specs, e executar pipeline spec-to-code'
+  }
+
+  daemon = person 'Daemon Autonomo' {
+    description 'Processo asyncio 24/7 que executa pipeline spec-to-code autonomamente via SpeckitBridge + claude -p, monitorando kanban e notificando resultados'
+  }
+}

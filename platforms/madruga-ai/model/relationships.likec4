@@ -1,0 +1,177 @@
+model {
+
+  // ══════════════════════════════════════
+  //  C4 CONTAINER RELATIONSHIPS
+  // ══════════════════════════════════════
+
+  // ── Architect interactions ──
+  architect -> madrugaAi.portal 'Consulta documentacao' {
+    technology 'HTTPS (browser)'
+  }
+
+  architect -> madrugaAi.speckitSkills 'Executa skills interativamente' {
+    technology 'Claude Code CLI'
+  }
+
+  architect -> madrugaAi.platformCli 'Gerencia plataformas' {
+    technology 'CLI (Python)'
+  }
+
+  // ── Daemon interactions ──
+  daemon -> madrugaAi.runtimeDaemon 'Processo principal' {
+    technology 'systemd / supervisord'
+  }
+
+  // ── Internal container relationships ──
+  madrugaAi.runtimeDaemon -[sync]-> madrugaAi.orchestrator 'Delega execucao de pipelines' {
+    technology 'Python async'
+  }
+
+  madrugaAi.orchestrator -[sync]-> madrugaAi.pipelinePhases 'Executa fases em sequencia' {
+    technology 'Python async'
+  }
+
+  madrugaAi.pipelinePhases -[sync]-> madrugaAi.speckitBridge 'Monta e executa prompts' {
+    technology 'Python async'
+  }
+
+  madrugaAi.speckitBridge -[sync]-> madrugaAi.speckitSkills 'Le skills e templates' {
+    technology 'Filesystem read'
+  }
+
+  madrugaAi.pipelinePhases -[sync]-> madrugaAi.debateEngine 'Solicita review de specs' {
+    technology 'Python async'
+  }
+
+  madrugaAi.pipelinePhases -[sync]-> madrugaAi.decisionSystem 'Classifica decisoes' {
+    technology 'Python async'
+  }
+
+  madrugaAi.runtimeDaemon -[sync]-> madrugaAi.memoryStore 'Persiste estado e metricas' {
+    technology 'SQLite (aiosqlite)'
+  }
+
+  madrugaAi.dashboard -[sync]-> madrugaAi.memoryStore 'Le metricas e status' {
+    technology 'SQLite (read-only)'
+  }
+
+  madrugaAi.platformCli -[sync]-> madrugaAi.copierTemplates 'Scaffold e sync plataformas' {
+    technology 'Copier Python API'
+  }
+
+  madrugaAi.visionBuild -[sync]-> madrugaAi.portal 'Popula AUTO markers no markdown' {
+    technology 'Filesystem write'
+  }
+
+  // ── External system relationships ──
+  madrugaAi.speckitBridge -[sync]-> claudeApi 'Executa prompts via claude -p' {
+    technology 'subprocess (claude -p)'
+  }
+
+  madrugaAi.debateEngine -[sync]-> claudeApi 'Debate rounds via claude -p' {
+    technology 'subprocess (claude -p)'
+  }
+
+  madrugaAi.decisionSystem -[sync]-> claudeApi 'Classifica decisoes via claude -p' {
+    technology 'subprocess (claude -p)'
+  }
+
+  madrugaAi.runtimeDaemon -[async]-> obsidianVault 'Monitora kanban' {
+    technology 'Filesystem polling'
+  }
+
+  madrugaAi.runtimeDaemon -[async]-> whatsappNotif 'Notificacoes criticas' {
+    technology 'Evolution API (HTTPS)'
+  }
+
+  madrugaAi.pipelinePhases -[sync]-> githubApi 'Cria issues e PRs' {
+    technology 'gh CLI'
+  }
+
+  madrugaAi.visionBuild -[sync]-> likec4Cli 'Exporta JSON do modelo' {
+    technology 'likec4 export json'
+  }
+
+  madrugaAi.portal -[sync]-> likec4Cli 'Build e serve diagramas' {
+    technology 'LikeC4VitePlugin'
+  }
+
+  // ── Storage relationships ──
+  madrugaAi.speckitBridge -[sync]-> gitFs 'Le e escreve artefatos' {
+    technology 'Filesystem (git)'
+  }
+
+  madrugaAi.platformCli -[sync]-> gitFs 'Scaffold e valida plataformas' {
+    technology 'Filesystem (git)'
+  }
+
+  madrugaAi.visionBuild -[sync]-> gitFs 'Le JSON exportado, escreve markdown' {
+    technology 'Filesystem (git)'
+  }
+
+  madrugaAi.runtimeDaemon -[sync]-> sqliteDb 'Estado operacional' {
+    technology 'aiosqlite'
+  }
+
+  madrugaAi.dashboard -[sync]-> sqliteDb 'Consulta metricas' {
+    technology 'SQLite read-only'
+  }
+
+  // ══════════════════════════════════════
+  //  DDD CONTEXT MAP RELATIONSHIPS
+  // ══════════════════════════════════════
+
+  // ── Core-Core ──
+  specDomain.specifyPhase -[customerSupplier]-> documentation.autoMarkers 'Customer-Supplier' {
+    description 'Specification (customer) gera specs que Documentation (supplier) popula com dados do modelo via AUTO markers'
+  }
+
+  // ── Core-Supporting ──
+  specDomain.specifyPhase -[customerSupplier]-> intelligence.debateModule 'Customer-Supplier' {
+    description 'Specification (customer) solicita review de specs a Intelligence (supplier) via debate engine'
+  }
+
+  specDomain.planPhase -[customerSupplier]-> intelligence.decisionModule 'Customer-Supplier' {
+    description 'Specification (customer) solicita classificacao de decisoes a Intelligence (supplier)'
+  }
+
+  execution.pipelineRunner -[customerSupplier]-> specDomain.specifyPhase 'Customer-Supplier' {
+    description 'Execution (customer) invoca fases de Specification (supplier) em sequencia'
+  }
+
+  execution.kanbanPoller -[acl]-> integration.obsidianCrud 'ACL' {
+    description 'Execution usa ACL para isolar formato de kanban Obsidian do modelo interno de epics'
+  }
+
+  // ── Supporting-Generic ──
+  execution.pipelineRunner -[acl]-> integration.claudeClient 'ACL' {
+    description 'Execution usa ACL para isolar detalhes do Claude API (subprocess, retries) do pipeline runner'
+  }
+
+  integration.githubOps -[conformist]-> githubApi 'Conformist' {
+    description 'Integration se conforma ao formato de issues e PRs da GitHub API'
+  }
+
+  integration.whatsappBridge -[conformist]-> whatsappNotif 'Conformist' {
+    description 'Integration se conforma ao formato de mensagens da Evolution API (WhatsApp)'
+  }
+
+  integration.claudeClient -[conformist]-> claudeApi 'Conformist' {
+    description 'Integration se conforma ao protocolo claude -p subprocess (stdin/stdout)'
+  }
+
+  integration.obsidianCrud -[conformist]-> obsidianVault 'Conformist' {
+    description 'Integration se conforma ao formato de markdown + frontmatter do Obsidian kanban plugin'
+  }
+
+  // ── Observability (Pub-Sub) ──
+  execution.daemonProcess -[pubSub]-> observability.metricsCollector 'Pub-Sub'
+  execution.pipelineRunner -[pubSub]-> observability.metricsCollector 'Pub-Sub'
+  intelligence.debateModule -[pubSub]-> observability.metricsCollector 'Pub-Sub'
+  specDomain.specifyPhase -[pubSub]-> observability.metricsCollector 'Pub-Sub'
+
+  // ── Documentation-Generic ──
+  documentation.modelPipeline -[acl]-> likec4Cli 'ACL' {
+    description 'Documentation usa ACL para isolar formato de export LikeC4 do modelo interno de artefatos'
+  }
+}

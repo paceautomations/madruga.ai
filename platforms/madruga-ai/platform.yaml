@@ -1,0 +1,32 @@
+name: madruga-ai
+title: "Madruga AI — Architecture Documentation & Spec-to-Code System"
+description: "Sistema de documentacao arquitetural e pipeline spec-to-code para plataformas digitais"
+lifecycle: development
+version: "0.1.0"
+model: model/
+views:
+  structural:
+    - id: index
+      label: "System Landscape"
+    - id: containers
+      label: "C4 L2 — Containers"
+    - id: contextMap
+      label: "DDD Context Map"
+    - id: documentationDetail
+      label: "Documentation (zoom)"
+    - id: specificationDetail
+      label: "Specification (zoom)"
+    - id: executionDetail
+      label: "Execution (zoom)"
+    - id: intelligenceDetail
+      label: "Intelligence (zoom)"
+  flows:
+    - id: businessFlow
+      label: "Spec-to-Code Pipeline"
+serve:
+  command: "likec4 serve"
+  port: 5173
+build:
+  command: "likec4 build"
+  export_json: "likec4 export json --pretty --skip-layout -o output/likec4.json"
+  cwd: "model/"

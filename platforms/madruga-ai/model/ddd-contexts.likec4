@@ -1,0 +1,136 @@
+model {
+
+  // ══════════════════════════════════════
+  //  CORE DOMAINS
+  // ══════════════════════════════════════
+
+  documentation = boundedContext 'Documentation' {
+    #core
+    description 'Dominio core: plataformas, portal, modelos LikeC4, markdown, AUTO markers. Responsavel por manter a documentacao arquitetural consistente e atualizada.'
+
+    platformScaffold = module 'Platform Scaffold' {
+      description 'Scaffolding de novas plataformas via Copier template, validacao estrutural (lint), e sincronizacao (update)'
+    }
+
+    portalBuilder = module 'Portal Builder' {
+      description 'Auto-discovery de plataformas, geracao de sidebar dinamica, symlinks, e build do site Starlight'
+    }
+
+    modelPipeline = module 'Model Pipeline' {
+      description 'Export LikeC4 JSON, validacao de modelos, e integracao com VitePlugin para embed no portal'
+    }
+
+    autoMarkers = module 'AUTO Markers' {
+      description 'Populacao automatica de tabelas markdown via markers <!-- AUTO:name --> a partir de LikeC4 JSON exportado'
+    }
+  }
+
+  specDomain = boundedContext 'Specification' {
+    #core
+    description 'Dominio core: pipeline SpecKit (specify, plan, tasks), skills, templates, constitution. Transforma ideias em specs implementaveis.'
+
+    specifyPhase = module 'Specify Phase' {
+      description 'Gera spec.md a partir de descricao natural language, usando constitution e templates como guia'
+    }
+
+    planPhase = module 'Plan Phase' {
+      description 'Gera plan.md com design detalhado: componentes, interfaces, fluxos, decisoes tecnicas'
+    }
+
+    tasksPhase = module 'Tasks Phase' {
+      description 'Gera tasks.md com tarefas ordenadas por dependencia, estimativas, e acceptance criteria'
+    }
+
+    clarifyEngine = module 'Clarify Engine' {
+      description 'Identifica areas sub-especificadas na spec e gera ate 5 perguntas de clarificacao targetadas'
+    }
+
+    analyzeEngine = module 'Analyze Engine' {
+      description 'Analise de consistencia cross-artefato: spec.md vs plan.md vs tasks.md, detectando gaps e contradicoes'
+    }
+  }
+
+  // ══════════════════════════════════════
+  //  SUPPORTING DOMAINS
+  // ══════════════════════════════════════
+
+  execution = boundedContext 'Execution' {
+    #supporting
+    description 'Dominio supporting: daemon asyncio, orchestrator slot-based, kanban poller, pipeline runner. Executa specs autonomamente.'
+
+    daemonProcess = module 'Daemon Process' {
+      description 'Processo asyncio 24/7 que gerencia lifecycle do sistema: startup, shutdown graceful, health checks'
+    }
+
+    orchestratorSlots = module 'Orchestrator Slots' {
+      description 'Scheduler slot-based que controla paralelismo (max N pipelines simultaneos) e gerencia filas de prioridade'
+    }
+
+    kanbanPoller = module 'Kanban Poller' {
+      description 'Monitora Obsidian vault via filesystem polling, detecta epics movidos para coluna "Ready", dispara pipeline'
+    }
+
+    pipelineRunner = module 'Pipeline Runner' {
+      description 'Executa fases do pipeline em sequencia (specify -> clarify -> plan -> tasks -> implement -> reconcile)'
+    }
+  }
+
+  intelligence = boundedContext 'Intelligence' {
+    #supporting
+    description 'Dominio supporting: debate engine, decision system, stress test. Garante qualidade de specs via review automatizado.'
+
+    debateModule = module 'Debate Module' {
+      description 'Orquestra debate multi-persona com 3-5 reviewers sinteticos em rounds estruturados'
+    }
+
+    decisionModule = module 'Decision Module' {
+      description 'Classifica decisoes em 1-way/2-way door, registra ADRs automaticamente, rastreia historico'
+    }
+
+    stressTest = module 'Stress Test' {
+      description 'Testa specs contra cenarios extremos: scale 10x, failure modes, edge cases, security threats'
+    }
+  }
+
+  // ══════════════════════════════════════
+  //  GENERIC DOMAINS
+  // ══════════════════════════════════════
+
+  integration = boundedContext 'Integration' {
+    #generic
+    description 'Dominio generico: adapters para sistemas externos (Obsidian, WhatsApp, GitHub, Claude API). ACLs isolam o core.'
+
+    obsidianCrud = module 'Obsidian CRUD' {
+      description 'Leitura e escrita de cards no kanban Obsidian via filesystem: mover colunas, atualizar frontmatter, ler estado'
+    }
+
+    whatsappBridge = module 'WhatsApp Bridge' {
+      description 'Envio de notificacoes criticas via WhatsApp (Evolution API): pipeline concluido, erros, decisoes pendentes'
+    }
+
+    githubOps = module 'GitHub Ops' {
+      description 'Criacao de issues, PRs, e labels via gh CLI. Converte tasks.md em issues com dependencias'
+    }
+
+    claudeClient = module 'Claude Client' {
+      description 'Wrapper para claude -p subprocess: monta prompt, executa, parseia output, gerencia retries e timeouts'
+    }
+  }
+
+  observability = boundedContext 'Observability' {
+    #generic
+    description 'Dominio generico: dashboard, health checks, metricas. Visibilidade sobre estado e performance do sistema.'
+
+    healthCheck = module 'Health Check' {
+      description 'Verifica saude do sistema: daemon alive, SQLite acessivel, git status limpo, Obsidian vault montado'
+    }
+
+    dashboardWeb = module 'Dashboard Web' {
+      description 'Interface web (FastAPI + HTMX) para visualizar metricas, status de epics, e historico de execucoes'
+    }
+
+    metricsCollector = module 'Metrics Collector' {
+      description 'Coleta metricas de execucao: duracao de pipelines, tokens consumidos, taxa de sucesso, patterns detectados'
+    }
+  }
+}

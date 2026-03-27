@@ -65,7 +65,7 @@ Se o usuario ja tem docs de pesquisa ou research no diretorio da plataforma (`re
 
 ### 2. Gerar One-Pager
 
-Escrever o documento com exatamente **6 secoes**, seguindo este template:
+Escrever o documento com exatamente **7 secoes**, seguindo este template:
 
 ```markdown
 ---
@@ -178,6 +178,18 @@ Se qualquer uma for falsa, a tese precisa ser revisada:
 - **Custo variavel:** ...
 - **Margem bruta target:** ...
 - **Break-even por [unidade]:** ...
+
+---
+
+## 7. Linguagem Ubiqua
+
+| Termo | Definicao | Exemplo |
+|-------|-----------|---------|
+| **[Termo 1]** | [definicao curta — o que significa no contexto deste negocio] | [uso em frase] |
+| **[Termo 2]** | ... | ... |
+| **[Termo N]** | ... | ... |
+
+> Padronizar estes termos em todos os documentos, codigo, e comunicacao do projeto.
 ```
 
 ### 3. Auto-Review
@@ -189,10 +201,11 @@ Antes de salvar, verificar:
 | 1 | Zero termos tecnicos (grep: API, SDK, framework, database, backend, frontend, deploy, server, endpoint, middleware, cache, queue, Python, Redis, Docker, Supabase, pgvector, webhook, microservice, CI/CD, ADR) | Reescrever em linguagem de negocio. Ver "Regra Cardinal" acima. |
 | 2 | Toda metrica tem numero | Adicionar numero ou marcar `[VALIDAR]` |
 | 3 | Nenhuma secao > 30 linhas | Cortar — one-pager nao tem secao longa |
-| 4 | Total < 170 linhas | Condensar secoes maiores |
+| 4 | Total < 200 linhas | Condensar secoes maiores |
 | 5 | Landscape tem max 5 players (incluindo a plataforma) | Cortar os menos relevantes |
 | 6 | Batalhas tem max 5 items | Priorizar as mais criticas |
 | 7 | Moat e realmente defensavel (nao e feature facilmente copiavel) | Reframear ou ser honesto |
+| 8 | Secao Linguagem Ubiqua presente com min 5 termos | Adicionar termos do dominio |
 
 **Excecao para check 1:** Nomes proprios de produtos/empresas concorrentes sao permitidos mesmo que sejam tecnicos (ex: "Botpress", "WhatsApp"). O check e sobre jargao tecnico generico, nao nomes proprios.
 
@@ -206,15 +219,16 @@ Antes de salvar, verificar:
 
 **Arquivo:** platforms/<nome>/business/vision.md
 **Linhas:** <N>
-**Framework:** Playing to Win (6 secoes)
+**Framework:** Playing to Win (7 secoes)
 
 ### Checks
 [x] Zero jargao tecnico
 [x] Metricas com numeros
 [x] Secoes <= 30 linhas
-[x] Total < 170 linhas
+[x] Total < 200 linhas
 [x] Landscape <= 5 players
 [x] Moat defensavel
+[x] Linguagem Ubiqua presente (min 5 termos)
 
 ### Secoes que precisam de validacao
 - [lista de items marcados com [VALIDAR], se houver]
