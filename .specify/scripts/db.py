@@ -110,10 +110,17 @@ def upsert_platform(
     metadata: str = "{}",
 ) -> None:
     conn.execute(
-        "INSERT OR REPLACE INTO platforms "
-        "(platform_id, name, title, lifecycle, repo_path, metadata, created_at, updated_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, "
-        "COALESCE((SELECT created_at FROM platforms WHERE platform_id=?), ?), ?)",
+        """INSERT INTO platforms
+           (platform_id, name, title, lifecycle, repo_path, metadata, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(platform_id) DO UPDATE SET
+             name = excluded.name,
+             title = excluded.title,
+             lifecycle = excluded.lifecycle,
+             repo_path = excluded.repo_path,
+             metadata = excluded.metadata,
+             updated_at = excluded.updated_at
+        """,
         (
             platform_id,
             name or platform_id,
@@ -121,7 +128,6 @@ def upsert_platform(
             lifecycle,
             repo_path,
             metadata,
-            platform_id,
             _now(),
             _now(),
         ),
@@ -195,10 +201,19 @@ def upsert_epic(
     conn: sqlite3.Connection, platform_id: str, epic_id: str, title: str = "", **kwargs
 ) -> None:
     conn.execute(
-        "INSERT OR REPLACE INTO epics "
-        "(platform_id, epic_id, title, status, appetite, priority, branch_name, file_path, "
-        "created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, "
-        "COALESCE((SELECT created_at FROM epics WHERE platform_id=? AND epic_id=?), ?), ?)",
+        """INSERT INTO epics
+           (platform_id, epic_id, title, status, appetite, priority, branch_name, file_path,
+            created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(platform_id, epic_id) DO UPDATE SET
+             title = excluded.title,
+             status = excluded.status,
+             appetite = COALESCE(excluded.appetite, epics.appetite),
+             priority = COALESCE(excluded.priority, epics.priority),
+             branch_name = COALESCE(excluded.branch_name, epics.branch_name),
+             file_path = COALESCE(excluded.file_path, epics.file_path),
+             updated_at = excluded.updated_at
+        """,
         (
             platform_id,
             epic_id,
@@ -208,8 +223,6 @@ def upsert_epic(
             kwargs.get("priority"),
             kwargs.get("branch_name"),
             kwargs.get("file_path"),
-            platform_id,
-            epic_id,
             _now(),
             _now(),
         ),
@@ -279,17 +292,32 @@ def get_epic_nodes(
 def insert_decision(
     conn: sqlite3.Connection, platform_id: str, skill: str, title: str, **kwargs
 ) -> str:
-    decision_id = kwargs.get("decision_id") or os.urandom(4).hex()
+    decision_id = kwargs.get("decision_id") or os.urandom(8).hex()
     decisions_json = json.dumps(kwargs.get("decisions", []))
     assumptions_json = json.dumps(kwargs.get("assumptions", []))
     open_questions_json = json.dumps(kwargs.get("open_questions", []))
     conn.execute(
-        "INSERT OR REPLACE INTO decisions "
-        "(decision_id, platform_id, epic_id, skill, slug, title, number, status, "
-        "superseded_by, source_decision_key, file_path, "
-        "decisions_json, assumptions_json, open_questions_json, created_at, updated_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "
-        "COALESCE((SELECT created_at FROM decisions WHERE decision_id=?), ?), ?)",
+        """INSERT INTO decisions
+           (decision_id, platform_id, epic_id, skill, slug, title, number, status,
+            superseded_by, source_decision_key, file_path,
+            decisions_json, assumptions_json, open_questions_json, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(decision_id) DO UPDATE SET
+             platform_id = excluded.platform_id,
+             epic_id = excluded.epic_id,
+             skill = excluded.skill,
+             slug = excluded.slug,
+             title = excluded.title,
+             number = excluded.number,
+             status = excluded.status,
+             superseded_by = excluded.superseded_by,
+             source_decision_key = excluded.source_decision_key,
+             file_path = excluded.file_path,
+             decisions_json = excluded.decisions_json,
+             assumptions_json = excluded.assumptions_json,
+             open_questions_json = excluded.open_questions_json,
+             updated_at = excluded.updated_at
+        """,
         (
             decision_id,
             platform_id,
@@ -305,7 +333,6 @@ def insert_decision(
             decisions_json,
             assumptions_json,
             open_questions_json,
-            decision_id,
             _now(),
             _now(),
         ),
@@ -399,12 +426,17 @@ def insert_run(
     return run_id
 
 
+_COMPLETE_RUN_FIELDS = frozenset(
+    {"tokens_in", "tokens_out", "cost_usd", "duration_ms", "error"}
+)
+
+
 def complete_run(
     conn: sqlite3.Connection, run_id: str, status: str = "completed", **kwargs
 ) -> None:
     sets = ["status=?", "completed_at=?"]
     vals: list = [status, _now()]
-    for field in ("tokens_in", "tokens_out", "cost_usd", "duration_ms", "error"):
+    for field in _COMPLETE_RUN_FIELDS:
         if field in kwargs:
             sets.append(f"{field}=?")
             vals.append(kwargs[field])
@@ -509,9 +541,16 @@ def get_stale_nodes(
 def get_platform_status(conn: sqlite3.Connection, platform_id: str) -> dict:
     rows = get_pipeline_nodes(conn, platform_id)
     total = len(rows)
-    counts = {"done": 0, "pending": 0, "stale": 0, "blocked": 0, "skipped": 0}
+    counts: dict[str, int] = {
+        "done": 0,
+        "pending": 0,
+        "stale": 0,
+        "blocked": 0,
+        "skipped": 0,
+    }
     for r in rows:
-        counts[r["status"]] = counts.get(r["status"], 0) + 1
+        s = r["status"]
+        counts[s] = counts.get(s, 0) + 1
     return {
         "platform_id": platform_id,
         "total_nodes": total,
@@ -523,9 +562,16 @@ def get_platform_status(conn: sqlite3.Connection, platform_id: str) -> dict:
 def get_epic_status(conn: sqlite3.Connection, platform_id: str, epic_id: str) -> dict:
     rows = get_epic_nodes(conn, platform_id, epic_id)
     total = len(rows)
-    counts = {"done": 0, "pending": 0, "stale": 0, "blocked": 0, "skipped": 0}
+    counts: dict[str, int] = {
+        "done": 0,
+        "pending": 0,
+        "stale": 0,
+        "blocked": 0,
+        "skipped": 0,
+    }
     for r in rows:
-        counts[r["status"]] = counts.get(r["status"], 0) + 1
+        s = r["status"]
+        counts[s] = counts.get(s, 0) + 1
     return {
         "platform_id": platform_id,
         "epic_id": epic_id,
@@ -599,6 +645,18 @@ def seed_from_filesystem(
             output_files=json.dumps(output_files),
             completed_by=node.get("skill"),
         )
+        # Populate artifact_provenance for done nodes
+        if status == "done":
+            for ofile in output_files:
+                full_path = pdir / ofile
+                if full_path.exists() and full_path.is_file():
+                    insert_provenance(
+                        conn,
+                        platform_id,
+                        ofile,
+                        generated_by=node.get("skill", f"madruga:{nid}"),
+                        output_hash=compute_file_hash(full_path),
+                    )
         insert_event(
             conn,
             platform_id,

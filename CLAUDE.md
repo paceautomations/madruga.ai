@@ -56,11 +56,11 @@ python3 .specify/scripts/platform.py new <name>              # scaffold new plat
 python3 .specify/scripts/platform.py lint <name>             # validate structure
 python3 .specify/scripts/platform.py lint --all              # validate all platforms
 python3 .specify/scripts/platform.py sync                    # copier update all platforms
-python3 .specify/scripts/platform.py register <name>         # update portal symlinks
+python3 .specify/scripts/platform.py register <name>         # inject LikeC4 loader + validate model
 
 # ── Portal ──
 cd portal
-npm install          # runs setup.sh (creates symlinks for ALL platforms)
+npm install          # install dependencies (symlinks auto-managed by Vite plugin)
 npm run dev          # http://localhost:4321 (auto-discovers all platforms)
 npm run build        # production build
 
@@ -72,6 +72,11 @@ likec4 serve         # http://localhost:5173 (standalone hot reload)
 python3 .specify/scripts/vision-build.py <name>              # populate AUTO tables from model
 python3 .specify/scripts/vision-build.py <name> --validate-only
 python3 .specify/scripts/vision-build.py <name> --export-png
+
+# ── DB State (post-save) ──
+python3 .specify/scripts/post_save.py --platform <name> --node <id> --skill <skill> --artifact <path>  # record skill completion
+python3 .specify/scripts/post_save.py --reseed --platform <name>   # re-seed platform from filesystem
+python3 .specify/scripts/post_save.py --reseed-all                 # re-seed all platforms
 ```
 
 ## Command Namespaces
@@ -114,7 +119,7 @@ The LikeC4 model files (`platforms/<name>/model/*.likec4`) are the **source of t
 
 - `portal/src/lib/platforms.mjs` auto-discovers all platforms by scanning `platforms/*/platform.yaml`
 - `portal/astro.config.mjs` builds sidebar dynamically from platform manifests and uses `LikeC4VitePlugin({ workspace: '../platforms' })` for multi-project support
-- `portal/setup.sh` creates symlinks for ALL discovered platforms: `src/content/docs/<name> → platforms/<name>`
+- `platformSymlinksPlugin()` in `astro.config.mjs` auto-creates per-section symlinks at build/dev time (no manual setup needed)
 - Dynamic routes in `src/pages/[platform]/` generate pages for every platform at build time
 - `LikeC4Diagram.tsx` uses `React.lazy` with per-project imports (`likec4:react/<name>`)
 - **IMPORTANT**: When adding a new platform, also add its import to `platformLoaders` in `portal/src/components/viewers/LikeC4Diagram.tsx`

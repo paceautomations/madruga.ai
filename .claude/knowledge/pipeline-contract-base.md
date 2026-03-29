@@ -119,35 +119,28 @@ Write to `platforms/<name>/<path>` (or `platforms/<name>/epics/<NNN>/<path>` for
 
 ### SQLite Integration
 
-If `.pipeline/madruga.db` exists, update the database after saving:
+After saving the artifact, run the post-save script to record state in the DB.
 
 **For L1 (platform DAG) skills:**
-```python
-import sys; sys.path.insert(0, '.specify/scripts')
-from db import get_conn, upsert_pipeline_node, insert_provenance, insert_event, compute_file_hash
-
-conn = get_conn('.pipeline/madruga.db')
-upsert_pipeline_node(conn, platform_id, node_id, 'done',
-                     output_hash=compute_file_hash(artifact_path),
-                     output_files=json.dumps([relative_path]))
-insert_provenance(conn, platform_id, relative_path, generated_by=skill_id)
-insert_event(conn, platform_id, 'node', node_id, 'completed', actor='claude')
-conn.close()
+```bash
+python3 .specify/scripts/post_save.py --platform <name> --node <node-id> --skill <skill-id> --artifact <relative-path>
 ```
 
 **For L2 (epic cycle) skills:**
-```python
-from db import get_conn, upsert_epic_node, insert_provenance, insert_event
-
-conn = get_conn('.pipeline/madruga.db')
-upsert_epic_node(conn, platform_id, epic_id, node_id, 'done',
-                 output_hash=compute_file_hash(artifact_path))
-insert_provenance(conn, platform_id, relative_path, generated_by=skill_id, epic_id=epic_id)
-insert_event(conn, platform_id, 'epic_node', f'{epic_id}/{node_id}', 'completed', actor='claude')
-conn.close()
+```bash
+python3 .specify/scripts/post_save.py --platform <name> --epic <epic-id> --node <node-id> --skill <skill-id> --artifact <relative-path>
 ```
 
-If `.pipeline/madruga.db` does not exist, skip silently and proceed.
+Example:
+```bash
+# After /vision saves business/vision.md:
+python3 .specify/scripts/post_save.py --platform fulano --node vision --skill madruga:vision --artifact business/vision.md
+
+# After /speckit.specify saves spec.md in an epic:
+python3 .specify/scripts/post_save.py --platform fulano --epic 001-channel-pipeline --node specify --skill speckit.specify --artifact epics/001-channel-pipeline/spec.md
+```
+
+If the script fails or the DB does not exist, proceed normally — the DB is additive, not blocking.
 
 ### Report Format
 

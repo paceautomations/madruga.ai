@@ -1,3 +1,6 @@
+---
+title: "STATE — Atomic Skills DAG Pipeline"
+---
 # STATE — Atomic Skills DAG Pipeline
 
 **Session**: 2026-03-29

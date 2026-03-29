@@ -30,11 +30,29 @@ Pipeline Observer + Advisor. Factual, visual, concise. Write output in Brazilian
 
 ### 1. Collect L1 Status (Platform DAG)
 
-Run: `.specify/scripts/bash/check-platform-prerequisites.sh --json --status --platform <name>`
+**Primary: Query DB** (if `.pipeline/madruga.db` exists):
+```bash
+python3 -c "
+import sys; sys.path.insert(0, '.specify/scripts')
+from db import get_conn, get_pipeline_nodes, get_platform_status, get_stale_nodes
+import json, yaml
 
-If `--use-db` is available (`.pipeline/madruga.db` exists), also run with `--use-db` for enhanced status with hashes and staleness.
+conn = get_conn()
+nodes = get_pipeline_nodes(conn, '<platform>')
+status = get_platform_status(conn, '<platform>')
 
-Parse the JSON output for nodes, status (done/ready/blocked/skipped/stale), and progress.
+# Load DAG edges for staleness check
+with open('platforms/<platform>/platform.yaml') as f:
+    manifest = yaml.safe_load(f)
+edges = {n['id']: n.get('depends', []) for n in manifest.get('pipeline', {}).get('nodes', [])}
+stale = get_stale_nodes(conn, '<platform>', edges)
+
+print(json.dumps({'nodes': nodes, 'status': status, 'stale': [s['node_id'] for s in stale]}))
+conn.close()
+"
+```
+
+**Fallback** (if DB not available): Run `.specify/scripts/bash/check-platform-prerequisites.sh --json --status --platform <name>`
 
 Additionally, read `platforms/<name>/platform.yaml` to obtain `depends` relationships for each node (required for Mermaid edges).
 
@@ -42,9 +60,24 @@ Additionally, read `platforms/<name>/platform.yaml` to obtain `depends` relation
 
 Check if `platforms/<name>/platform.yaml` has `epic_cycle` section.
 
-For each epic directory in `platforms/<name>/epics/*/`:
-- Run: `.specify/scripts/bash/check-platform-prerequisites.sh --json --epic <epic-slug> --status --platform <name>`
-- Or if DB exists: add `--use-db` for DB-enhanced status
+**Primary: Query DB** for each epic:
+```bash
+python3 -c "
+import sys; sys.path.insert(0, '.specify/scripts')
+from db import get_conn, get_epics, get_epic_nodes, get_epic_status
+import json
+
+conn = get_conn()
+epics = get_epics(conn, '<platform>')
+for e in epics:
+    nodes = get_epic_nodes(conn, '<platform>', e['epic_id'])
+    status = get_epic_status(conn, '<platform>', e['epic_id'])
+    print(json.dumps({'epic': e['epic_id'], 'title': e['title'], 'nodes': nodes, 'status': status}))
+conn.close()
+"
+```
+
+**Fallback**: For each epic directory in `platforms/<name>/epics/*/`, check file existence to infer status.
 
 ### 3. Render L1
 

@@ -104,12 +104,13 @@ Lines: <N>
 Checks: [x] ...
 Next step: /<next-skill> <name>
 
-#### SQLite Integration (if `.pipeline/madruga.db` exists)
-After saving the artifact, update the database:
-- `db.upsert_pipeline_node()` or `db.upsert_epic_node()` depending on DAG level
-- `db.insert_provenance()` with file_path and generated_by
-- `db.insert_event()` with action='completed'
-- If DB does not exist, proceed normally (DB is opt-in).
+#### SQLite Integration
+After saving, run:
+```bash
+python3 .specify/scripts/post_save.py --platform <name> --node <node-id> --skill <skill-id> --artifact <relative-path>
+# For epic cycle, add: --epic <epic-id>
+```
+If the script fails, proceed normally (DB is additive, not blocking).
 ```
 
 ---

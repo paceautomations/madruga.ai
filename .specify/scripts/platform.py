@@ -7,7 +7,7 @@ Usage:
     python3 .specify/scripts/platform.py lint <name>        # validate structure
     python3 .specify/scripts/platform.py lint --all         # validate all platforms
     python3 .specify/scripts/platform.py sync [name]        # copier update (one or all)
-    python3 .specify/scripts/platform.py register <name>    # re-run setup.sh + validate model
+    python3 .specify/scripts/platform.py register <name>    # inject LikeC4 loader + validate model
     python3 .specify/scripts/platform.py list               # list all platforms
 """
 
@@ -65,11 +65,7 @@ def _error(msg: str) -> None:
 
 def _discover_platforms() -> list[str]:
     """Return sorted list of platform names that have platform.yaml."""
-    return sorted(
-        d.name
-        for d in PLATFORMS_DIR.iterdir()
-        if d.is_dir() and (d / "platform.yaml").exists()
-    )
+    return sorted(d.name for d in PLATFORMS_DIR.iterdir() if d.is_dir() and (d / "platform.yaml").exists())
 
 
 def _inject_platform_loader(name: str) -> bool:
@@ -99,15 +95,7 @@ def _inject_platform_loader(name: str) -> bool:
 
     # Insert the new entry before the closing brace
     before = match.group(1).rstrip()
-    updated = (
-        content[: match.start()]
-        + before
-        + "\n"
-        + new_entry
-        + "\n"
-        + match.group(2)
-        + content[match.end() :]
-    )
+    updated = content[: match.start()] + before + "\n" + new_entry + "\n" + match.group(2) + content[match.end() :]
     LIKEC4_DIAGRAM_TSX.write_text(updated)
     _ok(f"Injected '{name}' into LikeC4Diagram.tsx platformLoaders")
     return True
@@ -140,7 +128,8 @@ def cmd_new(name: str) -> None:
 
     if not re.match(r"^[a-z][a-z0-9-]*$", name):
         _error(
-            f"Invalid platform name '{name}'. Must be kebab-case: lowercase letters, digits, hyphens. Start with a letter."
+            f"Invalid platform name '{name}'. "
+            "Must be kebab-case: lowercase letters, digits, hyphens. Start with a letter."
         )
         sys.exit(1)
 
@@ -167,11 +156,8 @@ def cmd_new(name: str) -> None:
     # 2. Inject LikeC4 loader import
     _inject_platform_loader(name)
 
-    # 3. Register in portal (symlinks)
-    setup_sh = PORTAL_DIR / "setup.sh"
-    if setup_sh.exists():
-        subprocess.run(["bash", str(setup_sh)], check=True, capture_output=True)
-        _ok("Portal symlinks updated")
+    # 3. Portal symlinks are auto-managed by Vite plugin in astro.config.mjs
+    _ok("Portal symlinks auto-managed by Vite plugin (no manual step needed)")
 
     # 4. Validate
     print(f"\n{'=' * 50}")
@@ -179,9 +165,7 @@ def cmd_new(name: str) -> None:
     print(f"{'=' * 50}")
     print("\nNext steps:")
     print("  cd portal && npm run dev              # see it in the portal")
-    print(
-        f"  /pipeline {name}                      # see pipeline status and next step"
-    )
+    print(f"  /pipeline {name}                      # see pipeline status and next step")
     print(f"  python3 .specify/scripts/platform.py lint {name}  # validate")
 
 
@@ -225,9 +209,7 @@ def _lint_platform(name: str) -> bool:
                 _error(f"platform.yaml missing required field: {field}")
                 ok = False
         if manifest.get("name") != name:
-            _warn(
-                f"platform.yaml name '{manifest.get('name')}' != directory name '{name}'"
-            )
+            _warn(f"platform.yaml name '{manifest.get('name')}' != directory name '{name}'")
         _ok("platform.yaml valid")
     else:
         _error("platform.yaml not found")
@@ -254,10 +236,7 @@ def _lint_platform(name: str) -> bool:
         if fpath.exists():
             content = fpath.read_text()
             for marker in markers:
-                if (
-                    f"<!-- AUTO:{marker} -->" in content
-                    and f"<!-- /AUTO:{marker} -->" in content
-                ):
+                if f"<!-- AUTO:{marker} -->" in content and f"<!-- /AUTO:{marker} -->" in content:
                     _ok(f"AUTO:{marker} markers in {filepath}")
                 else:
                     _warn(f"AUTO:{marker} markers missing in {filepath}")
@@ -346,7 +325,7 @@ def cmd_sync(name: str | None) -> None:
 
 
 def cmd_register(name: str) -> None:
-    """Inject LikeC4 loader, re-run portal setup.sh, and validate model."""
+    """Inject LikeC4 loader and validate model. Symlinks are auto-managed by Vite plugin."""
     pdir = PLATFORMS_DIR / name
     if not pdir.exists():
         _error(f"Platform '{name}' not found")
@@ -355,12 +334,8 @@ def cmd_register(name: str) -> None:
     # Inject LikeC4 loader import (idempotent — skips if already present)
     _inject_platform_loader(name)
 
-    # Re-run setup.sh
-    setup_sh = PORTAL_DIR / "setup.sh"
-    if setup_sh.exists():
-        print("Running portal/setup.sh...")
-        subprocess.run(["bash", str(setup_sh)], check=True)
-        _ok("Portal symlinks updated")
+    # Portal symlinks are auto-managed by Vite plugin in astro.config.mjs
+    _ok("Portal symlinks auto-managed by Vite plugin")
 
     # Validate LikeC4 model
     model_dir = pdir / "model"

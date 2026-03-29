@@ -64,7 +64,7 @@ def test_insert_decision_auto_id(tmp_db):
     did = insert_decision(
         tmp_db, "p1", "vision", "Test Decision", decisions=["chose A over B"]
     )
-    assert len(did) == 8  # hex of 4 bytes
+    assert len(did) == 16  # hex of 8 bytes
     decs = get_decisions(tmp_db, "p1")
     assert len(decs) == 1
     assert decs[0]["title"] == "Test Decision"

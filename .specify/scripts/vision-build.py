@@ -154,12 +154,8 @@ def _integrations_table(data: dict) -> str:
         source_id = rel.get("source", {}).get("model", "?")
         target_id = rel.get("target", {}).get("model", "?")
 
-        source_name = _esc(
-            data["elements"].get(source_id, {}).get("title", source_id.split(".")[-1])
-        )
-        target_name = _esc(
-            data["elements"].get(target_id, {}).get("title", target_id.split(".")[-1])
-        )
+        source_name = _esc(data["elements"].get(source_id, {}).get("title", source_id.split(".")[-1]))
+        target_name = _esc(data["elements"].get(target_id, {}).get("title", target_id.split(".")[-1]))
 
         title = _esc(rel.get("title", "-"))
         meta = rel.get("metadata", {})
@@ -168,14 +164,15 @@ def _integrations_table(data: dict) -> str:
         fallback = _esc(meta.get("fallback", "-"))
 
         direction = f"{source_name} -> {target_name}"
-        rows.append(
-            f"| {count} | **{title}** | {_esc(tech)} | {direction} | {freq} | {payload_desc} | {fallback} |"
-        )
+        rows.append(f"| {count} | **{title}** | {_esc(tech)} | {direction} | {freq} | {payload_desc} | {fallback} |")
 
         if count >= MAX_INTEGRATION_ROWS:
             break
 
-    header = "| # | System | Protocol | Direction | Frequency | Data | Fallback |\n|---|--------|----------|-----------|-----------|------|----------|\n"
+    header = (
+        "| # | System | Protocol | Direction | Frequency | Data | Fallback |\n"
+        "|---|--------|----------|-----------|-----------|------|----------|\n"
+    )
     return header + "\n".join(rows)
 
 
@@ -196,7 +193,6 @@ def _ddd_relations_table(data: dict) -> str:
     """Build markdown table of DDD inter-domain relationships."""
     rows = []
     bc_ids = set(_bc_ids(data))
-    bc_prefixes = tuple(f"{bc_id}." for bc_id in bc_ids)
 
     def _is_bc_or_module(eid: str) -> bool:
         el = data["elements"].get(eid, {})
@@ -249,17 +245,13 @@ def update_markdown(md_path: Path, marker: str, content: str) -> bool:
         print(f"[warn] Markers not found in {md_path.name} ({marker})")
         return False
 
-    new_text = (
-        text[: start_idx + len(start_tag)] + "\n" + content + "\n" + text[end_idx:]
-    )
+    new_text = text[: start_idx + len(start_tag)] + "\n" + content + "\n" + text[end_idx:]
     md_path.write_text(new_text)
     print(f"[ok] Updated {md_path.name} ({marker})")
     return True
 
 
-def build(
-    platform: str, validate_only: bool = False, do_export_png: bool = False
-) -> None:
+def build(platform: str, validate_only: bool = False, do_export_png: bool = False) -> None:
     """Main build pipeline: validate, export JSON, populate markdown tables."""
     model_dir = PLATFORMS_DIR / platform / "model"
     if not model_dir.exists():
@@ -272,18 +264,14 @@ def build(
 
     # export_json already validates the model (check=True fails on invalid input)
     data = export_json(model_dir)
-    print(
-        f"[ok] {len(data['elements'])} elements, {len(data['relations'])} relations, {len(data['views'])} views"
-    )
+    print(f"[ok] {len(data['elements'])} elements, {len(data['relations'])} relations, {len(data['views'])} views")
 
     eng_dir = PLATFORMS_DIR / platform / "engineering"
 
     update_markdown(eng_dir / "containers.md", "containers", _containers_table(data))
     update_markdown(eng_dir / "context-map.md", "domains", _domains_table(data))
     update_markdown(eng_dir / "context-map.md", "relations", _ddd_relations_table(data))
-    update_markdown(
-        eng_dir / "integrations.md", "integrations", _integrations_table(data)
-    )
+    update_markdown(eng_dir / "integrations.md", "integrations", _integrations_table(data))
 
     if do_export_png:
         export_png(model_dir)
@@ -291,9 +279,7 @@ def build(
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print(
-            "Usage: python .specify/scripts/vision-build.py <platform> [--validate-only] [--export-png]"
-        )
+        print("Usage: python .specify/scripts/vision-build.py <platform> [--validate-only] [--export-png]")
         sys.exit(1)
 
     platform_name = sys.argv[1]

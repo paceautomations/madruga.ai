@@ -19,3 +19,6 @@ pnpm-debug.log*
 
 # macOS-specific files
 .DS_Store
+
+# Auto-generated platform symlinks (managed by platformSymlinksPlugin in astro.config.mjs)
+src/content/docs/*/

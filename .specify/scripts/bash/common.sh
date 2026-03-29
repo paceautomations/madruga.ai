@@ -61,18 +61,22 @@ get_current_branch() {
     fi
 
     # For non-git repos, try to find the latest feature directory
-    local specs_dir="$repo_root/specs"
+    # Search platform epic dirs first, then specs/ as legacy fallback
+    local search_dirs=()
+    for pdir in "$repo_root"/platforms/*/epics; do
+        [[ -d "$pdir" ]] && search_dirs+=("$pdir")
+    done
+    [[ -d "$repo_root/specs" ]] && search_dirs+=("$repo_root/specs")
 
-    if [[ -d "$specs_dir" ]]; then
-        local latest_feature=""
-        local highest=0
-        local latest_timestamp=""
+    local latest_feature=""
+    local highest=0
+    local latest_timestamp=""
 
+    for specs_dir in "${search_dirs[@]}"; do
         for dir in "$specs_dir"/*; do
             if [[ -d "$dir" ]]; then
                 local dirname=$(basename "$dir")
                 if [[ "$dirname" =~ ^([0-9]{8}-[0-9]{6})- ]]; then
-                    # Timestamp-based branch: compare lexicographically
                     local ts="${BASH_REMATCH[1]}"
                     if [[ "$ts" > "$latest_timestamp" ]]; then
                         latest_timestamp="$ts"
@@ -83,7 +87,6 @@ get_current_branch() {
                     number=$((10#$number))
                     if [[ "$number" -gt "$highest" ]]; then
                         highest=$number
-                        # Only update if no timestamp branch found yet
                         if [[ -z "$latest_timestamp" ]]; then
                             latest_feature=$dirname
                         fi
@@ -91,11 +94,11 @@ get_current_branch() {
                 fi
             fi
         done
+    done
 
-        if [[ -n "$latest_feature" ]]; then
-            echo "$latest_feature"
-            return
-        fi
+    if [[ -n "$latest_feature" ]]; then
+        echo "$latest_feature"
+        return
     fi
 
     echo "main"  # Final fallback
@@ -133,10 +136,9 @@ check_feature_branch() {
     return 0
 }
 
-get_feature_dir() { echo "$1/specs/$2"; }
-
 # Find feature directory by numeric prefix instead of exact branch match.
 # This allows multiple branches to work on the same spec (e.g., 004-fix-bug, 004-add-feature).
+# Searches SPECIFY_BASE_DIR first, then specs/ as legacy fallback.
 find_feature_dir_by_prefix() {
     local repo_root="$1"
     local branch_name="$2"
@@ -147,39 +149,62 @@ find_feature_dir_by_prefix() {
         return
     fi
 
-    local specs_dir="$repo_root/specs"
-
     # Extract prefix from branch (e.g., "004" from "004-whatever" or "20260319-143022" from timestamp branches)
     local prefix=""
     if [[ "$branch_name" =~ ^([0-9]{8}-[0-9]{6})- ]]; then
         prefix="${BASH_REMATCH[1]}"
     elif [[ "$branch_name" =~ ^([0-9]{3})- ]]; then
         prefix="${BASH_REMATCH[1]}"
-    else
-        # If branch does not have a recognized prefix, fall back to exact match
-        echo "$specs_dir/$branch_name"
+    fi
+
+    # Search in all platform epic directories first, then specs/ as fallback
+    local search_dirs=()
+    for pdir in "$repo_root"/platforms/*/epics; do
+        [[ -d "$pdir" ]] && search_dirs+=("$pdir")
+    done
+    # Legacy fallback
+    [[ -d "$repo_root/specs" ]] && search_dirs+=("$repo_root/specs")
+
+    if [[ -z "$prefix" ]]; then
+        # No recognized prefix — try exact match in search dirs
+        for sdir in "${search_dirs[@]}"; do
+            if [[ -d "$sdir/$branch_name" ]]; then
+                echo "$sdir/$branch_name"
+                return
+            fi
+        done
+        # Not found — return first search dir with branch name (will fail later with clear error)
+        if [[ ${#search_dirs[@]} -gt 0 ]]; then
+            echo "${search_dirs[0]}/$branch_name"
+        else
+            echo "$repo_root/specs/$branch_name"
+        fi
         return
     fi
 
-    # Search for directories in specs/ that start with this prefix
+    # Search for directories that start with this prefix
     local matches=()
-    if [[ -d "$specs_dir" ]]; then
-        for dir in "$specs_dir"/"$prefix"-*; do
+    local match_paths=()
+    for sdir in "${search_dirs[@]}"; do
+        for dir in "$sdir"/"$prefix"-*; do
             if [[ -d "$dir" ]]; then
                 matches+=("$(basename "$dir")")
+                match_paths+=("$dir")
             fi
         done
-    fi
+    done
 
     # Handle results
     if [[ ${#matches[@]} -eq 0 ]]; then
-        # No match found — return the branch name path (will fail later with clear error)
-        echo "$specs_dir/$branch_name"
+        # No match found — return path that will fail later with clear error
+        if [[ ${#search_dirs[@]} -gt 0 ]]; then
+            echo "${search_dirs[0]}/$branch_name"
+        else
+            echo "$repo_root/specs/$branch_name"
+        fi
     elif [[ ${#matches[@]} -eq 1 ]]; then
-        # Exactly one match — use it
-        echo "$specs_dir/${matches[0]}"
+        echo "${match_paths[0]}"
     else
-        # Multiple matches — this should not happen with proper naming convention
         echo "ERROR: Multiple spec directories found with prefix '$prefix': ${matches[*]}" >&2
         echo "Ensure only one spec directory exists per prefix." >&2
         return 1
