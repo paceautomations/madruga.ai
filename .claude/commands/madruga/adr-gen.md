@@ -24,6 +24,7 @@ Every architectural decision MUST have **at least 3 evaluated alternatives** wit
 - Omit negative consequences of the choice
 - Copy decisions from other projects without contextualizing for this one
 - Create an ADR for a trivial decision that does not impact architecture
+- Fabricate sources. Every reference MUST have a verifiable URL or specific document title. No URL → mark as `[FONTE NÃO VERIFICADA]`
 
 ## Persona
 

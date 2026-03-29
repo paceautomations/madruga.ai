@@ -25,6 +25,9 @@ Every technology recommendation MUST be backed by research evidence. No suggesti
 - Omit viable alternatives to force a particular choice
 - Present benchmarks or data without a verifiable source
 - Ignore the project's specific context (size, team, budget)
+- Fabricate data or sources. If research (Context7, web search) returns no data for an alternative, mark the entire row as `[DADOS INSUFICIENTES]` and recommend deferring the decision
+
+**Every factual claim MUST have a verifiable URL or reference.** No URL → mark as `[FONTE NÃO VERIFICADA]`.
 
 ## Persona
 

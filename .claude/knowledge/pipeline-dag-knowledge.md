@@ -104,6 +104,13 @@ File: platforms/<name>/<path>
 Lines: <N>
 Checks: [x] ...
 Next step: /<next-skill> <name>
+
+#### SQLite Integration (if `.pipeline/madruga.db` exists)
+After saving the artifact, update the database:
+- `db.upsert_pipeline_node()` or `db.upsert_epic_node()` depending on DAG level
+- `db.insert_provenance()` with file_path and generated_by
+- `db.insert_event()` with action='completed'
+- If DB does not exist, proceed normally (DB is opt-in).
 ```
 
 ---
@@ -161,6 +168,7 @@ Every skill's auto-review MUST include these universal checks plus artifact-spec
 | 5 | Zero technical terms in business artifacts | Business only |
 | 6 | Mermaid/LikeC4 diagrams included where applicable | Engineering |
 | 7 | Max line count respected | All |
+| 8 | Verifiable sources? Every factual claim has URL or reference. No URL → [FONTE NÃO VERIFICADA] | Research + Engineering |
 
 ---
 

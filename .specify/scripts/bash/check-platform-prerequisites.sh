@@ -19,19 +19,21 @@
 set -e
 
 # Parse command line arguments
-JSON_MODE=false
 PLATFORM=""
 SKILL=""
+JSON_MODE=false
 STATUS_MODE=false
+USE_DB=false
+CHECK_PLATFORM_ONLY=false
 
-for arg in "$@"; do
+i=1
+while [ $i -le $# ]; do
+    arg="${!i}"
     case "$arg" in
         --json) JSON_MODE=true ;;
-        --platform)
-            shift_next=true ;;
-        --skill)
-            shift_next_skill=true ;;
         --status) STATUS_MODE=true ;;
+        --use-db) USE_DB=true ;;
+        --check-platform-only) CHECK_PLATFORM_ONLY=true ;;
         --help|-h)
             cat << 'EOF'
 Usage: check-platform-prerequisites.sh [OPTIONS]
@@ -39,45 +41,22 @@ Usage: check-platform-prerequisites.sh [OPTIONS]
 Platform pipeline prerequisites checker.
 
 OPTIONS:
-  --platform <name>   Platform name (required)
-  --skill <id>        Check prerequisites for a specific pipeline node
-  --status            Show full pipeline status (all nodes)
-  --json              Output in JSON format
-  --help, -h          Show this help message
+  --platform <name>        Platform name (required)
+  --skill <id>             Check prerequisites for a specific pipeline node
+  --status                 Show full pipeline status (all nodes)
+  --json                   Output in JSON format
+  --use-db                 Query SQLite DB for enhanced status (hash, staleness)
+  --check-platform-only    Only verify platform exists (for non-DAG skills)
+  --help, -h               Show this help message
 
 EXAMPLES:
-  # Check if domain-model skill can run
   ./check-platform-prerequisites.sh --json --platform madruga-ai --skill domain-model
-
-  # Show full pipeline status
   ./check-platform-prerequisites.sh --json --platform madruga-ai --status
+  ./check-platform-prerequisites.sh --json --platform madruga-ai --status --use-db
+  ./check-platform-prerequisites.sh --json --platform madruga-ai --check-platform-only
 EOF
             exit 0
             ;;
-        *)
-            if [ "${shift_next:-}" = true ]; then
-                PLATFORM="$arg"
-                shift_next=false
-            elif [ "${shift_next_skill:-}" = true ]; then
-                SKILL="$arg"
-                shift_next_skill=false
-            fi
-            ;;
-    esac
-done
-
-# Re-parse with positional awareness
-PLATFORM=""
-SKILL=""
-JSON_MODE=false
-STATUS_MODE=false
-i=1
-while [ $i -le $# ]; do
-    arg="${!i}"
-    case "$arg" in
-        --json) JSON_MODE=true ;;
-        --status) STATUS_MODE=true ;;
-        --help|-h) exit 0 ;;
         --platform)
             i=$((i + 1))
             PLATFORM="${!i}" ;;
@@ -104,11 +83,11 @@ if [ -z "$PLATFORM" ]; then
     exit 1
 fi
 
-if [ -z "$SKILL" ] && [ "$STATUS_MODE" != true ]; then
+if [ -z "$SKILL" ] && [ "$STATUS_MODE" != true ] && [ "$CHECK_PLATFORM_ONLY" != true ]; then
     if $JSON_MODE; then
-        echo '{"error":"One of --skill or --status is required"}'
+        echo '{"error":"One of --skill, --status, or --check-platform-only is required"}'
     else
-        echo "ERROR: One of --skill or --status is required" >&2
+        echo "ERROR: One of --skill, --status, or --check-platform-only is required" >&2
     fi
     exit 1
 fi
@@ -133,6 +112,65 @@ if [ ! -f "$PLATFORM_YAML" ]; then
         echo "ERROR: platform.yaml not found at $PLATFORM_YAML" >&2
     fi
     exit 1
+fi
+
+# --check-platform-only: just verify platform exists and is valid, then exit
+if [ "$CHECK_PLATFORM_ONLY" = true ]; then
+    if $JSON_MODE; then
+        printf '{"platform":"%s","valid":true,"platform_dir":"%s"}\n' "$PLATFORM" "$PLATFORM_DIR"
+    else
+        echo "Platform '$PLATFORM' is valid at $PLATFORM_DIR"
+    fi
+    exit 0
+fi
+
+# --use-db: query SQLite for enhanced status (with hashes, staleness)
+if [ "$USE_DB" = true ]; then
+    DB_PATH="$REPO_ROOT/.pipeline/madruga.db"
+    if [ ! -f "$DB_PATH" ]; then
+        echo '{"warning":"DB not found at .pipeline/madruga.db, falling back to filesystem"}' >&2
+        USE_DB=false
+    else
+        # Query DB via Python for full status with hashes and staleness
+        DB_RESULT=$(python3 -c "
+import sys, json
+sys.path.insert(0, '$REPO_ROOT/.specify/scripts')
+from db import get_conn, get_pipeline_nodes, get_stale_nodes, get_platform_status, get_epics
+import yaml
+
+conn = get_conn()
+status = get_platform_status(conn, '$PLATFORM')
+nodes = get_pipeline_nodes(conn, '$PLATFORM')
+epics = get_epics(conn, '$PLATFORM')
+
+# Parse DAG edges for staleness
+with open('$PLATFORM_YAML') as f:
+    manifest = yaml.safe_load(f)
+dag_edges = {}
+for n in manifest.get('pipeline', {}).get('nodes', []):
+    dag_edges[n['id']] = n.get('depends', [])
+
+stale = get_stale_nodes(conn, '$PLATFORM', dag_edges)
+stale_ids = {s['node_id'] for s in stale}
+
+# Enhance nodes with stale flag
+for node in nodes:
+    node['stale'] = node['node_id'] in stale_ids
+
+result = {
+    'platform': '$PLATFORM',
+    'source': 'db',
+    'status': status,
+    'nodes': nodes,
+    'stale_nodes': stale,
+    'epics_count': len(epics)
+}
+print(json.dumps(result, indent=2))
+conn.close()
+" 2>&1)
+        echo "$DB_RESULT"
+        exit 0
+    fi
 fi
 
 # Check python3 availability

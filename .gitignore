@@ -5,3 +5,6 @@ __pycache__/
 .ruff_cache/
 *.pyc
 *.log
+.pipeline/madruga.db
+.pipeline/madruga.db-wal
+.pipeline/madruga.db-shm

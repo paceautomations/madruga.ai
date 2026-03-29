@@ -4,7 +4,6 @@ import config from 'virtual:starlight/user-config';
 import LanguageSelect from 'virtual:starlight/components/LanguageSelect';
 import Search from 'virtual:starlight/components/Search';
 import SiteTitle from 'virtual:starlight/components/SiteTitle';
-import SocialIcons from 'virtual:starlight/components/SocialIcons';
 import ThemeSelect from 'virtual:starlight/components/ThemeSelect';
 import PlatformSwitcher from './PlatformSwitcher.astro';
 
@@ -15,15 +14,12 @@ const shouldRenderSearch =
 <div class="header">
 	<div class="title-wrapper sl-flex">
 		<SiteTitle />
+		<PlatformSwitcher />
 	</div>
-	<div class="sl-flex print:hidden">
+	<div class="sl-flex print:hidden search-right">
 		{shouldRenderSearch && <Search />}
 	</div>
 	<div class="sl-hidden md:sl-flex print:hidden right-group">
-		<PlatformSwitcher />
-		<div class="sl-flex social-icons">
-			<SocialIcons />
-		</div>
 		<ThemeSelect />
 		<LanguageSelect />
 	</div>
@@ -44,17 +40,17 @@ const shouldRenderSearch =
 			padding: 0.25rem;
 			margin: -0.25rem;
 			min-width: 0;
+			align-items: center;
+			gap: 1rem;
 		}
 
-		.right-group,
-		.social-icons {
+		.search-right {
+			justify-content: flex-end;
+		}
+
+		.right-group {
 			gap: 1rem;
 			align-items: center;
-		}
-		.social-icons::after {
-			content: '';
-			height: 2rem;
-			border-inline-end: 1px solid var(--sl-color-gray-5);
 		}
 
 		@media (min-width: 50rem) {

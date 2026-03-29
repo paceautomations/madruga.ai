@@ -257,3 +257,10 @@ After completing any implementation task (new code or refactor touching 3+ files
 - **Architecture models**: LikeC4 (.likec4 files)
 - **Portal**: Astro + Starlight + LikeC4 React
 - **Storage**: Filesystem only — artifacts are markdown/LikeC4 files, status derived from file existence
+
+## Active Technologies
+- Python 3.11+ (stdlib only: sqlite3, hashlib, json, pathlib, uuid) + Zero — apenas stdlib Python (002-sqlite-foundation)
+- SQLite 3 (WAL mode, foreign_keys=ON, busy_timeout=5000) (002-sqlite-foundation)
+
+## Recent Changes
+- 002-sqlite-foundation: Added Python 3.11+ (stdlib only: sqlite3, hashlib, json, pathlib, uuid) + Zero — apenas stdlib Python
