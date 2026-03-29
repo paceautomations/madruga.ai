@@ -74,6 +74,13 @@ python3 .specify/scripts/vision-build.py <name> --validate-only
 python3 .specify/scripts/vision-build.py <name> --export-png
 ```
 
+## Command Namespaces
+
+- **`madruga:*`** (e.g., `/vision`, `/adr`, `/pipeline`, `/getting-started`) — Platform documentation pipeline (13 DAG skills + 7 utilities). Operates at platform level.
+- **`speckit.*`** (e.g., `/speckit.specify`, `/speckit.plan`, `/speckit.tasks`) — SpecKit implementation cycle. Operates within an epic directory.
+
+Both are invoked via `/command-name` in Claude Code. Start with `/getting-started` for guided onboarding.
+
 ## Prerequisites
 
 - Node.js 20+

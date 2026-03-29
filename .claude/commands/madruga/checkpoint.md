@@ -97,3 +97,10 @@ No human approval required. Save immediately.
 |-------|--------|
 | No tasks.md found | Create minimal STATE.md based on git log |
 | No git repo | Create STATE.md based on filesystem only |
+
+---
+handoff:
+  from: checkpoint
+  to: null
+  context: "Utilitario. STATE.md salvo."
+  blockers: []

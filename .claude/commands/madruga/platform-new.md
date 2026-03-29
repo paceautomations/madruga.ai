@@ -128,3 +128,10 @@ platforms/<name>/
 | Scaffold OK but inject/symlinks fail | Run `python3 .specify/scripts/platform.py register <name>` (handles inject + symlinks + validation) |
 | Portal does not show the platform | Run `python3 .specify/scripts/platform.py register <name>` and restart `npm run dev` |
 | likec4 build fails on empty model | Normal — scaffold generates an empty `dynamic view businessFlow` that triggers a warning. Filling in the content resolves it. |
+
+---
+handoff:
+  from: platform-new
+  to: vision
+  context: "Plataforma criada. Vision deve definir posicionamento de negocio."
+  blockers: []

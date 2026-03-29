@@ -1,8 +1,8 @@
 """
 db.py — SQLite thin wrapper for madruga.ai pipeline state.
 
-Zero external dependencies. Uses only Python stdlib:
-sqlite3, hashlib, json, pathlib, os, logging.
+Uses Python stdlib: sqlite3, hashlib, json, pathlib, os, logging.
+seed_from_filesystem() additionally requires pyyaml.
 
 Usage:
     from db import get_conn, migrate, upsert_platform, ...
@@ -62,13 +62,26 @@ def migrate(
         if sql_file.name not in applied:
             logger.info("Applying migration: %s", sql_file.name)
             try:
-                conn.executescript(sql_file.read_text())
+                # Strip SQL comments, then split on ';' and execute each
+                # statement within the current transaction (unlike executescript()
+                # which auto-commits and breaks rollback safety).
+                sql_text = sql_file.read_text()
+                # Remove single-line comments
+                lines = [
+                    ln for ln in sql_text.split("\n") if not ln.strip().startswith("--")
+                ]
+                cleaned = "\n".join(lines)
+                for statement in cleaned.split(";"):
+                    stmt = statement.strip()
+                    if stmt:
+                        conn.execute(stmt)
                 conn.execute(
                     "INSERT INTO _migrations (name, applied_at) VALUES (?, ?)",
                     (sql_file.name, _now()),
                 )
                 conn.commit()
             except Exception:
+                conn.rollback()
                 logger.error("Migration failed: %s", sql_file.name)
                 raise
     if own_conn:
@@ -76,9 +89,9 @@ def migrate(
 
 
 def compute_file_hash(path: str | Path) -> str:
-    """Return 'sha256:<12-char hex>' hash of file contents."""
+    """Return 'sha256:<full hex>' hash of file contents."""
     data = Path(path).read_bytes()
-    return "sha256:" + hashlib.sha256(data).hexdigest()[:12]
+    return "sha256:" + hashlib.sha256(data).hexdigest()
 
 
 # ══════════════════════════════════════
@@ -136,22 +149,31 @@ def upsert_pipeline_node(
     status: str = "pending",
     **kwargs,
 ) -> None:
-    fields = {
-        "platform_id": platform_id,
-        "node_id": node_id,
-        "status": status,
-        "output_hash": kwargs.get("output_hash"),
-        "input_hashes": kwargs.get("input_hashes", "{}"),
-        "output_files": kwargs.get("output_files", "[]"),
-        "completed_at": kwargs.get("completed_at"),
-        "completed_by": kwargs.get("completed_by"),
-        "line_count": kwargs.get("line_count"),
-    }
-    cols = ", ".join(fields.keys())
-    placeholders = ", ".join(["?"] * len(fields))
     conn.execute(
-        f"INSERT OR REPLACE INTO pipeline_nodes ({cols}) VALUES ({placeholders})",
-        tuple(fields.values()),
+        """INSERT INTO pipeline_nodes
+           (platform_id, node_id, status, output_hash, input_hashes,
+            output_files, completed_at, completed_by, line_count)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(platform_id, node_id) DO UPDATE SET
+             status = excluded.status,
+             output_hash = COALESCE(excluded.output_hash, pipeline_nodes.output_hash),
+             input_hashes = COALESCE(excluded.input_hashes, pipeline_nodes.input_hashes),
+             output_files = COALESCE(excluded.output_files, pipeline_nodes.output_files),
+             completed_at = COALESCE(excluded.completed_at, pipeline_nodes.completed_at),
+             completed_by = COALESCE(excluded.completed_by, pipeline_nodes.completed_by),
+             line_count = COALESCE(excluded.line_count, pipeline_nodes.line_count)
+        """,
+        (
+            platform_id,
+            node_id,
+            status,
+            kwargs.get("output_hash"),
+            kwargs.get("input_hashes"),
+            kwargs.get("output_files"),
+            kwargs.get("completed_at"),
+            kwargs.get("completed_by"),
+            kwargs.get("line_count"),
+        ),
     )
     conn.commit()
 
@@ -217,9 +239,15 @@ def upsert_epic_node(
     **kwargs,
 ) -> None:
     conn.execute(
-        "INSERT OR REPLACE INTO epic_nodes "
-        "(platform_id, epic_id, node_id, status, output_hash, completed_at, completed_by) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        """INSERT INTO epic_nodes
+           (platform_id, epic_id, node_id, status, output_hash, completed_at, completed_by)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(platform_id, epic_id, node_id) DO UPDATE SET
+             status = excluded.status,
+             output_hash = COALESCE(excluded.output_hash, epic_nodes.output_hash),
+             completed_at = COALESCE(excluded.completed_at, epic_nodes.completed_at),
+             completed_by = COALESCE(excluded.completed_by, epic_nodes.completed_by)
+        """,
         (
             platform_id,
             epic_id,
@@ -570,6 +598,15 @@ def seed_from_filesystem(
             output_hash=output_hash,
             output_files=json.dumps(output_files),
             completed_by=node.get("skill"),
+        )
+        insert_event(
+            conn,
+            platform_id,
+            "node",
+            nid,
+            "seeded",
+            actor="seed",
+            payload={"status": status},
         )
         nodes_seeded += 1
 

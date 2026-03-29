@@ -155,3 +155,67 @@ def test_get_epic_status(tmp_db):
     assert status["total_nodes"] == 2
     assert status["done"] == 1
     assert status["progress_pct"] == 50.0
+
+
+def test_upsert_pipeline_node_preserves_existing(tmp_db):
+    """ON CONFLICT DO UPDATE must preserve existing values when new kwargs are None."""
+    from db import upsert_platform, upsert_pipeline_node, get_pipeline_nodes
+
+    upsert_platform(tmp_db, "p1", name="P1", repo_path="platforms/p1")
+    # First upsert: set all fields
+    upsert_pipeline_node(
+        tmp_db,
+        "p1",
+        "vision",
+        "done",
+        output_hash="sha256:original",
+        completed_at="2026-03-01T00:00:00Z",
+        completed_by="vision",
+        line_count=150,
+    )
+    # Second upsert: only update status, other kwargs absent
+    upsert_pipeline_node(tmp_db, "p1", "vision", "stale")
+    nodes = get_pipeline_nodes(tmp_db, "p1")
+    assert len(nodes) == 1
+    n = nodes[0]
+    assert n["status"] == "stale"
+    assert n["output_hash"] == "sha256:original"  # preserved
+    assert n["completed_at"] == "2026-03-01T00:00:00Z"  # preserved
+    assert n["completed_by"] == "vision"  # preserved
+    assert n["line_count"] == 150  # preserved
+
+
+def test_upsert_epic_node_preserves_existing(tmp_db):
+    """ON CONFLICT DO UPDATE must preserve existing values for epic nodes."""
+    from db import upsert_platform, upsert_epic, upsert_epic_node, get_epic_nodes
+
+    upsert_platform(tmp_db, "p1", name="P1", repo_path="platforms/p1")
+    upsert_epic(tmp_db, "p1", "001-test", title="Test")
+    upsert_epic_node(
+        tmp_db,
+        "p1",
+        "001-test",
+        "specify",
+        "done",
+        output_hash="sha256:abc",
+        completed_at="2026-03-01T00:00:00Z",
+    )
+    # Re-upsert with just status change
+    upsert_epic_node(tmp_db, "p1", "001-test", "specify", "stale")
+    nodes = get_epic_nodes(tmp_db, "p1", "001-test")
+    assert len(nodes) == 1
+    assert nodes[0]["status"] == "stale"
+    assert nodes[0]["output_hash"] == "sha256:abc"  # preserved
+    assert nodes[0]["completed_at"] == "2026-03-01T00:00:00Z"  # preserved
+
+
+def test_compute_file_hash_full_length(tmp_path):
+    """Hash should be full SHA-256 (64 hex chars after prefix)."""
+    from db import compute_file_hash
+
+    f = tmp_path / "test.txt"
+    f.write_text("hello")
+    h = compute_file_hash(f)
+    assert h.startswith("sha256:")
+    hex_part = h[len("sha256:") :]
+    assert len(hex_part) == 64  # full SHA-256

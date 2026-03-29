@@ -145,6 +145,12 @@ Reference the business layer and project constraints.
 | 7 | Does each alternative have both pros AND cons? | Complete |
 | 8 | References with real sources (not fabricated)? | Verify or remove |
 
+### Tier 3 — Adversarial Review (1-way-door)
+
+Per pipeline-contract-base.md Tier 3: before presenting to user, launch a subagent (Agent tool, subagent_type="general-purpose") with the complete artifact text. Prompt: "You are a staff engineer reviewing these ADRs for 1-way-door decisions. Be harsh and direct. Check for: missed alternatives, unsupported claims, hidden assumptions, scope creep, simpler approaches. Output a bullet list of issues (BLOCKER/WARNING/NIT) and an overall verdict."
+
+Incorporate feedback: fix blockers, note warnings in the scorecard.
+
 ## Error Handling
 
 | Problem | Action |

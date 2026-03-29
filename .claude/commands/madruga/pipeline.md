@@ -53,11 +53,14 @@ For each epic directory in `platforms/<name>/epics/*/`:
 ```
 ## Pipeline L1 — Platform DAG (<N>/<total> done)
 
-| # | Skill | Status | Layer | Gate | Missing Deps |
-|---|-------|--------|-------|------|-------------|
-| 1 | vision | done | business | human | — |
-| 2 | blueprint | ready | engineering | human | — |
-| 3 | containers | blocked | engineering | human | domain-model |
+| # | Skill | Status | Layer | Gate | Est. | Missing Deps |
+|---|-------|--------|-------|------|------|-------------|
+| 1 | platform-new | done | business | human | ~15 min | — |
+| 2 | vision | done | business | human | ~30 min | — |
+| 3 | solution-overview | ready | business | human | ~30 min | — |
+| ... | ... | ... | ... | ... | ... | ... |
+
+**Time estimates per skill**: platform-new ~15min, vision ~30min, solution-overview ~30min, business-process ~30min, tech-research ~45min, codebase-map ~30min, adr ~45min, blueprint ~30min, domain-model ~45min, containers ~45min, context-map ~30min, epic-breakdown ~45min, roadmap ~30min. **Total pipeline: ~7h.**
 ```
 
 **Colored Mermaid DAG:**

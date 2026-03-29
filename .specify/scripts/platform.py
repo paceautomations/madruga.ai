@@ -48,7 +48,7 @@ AUTO_MARKERS = {
     "engineering/integrations.md": ["integrations"],
 }
 ADR_REQUIRED_FIELDS = ["title", "status"]
-EPIC_REQUIRED_FIELDS = ["id", "title", "status", "phase"]
+EPIC_REQUIRED_FIELDS = ["title", "status"]
 
 
 def _ok(msg: str) -> None:

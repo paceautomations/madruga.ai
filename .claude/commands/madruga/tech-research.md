@@ -200,6 +200,12 @@ updated: YYYY-MM-DD
 | 6 | Max 350 lines total? | Condense |
 | 7 | Research is recent (2025-2026)? | Verify dates |
 
+### Tier 3 — Adversarial Review (1-way-door)
+
+Per pipeline-contract-base.md Tier 3: before presenting to user, launch a subagent (Agent tool, subagent_type="general-purpose") with the complete artifact text. Prompt: "You are a staff engineer reviewing this technology research for a 1-way-door decision. Be harsh and direct. Check for: biased analysis, missing alternatives, unsupported claims, vendor lock-in risks, simpler approaches. Output a bullet list of issues (BLOCKER/WARNING/NIT) and an overall verdict."
+
+Incorporate feedback: fix blockers, note warnings in the scorecard.
+
 ## Error Handling
 
 | Problem | Action |

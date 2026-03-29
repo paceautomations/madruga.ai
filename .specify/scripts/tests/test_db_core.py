@@ -91,7 +91,7 @@ def test_compute_file_hash_format(tmp_path):
     f.write_text("hello")
     h = compute_file_hash(f)
     assert h.startswith("sha256:")
-    assert len(h) == len("sha256:") + 12
+    assert len(h) == len("sha256:") + 64
 
 
 def test_compute_file_hash_differs(tmp_path):

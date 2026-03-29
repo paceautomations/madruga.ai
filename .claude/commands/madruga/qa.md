@@ -357,8 +357,10 @@ Re-execute ONLY the failed scenario.
 
 ### 6. Persist
 
-1. Create directory if it does not exist: `obsidian-vault/4_Documents/qa-reports/`
-2. Save to `obsidian-vault/4_Documents/qa-reports/YYYY-MM-DD-<slug>.md` with frontmatter:
+1. Determine save path:
+   - **In epic context**: `platforms/<name>/epics/<NNN>/qa-report.md`
+   - **Standalone**: `platforms/<name>/qa-reports/YYYY-MM-DD-<slug>.md`
+2. Create directory if it does not exist, then save with frontmatter:
    ```yaml
    ---
    type: qa-report
@@ -370,7 +372,7 @@ Re-execute ONLY the failed scenario.
    pass_rate: "X%"
    ---
    ```
-3. Confirm: `📄 Report saved: obsidian-vault/4_Documents/qa-reports/YYYY-MM-DD-<slug>.md`
+3. Confirm: `Report saved: platforms/<name>/epics/<NNN>/qa-report.md`
 
 ---
 
@@ -403,5 +405,12 @@ Re-execute ONLY the failed scenario.
 
 ## QA Report — Dashboard
 Success rate: 100% (7 PASS + 1 HEALED) | WARN: 1
-📄 Report saved: obsidian-vault/4_Documents/qa-reports/2026-03-23-dashboard.md
+Report saved: platforms/fulano/epics/001-channel-pipeline/qa-report.md
 ```
+
+---
+handoff:
+  from: qa
+  to: reconcile
+  context: "QA concluido. Reconcile deve verificar drift causado pelo heal loop."
+  blockers: []

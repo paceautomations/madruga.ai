@@ -182,3 +182,10 @@ updated: YYYY-MM-DD
 | Multiple languages | List all, focus on primary (most files) |
 | No dependency files found | Infer stack from files, mark [INFERRED] |
 | platform.yaml missing source_repo field | Check for local src/, otherwise greenfield |
+
+---
+handoff:
+  from: codebase-map
+  to: null
+  context: "No opcional. Sem handoff obrigatorio."
+  blockers: []

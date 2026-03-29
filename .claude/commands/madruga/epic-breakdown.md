@@ -137,6 +137,12 @@ priority: P1 | P2 | P3
 | 6 | Are bounded contexts mapped to epics? | Map them |
 | 7 | Are inter-epic dependencies acyclic? | Resolve cycles |
 
+### Tier 3 — Adversarial Review (1-way-door)
+
+Per pipeline-contract-base.md Tier 3: before presenting to user, launch a subagent (Agent tool, subagent_type="general-purpose") with the complete artifact text. Prompt: "You are a staff engineer reviewing this epic breakdown for a 1-way-door decision. Be harsh and direct. Check for: scope creep, missing epics, overlapping epics, unrealistic appetites, hidden assumptions. Output a bullet list of issues (BLOCKER/WARNING/NIT) and an overall verdict."
+
+Incorporate feedback: fix blockers, note warnings in the scorecard.
+
 ## Error Handling
 
 | Issue | Action |

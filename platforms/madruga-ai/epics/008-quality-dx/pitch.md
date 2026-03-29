@@ -1,6 +1,8 @@
 ---
+id: 008
 title: "Epic 008 — Quality & DX"
 status: proposed
+phase: pitch
 appetite: "2 weeks"
 priority: 1
 ---
