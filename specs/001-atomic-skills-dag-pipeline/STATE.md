@@ -24,40 +24,33 @@
   - T006: vision-one-pager.md — prerequisites + handoff para solution-overview
   - T007: solution-overview.md — prerequisites + handoff para business-process
 
-## Next Steps
+- [x] **Wave 3 (T008)**: Business Skills
+  - T008: `business-process.md` — Mermaid sequence diagrams, zero tech terms, gate human
+- [x] **Wave 4 (T009-T010)**: Research Skills
+  - T009: `tech-research.md` — 1-way-door gate, deep research com subagents paralelos
+  - T010: `codebase-map.md` — gate auto, brownfield/greenfield detection, optional node
+- [x] **Wave 5 (T011-T013)**: Engineering Core
+  - T011: `adr-gen.md` — 1-way-door, Nygard format, output_pattern, Context7 research
+  - T012: `blueprint.md` — concerns transversais, NFRs, "simplest thing that works"
+  - T013: `folder-arch.md` — annotated tree, boundaries, naming conventions
+- [x] **Wave 6 (T014-T016)**: Engineering DDD
+  - T014: `domain-model.md` — bounded contexts, Mermaid + LikeC4 DSL
+  - T015: `containers.md` — C4 L2, LikeC4 model files
+  - T016: `context-map.md` — DDD patterns (ACL, conformist, upstream/downstream)
+- [x] **Wave 7 (T017-T018)**: Planning
+  - T017: `epic-breakdown.md` — Shape Up format, 1-way-door gate
+  - T018: `roadmap.md` — Gantt, MVP, dependencies
+- [x] **Wave 8 (T019-T022)**: Implementation Support
+  - T019: `discuss.md` — gray areas by feature type
+  - T020: `verify.md` — auto-escalate gate, phantom completion detection
+  - T021: `checkpoint.md` — auto gate, STATE.md update
+  - T022: `reconcile.md` — drift detection, doc updates
+- [x] **Wave 9 (T023-T024)**: Orchestration
+  - T023: `pipeline-status.md` — table + Mermaid DAG + progress
+  - T024: `pipeline-next.md` — recommend only, NO auto-execute
 
-### Wave 3 (T008): Business Skills
-- [ ] T008: Criar `business-process.md` — skill nova seguindo contrato uniforme
+## Post-Implementation
 
-### Wave 4 (T009-T010): Research Skills
-- [ ] T009: Criar `tech-research.md` — 1-way-door gate, subagents paralelos
-- [ ] T010: Criar `codebase-map.md` — gate auto, brownfield detection
-
-### Wave 5 (T011-T013): Engineering Core
-- [ ] T011: Criar `adr-gen.md` — 1-way-door, Nygard format, output_pattern
-- [ ] T012: Criar `blueprint.md` — usa template existente
-- [ ] T013: Criar `folder-arch.md` — annotated tree
-
-### Wave 6 (T014-T016): Engineering DDD
-- [ ] T014: Criar `domain-model.md` — .md + .likec4
-- [ ] T015: Criar `containers.md` — .md + LikeC4 model
-- [ ] T016: Criar `context-map.md` — DDD patterns
-
-### Wave 7 (T017-T018): Planning
-- [ ] T017: Criar `epic-breakdown.md` — Shape Up, 1-way-door
-- [ ] T018: Criar `roadmap.md` — sequencia épicos
-
-### Wave 8 (T019-T022): Implementation Support
-- [ ] T019: Criar `discuss.md` — gray areas
-- [ ] T020: Criar `verify.md` — auto-escalate
-- [ ] T021: Criar `checkpoint.md` — auto gate
-- [ ] T022: Criar `reconcile.md` — drift detection
-
-### Wave 9 (T023-T024): Orchestration
-- [ ] T023: Criar `pipeline-status.md` — tabela + Mermaid
-- [ ] T024: Criar `pipeline-next.md` — recomendar próximo
-
-### Post-Implementation
 - [ ] `/speckit.analyze` final
 - [ ] Atualizar README.md e CLAUDE.md
 - [ ] `/simplify`
@@ -71,7 +64,29 @@
 - Bash YAML: python3 -c yaml.safe_load, sys.argv for paths
 - Gate types: human, auto, 1-way-door, auto-escalate
 
-## Files Created/Modified This Session
+## Files Created/Modified Session 2 (2026-03-29)
+
+- `.claude/commands/madruga/business-process.md` (NEW)
+- `.claude/commands/madruga/tech-research.md` (NEW)
+- `.claude/commands/madruga/codebase-map.md` (NEW)
+- `.claude/commands/madruga/adr-gen.md` (NEW)
+- `.claude/commands/madruga/blueprint.md` (NEW)
+- `.claude/commands/madruga/folder-arch.md` (NEW)
+- `.claude/commands/madruga/domain-model.md` (NEW)
+- `.claude/commands/madruga/containers.md` (NEW)
+- `.claude/commands/madruga/context-map.md` (NEW)
+- `.claude/commands/madruga/epic-breakdown.md` (NEW)
+- `.claude/commands/madruga/roadmap.md` (NEW)
+- `.claude/commands/madruga/discuss.md` (NEW)
+- `.claude/commands/madruga/verify.md` (NEW)
+- `.claude/commands/madruga/checkpoint.md` (NEW)
+- `.claude/commands/madruga/reconcile.md` (NEW)
+- `.claude/commands/madruga/pipeline-status.md` (NEW)
+- `.claude/commands/madruga/pipeline-next.md` (NEW)
+- `specs/001-atomic-skills-dag-pipeline/tasks.md` (MODIFIED — all 24 tasks marked [X])
+- `specs/001-atomic-skills-dag-pipeline/STATE.md` (MODIFIED)
+
+## Files Created/Modified Session 1 (2026-03-29)
 - `.specify/scripts/bash/check-platform-prerequisites.sh` (NEW)
 - `.claude/knowledge/pipeline-dag-knowledge.md` (NEW)
 - `.specify/templates/platform/template/platform.yaml.jinja` (MODIFIED)
