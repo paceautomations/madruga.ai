@@ -1287,7 +1287,7 @@ Quando precisar multi-user, portal real-time, ou pgvector:
 | A8 | Auto-review tiered | **DONE** | 008 | 3 tiers em contract-base: Tier 1 (auto/exec), Tier 2 (human/scorecard), Tier 3 (1-way-door/adversarial) |
 | A9 | `platform-new` não segue contrato 6 passos | **DONE** | 008 | Referencia contract-base. Contrato de 6 passos acessível via knowledge file |
 | A10 | `/pipeline` não cobre epic cycle | **DONE** | 007 | `pipeline-status` + `pipeline-next` mergeados em `/pipeline`. Lê SQLite L1+L2. Mermaid com cores por status |
-| A11 | Risco de alucinação em tech-research | **PENDENTE** | — | Sem guardrails adicionados. Cardinal Rule já previne parcialmente |
+| A11 | Risco de alucinação em tech-research | **DONE** | 008 | `[DADOS INSUFICIENTES]` e `[FONTE NÃO VERIFICADA]` em tech-research, adr, DAG knowledge §4 e §6 |
 | A12 | DAG duplicado em CLAUDE.md e knowledge | **PARCIAL** | 007 | CLAUDE.md reduzido (19 skills, tabela compacta). Knowledge file é referência completa. Mas CLAUDE.md ainda tem ~15 linhas de detalhe que poderiam ir para knowledge |
 
 ### Média Prioridade
@@ -1300,9 +1300,9 @@ Quando precisar multi-user, portal real-time, ou pgvector:
 | M6 | Hooks boilerplate duplicado | **PENDENTE** | 008 | Hooks inline em 6 skills SpecKit |
 | M7 | Dead code argument parser | **NÃO VERIFICADO** | — | — |
 | M8 | `containers` gera 3 files DAG trackeia 2 | **NÃO VERIFICADO** | — | — |
-| M9 | Marcadores `[VALIDAR]` consistentes | **PENDENTE** | — | — |
-| M10 | Save reports verbosos | **PENDENTE** | — | — |
-| M11 | `platform.py` não valida nome | **PENDENTE** | — | — |
+| M9 | Marcadores `[VALIDAR]` consistentes | **DONE** | 008 | Contract-business usa `[VALIDAR]`. DAG knowledge §6 check #2 padroniza |
+| M10 | Save reports verbosos | **DONE** | 008 | Contract-base §Step 5 define formato compacto |
+| M11 | `platform.py` não valida nome | **DONE** | 008 | Regex `^[a-z][a-z0-9-]*$` em cmd_new |
 | M12 | checklist e constitution órfãos | **DOCUMENTADO** | — | Listados como utility skills em CLAUDE.md |
 | M13 | Personas decorativas | **DONE** | 008 | Diretivas comportamentais em pipeline-dag-knowledge.md §4 e contract files |
 | M14 | Validação de conteúdo no prerequisites | **PARCIAL** | 006 | `artifact_provenance` table existe. Falta integração em `check-platform-prerequisites.sh` |
@@ -1337,9 +1337,9 @@ Quando precisar multi-user, portal real-time, ou pgvector:
 | 7 | LikeC4 validation | **DONE** | Epic 008 — likec4-syntax.md + likec4 build em 2 skills |
 | 8 | HANDOFF blocks | **DONE** | Epic 007 — 15 skills |
 | 9 | `/pipeline` unificado | **DONE** | Epic 007 |
-| 10 | Hallucination guardrails | **PENDENTE** | — |
+| 10 | Hallucination guardrails | **DONE** | Epic 008 — escape hatch + URL format em tech-research, adr, DAG knowledge |
 
-**Resumo: 9/10 DONE, 1/10 PENDENTE (hallucination guardrails).**
+**Resumo: 10/10 DONE.**
 
 ### Resíduos Corrigidos Nesta Revisão (2026-03-29)
 

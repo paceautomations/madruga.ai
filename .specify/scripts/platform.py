@@ -136,6 +136,14 @@ def cmd_list() -> None:
 
 def cmd_new(name: str) -> None:
     """Scaffold a new platform via copier copy, register in portal, inject LikeC4 loader."""
+    import re
+
+    if not re.match(r"^[a-z][a-z0-9-]*$", name):
+        _error(
+            f"Invalid platform name '{name}'. Must be kebab-case: lowercase letters, digits, hyphens. Start with a letter."
+        )
+        sys.exit(1)
+
     dst = PLATFORMS_DIR / name
     if dst.exists():
         _error(f"Platform '{name}' already exists at {dst}")
