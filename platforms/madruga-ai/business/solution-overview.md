@@ -52,7 +52,7 @@ O sistema resolve o problema central de times pequenos: manter arquitetura, spec
 | **Copier Template System** | Template em `.specify/templates/platform/` com Jinja2. `copier copy` scaffolda, `copier update` sincroniza. `_skip_if_exists` protege conteudo editavel. | Arquiteto-Operator | Plataformas com estrutura identica |
 | **Portal Starlight** | Astro + Starlight com auto-discovery de plataformas (`platforms.mjs`), sidebar dinamica, dynamic routes, e diagramas LikeC4 interativos (pan, zoom, drill-down). | Consumidor do Portal | Portal acessivel em localhost:4321 com todas as plataformas |
 | **SpecKit Pipeline (interativo)** | 9 skills (`speckit.*`): specify, clarify, plan, tasks, implement, analyze, checklist, constitution, taskstoissues. Progressao linear pitch -> spec -> plan -> tasks. | Arquiteto-Operator | Pipeline completo funcional interativamente |
-| **Architecture Skills** | 20 skills (`madruga/*`): pipeline DAG incremental com 14 nós (platform-new → roadmap) + utilities (pipeline-status, pipeline-next, checkpoint, verify, reconcile, discuss). Geracao de artefatos de arquitetura. | Arquiteto-Operator | Artefatos gerados seguem template padrao |
+| **Architecture Skills** | 19 skills (`madruga/*`): pipeline DAG incremental com 13 nós (platform-new → roadmap) + utilities (pipeline, checkpoint, verify, reconcile, epic-context, codebase-map, qa). Geracao de artefatos de arquitetura. | Arquiteto-Operator | Artefatos gerados seguem template padrao |
 | **ADRs (Nygard)** | Decisoes arquiteturais em `decisions/ADR-NNN-*.md`. Formato: Context, Decision, Alternatives, Consequences. | Arquiteto-Operator, Revisor | Decisoes rastreadas e versionadas |
 | **Epics (Shape Up)** | Folders autocontidos `epics/NNN-slug/` com pitch.md. Formato: Problem, Appetite, Solution, Rabbit Holes, Acceptance Criteria. | Arquiteto-Operator | Epics com contexto completo e autocontido |
 
@@ -75,7 +75,7 @@ O sistema resolve o problema central de times pequenos: manter arquitetura, spec
 |---------|-----------|---------|---------|
 | **RECONCILE Loop** | Apos implementacao: le diff do PR, compara vs arquitetura, calcula drift_score. Auto-update se < 0.3, escala humano se >= 0.3. | Daemon, Revisor | Architectural drift detectado e corrigido automaticamente |
 | **State Checkpoint (`speckit.checkpoint`)** | `STATE.md` persistido entre sessoes com decisoes tomadas, blockers, proximos passos. Contexto nunca perdido. | Daemon | Zero context loss entre sessoes |
-| **Discuss Phase (`speckit.discuss`)** | Captura preferencias de implementacao em gray areas antes do plan. Reduz retrabalho. | Arquiteto-Operator | Preferencias capturadas antes de gastar tokens em plan |
+| **Epic Context Phase (`madruga:epic-context`)** | Captura preferencias de implementacao e decisoes em gray areas antes do spec. Reduz retrabalho. | Arquiteto-Operator | Preferencias capturadas antes de gastar tokens em spec |
 | **Research Paralelo** | Subagents paralelos pesquisam stack, patterns, pitfalls e libs simultaneamente durante plan. | Daemon | Tempo de research reduzido em 60% |
 | **Roadmap Auto-Sync** | Roadmap.md gerado automaticamente do frontmatter dos epics (status, phase, priority). Epic frontmatter e source of truth. | Consumidor do Portal | Roadmap sempre reflete estado real dos epics |
 | **Architecture Fitness Functions** | Validacao continua: `stress/arch_fitness.py` verifica spec compliance, cobertura de testes, conformidade com ADRs. | Daemon, Revisor | Score de fitness por plataforma visivel no portal |
