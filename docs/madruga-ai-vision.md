@@ -38,7 +38,7 @@ FLUXO COMPLETO:
     -> platforms/fulano/ criado              |
     -> Portal registrado                     kanban_poll.py (60s)
                                              |
-  /madruga/vision-one-pager fulano           Obsidian kanban → detecta APPROVED
+  /madruga/vision fulano           Obsidian kanban → detecta APPROVED
     -> Playing to Win framework              |
     -> Gera business/vision.md               Orchestrator (slots, queue)
                                              |
@@ -269,7 +269,7 @@ Cada artefato tem UM dono (skill) e UM proposito. Nenhum artefato duplica inform
 
 | Artefato | Dono | Proposito |
 |----------|------|-----------|
-| `business/vision.md` | `madruga/vision-one-pager` | Visao macro: tese, mercado, moat, pricing (Playing to Win) |
+| `business/vision.md` | `madruga/vision` | Visao macro: tese, mercado, moat, pricing (Playing to Win) |
 | `business/solution-overview.md` | `madruga/solution-overview` | Feature map Now/Next/Later + personas + principios |
 | Business Flow | LikeC4 view `businessFlow` | Pipeline ponta-a-ponta animado (14 modulos) |
 | `engineering/domain-model.md` | Manual | Entidades, class diagrams, SQL schemas, invariantes |
@@ -284,7 +284,7 @@ Cada artefato tem UM dono (skill) e UM proposito. Nenhum artefato duplica inform
 
 | Artefato | Dono | Proposito | Input |
 |----------|------|-----------|-------|
-| `pitch.md` | Manual / `madruga/vision-one-pager` | Shape Up bet: problema, appetite, solucao, rabbit holes | Discovery interativo |
+| `pitch.md` | Manual / `madruga/vision` | Shape Up bet: problema, appetite, solucao, rabbit holes | Discovery interativo |
 | `spec.md` | `speckit.specify` | Requisitos funcionais: user scenarios, acceptance criteria | `pitch.md` |
 | `plan.md` | `speckit.plan` | Design tecnico: stack, arquitetura, file structure | `spec.md` + Vision context (ADRs, Context Map, modelo dominio) |
 | `research.md` | `speckit.plan` | Pesquisa tecnica: decisoes, alternatives, rationale (opcional) | `spec.md` unknowns |
@@ -312,7 +312,7 @@ Cada artefato tem UM dono (skill) e UM proposito. Nenhum artefato duplica inform
 2. Registra no portal (symlinks + LikeC4Diagram.tsx)
 3. Resultado: `platforms/<name>/` com toda a estrutura
 
-**`madruga/vision-one-pager`** — Gera Vision Brief
+**`madruga/vision`** — Gera Vision Brief
 1. Playing to Win framework (11 perguntas)
 2. Gera `business/vision.md`
 
@@ -364,7 +364,7 @@ Cada epic e um folder autocontido em `platforms/<name>/epics/NNN-slug/`. A pasta
 #### Fase 1 — Criacao (pitch)
 ```
 epics/001-channel-pipeline/
-  pitch.md              ← Manual ou /madruga/vision-one-pager (Shape Up pitch)
+  pitch.md              ← Manual ou /madruga/vision (Shape Up pitch)
 ```
 
 #### Fase 2 — Especificacao (speckit.specify)

@@ -1259,4 +1259,111 @@ Quando precisar multi-user, portal real-time, ou pgvector:
 
 ---
 
-*Documento gerado por 9 agentes especializados. Recomendações revisadas priorizando longo prazo, valor, performance, consistência e qualidade. SQLite como BD desde o início — zero arquivos intermediários de estado.*
+---
+
+## Status de Implementação (atualizado 2026-03-29)
+
+> Revisão pós-implementação dos Epics 006 (SQLite Foundation) e 007 (Directory Unification).
+> Cada item cruzado com o estado real do filesystem, BD e git.
+
+### Bloqueantes
+
+| ID | Item | Status | Epic | Evidência |
+|----|------|--------|------|-----------|
+| B1 | `copier update` nas plataformas existentes | **DONE** | 007 | `fulano/platform.yaml` e `madruga-ai/platform.yaml` atualizados com 13 nós, `epic_cycle`, nomes corretos. BD re-seeded |
+| B2+B3 | Unificação diretório + DAG dois níveis | **DONE** | 007 | `specs/` deletado. SpecKit opera em `epics/<NNN>/` via `--base-dir`. `epic_cycle` com 10 nós em `platform.yaml`. `epic_nodes` table no SQLite. `/pipeline` unificado |
+
+### Alta Prioridade
+
+| ID | Item | Status | Epic | Evidência |
+|----|------|--------|------|-----------|
+| A1 | Knowledge files em camadas (boilerplate) | **PENDENTE** | 008 | Skills ainda têm contrato completo inline. Aguarda epic 008 |
+| A2 | HANDOFF blocks nos artefatos | **DONE** | 007 | 14 skills DAG + pipeline com bloco YAML `handoff:` no footer. `handoff_template` no DAG knowledge |
+| A3 | Staleness detection (content hash) | **PARCIAL** | 006 | `pipeline_nodes.output_hash` existe. `compute_file_hash()` em db.py. `get_stale_nodes()` implementado. Falta integração no step 5 das skills |
+| A4 | Idempotência adr/epic-breakdown (registry) | **PARCIAL** | 006 | Schema `decisions` com `source_decision_key` e `slug` existe. Falta integração no skill `adr` |
+| A5 | `test-ai` salva em `obsidian-vault/` | **DONE** | 007 | Renomeado para `qa`. Salva em `epics/<NNN>/qa-report.md`. Path hardcoded eliminado |
+| A6 | LikeC4 validation | **PENDENTE** | 008 | Nenhum knowledge file criado. `likec4 build` não integrado |
+| A7 | Merge folder-arch em blueprint | **DONE** | 007 | `folder-arch.md` deletado. Blueprint template tem §5 Folder Structure. DAG 14→13 nós |
+| A8 | Auto-review tiered | **PENDENTE** | 008 | Skills ainda usam checkbox list. Sem tiers por gate type |
+| A9 | `platform-new` não segue contrato 6 passos | **PENDENTE** | 008 | Skill não alterada |
+| A10 | `/pipeline` não cobre epic cycle | **DONE** | 007 | `pipeline-status` + `pipeline-next` mergeados em `/pipeline`. Lê SQLite L1+L2. Mermaid com cores por status |
+| A11 | Risco de alucinação em tech-research | **PENDENTE** | — | Sem guardrails adicionados. Cardinal Rule já previne parcialmente |
+| A12 | DAG duplicado em CLAUDE.md e knowledge | **PARCIAL** | 007 | CLAUDE.md reduzido (19 skills, tabela compacta). Knowledge file é referência completa. Mas CLAUDE.md ainda tem ~15 linhas de detalhe que poderiam ir para knowledge |
+
+### Média Prioridade
+
+| ID | Item | Status | Epic | Notas |
+|----|------|--------|------|-------|
+| M1 | Gates excessivos na business layer | **MANTIDO** | — | Decisão: manter todos human. `context-map` → auto-escalate não aplicado |
+| M2 | Merge analyze-post no verify | **PARCIAL** | 007 | verify agora persiste `verify-report.md`. analyze-post ainda roda separado no ciclo |
+| M3-5 | Renaming discuss→epic-context, adr-gen→adr, test-ai→qa, vision-one-pager→vision | **DONE** | 007 | Todos renomeados. Zero refs antigas em skills/CLAUDE.md/knowledge |
+| M6 | Hooks boilerplate duplicado | **PENDENTE** | 008 | Hooks inline em 6 skills SpecKit |
+| M7 | Dead code argument parser | **NÃO VERIFICADO** | — | — |
+| M8 | `containers` gera 3 files DAG trackeia 2 | **NÃO VERIFICADO** | — | — |
+| M9 | Marcadores `[VALIDAR]` consistentes | **PENDENTE** | — | — |
+| M10 | Save reports verbosos | **PENDENTE** | — | — |
+| M11 | `platform.py` não valida nome | **PENDENTE** | — | — |
+| M12 | checklist e constitution órfãos | **DOCUMENTADO** | — | Listados como utility skills em CLAUDE.md |
+| M13 | Personas decorativas | **PENDENTE** | 008 | Personas inalteradas |
+| M14 | Validação de conteúdo no prerequisites | **PARCIAL** | 006 | `artifact_provenance` table existe. Falta integração em `check-platform-prerequisites.sh` |
+
+### Baixa Prioridade / Quick Wins
+
+| ID | Item | Status | Notas |
+|----|------|--------|-------|
+| L1 | TL;DR no topo de cada skill | **PENDENTE** | — |
+| L2 | Checkpoint auto-executar após skill | **PARCIAL** | `checkpoint.md` existe. Falta trigger automático |
+| L3 | Tempo estimado no pipeline-status | **PENDENTE** | — |
+| L4 | Handoffs em skills SpecKit | **DONE** (007) | SpecKit skills têm nota "Epic Dir Support" |
+| L5 | Limites de linhas advisory | **PENDENTE** | — |
+| L6 | context-map → auto-escalate | **NÃO FEITO** | Decisão: manter human |
+| L7 | Guidance de quantidade de perguntas | **PENDENTE** | — |
+| L8 | Reconcile report path | **DONE** (007) | Salva em `epics/<NNN>/reconcile-report.md` |
+| L9 | verify/reconcile leem context.md | **DONE** (007) | Tudo no epic dir |
+| L10 | Testes automatizados | **PARCIAL** (006) | 24 testes db.py (pytest). 17 testes template. bash tests do --base-dir. Falta: vision-build.py, platform.py, check-prerequisites.sh |
+| L11 | Skill /getting-started | **PENDENTE** | — |
+| L12 | Diretório planning/ | **MANTIDO** | Existe em `platforms/*/planning/` |
+
+### Top 10 — Status Consolidado
+
+| # | Ação | Status | Implementado em |
+|---|------|--------|----------------|
+| 1 | `copier update` + lint | **DONE** | Epic 007 (manual + re-seed) |
+| 2 | SQLite + `db.py` | **DONE** | Epic 006 — schema, migrations, CRUD, seed, 24 testes |
+| 3 | Unificação diretório + DAG dois níveis | **DONE** | Epic 007 — `--base-dir`, `epic_cycle`, `--epic` flag |
+| 4 | Knowledge files em camadas | **PENDENTE** | Epic 008 (próximo) |
+| 5 | Auto-review tiered | **PENDENTE** | Epic 008 (próximo) |
+| 6 | Merge folder-arch + renaming | **DONE** | Epic 007 |
+| 7 | LikeC4 validation | **PENDENTE** | Epic 008 (próximo) |
+| 8 | HANDOFF blocks | **DONE** | Epic 007 — 15 skills |
+| 9 | `/pipeline` unificado | **DONE** | Epic 007 |
+| 10 | Hallucination guardrails | **PENDENTE** | — |
+
+**Resumo: 6/10 DONE, 1/10 PARCIAL, 3/10 PENDENTE.**
+
+### Resíduos Corrigidos Nesta Revisão (2026-03-29)
+
+| Arquivo | Problema | Fix |
+|---------|----------|-----|
+| `tech-research.md:10,257` | `adr-gen` → `adr` (handoff + next step) | Corrigido |
+| `conftest.py:49` | `madruga:vision-one-pager` → `madruga:vision` (test fixture) | Corrigido |
+| `platform.py:174` | `/pipeline-next` → `/pipeline` (output text) | Corrigido |
+| `fulano/platform.yaml` | Nomes antigos `adr-gen`, `folder-arch`, `vision-one-pager`. Sem `epic_cycle` | Atualizado para 13 nós + epic_cycle |
+| SQLite DB | Nós `adr-gen` e `folder-arch` — re-seeded | Corrigido |
+| `docs/madruga-ai-vision.md` | 5 refs `vision-one-pager` | Corrigido |
+
+### Itens para Epic 008 (Quality & DX)
+
+Com base no status acima, o próximo epic deve cobrir:
+
+1. **Knowledge files em camadas** (A1) — contract-base + contract-{layer} — reduz ~15K tokens de boilerplate
+2. **Auto-review tiered** (A8) — exec/scorecard/adversarial por gate type
+3. **LikeC4 knowledge file + validation** (A6) — syntax reference + `likec4 build` pós-geração
+4. **Personas afiadas** (M13) — diretivas comportamentais em vez de labels decorativos
+5. **Integração BD no step 5** (A3/A4/M14) — `upsert_pipeline_node()`, `insert_provenance()`, `insert_decision()` após cada skill salvar artefato
+
+**Princípio de priorização: resultado >> esforço. Futuro >> presente.**
+
+---
+
+*Documento gerado por 9 agentes especializados. Revisão de status baseada nos Epics 006 (SQLite Foundation) e 007 (Directory Unification), ambos merged to main em 2026-03-29.*

@@ -171,7 +171,9 @@ def cmd_new(name: str) -> None:
     print(f"{'=' * 50}")
     print("\nNext steps:")
     print("  cd portal && npm run dev              # see it in the portal")
-    print(f"  /pipeline-next {name}                 # see what to document next")
+    print(
+        f"  /pipeline {name}                      # see pipeline status and next step"
+    )
     print(f"  python3 .specify/scripts/platform.py lint {name}  # validate")
 
 

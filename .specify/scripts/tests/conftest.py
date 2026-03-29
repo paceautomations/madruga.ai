@@ -46,7 +46,7 @@ pipeline:
       layer: business
       gate: human
     - id: vision
-      skill: "madruga:vision-one-pager"
+      skill: "madruga:vision"
       outputs: ["business/vision.md"]
       depends: ["platform-new"]
       layer: business

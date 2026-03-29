@@ -7,7 +7,7 @@ arguments:
 argument-hint: "[platform-name]"
 handoffs:
   - label: Generate ADRs
-    agent: madruga/adr-gen
+    agent: madruga/adr
     prompt: "Generate Architecture Decision Records from the validated technology decisions. WARNING: 1-way-door gate — ADRs define the project's technical foundation."
 ---
 
@@ -254,8 +254,8 @@ Wait for confirmation on ALL decisions before saving.
 [x] Explicit per-decision approval (1-way-door gate)
 
 ### Next Step
-`/adr-gen <name>` — Generate formal ADRs for each approved decision.
-WARNING: ADR Gen is also a 1-way-door gate.
+`/adr <name>` — Generate formal ADRs for each approved decision.
+WARNING: ADR is also a 1-way-door gate.
 ```
 
 ## Error Handling
