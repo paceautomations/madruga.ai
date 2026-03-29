@@ -6,7 +6,7 @@ arguments:
     required: false
 argument-hint: "[nome-da-plataforma]"
 handoffs:
-  - label: Pesquisar Alternativas Tecnológicas
+  - label: Pesquisar Alternativas Tecnologicas
     agent: madruga/tech-research
     prompt: "Pesquisar alternativas tecnológicas baseadas nos fluxos de negócio validados. ATENÇÃO: Gate 1-way-door — decisões tecnológicas definem toda a arquitetura."
 ---
@@ -178,6 +178,8 @@ Antes de salvar, verificar:
 | 6 | Toda premissa marcada [VALIDAR] ou confirmada | Marcar |
 | 7 | Tabela Visao Geral presente com frequencia e impacto | Completar |
 | 8 | Glossario de Atores presente | Adicionar |
+| 9 | Toda decisao tem >=2 alternativas documentadas? | Adicionar alternativa |
+| 10 | Trade-offs explicitos (pros/cons)? | Adicionar pros/cons |
 
 ### 4. Gate de Aprovacao (human)
 

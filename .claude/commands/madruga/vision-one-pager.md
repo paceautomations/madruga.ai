@@ -52,12 +52,14 @@ Rodar `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <
 - Se `ready: true`: ler artefatos listados em `available` como contexto adicional.
 - Ler `.specify/memory/constitution.md` para validar output contra principios.
 
-### 1. Coletar Contexto
+### 1. Coletar Contexto + Questionar
 
 **Se `$ARGUMENTS.platform` existe:** usar como nome da plataforma.
 **Se vazio:** perguntar nome.
 
 Em ambos os casos, verificar se ja existe arquivo em `platforms/<nome>/business/vision.md`. Se existir, ler como base.
+
+Se o usuario ja tem docs de pesquisa ou research no diretorio da plataforma (`research/`), ler para extrair dados antes de perguntar.
 
 Coletar com o usuario (perguntar tudo de uma vez, nao uma por uma):
 
@@ -72,7 +74,16 @@ Coletar com o usuario (perguntar tudo de uma vez, nao uma por uma):
 | 7 | **Pricing** — Modelo e tiers (se definido) | "Free R$0, Starter R$197, Growth R$497, Business R$997" |
 | 8 | **Riscos** — Top 3-5 riscos de negocio | "Meta muda pricing, custo LLM explode, canal unico" |
 
-Se o usuario ja tem docs de pesquisa ou research no diretorio da plataforma (`research/`), ler para extrair dados antes de perguntar.
+Apos receber respostas, identificar premissas implicitas e apresentar perguntas estruturadas:
+
+| Categoria | Pergunta |
+|-----------|----------|
+| **Premissas** | "Assumo que [X extraido das respostas]. Correto?" |
+| **Trade-offs** | "[Moat A] mais defensavel ou [Moat B] mais escalavel?" |
+| **Gaps** | "Nao tenho dados sobre [mercado/pricing]. Voce define ou eu estimo com [VALIDAR]?" |
+| **Provocacao** | "[Posicionamento obvio], mas [alternativa] pode ser melhor porque [razao]." |
+
+Aguardar respostas ANTES de gerar.
 
 ### 2. Gerar One-Pager
 
@@ -211,16 +222,44 @@ Antes de salvar, verificar:
 |---|-------|---------------|
 | 1 | Zero termos tecnicos (grep: API, SDK, framework, database, backend, frontend, deploy, server, endpoint, middleware, cache, queue, Python, Redis, Docker, Supabase, pgvector, webhook, microservice, CI/CD, ADR) | Reescrever em linguagem de negocio. Ver "Regra Cardinal" acima. |
 | 2 | Toda metrica tem numero | Adicionar numero ou marcar `[VALIDAR]` |
-| 3 | Nenhuma secao > 30 linhas | Cortar — one-pager nao tem secao longa |
-| 4 | Total < 200 linhas | Condensar secoes maiores |
-| 5 | Landscape tem max 5 players (incluindo a plataforma) | Cortar os menos relevantes |
-| 6 | Batalhas tem max 5 items | Priorizar as mais criticas |
-| 7 | Moat e realmente defensavel (nao e feature facilmente copiavel) | Reframear ou ser honesto |
-| 8 | Secao Linguagem Ubiqua presente com min 5 termos | Adicionar termos do dominio |
+| 3 | Toda decisao tem >=2 alternativas documentadas | Adicionar alternativa |
+| 4 | Trade-offs explicitos (pros/cons) | Adicionar pros/cons |
+| 5 | Premissas marcadas [VALIDAR] ou com dado | Marcar [VALIDAR] |
+| 6 | Nenhuma secao > 30 linhas | Cortar — one-pager nao tem secao longa |
+| 7 | Total < 200 linhas | Condensar secoes maiores |
+| 8 | Landscape tem max 5 players (incluindo a plataforma) | Cortar os menos relevantes |
+| 9 | Batalhas tem max 5 items | Priorizar as mais criticas |
+| 10 | Moat e realmente defensavel (nao e feature facilmente copiavel) | Reframear ou ser honesto |
+| 11 | Secao Linguagem Ubiqua presente com min 5 termos | Adicionar termos do dominio |
 
 **Excecao para check 1:** Nomes proprios de produtos/empresas concorrentes sao permitidos mesmo que sejam tecnicos (ex: "Botpress", "WhatsApp"). O check e sobre jargao tecnico generico, nao nomes proprios.
 
-### 4. Salvar
+### 4. Gate de Aprovacao (human)
+
+Apresentar ao usuario:
+
+```
+## Resumo do Vision One-Pager
+
+**Framework:** Playing to Win (7 secoes)
+**North Star Metric:** [metrica escolhida]
+**Moat:** [moat identificado]
+
+### Decisoes tomadas
+1. [Decisao]: [justificativa]
+2. ...
+
+### Perguntas de validacao
+1. A tese reflete a realidade do negocio?
+2. O moat e realmente defensavel ou e uma feature copiavel?
+3. Os numeros de mercado (TAM/SAM/SOM) fazem sentido?
+4. Os riscos cobrem os cenarios mais criticos?
+5. A linguagem ubiqua esta completa para o dominio?
+```
+
+Aguardar aprovacao antes de salvar.
+
+### 5. Salvar + Relatorio
 
 1. Salvar em `platforms/<nome>/business/vision.md`
 2. Informar ao usuario:
@@ -235,6 +274,9 @@ Antes de salvar, verificar:
 ### Checks
 [x] Zero jargao tecnico
 [x] Metricas com numeros
+[x] Decisoes com alternativas
+[x] Trade-offs explicitos
+[x] Premissas marcadas
 [x] Secoes <= 30 linhas
 [x] Total < 200 linhas
 [x] Landscape <= 5 players
@@ -243,6 +285,9 @@ Antes de salvar, verificar:
 
 ### Secoes que precisam de validacao
 - [lista de items marcados com [VALIDAR], se houver]
+
+### Proximo passo
+`/solution-overview <nome>`
 ```
 
 ## Tratamento de Erros

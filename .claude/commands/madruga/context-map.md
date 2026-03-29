@@ -52,6 +52,7 @@ Rodar `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <
 **Leitura obrigatoria:**
 - `engineering/domain-model.md` — bounded contexts, agregados
 - `engineering/containers.md` — como contexts mapeiam para containers
+- `model/ddd-contexts.likec4` — naming de contexts para consistencia
 
 **Perguntas Estruturadas:**
 
@@ -61,6 +62,8 @@ Rodar `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <
 | **Trade-offs** | "ACL (desacoplado, mais codigo) ou Conformist (acoplado, menos codigo) para [relacao]?" |
 | **Gaps** | "Relacao entre [X] e [Y] nao esta clara. Como se comunicam?" |
 | **Provocacao** | "Shared Kernel entre [A] e [B] cria acoplamento forte. Vale o trade-off?" |
+
+Aguardar respostas ANTES de gerar.
 
 ### 2. Gerar Context Map
 
@@ -136,10 +139,26 @@ graph TD
 | 5 | Diagrama Mermaid renderiza? | Corrigir |
 | 6 | Max 150 linhas? | Condensar |
 | 7 | Todos os contexts do domain-model presentes? | Adicionar faltantes |
+| 8 | Toda decisao tem >=2 alternativas documentadas? | Adicionar |
+| 9 | Trade-offs explicitos? | Adicionar pros/cons |
+| 10 | Premissas marcadas [VALIDAR] ou com dado? | Marcar [VALIDAR] |
 
 ### 4. Gate de Aprovacao: Human
 
-Apresentar diagrama, tabela de relacoes, perguntas de validacao.
+Apresentar ao usuario:
+
+**Resumo do Context Map:**
+- Bounded Contexts: [N]
+- Relacoes: [N]
+- Padroes usados: [lista]
+
+**Perguntas de validacao:**
+1. Direcoes upstream/downstream fazem sentido?
+2. Padroes escolhidos sao os mais adequados?
+3. Alguma relacao esta faltando?
+4. Shared kernel (se usado) e realmente necessario?
+
+Aguardar aprovacao antes de salvar.
 
 ### 5. Salvar + Relatorio
 
@@ -157,7 +176,7 @@ Apresentar diagrama, tabela de relacoes, perguntas de validacao.
 [x] Justificativas presentes
 [x] Todos contexts cobertos
 
-### ⚠️ Proximo Passo
+### Proximo Passo
 `/epic-breakdown <nome>` — Quebrar em epicos Shape Up.
 ATENCAO: Gate 1-way-door — escopo dos epicos define toda implementacao.
 ```

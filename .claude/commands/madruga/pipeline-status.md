@@ -32,6 +32,8 @@ Rodar: `.specify/scripts/bash/check-platform-prerequisites.sh --json --status --
 
 Parsear JSON com nodes, status (done/ready/blocked), progress.
 
+Alem do JSON de status, ler `platforms/<nome>/platform.yaml` para obter as relacoes `depends` de cada node (necessario para construir o Mermaid DAG — o JSON de --status nao inclui edges).
+
 ### 2. Renderizar
 
 **Tabela de Status:**
@@ -59,11 +61,20 @@ graph TD
     ...
 ```
 
-**Progresso:** N/14 done | M ready | K blocked
+**Progresso:** N/<total> done | M ready | K blocked
+(Usar `progress.total` do JSON retornado pelo script)
 
-**Proximo(s) disponivel(is):**
-- `/<skill> <platform>` — [descricao breve]
+**Para recomendacao do proximo passo:** `/pipeline-next <nome>`
 
 ### 3. Apresentar
 
 Mostrar tabela + Mermaid + progresso + sugestao de proximo. NAO executar nada.
+
+## Tratamento de Erros
+
+| Problema | Acao |
+|----------|------|
+| Script falha (python3 nao encontrado) | ERROR: pre-requisito python3 nao instalado |
+| Platform.yaml nao existe | ERROR: plataforma nao encontrada. Rodar `/platform-new` primeiro |
+| Pipeline section ausente no platform.yaml | ERROR: platform.yaml sem secao `pipeline:`. Rodar `copier update` na plataforma |
+| Nome de plataforma invalido | Perguntar nome correto |

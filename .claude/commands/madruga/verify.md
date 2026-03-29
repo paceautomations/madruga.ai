@@ -29,15 +29,20 @@ QA Lead / Auditor. Cético, factual. Portugues BR.
 
 ## Diretorio
 
-Salvar em `platforms/<nome>/epics/<N>/verify-report.md` ou no spec dir do epico.
+Salvar em `platforms/<nome>/epics/<NNN>/verify-report.md`.
 
 ## Instrucoes
 
 ### 0. Pre-requisitos
 
+Rodar `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <nome> --skill verify` e parsear JSON.
+- Se `ready: false`: ERROR listando dependencias faltantes.
+- Se `ready: true`: ler artefatos em `available`.
+- Ler `.specify/memory/constitution.md`.
+
 Verificar que spec.md e tasks.md existem para o epico (no spec dir correspondente).
 
-### 1. Coletar Dados
+### 1. Coletar Contexto + Verificar
 
 - Ler spec.md — extrair functional requirements (FR-NNN)
 - Ler tasks.md — extrair tasks e status ([X] vs [ ])
@@ -90,6 +95,9 @@ updated: YYYY-MM-DD
 | 1 | Todo FR verificado? | Verificar |
 | 2 | Toda task [X] tem evidencia? | Verificar |
 | 3 | Drift identificado? | Reportar |
+| 4 | Toda decisao tem >=2 alternativas documentadas? | Adicionar |
+| 5 | Trade-offs explicitos? | Adicionar |
+| 6 | Premissas marcadas [VALIDAR] ou com dado? | Marcar |
 
 ### 4. Gate: Auto-Escalate
 
@@ -101,6 +109,8 @@ updated: YYYY-MM-DD
 ```
 ## Verificacao completa
 
+**Arquivo:** platforms/<nome>/epics/<NNN>/verify-report.md
+**Linhas:** <N>
 **Score:** [N]%
 **Blockers:** <N>
 **Warnings:** <N>

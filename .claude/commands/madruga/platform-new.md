@@ -1,5 +1,5 @@
 ---
-description: Cria nova plataforma a partir do template Copier e gera artefatos de arquitetura
+description: Cria nova plataforma a partir do template Copier
 arguments:
   - name: platform
     description: "Nome da plataforma em kebab-case (ex: meu-saas, energy-platform)"
@@ -11,14 +11,14 @@ handoffs:
     prompt: Gerar business vision para a nova plataforma
 ---
 
-# Platform New — Scaffolding + Arquitetura Completa
+# Platform New — Scaffolding
 
 Cria uma nova plataforma no repositorio madruga.ai usando o script `platform.py new`, que automaticamente:
 1. Scaffolda via Copier (estrutura completa)
 2. Injeta o import no LikeC4Diagram.tsx (diagramas funcionam automaticamente)
 3. Atualiza symlinks do portal (conteudo aparece no Starlight)
 
-Opcionalmente gera artefatos de arquitetura via `/architecture-portal`.
+Apos scaffold, seguir o pipeline DAG com `/vision-one-pager <nome>`.
 
 ## Uso
 
@@ -77,21 +77,16 @@ python3 .specify/scripts/platform.py lint <nome>
 python3 .specify/scripts/platform.py list
 ```
 
-### 4. Gerar Conteudo (opcional)
+### 4. Proximo Passo
 
-Perguntar ao usuario:
+Informar ao usuario que a plataforma foi criada e o proximo passo e iniciar o pipeline de documentacao:
 
 ```
 Plataforma '<nome>' criada com sucesso!
 
-Quer gerar os artefatos de arquitetura agora?
-Isso inclui: vision, solution overview, domain model, containers, ADRs, epics, modelo LikeC4.
-
-[S] Sim — roda /architecture-portal <nome>
-[N] Nao — scaffold basico pronto, preencher depois
+Proximo passo: `/vision-one-pager <nome>` para iniciar o pipeline de documentacao.
+Use `/pipeline-status <nome>` para ver o status completo do pipeline.
 ```
-
-Se sim: rodar `/architecture-portal <nome>`.
 
 ### 5. Apresentar Resultado
 
@@ -117,10 +112,9 @@ platforms/<nome>/
 └── model/ (spec.likec4, likec4.config.json, views.likec4, ...)
 
 ### Proximo passo
-- `cd portal && npm run dev` para ver no portal
-- `/architecture-portal <nome>` para gerar conteudo completo
-- `/vision-one-pager <nome>` para gerar apenas o vision
-- `/solution-overview <nome>` para gerar apenas o feature map
+- `/vision-one-pager <nome>` — iniciar pipeline de documentacao (recomendado)
+- `/pipeline-status <nome>` — ver status do pipeline DAG
+- `cd portal && npm run dev` — ver no portal
 ```
 
 ## Tratamento de Erros

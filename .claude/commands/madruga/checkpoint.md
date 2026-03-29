@@ -1,10 +1,13 @@
 ---
 description: Gera/atualiza STATE.md com progresso da sessao atual — tasks, decisoes, problemas, proximos passos
 arguments:
+  - name: platform
+    description: "Nome da plataforma/produto."
+    required: false
   - name: context
     description: "Contexto breve da sessao (ex: 'wave 3 implementation')."
     required: false
-argument-hint: "[contexto-da-sessao]"
+argument-hint: "[plataforma] [contexto-da-sessao]"
 ---
 
 # Checkpoint — Estado da Sessao
@@ -28,7 +31,9 @@ Session Recorder. Factual, conciso. Portugues BR.
 
 ### 0. Pre-requisitos
 
-Verificar se tasks.md existe (spec dir ou raiz). Minimo necessario.
+Rodar `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <nome> --skill checkpoint` e parsear JSON (se plataforma fornecida).
+- Ler `.specify/memory/constitution.md`.
+- Verificar se tasks.md existe (spec dir ou raiz).
 
 ### 1. Coletar Dados
 
@@ -47,32 +52,40 @@ Se STATE.md existe, adicionar nova sessao. Se nao, criar.
 **Session**: YYYY-MM-DD
 **Branch**: `branch-name`
 
-## Completed
+## Concluido
 
 [Tasks marcadas [X] nesta sessao]
 
-## Decisions Made
+## Decisoes Tomadas
 
 [Decisoes tomadas e por que — extrair de commits/contexto]
 
-## Problems & Solutions
+## Problemas e Solucoes
 
 [Problemas encontrados e como resolvidos]
 
-## Next Steps
+## Proximos Passos
 
 [Derivado das tasks pendentes]
 
-## Files Touched
+## Arquivos Alterados
 
 [Lista de arquivos criados/modificados]
 ```
 
-### 3. Gate: Auto
+### 3. Auto-Review
+
+| # | Check | Acao se falhar |
+|---|-------|---------------|
+| 1 | Todas tasks [X] tem commits correspondentes? | Verificar git log |
+| 2 | Nenhuma informacao inventada? | Cruzar com git log/filesystem |
+| 3 | Proximos passos derivados de tasks pendentes reais? | Verificar tasks.md |
+
+### 4. Gate: Auto
 
 Sem aprovacao humana. Salvar imediatamente.
 
-### 4. Salvar + Relatorio
+### 5. Salvar + Relatorio
 
 ```
 ## Checkpoint salvo

@@ -27,7 +27,7 @@ Todo marco deve ter epico associado com acceptance criteria testavel. Nenhum mil
 
 ## Persona
 
-Product Manager. Foco em entrega de valor incremental. Portugues BR.
+Product Manager / Architect. Dual hat: entende entrega de valor E dependencias tecnicas. Portugues BR.
 
 ## Uso
 
@@ -51,6 +51,9 @@ Rodar `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <
 
 **Leitura obrigatoria:**
 - `epics/*/pitch.md` — todos os epicos com appetite e dependencias
+- `engineering/blueprint.md` — NFRs que constrangem sequencia
+- `engineering/containers.md` — infraestrutura compartilhada
+- `business/vision.md` — prioridades de negocio
 
 **Perguntas Estruturadas:**
 
@@ -60,6 +63,8 @@ Rodar `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <
 | **Trade-offs** | "Risk-first (resolver incertezas cedo) ou value-first (entregar valor rapido)?" |
 | **Gaps** | "Ha deadline externo? Restricao de equipe/budget?" |
 | **Provocacao** | "Se pudesse entregar apenas 1 epico, qual seria?" |
+
+Aguardar respostas ANTES de gerar roadmap.
 
 ### 2. Gerar Roadmap
 
@@ -143,6 +148,9 @@ graph LR
 | 4 | Timeline realista (soma appetites)? | Ajustar |
 | 5 | Milestones com criterios testaveis? | Tornar mensuravel |
 | 6 | Mermaid Gantt renderiza? | Corrigir |
+| 7 | Toda decisao tem >=2 alternativas documentadas? | Adicionar |
+| 8 | Trade-offs explicitos? | Adicionar pros/cons |
+| 9 | Premissas marcadas [VALIDAR] ou com dado? | Marcar [VALIDAR] |
 
 ### 4. Gate de Aprovacao: Human
 

@@ -39,14 +39,19 @@ Salvar em `platforms/<nome>/epics/<N>/context.md`.
 
 ### 0. Pre-requisitos
 
-Verificar que `epics/<N>/pitch.md` existe. Ler:
-- `epics/<N>/pitch.md` — escopo do epico
+Rodar `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <nome> --skill discuss` e parsear JSON.
+- Se `ready: false`: ERROR listando dependencias faltantes.
+- Se `ready: true`: ler artefatos em `available`.
+- Ler `.specify/memory/constitution.md`.
+
+Leitura adicional obrigatoria:
+- `epics/<NNN>/pitch.md` — escopo do epico
 - `engineering/blueprint.md` — stack e concerns
 - `engineering/domain-model.md` — DDD
 - `engineering/containers.md` — arquitetura
 - `decisions/ADR-*.md` — decisoes relevantes
 
-### 1. Identificar Gray Areas
+### 1. Coletar Contexto + Questionar
 
 Por tipo de feature no epico:
 
@@ -58,7 +63,16 @@ Por tipo de feature no epico:
 | Integracao | Failure modes, retries, circuit breaker, timeouts |
 | Infra | Deploy strategy, scaling, monitoring thresholds |
 
-Apresentar gray areas com perguntas estruturadas (Premissas, Trade-offs, Gaps, Provocacao).
+**Perguntas Estruturadas:**
+
+| Categoria | Pergunta |
+|-----------|----------|
+| **Premissas** | "Assumo que [decisao do ADR-NNN] se aplica aqui. Correto?" |
+| **Trade-offs** | "Para [gray area]: [approach A simples] ou [approach B robusto]?" |
+| **Gaps** | "Blueprint nao especifica [detalhe X] para este epico. Definir?" |
+| **Provocacao** | "[Approach obvio] pode nao ser o melhor porque [razao]." |
+
+Aguardar respostas ANTES de gerar.
 
 ### 2. Gerar Context
 
@@ -95,6 +109,9 @@ updated: YYYY-MM-DD
 | 1 | Toda decisao referencia arquitetura? | Conectar |
 | 2 | Gray areas resolvidas? | Resolver ou marcar pendente |
 | 3 | Constraints do blueprint presentes? | Adicionar |
+| 4 | Toda decisao tem >=2 alternativas documentadas? | Adicionar |
+| 5 | Trade-offs explicitos (pros/cons)? | Adicionar pros/cons |
+| 6 | Premissas marcadas [VALIDAR] ou com dado? | Marcar [VALIDAR] |
 
 ### 4. Gate: Human
 
@@ -105,11 +122,18 @@ Apresentar decisoes e gray areas resolvidas para validacao.
 ```
 ## Contexto capturado
 
-**Arquivo:** platforms/<nome>/epics/<N>/context.md
+**Arquivo:** platforms/<nome>/epics/<NNN>/context.md
+**Linhas:** <N>
 **Decisoes:** <N>
 **Gray areas resolvidas:** <N>
 
-Proximo: `/speckit.specify` para iniciar ciclo de implementacao.
+### Checks
+[x] Decisoes referenciam arquitetura
+[x] Gray areas resolvidas
+[x] Constraints do blueprint presentes
+
+### Proximo passo
+`/speckit.specify` para iniciar ciclo de implementacao.
 ```
 
 ## Tratamento de Erros

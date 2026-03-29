@@ -55,6 +55,9 @@ Rodar `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <
 **Leitura obrigatoria:**
 - `engineering/domain-model.md` — bounded contexts e agregados
 - `engineering/blueprint.md` — stack, NFRs, topologia
+- `decisions/ADR-*.md` — decisoes de stack que impactam containers
+- `model/spec.likec4` — element types existentes (NUNCA redefinir)
+- `model/ddd-contexts.likec4` — naming de bounded contexts
 
 **Perguntas Estruturadas:**
 
@@ -64,6 +67,8 @@ Rodar `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <
 | **Trade-offs** | "Monolito modular (simples, 1 deploy) ou microservices (complexo, deploy independente)?" |
 | **Gaps** | "Blueprint nao especifica [messaging pattern]. Definir?" |
 | **Provocacao** | "Voce realmente precisa de [N] containers? Comece com monolito modular e split depois." |
+
+Aguardar respostas ANTES de gerar.
 
 ### 2. Gerar Artefatos
 
@@ -139,10 +144,32 @@ graph TD
 | 5 | LikeC4 syntax valida? | Corrigir |
 | 6 | Max 200 linhas (.md)? | Condensar |
 | 7 | Data ownership claro? | Definir |
+| 8 | Toda decisao tem >=2 alternativas documentadas? | Adicionar |
+| 9 | Trade-offs explicitos (pros/cons)? | Adicionar pros/cons |
+| 10 | Premissas marcadas [VALIDAR] ou com dado? | Marcar [VALIDAR] |
+| 11 | Consistencia entre .md e .likec4? | Alinhar |
 
 ### 4. Gate de Aprovacao: Human
 
-Apresentar diagrama, tabela resumida, perguntas: "E possivel com menos containers?", "Protocolos fazem sentido?", "Data ownership esta correto?"
+Apresentar ao usuario:
+
+**Resumo da Arquitetura de Containers:**
+- Containers: [N]
+- Comunicacoes: [N]
+- Padrao: [monolito modular / microservices / hibrido]
+
+**Decisoes-chave:**
+| # | Decisao | Alternativa simples | Alternativa robusta | Escolha |
+|---|---------|--------------------|--------------------|---------|
+| 1 | ... | ... | ... | ... |
+
+**Perguntas de validacao:**
+1. E possivel com menos containers?
+2. Protocolos de comunicacao fazem sentido?
+3. Data ownership esta correto?
+4. NFRs por container sao realistas?
+
+Aguardar aprovacao antes de salvar.
 
 ### 5. Salvar + Relatorio
 
@@ -163,6 +190,9 @@ Apresentar diagrama, tabela resumida, perguntas: "E possivel com menos container
 [x] Protocolos definidos
 [x] NFRs com targets
 [x] LikeC4 syntax valida
+
+### Proximo Passo
+`/context-map <nome>`
 ```
 
 ## Tratamento de Erros

@@ -199,7 +199,7 @@ Aguardar confirmacao de TODOS os ADRs antes de salvar. Se algum for rejeitado, v
 [x] Numeracao sequencial
 [x] Aprovacao explicita por ADR (gate 1-way-door)
 
-### ⚠️ Proximo Passo
+### Proximo Passo
 `/blueprint <nome>` — Gerar blueprint de engenharia baseado nos ADRs aprovados.
 ```
 
@@ -211,5 +211,5 @@ Aguardar confirmacao de TODOS os ADRs antes de salvar. Se algum for rejeitado, v
 | Decisao trivial (nao impacta arquitetura) | Nao gerar ADR, documentar como nota no blueprint |
 | Conflito entre ADRs | Resolver antes de salvar — ADRs nao podem se contradizer |
 | ADRs existentes conflitam com novos | Propor atualizar status dos antigos para "superseded" |
-| Menos de 3 alternativas reais | Pesquisar mais ou ser honesto: "apenas 2 alternativas viaveis" com justificativa |
+| Menos de 3 alternativas reais | Pesquisar mais. Se genuinamente so existem 2: documentar com justificativa explicita de por que nao ha 3a viavel |
 | Usuario rejeita decisao no gate | Voltar ao passo 1 com novas constraints para essa decisao |

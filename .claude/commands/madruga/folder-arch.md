@@ -5,6 +5,7 @@ arguments:
     description: "Nome da plataforma/produto. Se vazio, pergunta."
     required: false
 argument-hint: "[nome-da-plataforma]"
+handoffs: []
 ---
 
 # Folder Architecture — Estrutura de Pastas
@@ -52,6 +53,7 @@ Rodar `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <
 **Identificar convencoes da stack:**
 - A partir dos ADRs, identificar framework/linguagem principal
 - Pesquisar via Context7 a estrutura recomendada pelo framework
+- Web search: "[framework] project structure best practices 2026"
 - Adaptar ao tamanho do projeto (nao usar estrutura enterprise para MVP)
 
 **Perguntas Estruturadas:**
@@ -62,6 +64,8 @@ Rodar `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <
 | **Trade-offs** | "Feature-based (src/features/X) ou layer-based (src/models, src/services)?" |
 | **Gaps** | "Blueprint nao especifica onde ficam [testes/configs/scripts]. Definir?" |
 | **Provocacao** | "Estrutura flat (poucos niveis) pode ser melhor que deep nesting para este projeto." |
+
+Aguardar respostas ANTES de gerar.
 
 ### 2. Gerar Folder Structure
 
@@ -147,6 +151,9 @@ updated: YYYY-MM-DD
 | 5 | Boundaries de modulo claras? | Definir |
 | 6 | Convencoes de nomenclatura documentadas? | Adicionar |
 | 7 | Max 150 linhas? | Condensar |
+| 8 | Toda decisao tem >=2 alternativas documentadas? | Adicionar alternativa |
+| 9 | Trade-offs explicitos (pros/cons)? | Adicionar pros/cons |
+| 10 | Premissas marcadas [VALIDAR] ou com dado? | Marcar [VALIDAR] |
 
 ### 4. Gate de Aprovacao: Human
 
@@ -170,6 +177,9 @@ Apresentar:
 [x] Zero pastas orfas
 [x] Boundaries documentadas
 [x] Convencoes definidas
+
+### Proximo Passo
+folder-arch e terminal no DAG. Verificar `/pipeline-status <nome>` para outros skills pendentes (domain-model, containers, etc.).
 ```
 
 ## Tratamento de Erros

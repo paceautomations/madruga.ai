@@ -54,6 +54,7 @@ Rodar `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <
 - `business/vision.md` — contexto de negocio, metricas, escala esperada
 - `business/solution-overview.md` — features e prioridades
 - `business/process.md` — fluxos de negocio e requisitos implicitos
+- `research/codebase-context.md` — (se existir) stack existente e padroes detectados (brownfield)
 
 **Identificar decisoes tecnologicas necessarias:**
 
@@ -73,15 +74,16 @@ A partir dos artefatos de business, listar todas as decisoes tecnologicas que pr
 
 | Categoria | Pergunta |
 |-----------|----------|
-| **Premissas** | "Assumo que a equipe tem experiencia com [X]. Correto?" |
+| **Premissas** | "Assumo que a equipe tem experiencia com [X]. Correto?" / "Ha restricoes de budget, cloud provider ou tecnologia ja definida?" |
 | **Trade-offs** | "Priorizar [simplicidade] ou [escalabilidade] neste momento?" |
 | **Gaps** | "Nao encontrei requisitos sobre [observabilidade/seguranca/compliance]. Definir agora?" |
 | **Provocacao** | "O padrao de mercado e [X], mas para o tamanho deste projeto [Y] pode ser mais adequado." |
-| **Constraints** | "Ha alguma restricao de budget, cloud provider, ou tecnologia ja definida?" |
 
 Aguardar respostas ANTES de iniciar pesquisa.
 
-### 2. Deep Research com Subagents Paralelos
+### 2. Gerar Artefato — Pesquisa + Matriz
+
+#### 2a. Deep Research com Subagents Paralelos
 
 **Spawnar Agent subagents em paralelo** — 1 por decisao tecnologica:
 
@@ -96,7 +98,7 @@ Para cada decisao:
 - Fonte de cada claim
 - Recomendacao com justificativa
 
-### 3. Gerar Matriz de Decisao
+#### 2b. Consolidar Matriz de Decisao
 
 Consolidar resultados em `research/tech-alternatives.md`:
 
@@ -192,7 +194,7 @@ updated: YYYY-MM-DD
 2. [fonte 2]
 ```
 
-### 4. Auto-Review
+### 3. Auto-Review
 
 | # | Check | Acao se falhar |
 |---|-------|---------------|
@@ -202,10 +204,10 @@ updated: YYYY-MM-DD
 | 4 | Matriz tem criterios mensuráveis? | Adicionar metricas |
 | 5 | Recomendacao tem justificativa referenciando matriz? | Conectar com criterios |
 | 6 | Premissas marcadas com [VALIDAR]? | Marcar |
-| 7 | Max 250 linhas total? | Condensar |
+| 7 | Max 350 linhas total? | Condensar |
 | 8 | Pesquisa recente (2025-2026)? | Verificar datas |
 
-### 5. Gate de Aprovacao: 1-Way-Door
+### 4. Gate de Aprovacao: 1-Way-Door
 
 **ATENCAO: Este e um gate 1-way-door.** Decisoes tecnologicas definidas aqui constrangem TODA a arquitetura downstream (ADRs, blueprint, containers, DDD, epics).
 
@@ -228,7 +230,7 @@ Apresentar ao usuario:
 
 Aguardar confirmacao de TODAS as decisoes antes de salvar.
 
-### 6. Salvar + Relatorio
+### 5. Salvar + Relatorio
 
 1. Salvar em `platforms/<nome>/research/tech-alternatives.md`
 2. Informar ao usuario:
@@ -248,7 +250,7 @@ Aguardar confirmacao de TODAS as decisoes antes de salvar.
 [x] Premissas marcadas
 [x] Aprovacao explicita por decisao (gate 1-way-door)
 
-### ⚠️ Proximo Passo
+### Proximo Passo
 `/adr-gen <nome>` — Gerar ADRs formais para cada decisao aprovada.
 ATENCAO: ADR Gen tambem e gate 1-way-door.
 ```

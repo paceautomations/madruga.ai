@@ -54,6 +54,8 @@ Rodar `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <
 - `engineering/containers.md` — arquitetura
 - `engineering/context-map.md` — relacoes DDD
 - `business/*` — vision, solution-overview, process
+- `engineering/blueprint.md` — NFRs e concerns transversais
+- `decisions/ADR-*.md` — restricoes tecnologicas
 
 **Identificar boundaries naturais para epicos:**
 - 1 bounded context = candidato a 1 epico
@@ -68,6 +70,8 @@ Rodar `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <
 | **Trade-offs** | "MVP com [2 epicos] ou entrega completa com [5]? Qual appetite?" |
 | **Gaps** | "Qual e o criterio de sucesso do MVP?" |
 | **Provocacao** | "Epico [X] parece grande demais (6w). Vale split em 2 de 2w?" |
+
+Aguardar respostas ANTES de gerar epicos.
 
 ### 2. Gerar Epicos
 
@@ -141,6 +145,9 @@ priority: P1 | P2 | P3
 | 5 | Nenhum overlap de escopo entre epicos? | Resolver |
 | 6 | Bounded contexts mapeados para epicos? | Mapear |
 | 7 | Dependencias entre epicos acyclicas? | Resolver ciclos |
+| 8 | Toda decisao tem >=2 alternativas documentadas? | Adicionar |
+| 9 | Trade-offs explicitos? | Adicionar pros/cons |
+| 10 | Premissas marcadas [VALIDAR] ou com dado? | Marcar [VALIDAR] |
 
 ### 4. Gate de Aprovacao: 1-Way-Door
 

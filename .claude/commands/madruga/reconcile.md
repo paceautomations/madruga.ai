@@ -36,9 +36,12 @@ Atualiza docs existentes em `platforms/<nome>/`. Report em `reconcile-report.md`
 
 ### 0. Pre-requisitos
 
-Verificar plataforma existe e tem docs de arquitetura.
+Rodar `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <nome> --skill reconcile` e parsear JSON.
+- Se `ready: false`: ERROR listando dependencias faltantes.
+- Se `ready: true`: ler artefatos em `available`.
+- Ler `.specify/memory/constitution.md`.
 
-### 1. Detectar Drift
+### 1. Coletar Contexto + Detectar Drift
 
 Ler:
 - `git diff` ou `git log` recente
@@ -55,9 +58,24 @@ Ler:
 | Model drift | Containers/contexts mudaram mas LikeC4 nao atualizado |
 | Domain drift | Novas entidades/agregados nao no domain-model |
 
+**Perguntas Estruturadas:**
+
+| Categoria | Pergunta |
+|-----------|----------|
+| **Premissas** | "Assumo que mudanca em [X] foi intencional. Correto?" |
+| **Trade-offs** | "Atualizar docs agora (completo) ou marcar para proximo sprint (rapido)?" |
+| **Gaps** | "Nao sei se mudanca em [X] afeta [doc Y]. Verificar?" |
+| **Provocacao** | "Drift em [area] pode indicar que o ADR original precisa ser revisado." |
+
+Aguardar respostas ANTES de propor atualizacoes.
+
 ### 2. Propor Atualizacoes
 
-Para cada drift: identificar doc afetado, propor mudanca especifica.
+Para cada drift detectado, gerar proposta estruturada:
+
+| # | Drift | Doc Afetado | Mudanca Proposta | Severidade |
+|---|-------|-------------|-----------------|-----------|
+| 1 | [descricao] | [arquivo] | [o que mudar] | alta/media/baixa |
 
 ### 3. Auto-Review
 
@@ -66,6 +84,9 @@ Para cada drift: identificar doc afetado, propor mudanca especifica.
 | 1 | Todo drift identificado? | Re-scan |
 | 2 | Atualizacoes consistentes entre docs? | Verificar cross-references |
 | 3 | LikeC4 syntax valida? | Corrigir |
+| 4 | Toda proposta tem >=2 alternativas? | Adicionar alternativa |
+| 5 | Trade-offs explicitos? | Adicionar pros/cons |
+| 6 | Premissas marcadas [VALIDAR] ou com dado? | Marcar [VALIDAR] |
 
 ### 4. Gate: Human
 
@@ -76,6 +97,8 @@ Apresentar drift report e atualizacoes propostas. Pedir aprovacao antes de aplic
 ```
 ## Reconciliacao completa
 
+**Arquivo:** platforms/<nome>/reconcile-report.md
+**Linhas:** <N>
 **Drifts detectados:** <N>
 **Docs atualizados:** <N>
 **Categorias:** [scope/architecture/model/domain]
