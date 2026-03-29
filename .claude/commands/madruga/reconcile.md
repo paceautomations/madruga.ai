@@ -7,7 +7,7 @@ arguments:
 argument-hint: "[platform-name]"
 handoffs:
   - label: Check Pipeline Status
-    agent: madruga/pipeline-status
+    agent: madruga/pipeline
     prompt: "Documentation updated. Check pipeline status."
 ---
 
@@ -103,7 +103,7 @@ Present the drift report and proposed updates. Request approval before applying.
 **Docs updated:** <N>
 **Categories:** [scope/architecture/model/domain]
 
-Next: `/pipeline-status <name>` to check pipeline state.
+Next: `/pipeline <name>` to check pipeline state.
 ```
 
 ## Error Handling
@@ -113,3 +113,10 @@ Next: `/pipeline-status <name>` to check pipeline state.
 | No git diff (nothing changed) | Report "zero drift" |
 | Architecture docs incomplete | List gaps, suggest completing the pipeline |
 | Drift too large | Suggest re-running affected skills |
+
+---
+handoff:
+  from: reconcile
+  to: null
+  context: "Reconciliação concluída. Epic cycle completo."
+  blockers: []

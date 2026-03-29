@@ -240,3 +240,10 @@ WARNING: tech-research is a 1-way-door gate — technology decisions define the 
 | Vision/solution-overview do not exist | ERROR: missing dependencies. Run `/solution-overview <name>` first |
 | Platform already has process.md | Read as base; ask whether to rewrite from scratch or iterate |
 | Exception without clear handling | Ask the user: "When [X] happens, what does the [actor] do?" |
+
+---
+handoff:
+  from: business-process
+  to: tech-research
+  context: "Processos mapeados. Tech research deve avaliar alternativas. WARNING: 1-way-door."
+  blockers: []

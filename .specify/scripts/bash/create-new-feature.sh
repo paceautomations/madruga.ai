@@ -6,6 +6,7 @@ JSON_MODE=false
 SHORT_NAME=""
 BRANCH_NUMBER=""
 USE_TIMESTAMP=false
+BASE_DIR=""
 ARGS=()
 i=1
 while [ $i -le $# ]; do
@@ -44,14 +45,28 @@ while [ $i -le $# ]; do
         --timestamp)
             USE_TIMESTAMP=true
             ;;
+        --base-dir)
+            if [ $((i + 1)) -gt $# ]; then
+                echo 'Error: --base-dir requires a value' >&2
+                exit 1
+            fi
+            i=$((i + 1))
+            next_arg="${!i}"
+            if [[ "$next_arg" == --* ]]; then
+                echo 'Error: --base-dir requires a value' >&2
+                exit 1
+            fi
+            BASE_DIR="$next_arg"
+            ;;
         --help|-h)
-            echo "Usage: $0 [--json] [--short-name <name>] [--number N] [--timestamp] <feature_description>"
+            echo "Usage: $0 [--json] [--short-name <name>] [--number N] [--timestamp] [--base-dir <path>] <feature_description>"
             echo ""
             echo "Options:"
             echo "  --json              Output in JSON format"
             echo "  --short-name <name> Provide a custom short name (2-4 words) for the branch"
             echo "  --number N          Specify branch number manually (overrides auto-detection)"
             echo "  --timestamp         Use timestamp prefix (YYYYMMDD-HHMMSS) instead of sequential numbering"
+            echo "  --base-dir <path>   Use custom base directory instead of specs/ (e.g., platforms/<name>/epics/<NNN>/)"
             echo "  --help, -h          Show this help message"
             echo ""
             echo "Examples:"
@@ -173,7 +188,13 @@ fi
 
 cd "$REPO_ROOT"
 
-SPECS_DIR="$REPO_ROOT/specs"
+if [ -n "$BASE_DIR" ]; then
+    # --base-dir mode: use provided path directly, export for downstream scripts
+    SPECS_DIR="$BASE_DIR"
+    export SPECIFY_BASE_DIR="$BASE_DIR"
+else
+    SPECS_DIR="$REPO_ROOT/specs"
+fi
 mkdir -p "$SPECS_DIR"
 
 # Generate branch name with stop word filtering and length filtering
@@ -302,7 +323,12 @@ else
     >&2 echo "[specify] Warning: Git repository not detected; skipped branch creation for $BRANCH_NAME"
 fi
 
-FEATURE_DIR="$SPECS_DIR/$BRANCH_NAME"
+if [ -n "$BASE_DIR" ]; then
+    # --base-dir mode: use base dir directly as feature dir
+    FEATURE_DIR="$SPECS_DIR"
+else
+    FEATURE_DIR="$SPECS_DIR/$BRANCH_NAME"
+fi
 mkdir -p "$FEATURE_DIR"
 
 TEMPLATE=$(resolve_template "spec-template" "$REPO_ROOT") || true

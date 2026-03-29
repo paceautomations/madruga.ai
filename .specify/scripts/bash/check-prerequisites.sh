@@ -27,7 +27,9 @@ REQUIRE_TASKS=false
 INCLUDE_TASKS=false
 PATHS_ONLY=false
 
-for arg in "$@"; do
+i=1
+while [ $i -le $# ]; do
+    arg="${!i}"
     case "$arg" in
         --json)
             JSON_MODE=true
@@ -40,6 +42,10 @@ for arg in "$@"; do
             ;;
         --paths-only)
             PATHS_ONLY=true
+            ;;
+        --base-dir)
+            i=$((i + 1))
+            export SPECIFY_BASE_DIR="${!i}"
             ;;
         --help|-h)
             cat << 'EOF'
@@ -72,6 +78,7 @@ EOF
             exit 1
             ;;
     esac
+    i=$((i + 1))
 done
 
 # Source common functions

@@ -216,3 +216,10 @@ Wait for approval before saving.
 | No clear priorities | Ask: "Without what does the product not work?" (Now) / "What improves it significantly?" (Next) / "What would be nice to have?" (Later) |
 | Vision exists but solution-overview does not | Read vision and derive features from segments and critical battles |
 | Platform already has a solution-overview | Read as baseline, ask whether to rewrite or iterate |
+
+---
+handoff:
+  from: solution-overview
+  to: business-process
+  context: "Feature map priorizado. Business process deve mapear fluxos core."
+  blockers: []

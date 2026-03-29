@@ -7,8 +7,8 @@ arguments:
 argument-hint: "[platform-name]"
 handoffs:
   - label: Start Implementation by Epic
-    agent: madruga/discuss
-    prompt: "Documentation pipeline complete! Start per-epic implementation with discuss."
+    agent: madruga/epic-context
+    prompt: "Documentation pipeline complete! Start per-epic implementation with epic-context."
 ---
 
 # Roadmap — Delivery Sequence
@@ -174,7 +174,7 @@ Present Gantt, MVP definition, sequence. Questions: "Is the MVP correct?", "Does
 
 ### Documentation Pipeline Complete!
 Next steps per epic:
-1. `/discuss <name>` — Capture implementation context
+1. `/epic-context <name>` — Capture implementation context
 2. `/speckit.specify` — Feature specification
 3. `/speckit.clarify` — Clarify ambiguities
 4. `/speckit.plan` — Design artifacts
@@ -183,7 +183,7 @@ Next steps per epic:
 7. `/speckit.implement` — Execute tasks
 8. `/speckit.analyze` — Post-implementation consistency check
 9. `/verify <name>` — Verify adherence
-10. `/test-ai` — (opcional) QA test if app is running
+10. `/qa` — (opcional) QA test if app is running
 11. `/reconcile <name>` — Update documentation
 ```
 
@@ -195,3 +195,10 @@ Next steps per epic:
 | Circular dependencies | Resolve before generating |
 | No deadline | Use appetite as relative estimate |
 | Team size undefined | Note that parallelism depends on team size |
+
+---
+handoff:
+  from: roadmap
+  to: epic-context
+  context: "Roadmap definido. Para cada epic, iniciar ciclo com /epic-context <platform> <NNN>."
+  blockers: []

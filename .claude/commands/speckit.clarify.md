@@ -16,6 +16,8 @@ You **MUST** consider the user input before proceeding (if not empty).
 
 ## Outline
 
+**Epic Dir Support**: When this skill is invoked in the context of a platform epic (e.g., via `/epic-context` → handoff), set `export SPECIFY_BASE_DIR=platforms/<name>/epics/<NNN-slug>/` before invoking any SpecKit bash scripts. This ensures all artifacts (spec.md, plan.md, tasks.md, etc.) are created within the epic directory instead of `specs/`.
+
 Goal: Detect and reduce ambiguity or missing decision points in the active feature specification and record the clarifications directly in the spec file.
 
 Note: This clarification workflow is expected to run (and be completed) BEFORE invoking `/speckit.plan`. If the user explicitly states they are skipping clarification (e.g., exploratory spike), you may proceed, but must warn that downstream rework risk increases.

@@ -7,7 +7,7 @@ arguments:
 argument-hint: "[platform-name]"
 handoffs:
   - label: Generate Vision One-Pager
-    agent: madruga/vision-one-pager
+    agent: madruga/vision
     prompt: Generate business vision for the new platform
 ---
 
@@ -18,7 +18,7 @@ Create a new platform in the madruga.ai repository using the `platform.py new` s
 2. Injects the import into LikeC4Diagram.tsx (diagrams work automatically)
 3. Updates portal symlinks (content appears in Starlight)
 
-After scaffolding, follow the pipeline DAG with `/vision-one-pager <name>`.
+After scaffolding, follow the pipeline DAG with `/vision <name>`.
 
 ## Usage
 
@@ -84,8 +84,8 @@ Inform the user that the platform was created and the next step is to start the 
 ```
 Platform '<name>' created successfully!
 
-Next step: `/vision-one-pager <name>` to start the documentation pipeline.
-Use `/pipeline-status <name>` to see the full pipeline status.
+Next step: `/vision <name>` to start the documentation pipeline.
+Use `/pipeline <name>` to see the full pipeline status.
 ```
 
 ### 5. Present Result
@@ -112,8 +112,8 @@ platforms/<name>/
 └── model/ (spec.likec4, likec4.config.json, views.likec4, ...)
 
 ### Next step
-- `/vision-one-pager <name>` — start documentation pipeline (recommended)
-- `/pipeline-status <name>` — see pipeline DAG status
+- `/vision <name>` — start documentation pipeline (recommended)
+- `/pipeline <name>` — see pipeline DAG status
 - `cd portal && npm run dev` — view in portal
 ```
 

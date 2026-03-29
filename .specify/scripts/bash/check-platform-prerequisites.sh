@@ -10,17 +10,19 @@
 # OPTIONS:
 #   --platform <name>   Platform name (e.g., madruga-ai, fulano) [REQUIRED]
 #   --skill <id>        Check prerequisites for a specific pipeline node
+#   --epic <slug>       Check epic cycle node prerequisites (e.g., 001-onboarding)
 #   --status            Show full pipeline status (all nodes)
 #   --json              Output in JSON format (default: text)
 #   --help, -h          Show help message
 #
-# One of --skill or --status is required.
+# One of --skill, --status, or --epic is required.
 
 set -e
 
 # Parse command line arguments
 PLATFORM=""
 SKILL=""
+EPIC=""
 JSON_MODE=false
 STATUS_MODE=false
 USE_DB=false
@@ -43,6 +45,7 @@ Platform pipeline prerequisites checker.
 OPTIONS:
   --platform <name>        Platform name (required)
   --skill <id>             Check prerequisites for a specific pipeline node
+  --epic <slug>            Check epic cycle node prerequisites (e.g., 001-onboarding)
   --status                 Show full pipeline status (all nodes)
   --json                   Output in JSON format
   --use-db                 Query SQLite DB for enhanced status (hash, staleness)
@@ -54,6 +57,8 @@ EXAMPLES:
   ./check-platform-prerequisites.sh --json --platform madruga-ai --status
   ./check-platform-prerequisites.sh --json --platform madruga-ai --status --use-db
   ./check-platform-prerequisites.sh --json --platform madruga-ai --check-platform-only
+  ./check-platform-prerequisites.sh --json --platform fulano --epic 001-onboarding --status
+  ./check-platform-prerequisites.sh --json --platform fulano --epic 001-onboarding --skill discuss
 EOF
             exit 0
             ;;
@@ -63,6 +68,9 @@ EOF
         --skill)
             i=$((i + 1))
             SKILL="${!i}" ;;
+        --epic)
+            i=$((i + 1))
+            EPIC="${!i}" ;;
     esac
     i=$((i + 1))
 done
@@ -83,11 +91,11 @@ if [ -z "$PLATFORM" ]; then
     exit 1
 fi
 
-if [ -z "$SKILL" ] && [ "$STATUS_MODE" != true ] && [ "$CHECK_PLATFORM_ONLY" != true ]; then
+if [ -z "$SKILL" ] && [ "$STATUS_MODE" != true ] && [ "$CHECK_PLATFORM_ONLY" != true ] && [ -z "$EPIC" ]; then
     if $JSON_MODE; then
-        echo '{"error":"One of --skill, --status, or --check-platform-only is required"}'
+        echo '{"error":"One of --skill, --status, --epic, or --check-platform-only is required"}'
     else
-        echo "ERROR: One of --skill, --status, or --check-platform-only is required" >&2
+        echo "ERROR: One of --skill, --status, --epic, or --check-platform-only is required" >&2
     fi
     exit 1
 fi
@@ -122,6 +130,144 @@ if [ "$CHECK_PLATFORM_ONLY" = true ]; then
         echo "Platform '$PLATFORM' is valid at $PLATFORM_DIR"
     fi
     exit 0
+fi
+
+# --epic mode: check epic cycle node prerequisites
+if [ -n "$EPIC" ]; then
+    python3 -c "
+import json, sys, os, glob, yaml
+
+platform_dir = sys.argv[1]
+platform_name = sys.argv[2]
+epic_slug = sys.argv[3]
+json_mode = sys.argv[4] == 'true'
+skill_id = sys.argv[5] if len(sys.argv) > 5 else ''
+status_mode = sys.argv[6] == 'true'
+use_db = sys.argv[7] == 'true'
+
+# Load epic_cycle from platform.yaml
+with open(os.path.join(platform_dir, 'platform.yaml')) as f:
+    manifest = yaml.safe_load(f)
+
+epic_cycle = manifest.get('pipeline', {}).get('epic_cycle', {})
+nodes = epic_cycle.get('nodes', [])
+if not nodes:
+    print(json.dumps({'error': 'No epic_cycle section in platform.yaml'}))
+    sys.exit(1)
+
+epic_dir = os.path.join(platform_dir, 'epics', epic_slug)
+
+def check_outputs(node):
+    outputs = node.get('outputs', [])
+    for o in outputs:
+        path = o.replace('{epic}', os.path.join('epics', epic_slug))
+        if not os.path.exists(os.path.join(platform_dir, path)):
+            return False
+    return len(outputs) > 0
+
+if use_db:
+    try:
+        sys.path.insert(0, os.path.join(os.path.dirname(platform_dir), '..', '.specify', 'scripts'))
+        from db import get_conn, get_epic_nodes, get_epic_status
+        conn = get_conn()
+        db_nodes = get_epic_nodes(conn, platform_name, epic_slug)
+        db_status = get_epic_status(conn, platform_name, epic_slug)
+        db_map = {n['node_id']: n for n in db_nodes}
+        conn.close()
+    except Exception:
+        db_map = {}
+        db_status = {}
+else:
+    db_map = {}
+    db_status = {}
+
+node_map = {n['id']: n for n in nodes}
+results = []
+for node in nodes:
+    nid = node['id']
+    optional = node.get('optional', False)
+    gate = node.get('gate', 'human')
+    outputs_exist = check_outputs(node)
+
+    # Check DB status if available
+    db_node = db_map.get(nid)
+    if db_node and db_node.get('status') == 'done':
+        status = 'done'
+    elif outputs_exist:
+        status = 'done'
+    else:
+        deps = node.get('depends', [])
+        missing_deps = []
+        for dep_id in deps:
+            dep_node = node_map.get(dep_id)
+            if not dep_node:
+                continue
+            if dep_node.get('optional', False):
+                continue
+            if not check_outputs(dep_node):
+                dep_db = db_map.get(dep_id)
+                if not (dep_db and dep_db.get('status') == 'done'):
+                    missing_deps.append(dep_id)
+        if missing_deps:
+            status = 'blocked'
+        elif optional:
+            status = 'skipped'
+        else:
+            status = 'ready'
+
+    entry = {'id': nid, 'status': status, 'gate': gate}
+    if optional:
+        entry['optional'] = True
+    results.append(entry)
+
+if status_mode or not skill_id:
+    next_nodes = [r['id'] for r in results if r['status'] == 'ready']
+    done_count = sum(1 for r in results if r['status'] == 'done')
+    total = len(results)
+    output = {
+        'platform': platform_name,
+        'epic': epic_slug,
+        'source': 'db' if use_db and db_map else 'filesystem',
+        'nodes': results,
+        'next': next_nodes,
+        'progress': {
+            'done': done_count,
+            'ready': sum(1 for r in results if r['status'] == 'ready'),
+            'blocked': sum(1 for r in results if r['status'] == 'blocked'),
+            'skipped': sum(1 for r in results if r['status'] == 'skipped'),
+            'total': total
+        }
+    }
+    if db_status:
+        output['db_status'] = db_status
+    print(json.dumps(output, indent=2))
+else:
+    # Skill mode for epic cycle
+    target = node_map.get(skill_id)
+    if not target:
+        print(json.dumps({'error': f\"Node '{skill_id}' not found in epic_cycle\", 'available_nodes': [n['id'] for n in nodes]}))
+        sys.exit(1)
+    deps = target.get('depends', [])
+    missing = []
+    for dep_id in deps:
+        dep_r = next((r for r in results if r['id'] == dep_id), None)
+        if dep_r and dep_r['status'] != 'done':
+            if not node_map.get(dep_id, {}).get('optional', False):
+                missing.append(dep_id)
+    ready = len(missing) == 0
+    result = {
+        'platform': platform_name,
+        'epic': epic_slug,
+        'skill': skill_id,
+        'ready': ready,
+        'missing': missing,
+        'depends_on': deps
+    }
+    print(json.dumps(result, indent=2))
+    if not ready:
+        sys.exit(2)
+" "$PLATFORM_DIR" "$PLATFORM" "$EPIC" "$JSON_MODE" "$SKILL" "$STATUS_MODE" "$USE_DB"
+    exit $?
 fi
 
 # --use-db: query SQLite for enhanced status (with hashes, staleness)

@@ -10,8 +10,8 @@ arguments:
 argument-hint: "[platform] [epic-number]"
 handoffs:
   - label: QA Test (optional)
-    agent: madruga/test-ai
-    prompt: "Verify complete. If app is running, run QA tests with /test-ai."
+    agent: madruga/qa
+    prompt: "Verify complete. If app is running, run QA tests with /qa."
   - label: Reconcile Documentation
     agent: madruga/reconcile
     prompt: "Skip QA tests. Reconcile documentation with implementation."
@@ -133,3 +133,10 @@ updated: YYYY-MM-DD
 | No spec.md | Suggest `/speckit.specify` |
 | No tasks.md | Suggest `/speckit.tasks` |
 | No code implemented | Score 0%, list everything as pending |
+
+---
+handoff:
+  from: verify
+  to: qa
+  context: "Verificação de aderência concluída. QA deve testar features web-facing via Playwright (opcional)."
+  blockers: []
