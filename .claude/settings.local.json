@@ -71,7 +71,7 @@
       "Bash(git push:*)"
     ],
     "deny": [],
-    "defaultMode": "acceptEdits"
+    "defaultMode": "dontAsk"
   },
   "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
