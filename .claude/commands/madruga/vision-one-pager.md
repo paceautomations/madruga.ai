@@ -1,100 +1,100 @@
 ---
-description: Gera business vision one-pager no framework Playing to Win para qualquer plataforma
+description: Generate a business vision one-pager using the Playing to Win framework for any platform
 arguments:
   - name: platform
-    description: "Nome da plataforma/produto. Se vazio, pergunta."
+    description: "Platform/product name. If empty, prompt the user."
     required: false
-argument-hint: "[nome-da-plataforma]"
+argument-hint: "[platform-name]"
 handoffs:
-  - label: Gerar Solution Overview
+  - label: Generate Solution Overview
     agent: madruga/solution-overview
-    prompt: Gerar solution overview baseado no vision validado
+    prompt: Generate solution overview based on the validated vision
 ---
 
 # Vision One-Pager — Playing to Win
 
-Gera um business vision document de 1 pagina (markdown, ~150 linhas) no framework Playing to Win (Lafley & Martin). Output puramente de negocio — zero jargao tecnico.
+Generate a 1-page business vision document (markdown, ~150 lines) using the Playing to Win framework (Lafley & Martin). The output is purely business-oriented — zero technical jargon.
 
-## Regra Cardinal: ZERO Conteudo Tecnico
+## Cardinal Rule: ZERO Technical Content
 
-Este documento e **exclusivamente de negocio**. Decisoes tecnicas, arquitetura e implementacao pertencem a outros artefatos (ADRs, roadmap tecnico, C4 diagrams).
+This document is **exclusively about the business**. Technical decisions, architecture, and implementation belong in other artifacts (ADRs, technical roadmap, C4 diagrams).
 
-**NUNCA incluir no output:**
-- Nomes de tecnologias, frameworks, linguagens, bancos de dados, bibliotecas (ex: Python, FastAPI, Redis, Supabase, pgvector, React, Docker)
-- Termos de arquitetura (ex: RLS, API, SDK, middleware, cache, queue, webhook, endpoint, microservice, monolith)
-- Referencias a ADRs, specs tecnicas ou diagramas C4
-- Detalhes de infraestrutura (ex: deploy, CI/CD, server, container, cloud provider)
-- Nomes de ferramentas internas de desenvolvimento (ex: LangFuse, Bifrost, Evolution API)
+**NEVER include in the output:**
+- Names of technologies, frameworks, languages, databases, or libraries (e.g., Python, FastAPI, Redis, Supabase, pgvector, React, Docker)
+- Architecture terms (e.g., RLS, API, SDK, middleware, cache, queue, webhook, endpoint, microservice, monolith)
+- References to ADRs, technical specs, or C4 diagrams
+- Infrastructure details (e.g., deploy, CI/CD, server, container, cloud provider)
+- Names of internal development tools (e.g., LangFuse, Bifrost, Evolution API)
 
-**Excecoes permitidas:** nomes proprios de produtos/empresas concorrentes (Botpress, Blip) e termos de negocio que coincidem com termos tecnicos (ex: "plataforma", "canal", "automacao").
+**Permitted exceptions:** proper names of competitor products/companies (Botpress, Blip) and business terms that overlap with technical terms (e.g., "platform", "channel", "automation").
 
-**Na duvida:** se uma frase so faz sentido para um engenheiro, ela nao pertence a este documento. Reescrever em linguagem que um investidor ou executivo de negocio entenderia.
+**When in doubt:** if a sentence only makes sense to an engineer, it does not belong in this document. Rewrite it in language that an investor or business executive would understand.
 
 ## Persona
 
-Estrategista senior Bain/McKinsey. Objetivo, direto, cada frase com informacao. Quantifica tudo. Marca `[VALIDAR]` quando nao tem dado. Portugues BR.
+Senior Bain/McKinsey strategist. Objective, direct, every sentence carries information. Quantify everything. Mark `[VALIDAR]` when data is unavailable. Write generated artifacts in Brazilian Portuguese (PT-BR).
 
-## Uso
+## Usage
 
-- `/vision-one-pager fulano` — Gera one-pager para plataforma "fulano"
-- `/vision-one-pager` — Pergunta nome da plataforma e coleta contexto
+- `/vision-one-pager fulano` — Generate one-pager for platform "fulano"
+- `/vision-one-pager` — Prompt for the platform name and collect context
 
-## Diretorio
+## Output Directory
 
-Salvar em `platforms/<nome>/business/vision.md`. Criar diretorio se nao existir.
+Save to `platforms/<name>/business/vision.md`. Create the directory if it does not exist.
 
-## Instrucoes
+## Instructions
 
-### 0. Pre-requisitos
+### 0. Prerequisites
 
-Rodar `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <nome> --skill vision` e parsear JSON.
-- Se `ready: false`: ERROR listando dependencias faltantes e qual skill gera cada uma.
-- Se `ready: true`: ler artefatos listados em `available` como contexto adicional.
-- Ler `.specify/memory/constitution.md` para validar output contra principios.
+Run `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <name> --skill vision` and parse the JSON output.
+- If `ready: false`: ERROR — list missing dependencies and which skill generates each one.
+- If `ready: true`: read artifacts listed in `available` as additional context.
+- Read `.specify/memory/constitution.md` to validate the output against project principles.
 
-### 1. Coletar Contexto + Questionar
+### 1. Collect Context + Ask Questions
 
-**Se `$ARGUMENTS.platform` existe:** usar como nome da plataforma.
-**Se vazio:** perguntar nome.
+**If `$ARGUMENTS.platform` is provided:** use it as the platform name.
+**If empty:** ask the user for the name.
 
-Em ambos os casos, verificar se ja existe arquivo em `platforms/<nome>/business/vision.md`. Se existir, ler como base.
+In both cases, check whether `platforms/<name>/business/vision.md` already exists. If it does, read it as a baseline.
 
-Se o usuario ja tem docs de pesquisa ou research no diretorio da plataforma (`research/`), ler para extrair dados antes de perguntar.
+If the user has research docs in the platform directory (`research/`), read them to extract data before asking questions.
 
-Coletar com o usuario (perguntar tudo de uma vez, nao uma por uma):
+Collect the following from the user (ask everything at once, not one at a time):
 
-| # | Pergunta | Exemplo |
+| # | Question | Example |
 |---|----------|---------|
-| 1 | **Tese** — O que faz, para quem, como? (1-2 frases) | "Plataforma config-driven de agentes IA WhatsApp para PMEs BR" |
-| 2 | **Cliente-alvo** — Persona, dor, alternativa atual | "Dono PME, atendimento manual nao escala, usa chatbot rigido" |
-| 3 | **Mercado** — TAM, SAM, SOM (ou estimativas) | "6M PMEs BR no WhatsApp, SOM 500 em 18m" |
-| 4 | **Moat** — O que e dificil de copiar? (1-2 diferenciais reais) | "Unico que faz IA em grupos WhatsApp" |
-| 5 | **Competidores** — 3-5 players relevantes | "Blip, Botpress, Respond.io, Octadesk" |
-| 6 | **Metricas de sucesso** — North Star + targets 6m e 18m | "Conversas resolvidas/mes. 50->500 clientes, R$25K->250K MRR" |
-| 7 | **Pricing** — Modelo e tiers (se definido) | "Free R$0, Starter R$197, Growth R$497, Business R$997" |
-| 8 | **Riscos** — Top 3-5 riscos de negocio | "Meta muda pricing, custo LLM explode, canal unico" |
+| 1 | **Thesis** — What it does, for whom, how? (1-2 sentences) | "Config-driven AI WhatsApp agent platform for Brazilian SMBs" |
+| 2 | **Target customer** — Persona, pain, current alternative | "SMB owner, manual service doesn't scale, uses rigid chatbot" |
+| 3 | **Market** — TAM, SAM, SOM (or estimates) | "6M Brazilian SMBs on WhatsApp, SOM 500 in 18m" |
+| 4 | **Moat** — What is hard to copy? (1-2 real differentiators) | "Only one that does AI in WhatsApp groups" |
+| 5 | **Competitors** — 3-5 relevant players | "Blip, Botpress, Respond.io, Octadesk" |
+| 6 | **Success metrics** — North Star + targets at 6m and 18m | "Conversations resolved/month. 50->500 clients, R$25K->250K MRR" |
+| 7 | **Pricing** — Model and tiers (if defined) | "Free R$0, Starter R$197, Growth R$497, Business R$997" |
+| 8 | **Risks** — Top 3-5 business risks | "Meta changes pricing, LLM cost explodes, single channel" |
 
-Apos receber respostas, identificar premissas implicitas e apresentar perguntas estruturadas:
+After receiving answers, identify implicit assumptions and present structured questions:
 
-| Categoria | Pergunta |
-|-----------|----------|
-| **Premissas** | "Assumo que [X extraido das respostas]. Correto?" |
-| **Trade-offs** | "[Moat A] mais defensavel ou [Moat B] mais escalavel?" |
-| **Gaps** | "Nao tenho dados sobre [mercado/pricing]. Voce define ou eu estimo com [VALIDAR]?" |
-| **Provocacao** | "[Posicionamento obvio], mas [alternativa] pode ser melhor porque [razao]." |
+| Category | Question |
+|----------|----------|
+| **Assumptions** | "I assume [X extracted from answers]. Correct?" |
+| **Trade-offs** | "[Moat A] more defensible or [Moat B] more scalable?" |
+| **Gaps** | "I have no data about [market/pricing]. Do you define it or should I estimate with [VALIDAR]?" |
+| **Provocation** | "[Obvious positioning], but [alternative] may be better because [reason]." |
 
-Aguardar respostas ANTES de gerar.
+Wait for answers BEFORE generating.
 
-### 2. Gerar One-Pager
+### 2. Generate One-Pager
 
-Escrever o documento com exatamente **7 secoes**, seguindo este template:
+Write the document with exactly **7 sections**, following this template. All generated content MUST be in PT-BR:
 
 ```markdown
 ---
 title: "Business Vision"
 updated: YYYY-MM-DD
 ---
-# <Nome> — Business Vision
+# <Name> — Business Vision
 
 > Framework: Playing to Win (Lafley & Martin). Ultima atualizacao: YYYY-MM-DD.
 
@@ -102,11 +102,11 @@ updated: YYYY-MM-DD
 
 ## 1. Tese & Aspiracao
 
-[Paragrafo tese: o que faz, para quem, como. 3-4 linhas max.]
+[Thesis paragraph: what it does, for whom, how. 3-4 lines max.]
 
-[Diferencial estrutural em bold — o moat real. 2 linhas.]
+[Structural differentiator in bold — the real moat. 2 lines.]
 
-**North Star Metric:** [metrica]
+**North Star Metric:** [metric]
 
 | Horizonte | [KPI 1] | [KPI 2] | [KPI 3] | [KPI 4] |
 |-----------|---------|---------|---------|---------|
@@ -118,9 +118,9 @@ updated: YYYY-MM-DD
 ## 2. Where to Play
 
 ### Mercado
-- **TAM:** [numero + fonte]
-- **SAM:** [segmento + numero]
-- **SOM:** [alcancavel em 18m]
+- **TAM:** [number + source]
+- **SAM:** [segment + number]
+- **SOM:** [achievable in 18m]
 
 ### Cliente-alvo
 | Dimensao | Detalhe |
@@ -144,11 +144,11 @@ updated: YYYY-MM-DD
 
 ## 3. How to Win
 
-### Moat estrutural: [nome do moat]
-[2 paragrafos: o que e + por que e dificil de copiar]
+### Moat estrutural: [moat name]
+[2 paragraphs: what it is + why it is hard to copy]
 
 ### Posicionamento
-[1 paragrafo: contra quem NAO compete + qual eixo compete]
+[1 paragraph: who it does NOT compete against + on which axis it competes]
 
 ### Batalhas criticas
 | # | Batalha | Metrica de sucesso | Por que importa |
@@ -163,12 +163,12 @@ updated: YYYY-MM-DD
 
 ## 4. Landscape
 
-| Player | Foco | Preco entry | [Coluna diferencial] |
-|--------|------|-------------|----------------------|
+| Player | Foco | Preco entry | [Differentiator column] |
+|--------|------|-------------|------------------------|
 | ... | ... | ... | ... |
-| **[Plataforma]** | ... | ... | **Sim** |
+| **[Platform]** | ... | ... | **Sim** |
 
-**Tese competitiva:** [1 paragrafo: por que o espaco e vazio e como expande]
+**Tese competitiva:** [1 paragraph: why the space is empty and how it expands]
 
 ---
 
@@ -189,17 +189,17 @@ Se qualquer uma for falsa, a tese precisa ser revisada:
 ## 6. Modelo de Negocio
 
 ### Pricing
-| Tier | Preco/mes | [Unidade] | [Recurso 1] | [Recurso 2] |
-|------|-----------|-----------|-------------|-------------|
+| Tier | Preco/mes | [Unit] | [Resource 1] | [Resource 2] |
+|------|-----------|--------|--------------|--------------|
 | ... | ... | ... | ... | ... |
 
-### [Tailwind ou vantagem estrutural de custo]
-[2-3 linhas]
+### [Tailwind or structural cost advantage]
+[2-3 lines]
 
 ### Unit economics
 - **Custo variavel:** ...
 - **Margem bruta target:** ...
-- **Break-even por [unidade]:** ...
+- **Break-even por [unit]:** ...
 
 ---
 
@@ -207,94 +207,94 @@ Se qualquer uma for falsa, a tese precisa ser revisada:
 
 | Termo | Definicao | Exemplo |
 |-------|-----------|---------|
-| **[Termo 1]** | [definicao curta — o que significa no contexto deste negocio] | [uso em frase] |
-| **[Termo 2]** | ... | ... |
-| **[Termo N]** | ... | ... |
+| **[Term 1]** | [short definition — what it means in this business context] | [usage in a sentence] |
+| **[Term 2]** | ... | ... |
+| **[Term N]** | ... | ... |
 
 > Padronizar estes termos em todos os documentos, codigo, e comunicacao do projeto.
 ```
 
 ### 3. Auto-Review
 
-Antes de salvar, verificar:
+Before saving, verify:
 
-| # | Check | Acao se falhar |
-|---|-------|---------------|
-| 1 | Zero termos tecnicos (grep: API, SDK, framework, database, backend, frontend, deploy, server, endpoint, middleware, cache, queue, Python, Redis, Docker, Supabase, pgvector, webhook, microservice, CI/CD, ADR) | Reescrever em linguagem de negocio. Ver "Regra Cardinal" acima. |
-| 2 | Toda metrica tem numero | Adicionar numero ou marcar `[VALIDAR]` |
-| 3 | Toda decisao tem >=2 alternativas documentadas | Adicionar alternativa |
-| 4 | Trade-offs explicitos (pros/cons) | Adicionar pros/cons |
-| 5 | Premissas marcadas [VALIDAR] ou com dado | Marcar [VALIDAR] |
-| 6 | Nenhuma secao > 30 linhas | Cortar — one-pager nao tem secao longa |
-| 7 | Total < 200 linhas | Condensar secoes maiores |
-| 8 | Landscape tem max 5 players (incluindo a plataforma) | Cortar os menos relevantes |
-| 9 | Batalhas tem max 5 items | Priorizar as mais criticas |
-| 10 | Moat e realmente defensavel (nao e feature facilmente copiavel) | Reframear ou ser honesto |
-| 11 | Secao Linguagem Ubiqua presente com min 5 termos | Adicionar termos do dominio |
+| # | Check | Action on Failure |
+|---|-------|-------------------|
+| 1 | Zero technical terms (scan for: API, SDK, framework, database, backend, frontend, deploy, server, endpoint, middleware, cache, queue, Python, Redis, Docker, Supabase, pgvector, webhook, microservice, CI/CD, ADR) | Rewrite in business language. See "Cardinal Rule" above. |
+| 2 | Every metric has a number | Add number or mark `[VALIDAR]` |
+| 3 | Every decision has >=2 documented alternatives | Add an alternative |
+| 4 | Explicit trade-offs (pros/cons) | Add pros/cons |
+| 5 | Assumptions marked [VALIDAR] or backed by data | Mark [VALIDAR] |
+| 6 | No section exceeds 30 lines | Trim — a one-pager has no long sections |
+| 7 | Total under 200 lines | Condense the largest sections |
+| 8 | Landscape has max 5 players (including the platform) | Remove the least relevant |
+| 9 | Critical battles has max 5 items | Prioritize the most critical |
+| 10 | Moat is truly defensible (not an easily copied feature) | Reframe or be honest |
+| 11 | Ubiquitous Language section present with min 5 terms | Add domain terms |
 
-**Excecao para check 1:** Nomes proprios de produtos/empresas concorrentes sao permitidos mesmo que sejam tecnicos (ex: "Botpress", "WhatsApp"). O check e sobre jargao tecnico generico, nao nomes proprios.
+**Exception for check 1:** Proper names of competitor products/companies are allowed even if they are technical (e.g., "Botpress", "WhatsApp"). The check targets generic technical jargon, not proper names.
 
-### 4. Gate de Aprovacao (human)
+### 4. Approval Gate (human)
 
-Apresentar ao usuario:
+Present to the user:
 
 ```
-## Resumo do Vision One-Pager
+## Vision One-Pager Summary
 
-**Framework:** Playing to Win (7 secoes)
-**North Star Metric:** [metrica escolhida]
-**Moat:** [moat identificado]
+**Framework:** Playing to Win (7 sections)
+**North Star Metric:** [chosen metric]
+**Moat:** [identified moat]
 
-### Decisoes tomadas
-1. [Decisao]: [justificativa]
+### Decisions Made
+1. [Decision]: [rationale]
 2. ...
 
-### Perguntas de validacao
-1. A tese reflete a realidade do negocio?
-2. O moat e realmente defensavel ou e uma feature copiavel?
-3. Os numeros de mercado (TAM/SAM/SOM) fazem sentido?
-4. Os riscos cobrem os cenarios mais criticos?
-5. A linguagem ubiqua esta completa para o dominio?
+### Validation Questions
+1. Does the thesis reflect business reality?
+2. Is the moat truly defensible or is it a copyable feature?
+3. Do the market numbers (TAM/SAM/SOM) make sense?
+4. Do the risks cover the most critical scenarios?
+5. Is the ubiquitous language complete for the domain?
 ```
 
-Aguardar aprovacao antes de salvar.
+Wait for approval before saving.
 
-### 5. Salvar + Relatorio
+### 5. Save + Report
 
-1. Salvar em `platforms/<nome>/business/vision.md`
-2. Informar ao usuario:
+1. Save to `platforms/<name>/business/vision.md`
+2. Report to the user:
 
 ```
-## Vision One-Pager gerado
+## Vision One-Pager Generated
 
-**Arquivo:** platforms/<nome>/business/vision.md
-**Linhas:** <N>
-**Framework:** Playing to Win (7 secoes)
+**File:** platforms/<name>/business/vision.md
+**Lines:** <N>
+**Framework:** Playing to Win (7 sections)
 
 ### Checks
-[x] Zero jargao tecnico
-[x] Metricas com numeros
-[x] Decisoes com alternativas
-[x] Trade-offs explicitos
-[x] Premissas marcadas
-[x] Secoes <= 30 linhas
-[x] Total < 200 linhas
+[x] Zero technical jargon
+[x] Metrics with numbers
+[x] Decisions with alternatives
+[x] Explicit trade-offs
+[x] Assumptions marked
+[x] Sections <= 30 lines
+[x] Total < 200 lines
 [x] Landscape <= 5 players
-[x] Moat defensavel
-[x] Linguagem Ubiqua presente (min 5 termos)
+[x] Moat is defensible
+[x] Ubiquitous Language present (min 5 terms)
 
-### Secoes que precisam de validacao
-- [lista de items marcados com [VALIDAR], se houver]
+### Sections Requiring Validation
+- [list of items marked [VALIDAR], if any]
 
-### Proximo passo
-`/solution-overview <nome>`
+### Next Step
+`/solution-overview <name>`
 ```
 
-## Tratamento de Erros
+## Error Handling
 
-| Problema | Acao |
-|----------|------|
-| Usuario nao sabe o moat | Perguntar: "O que voce faz que um concorrente levaria >6 meses para copiar?" Se nao tem, ser honesto: marcar como `[DEFINIR]` |
-| Sem dados de mercado | Usar estimativas com `[ESTIMAR]` e recomendar fontes (SEBRAE, IBGE, Statista) |
-| Plataforma ja tem vision | Ler como base, perguntar se quer reescrever do zero ou iterar |
-| Mais de 5 competidores relevantes | Forcar priorizacao: "Quais 4 definem o espaco competitivo?" |
+| Problem | Action |
+|---------|--------|
+| User does not know the moat | Ask: "What do you do that a competitor would take >6 months to copy?" If there is none, be honest: mark as `[DEFINIR]` |
+| No market data | Use estimates with `[ESTIMAR]` and recommend sources (SEBRAE, IBGE, Statista) |
+| Platform already has a vision | Read as baseline, ask whether to rewrite from scratch or iterate |
+| More than 5 relevant competitors | Force prioritization: "Which 4 define the competitive space?" |

@@ -2,6 +2,10 @@
   "permissions": {
     "allow": [
       "Bash",
+      "Edit(.claude/**)",
+      "Write(.claude/**)",
+      "Edit(.specify/**)",
+      "Write(.specify/**)",
       "Edit",
       "Read",
       "Write",

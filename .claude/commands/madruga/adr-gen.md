@@ -1,215 +1,215 @@
 ---
-description: Gera Architecture Decision Records (ADRs) no formato Nygard a partir da matriz de decisoes tecnologicas
+description: Generate Architecture Decision Records (ADRs) in Nygard format from the technology decision matrix
 arguments:
   - name: platform
-    description: "Nome da plataforma/produto. Se vazio, pergunta."
+    description: "Platform/product name. If empty, prompt the user."
     required: false
-argument-hint: "[nome-da-plataforma]"
+argument-hint: "[platform-name]"
 handoffs:
-  - label: Gerar Blueprint de Engenharia
+  - label: Generate Engineering Blueprint
     agent: madruga/blueprint
-    prompt: Gerar blueprint de engenharia baseado nos ADRs aprovados
+    prompt: Generate engineering blueprint based on the approved ADRs
 ---
 
 # ADR Gen — Architecture Decision Records
 
-Gera ADRs no formato Nygard para cada decisao tecnologica da matriz de alternativas. Cada ADR documenta contexto, decisao, alternativas avaliadas e consequencias.
+Generate ADRs in Nygard format for each technology decision from the alternatives matrix. Each ADR documents context, decision, evaluated alternatives, and consequences.
 
-## Regra Cardinal: ZERO ADR sem Alternativas
+## Cardinal Rule: ZERO ADRs Without Alternatives
 
-Toda decisao arquitetural DEVE ter **minimo 3 alternativas avaliadas** com pros/cons documentados. Nenhum ADR pode conter apenas a escolha final sem mostrar o que foi considerado e rejeitado.
+Every architectural decision MUST have **at least 3 evaluated alternatives** with documented pros/cons. No ADR may contain only the final choice without showing what was considered and rejected.
 
-**NUNCA:**
-- Criar ADR com apenas 1 alternativa ("escolhemos X porque sim")
-- Omitir consequencias negativas da escolha
-- Copiar decisoes de outros projetos sem contextualizar
-- Criar ADR para decisao trivial que nao impacta arquitetura
+**NEVER:**
+- Create an ADR with only 1 alternative ("we chose X because we felt like it")
+- Omit negative consequences of the choice
+- Copy decisions from other projects without contextualizing for this one
+- Create an ADR for a trivial decision that does not impact architecture
 
 ## Persona
 
-Staff Engineer com 15+ anos de experiencia. Documenta decisoes para o "eu do futuro" que vai precisar entender por que essa escolha foi feita. Brutalmente honesto sobre trade-offs. Portugues BR.
+Staff Engineer with 15+ years of experience. Document decisions for "future me" who will need to understand why this choice was made. Brutally honest about trade-offs. Write prose in Brazilian Portuguese (PT-BR).
 
-## Uso
+## Usage
 
-- `/adr-gen fulano` — Gera ADRs para plataforma "fulano"
-- `/adr-gen` — Pergunta nome da plataforma
+- `/adr-gen fulano` — Generate ADRs for the "fulano" platform
+- `/adr-gen` — Prompt for the platform name
 
-## Diretorio
+## Output Directory
 
-Salvar em `platforms/<nome>/decisions/ADR-NNN-kebab-case.md`. Auto-numerar a partir do maior ADR existente + 1.
+Save to `platforms/<name>/decisions/ADR-NNN-kebab-case.md`. Auto-number starting from the highest existing ADR number + 1.
 
-## Instrucoes
+## Instructions
 
-### 0. Pre-requisitos
+### 0. Prerequisites
 
-Rodar `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <nome> --skill adr-gen` e parsear JSON.
-- Se `ready: false`: ERROR listando dependencias faltantes e qual skill gera cada uma.
-- Se `ready: true`: ler artefatos listados em `available` como contexto.
-- Ler `.specify/memory/constitution.md` para validar output contra principios.
+Run `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <name> --skill adr-gen` and parse the JSON output.
+- If `ready: false`: ERROR — list missing dependencies and which skill generates each one.
+- If `ready: true`: read the artifacts listed in `available` as context.
+- Read `.specify/memory/constitution.md` and validate output against its principles.
 
-### 1. Coletar Contexto + Questionar
+### 1. Collect Context + Ask Questions
 
-**Leitura obrigatoria:**
-- `research/tech-alternatives.md` — matriz de decisoes tecnologicas (fonte principal)
-- `research/codebase-context.md` — contexto de codebase existente (se existir)
-- `business/*` — contexto de negocio para justificar decisoes
+**Required reading:**
+- `research/tech-alternatives.md` — technology decision matrix (primary source)
+- `research/codebase-context.md` — existing codebase context (if present)
+- `business/*` — business context to justify decisions
 
-**Para cada decisao na matriz:**
+**For each decision in the matrix:**
 
-1. Identificar a decisao e suas alternativas avaliadas
-2. Usar Context7 (tool `mcp__context7__resolve-library-id` + `mcp__context7__query-docs`) para pesquisar best practices da tecnologia escolhida
-3. Pesquisar via web: casos de uso reais, problemas conhecidos, migracoes
+1. Identify the decision and its evaluated alternatives
+2. Use Context7 (`mcp__context7__resolve-library-id` + `mcp__context7__query-docs`) to research best practices for the chosen technology
+3. Search the web for real-world use cases, known issues, and migrations
 
-**Perguntas Estruturadas (apresentar ANTES de gerar):**
+**Structured Questions (present BEFORE generating):**
 
-| Categoria | Pergunta |
-|-----------|----------|
-| **Premissas** | "Assumo que [tecnologia X] sera usada em [contexto Y]. Correto?" |
-| **Trade-offs** | "Escolher [A] simplifica [X] mas complica [Y]. Aceitavel?" |
-| **Gaps** | "A matriz nao cobre [aspecto Z]. Voce define ou eu pesquiso?" |
-| **Provocacao** | "[Alternativa rejeitada B] pode ser melhor se [condicao]. Vale reconsiderar?" |
+| Category | Question |
+|----------|----------|
+| **Assumptions** | "I assume [technology X] will be used in [context Y]. Correct?" |
+| **Trade-offs** | "Choosing [A] simplifies [X] but complicates [Y]. Acceptable?" |
+| **Gaps** | "The matrix does not cover [aspect Z]. Do you define it or should I research?" |
+| **Challenge** | "[Rejected alternative B] might be better if [condition]. Worth reconsidering?" |
 
-Aguardar respostas ANTES de gerar ADRs.
+Wait for answers BEFORE generating ADRs.
 
-### 2. Gerar ADRs
+### 2. Generate ADRs
 
-**Detectar numeracao:** Buscar ADRs existentes em `platforms/<nome>/decisions/` e iniciar numeracao do proximo disponivel.
+**Detect numbering:** Search for existing ADRs in `platforms/<name>/decisions/` and start numbering from the next available number.
 
-**Para CADA decisao tecnologica na matriz**, gerar um arquivo:
+**For EACH technology decision in the matrix**, generate a file:
 
 `decisions/ADR-NNN-kebab-case.md`
 
 ```markdown
 ---
-title: "ADR-NNN: Titulo da Decisao"
+title: "ADR-NNN: Decision Title"
 status: accepted
 date: YYYY-MM-DD
 ---
-# ADR-NNN: Titulo da Decisao
+# ADR-NNN: Decision Title
 
 ## Status
 
 Accepted — YYYY-MM-DD
 
-## Contexto
+## Context
 
-[Por que essa decisao e necessaria. Qual problema resolve.
-Referenciar business layer e constraints do projeto.
-2-3 paragrafos max.]
+[Why this decision is necessary. What problem it solves.
+Reference the business layer and project constraints.
+2-3 paragraphs max.]
 
-## Decisao
+## Decision
 
-[O que foi decidido e por que. Incluir:
-- A escolha feita
-- Razao principal (1-2 frases)
-- Constraints que levaram a essa escolha]
+[What was decided and why. Include:
+- The choice made
+- Primary reason (1-2 sentences)
+- Constraints that led to this choice]
 
-## Alternativas Consideradas
+## Alternatives Considered
 
-### Alternativa A: [Nome] (escolhida)
-- **Pros:** [lista]
-- **Cons:** [lista]
-- **Fit:** [por que e a melhor para este projeto]
+### Alternative A: [Name] (chosen)
+- **Pros:** [list]
+- **Cons:** [list]
+- **Fit:** [why it is the best for this project]
 
-### Alternativa B: [Nome]
-- **Pros:** [lista]
-- **Cons:** [lista]
-- **Por que rejeitada:** [razao especifica]
+### Alternative B: [Name]
+- **Pros:** [list]
+- **Cons:** [list]
+- **Why rejected:** [specific reason]
 
-### Alternativa C: [Nome]
-- **Pros:** [lista]
-- **Cons:** [lista]
-- **Por que rejeitada:** [razao especifica]
+### Alternative C: [Name]
+- **Pros:** [list]
+- **Cons:** [list]
+- **Why rejected:** [specific reason]
 
-## Consequencias
+## Consequences
 
-### Positivas
-- [consequencia 1]
-- [consequencia 2]
+### Positive
+- [consequence 1]
+- [consequence 2]
 
-### Negativas
-- [consequencia 1 — ser honesto]
-- [consequencia 2]
+### Negative
+- [consequence 1 — be honest]
+- [consequence 2]
 
-### Riscos
-- [risco 1 + mitigacao]
+### Risks
+- [risk 1 + mitigation]
 
-## Referencias
+## References
 
-- [fonte 1 — documentacao oficial, artigo, benchmark]
-- [fonte 2]
+- [source 1 — official documentation, article, benchmark]
+- [source 2]
 ```
 
 ### 3. Auto-Review
 
-| # | Check | Acao se falhar |
-|---|-------|---------------|
-| 1 | Cada ADR tem >= 3 alternativas? | Pesquisar e adicionar alternativas |
-| 2 | Formato Nygard completo (Context, Decision, Alternatives, Consequences)? | Completar secoes |
-| 3 | Consequencias incluem negativas honestas? | Adicionar — nao esconder trade-offs |
-| 4 | Contexto referencia business layer? | Conectar com vision/solution-overview/process |
-| 5 | Numeracao sequencial sem gaps? | Renumerar |
-| 6 | Kebab-case no nome do arquivo? | Renomear |
-| 7 | Cada alternativa tem pros E cons? | Completar |
-| 8 | Referencias com fontes reais (nao inventadas)? | Verificar ou remover |
+| # | Check | Action on Failure |
+|---|-------|-------------------|
+| 1 | Does each ADR have >= 3 alternatives? | Research and add alternatives |
+| 2 | Full Nygard format (Context, Decision, Alternatives, Consequences)? | Complete missing sections |
+| 3 | Do consequences include honest negatives? | Add them — do not hide trade-offs |
+| 4 | Does context reference the business layer? | Connect with vision/solution-overview/process |
+| 5 | Sequential numbering without gaps? | Renumber |
+| 6 | Kebab-case file names? | Rename |
+| 7 | Does each alternative have both pros AND cons? | Complete |
+| 8 | References with real sources (not fabricated)? | Verify or remove |
 
-### 4. Gate de Aprovacao: 1-Way-Door
+### 4. Approval Gate: 1-Way-Door
 
-**ATENCAO: Este e um gate 1-way-door.** Decisoes arquiteturais definidas aqui constrangem TODOS os artefatos downstream (blueprint, containers, DDD, epics).
+**WARNING: This is a 1-way-door gate.** Architectural decisions defined here constrain ALL downstream artifacts (blueprint, containers, DDD, epics).
 
-Apresentar ao usuario:
+Present to the user:
 
-**Resumo dos ADRs gerados:**
+**Summary of Generated ADRs:**
 
-| # | ADR | Decisao | Alternativa Escolhida | Alternativas Rejeitadas |
-|---|-----|---------|----------------------|------------------------|
-| 1 | ADR-NNN: [titulo] | [o que decide] | [escolha] | [A, B] |
+| # | ADR | Decision | Chosen Alternative | Rejected Alternatives |
+|---|-----|----------|-------------------|----------------------|
+| 1 | ADR-NNN: [title] | [what it decides] | [choice] | [A, B] |
 | 2 | ... | ... | ... | ... |
 
-**Para CADA ADR, pedir confirmacao explicita:**
+**For EACH ADR, request explicit confirmation:**
 
-> **ADR-NNN: [titulo]**
-> Decisao: [resumo da escolha]
-> Alternativas rejeitadas: [lista]
-> Impacto downstream: [o que essa decisao define para blueprint, containers, etc.]
+> **ADR-NNN: [title]**
+> Decision: [summary of choice]
+> Rejected alternatives: [list]
+> Downstream impact: [what this decision defines for blueprint, containers, etc.]
 >
-> **Confirma esta decisao? (sim/nao/ajustar)**
+> **Confirm this decision? (yes/no/adjust)**
 
-Aguardar confirmacao de TODOS os ADRs antes de salvar. Se algum for rejeitado, voltar ao passo 2 para essa decisao especifica.
+Wait for confirmation of ALL ADRs before saving. If any is rejected, return to step 2 for that specific decision.
 
-### 5. Salvar + Relatorio
+### 5. Save + Report
 
-1. Salvar cada ADR em `platforms/<nome>/decisions/ADR-NNN-kebab-case.md`
-2. Informar ao usuario:
+1. Save each ADR to `platforms/<name>/decisions/ADR-NNN-kebab-case.md`
+2. Present the following report:
 
 ```
-## ADRs Gerados
+## ADRs Generated
 
-**Diretorio:** platforms/<nome>/decisions/
-**ADRs criados:** <N>
+**Directory:** platforms/<name>/decisions/
+**ADRs created:** <N>
 
-| ADR | Titulo | Decisao |
-|-----|--------|---------|
+| ADR | Title | Decision |
+|-----|-------|----------|
 | ADR-NNN | ... | ... |
 
 ### Checks
-[x] Cada ADR com >= 3 alternativas
-[x] Formato Nygard completo
-[x] Consequencias honestas (positivas E negativas)
-[x] Numeracao sequencial
-[x] Aprovacao explicita por ADR (gate 1-way-door)
+[x] Each ADR with >= 3 alternatives
+[x] Full Nygard format
+[x] Honest consequences (positive AND negative)
+[x] Sequential numbering
+[x] Explicit per-ADR approval (1-way-door gate)
 
-### Proximo Passo
-`/blueprint <nome>` — Gerar blueprint de engenharia baseado nos ADRs aprovados.
+### Next Step
+`/blueprint <name>` — Generate engineering blueprint based on the approved ADRs.
 ```
 
-## Tratamento de Erros
+## Error Handling
 
-| Problema | Acao |
-|----------|------|
-| Matriz de alternativas incompleta | Pesquisar via Context7/web para completar alternativas |
-| Decisao trivial (nao impacta arquitetura) | Nao gerar ADR, documentar como nota no blueprint |
-| Conflito entre ADRs | Resolver antes de salvar — ADRs nao podem se contradizer |
-| ADRs existentes conflitam com novos | Propor atualizar status dos antigos para "superseded" |
-| Menos de 3 alternativas reais | Pesquisar mais. Se genuinamente so existem 2: documentar com justificativa explicita de por que nao ha 3a viavel |
-| Usuario rejeita decisao no gate | Voltar ao passo 1 com novas constraints para essa decisao |
+| Problem | Action |
+|---------|--------|
+| Incomplete alternatives matrix | Research via Context7/web to complete alternatives |
+| Trivial decision (no architecture impact) | Do not generate ADR; document as a note in the blueprint |
+| Conflict between ADRs | Resolve before saving — ADRs must not contradict each other |
+| Existing ADRs conflict with new ones | Propose updating old ADR status to "superseded" |
+| Fewer than 3 real alternatives | Research more. If genuinely only 2 exist: document with explicit justification for why no 3rd is viable |
+| User rejects a decision at the gate | Return to step 1 with new constraints for that decision |

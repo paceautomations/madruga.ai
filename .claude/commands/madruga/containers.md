@@ -1,91 +1,91 @@
 ---
-description: Gera arquitetura de containers C4 L2 com diagramas LikeC4 para qualquer plataforma
+description: Generate C4 Level 2 container architecture with LikeC4 diagrams for any platform
 arguments:
   - name: platform
-    description: "Nome da plataforma/produto. Se vazio, pergunta."
+    description: "Platform/product name. If empty, prompt for it."
     required: false
-argument-hint: "[nome-da-plataforma]"
+argument-hint: "[platform-name]"
 handoffs:
-  - label: Gerar Context Map (DDD)
+  - label: Generate Context Map (DDD)
     agent: madruga/context-map
-    prompt: Gerar context map com relacoes entre bounded contexts baseado no domain model e containers
+    prompt: Generate context map with relationships between bounded contexts based on domain model and containers
 ---
 
-# Containers — Arquitetura C4 Level 2
+# Containers — C4 Level 2 Architecture
 
-Gera arquitetura de containers (~200 linhas) com diagrama C4 L2, tabela de containers, protocolos de comunicacao e NFRs por container. Inclui LikeC4 DSL para portal interativo.
+Generate container architecture (~200 lines) with C4 L2 diagram, container table, communication protocols, and per-container NFRs. Include LikeC4 DSL for interactive portal diagrams.
 
-## Regra Cardinal: ZERO Container sem Responsabilidade Clara
+## Cardinal Rule: ZERO Containers Without Clear Responsibility
 
-Um container = uma razao de existir. Se dois containers fazem a mesma coisa, mesclar. Se um container faz tudo, separar.
+One container = one reason to exist. If two containers do the same thing, merge them. If one container does everything, split it.
 
-**NUNCA:**
-- Criar container "utils" ou "shared" como runtime separado
-- Separar em microservices sem justificativa de escala/equipe
-- Omitir protocolos de comunicacao entre containers
-- Criar container sem owner claro (qual bounded context pertence)
+**NEVER:**
+- Create a "utils" or "shared" container as a separate runtime
+- Split into microservices without scale/team justification
+- Omit communication protocols between containers
+- Create a container without a clear owner (which bounded context it belongs to)
 
 ## Persona
 
-Staff Engineer com 15+ anos. Foco em simplicidade operacional. "E possivel com menos containers?" Portugues BR.
+Staff Engineer with 15+ years of experience. Focus on operational simplicity. "Can this be done with fewer containers?" Write all generated artifact content in Brazilian Portuguese (PT-BR).
 
-## Uso
+## Usage
 
-- `/containers fulano` — Gera containers para "fulano"
-- `/containers` — Pergunta nome
+- `/containers fulano` — Generate containers for "fulano"
+- `/containers` — Prompt for name
 
-## Diretorio
+## Output Directory
 
-Salvar em:
-- `platforms/<nome>/engineering/containers.md`
-- `platforms/<nome>/model/platform.likec4`
-- `platforms/<nome>/model/views.likec4`
+Save to:
+- `platforms/<name>/engineering/containers.md`
+- `platforms/<name>/model/platform.likec4`
+- `platforms/<name>/model/views.likec4`
 
-## Instrucoes
+## Instructions
 
-### 0. Pre-requisitos
+### 0. Prerequisites
 
-Rodar `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <nome> --skill containers` e parsear JSON.
-- Se `ready: false`: ERROR listando dependencias faltantes.
-- Se `ready: true`: ler artefatos em `available`.
-- Ler `.specify/memory/constitution.md`.
+Run `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <name> --skill containers` and parse the JSON output.
+- If `ready: false`: ERROR listing missing dependencies.
+- If `ready: true`: read artifacts listed in `available`.
+- Read `.specify/memory/constitution.md`.
 
-### 1. Coletar Contexto + Questionar
+### 1. Collect Context + Ask Questions
 
-**Leitura obrigatoria:**
-- `engineering/domain-model.md` — bounded contexts e agregados
-- `engineering/blueprint.md` — stack, NFRs, topologia
-- `decisions/ADR-*.md` — decisoes de stack que impactam containers
-- `model/spec.likec4` — element types existentes (NUNCA redefinir)
-- `model/ddd-contexts.likec4` — naming de bounded contexts
+**Required reading:**
+- `engineering/domain-model.md` — bounded contexts and aggregates
+- `engineering/blueprint.md` — stack, NFRs, topology
+- `decisions/ADR-*.md` — stack decisions that impact containers
+- `model/spec.likec4` — existing element types (NEVER redefine)
+- `model/ddd-contexts.likec4` — bounded context naming
 
-**Perguntas Estruturadas:**
+**Structured Questions:**
 
-| Categoria | Pergunta |
-|-----------|----------|
-| **Premissas** | "Assumo [N] containers baseado nos bounded contexts. Correto?" |
-| **Trade-offs** | "Monolito modular (simples, 1 deploy) ou microservices (complexo, deploy independente)?" |
-| **Gaps** | "Blueprint nao especifica [messaging pattern]. Definir?" |
-| **Provocacao** | "Voce realmente precisa de [N] containers? Comece com monolito modular e split depois." |
+| Category | Question |
+|----------|----------|
+| **Assumptions** | "I assume [N] containers based on the bounded contexts. Correct?" |
+| **Trade-offs** | "Modular monolith (simple, 1 deploy) or microservices (complex, independent deploy)?" |
+| **Gaps** | "Blueprint does not specify [messaging pattern]. Define it?" |
+| **Challenge** | "Do you really need [N] containers? Start with a modular monolith and split later." |
 
-Aguardar respostas ANTES de gerar.
+Wait for answers BEFORE generating.
 
-### 2. Gerar Artefatos
+### 2. Generate Artifacts
 
-**Arquivo 1: engineering/containers.md**
+**File 1: engineering/containers.md**
 
 ```markdown
 ---
 title: "Container Architecture"
 updated: YYYY-MM-DD
 ---
-# <Nome> — Container Architecture (C4 Level 2)
+# <Name> — Container Architecture (C4 Level 2)
 
-> Containers, responsabilidades, protocolos e NFRs. Ultima atualizacao: YYYY-MM-DD.
+> Containers, responsibilities, protocols, and NFRs. Last updated: YYYY-MM-DD.
 
 ---
 
-## Diagrama de Containers
+## Container Diagram
 
 ```mermaid
 graph TD
@@ -94,112 +94,112 @@ graph TD
 
 ---
 
-## Tabela de Containers
+## Container Table
 
-| Container | Tecnologia | Responsabilidade | Bounded Contexts | Protocolo In | Protocolo Out |
-|-----------|-----------|-----------------|-----------------|-------------|--------------|
+| Container | Technology | Responsibility | Bounded Contexts | Protocol In | Protocol Out |
+|-----------|-----------|---------------|-----------------|-------------|--------------|
 | ... | ... | ... | ... | ... | ... |
 
 ---
 
-## Comunicacao Inter-Container
+## Inter-Container Communication
 
-| De | Para | Protocolo | Dados | Sincrono? |
-|----|------|-----------|-------|-----------|
+| From | To | Protocol | Data | Synchronous? |
+|------|-----|----------|------|-------------|
 | ... | ... | ... | ... | ... |
 
 ---
 
-## NFRs por Container
+## Per-Container NFRs
 
-| Container | Latencia P95 | Throughput | Disponibilidade | Notas |
-|-----------|-------------|-----------|----------------|-------|
+| Container | Latency P95 | Throughput | Availability | Notes |
+|-----------|-------------|-----------|-------------|-------|
 | ... | ... | ... | ... | ... |
 
 ---
 
 ## Data Ownership
 
-| Container | Stores | Dados | Padrao |
-|-----------|--------|-------|--------|
+| Container | Store | Data | Pattern |
+|-----------|-------|------|---------|
 | ... | ... | ... | Database per service / Shared DB |
 ```
 
-**Arquivo 2: model/platform.likec4**
-- Definir elementos LikeC4 para cada container
-- Relationships entre containers
+**File 2: model/platform.likec4**
+- Define LikeC4 elements for each container
+- Relationships between containers
 
-**Arquivo 3: model/views.likec4**
-- Views para o portal interativo
-- Container view principal
+**File 3: model/views.likec4**
+- Views for the interactive portal
+- Main container view
 
 ### 3. Auto-Review
 
-| # | Check | Acao se falhar |
-|---|-------|---------------|
-| 1 | Todo container tem responsabilidade unica? | Mesclar ou justificar |
-| 2 | Nenhum container orfao (desconectado)? | Conectar ou remover |
-| 3 | Protocolos definidos para toda comunicacao? | Adicionar |
-| 4 | NFRs mensuraveis por container? | Adicionar targets |
-| 5 | LikeC4 syntax valida? | Corrigir |
-| 6 | Max 200 linhas (.md)? | Condensar |
-| 7 | Data ownership claro? | Definir |
-| 8 | Toda decisao tem >=2 alternativas documentadas? | Adicionar |
-| 9 | Trade-offs explicitos (pros/cons)? | Adicionar pros/cons |
-| 10 | Premissas marcadas [VALIDAR] ou com dado? | Marcar [VALIDAR] |
-| 11 | Consistencia entre .md e .likec4? | Alinhar |
+| # | Check | Action on Failure |
+|---|-------|-------------------|
+| 1 | Does every container have a single responsibility? | Merge or justify |
+| 2 | Are there any orphan containers (disconnected)? | Connect or remove |
+| 3 | Are protocols defined for every communication? | Add them |
+| 4 | Are NFRs measurable per container? | Add targets |
+| 5 | Is LikeC4 syntax valid? | Fix |
+| 6 | Max 200 lines (.md)? | Condense |
+| 7 | Is data ownership clear? | Define it |
+| 8 | Does every decision have >=2 documented alternatives? | Add |
+| 9 | Are trade-offs explicit (pros/cons)? | Add pros/cons |
+| 10 | Are assumptions marked [VALIDATE] or backed by data? | Mark [VALIDATE] |
+| 11 | Is .md consistent with .likec4? | Align |
 
-### 4. Gate de Aprovacao: Human
+### 4. Approval Gate: Human
 
-Apresentar ao usuario:
+Present to user:
 
-**Resumo da Arquitetura de Containers:**
+**Container Architecture Summary:**
 - Containers: [N]
-- Comunicacoes: [N]
-- Padrao: [monolito modular / microservices / hibrido]
+- Communications: [N]
+- Pattern: [modular monolith / microservices / hybrid]
 
-**Decisoes-chave:**
-| # | Decisao | Alternativa simples | Alternativa robusta | Escolha |
-|---|---------|--------------------|--------------------|---------|
+**Key Decisions:**
+| # | Decision | Simple Alternative | Robust Alternative | Choice |
+|---|---------|-------------------|-------------------|--------|
 | 1 | ... | ... | ... | ... |
 
-**Perguntas de validacao:**
-1. E possivel com menos containers?
-2. Protocolos de comunicacao fazem sentido?
-3. Data ownership esta correto?
-4. NFRs por container sao realistas?
+**Validation Questions:**
+1. Can this be done with fewer containers?
+2. Do the communication protocols make sense?
+3. Is data ownership correct?
+4. Are per-container NFRs realistic?
 
-Aguardar aprovacao antes de salvar.
+Wait for approval before saving.
 
-### 5. Salvar + Relatorio
+### 5. Save + Report
 
 ```
-## Containers gerados
+## Containers generated
 
-**Arquivos:**
-- platforms/<nome>/engineering/containers.md (<N> linhas)
-- platforms/<nome>/model/platform.likec4
-- platforms/<nome>/model/views.likec4
+**Files:**
+- platforms/<name>/engineering/containers.md (<N> lines)
+- platforms/<name>/model/platform.likec4
+- platforms/<name>/model/views.likec4
 
 **Containers:** <N>
-**Comunicacoes:** <N>
+**Communications:** <N>
 
 ### Checks
-[x] Responsabilidade unica por container
-[x] Zero containers orfaos
-[x] Protocolos definidos
-[x] NFRs com targets
-[x] LikeC4 syntax valida
+[x] Single responsibility per container
+[x] Zero orphan containers
+[x] Protocols defined
+[x] NFRs with targets
+[x] LikeC4 syntax valid
 
-### Proximo Passo
-`/context-map <nome>`
+### Next Step
+`/context-map <name>`
 ```
 
-## Tratamento de Erros
+## Error Handling
 
-| Problema | Acao |
-|----------|------|
-| Domain model com 1 bounded context | Gerar 1 container (monolito) — nao forcar split |
-| Muitos containers (>8) | Desafiar: "Voce tem equipe para manter 8 servicos?" |
-| LikeC4 syntax error | Validar contra spec antes de salvar |
-| Conflito com blueprint topologia | Alinhar com blueprint, propor update se necessario |
+| Issue | Action |
+|-------|--------|
+| Domain model with 1 bounded context | Generate 1 container (monolith) — do not force a split |
+| Too many containers (>8) | Challenge: "Do you have a team to maintain 8 services?" |
+| LikeC4 syntax error | Validate against spec before saving |
+| Conflict with blueprint topology | Align with blueprint, propose update if needed |

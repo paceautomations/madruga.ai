@@ -94,7 +94,7 @@ source "$SCRIPT_DIR/common.sh"
 
 REPO_ROOT=$(get_repo_root)
 
-# Validate required args
+# Validate required arguments
 if [ -z "$PLATFORM" ]; then
     if $JSON_MODE; then
         echo '{"error":"--platform is required","suggestion":"Provide platform name, e.g., --platform madruga-ai"}'
@@ -135,7 +135,7 @@ if [ ! -f "$PLATFORM_YAML" ]; then
     exit 1
 fi
 
-# Check python3
+# Check python3 availability
 if ! command -v python3 >/dev/null 2>&1; then
     if $JSON_MODE; then
         echo '{"error":"python3 required for YAML parsing"}'
@@ -265,14 +265,12 @@ else:
     print(f'Pipeline Status: {platform_name}')
     print(f'Progress: {done_count}/{total} nodes done ({pct}%)')
     print()
-    emojis = {'done': '✅', 'ready': '🟡', 'blocked': '🔴', 'skipped': '⬜'}
     print(f'{\"Layer\":<12} {\"Skill\":<22} {\"Status\":<10} {\"Gate\":<14} {\"Missing\"}')
     print('-' * 75)
     for r in results:
-        emoji = emojis.get(r['status'], '?')
-        missing = ', '.join(r.get('missing_deps', [])) or '—'
+        missing = ', '.join(r.get('missing_deps', [])) or '-'
         opt = ' (optional)' if r.get('optional') else ''
-        print(f'{r[\"layer\"]:<12} {r[\"id\"]:<22} {emoji} {r[\"status\"]:<6} {r[\"gate\"]:<14} {missing}{opt}')
+        print(f'{r[\"layer\"]:<12} {r[\"id\"]:<22} {r[\"status\"]:<8} {r[\"gate\"]:<14} {missing}{opt}')
     print()
     if next_nodes:
         print(f'Next available: /{next_nodes[0]} {platform_name}')
@@ -327,7 +325,7 @@ for dep_id in deps:
         missing.append(dep_id)
         continue
     if dep_node.get('optional', False):
-        # Optional dep: check but don't block
+        # Optional dep: check but do not block
         if check_outputs(dep_node):
             for o in dep_node.get('outputs', []):
                 available.append(o)
@@ -380,9 +378,9 @@ else:
         dep_node = node_map.get(dep_id, {})
         dep_outputs = dep_node.get('outputs', [dep_node.get('output_pattern', '?')])
         exists = dep_id not in missing
-        marker = '✓' if exists else '✗'
+        marker = '[ok]' if exists else '[missing]'
         opt = ' (optional)' if dep_node.get('optional') else ''
-        print(f'  {marker} {dep_id} → {', '.join(dep_outputs)}{opt}')
+        print(f'  {marker} {dep_id} -> {', '.join(dep_outputs)}{opt}')
     print()
     print('Outputs (will generate):')
     for o in outputs:

@@ -1,242 +1,242 @@
 ---
-description: Gera mapeamento de fluxos de negocio com diagramas Mermaid para qualquer plataforma
+description: Generate business flow mapping with Mermaid diagrams for any platform
 arguments:
   - name: platform
-    description: "Nome da plataforma/produto. Se vazio, pergunta."
+    description: "Platform/product name. If empty, prompt the user."
     required: false
-argument-hint: "[nome-da-plataforma]"
+argument-hint: "[platform-name]"
 handoffs:
-  - label: Pesquisar Alternativas Tecnologicas
+  - label: Research Technology Alternatives
     agent: madruga/tech-research
-    prompt: "Pesquisar alternativas tecnológicas baseadas nos fluxos de negócio validados. ATENÇÃO: Gate 1-way-door — decisões tecnológicas definem toda a arquitetura."
+    prompt: "Research technology alternatives based on the validated business flows. WARNING: 1-way-door gate — technology decisions define the entire architecture."
 ---
 
-# Business Process — Fluxos de Negocio
+# Business Process — Business Flows
 
-Gera um mapeamento de 3-5 fluxos de negocio principais como diagramas Mermaid (sequence diagrams), cada um com caminho feliz e excecao. Output puramente de negocio — zero jargao tecnico.
+Generate a mapping of 3-5 main business flows as Mermaid sequence diagrams, each with a happy path and an exception path. Output is purely business-oriented — zero technical jargon.
 
-## Regra Cardinal: ZERO Conteudo Tecnico
+## Cardinal Rule: ZERO Technical Content
 
-Este documento descreve **como o negocio funciona do ponto de vista dos atores envolvidos**. Decisoes tecnicas, arquitetura e implementacao pertencem a outros artefatos.
+This document describes **how the business works from the perspective of the actors involved**. Technical decisions, architecture, and implementation belong in other artifacts.
 
-**NUNCA incluir no output:**
-- Nomes de tecnologias, frameworks, linguagens, bancos de dados, bibliotecas (ex: Python, FastAPI, Redis, Supabase, pgvector, React, Docker)
-- Termos de arquitetura (ex: RLS, API, SDK, middleware, cache, queue, webhook, endpoint, microservice, pipeline, module)
-- Referencias a ADRs, specs tecnicas, diagramas C4 ou epicos numerados
-- Detalhes de infraestrutura (ex: deploy, CI/CD, server, container, cloud provider)
-- Nomes de ferramentas internas de desenvolvimento
-- Participantes tecnicos nos diagramas (ex: "Backend", "Database", "Queue", "Cache")
+**NEVER include in the output:**
+- Technology names, frameworks, languages, databases, libraries (e.g., Python, FastAPI, Redis, Supabase, pgvector, React, Docker)
+- Architecture terms (e.g., RLS, API, SDK, middleware, cache, queue, webhook, endpoint, microservice, pipeline, module)
+- References to ADRs, technical specs, C4 diagrams, or numbered epics
+- Infrastructure details (e.g., deploy, CI/CD, server, container, cloud provider)
+- Internal development tool names
+- Technical participants in diagrams (e.g., "Backend", "Database", "Queue", "Cache")
 
-**Excecoes permitidas:** nomes proprios de produtos/empresas e termos de negocio comuns (ex: "plataforma", "canal", "automacao", "painel").
+**Permitted exceptions:** proper names of products/companies and common business terms (e.g., "platform", "channel", "automation", "dashboard").
 
-**Na duvida:** se um participante ou passo do fluxo so faz sentido para um engenheiro, reescrever em linguagem que o dono de uma PME entenderia. Ex: "Sistema processa pagamento" em vez de "Payment microservice calls Stripe API".
+**When in doubt:** if a participant or flow step only makes sense to an engineer, rewrite it in language a small business owner would understand. E.g., "System processes payment" instead of "Payment microservice calls Stripe API".
 
 ## Persona
 
-Estrategista senior Bain/McKinsey. Foco em fluxos de valor, gargalos operacionais e excecoes de negocio. Objetivo, direto, cada fluxo justificado. Quantifica impacto quando possivel. Marca `[VALIDAR]` quando nao tem dado. Portugues BR.
+Senior Bain/McKinsey strategist. Focus on value flows, operational bottlenecks, and business exceptions. Objective, direct, every flow justified. Quantify impact when possible. Mark `[VALIDATE]` when data is missing. Write prose in Brazilian Portuguese (PT-BR).
 
-## Uso
+## Usage
 
-- `/business-process fulano` — Gera fluxos de negocio para plataforma "fulano"
-- `/business-process` — Pergunta nome da plataforma e coleta contexto
+- `/business-process fulano` — Generate business flows for the "fulano" platform
+- `/business-process` — Prompt for platform name and collect context
 
-## Diretorio
+## Output Directory
 
-Salvar em `platforms/<nome>/business/process.md`. Criar diretorio se nao existir.
+Save to `platforms/<name>/business/process.md`. Create the directory if it does not exist.
 
-## Instrucoes
+## Instructions
 
-### 0. Pre-requisitos
+### 0. Prerequisites
 
-Rodar `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <nome> --skill business-process` e parsear JSON.
-- Se `ready: false`: ERROR listando dependencias faltantes e qual skill gera cada uma.
-- Se `ready: true`: ler artefatos listados em `available` como contexto adicional.
-- Ler `.specify/memory/constitution.md` para validar output contra principios.
+Run `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <name> --skill business-process` and parse the JSON output.
+- If `ready: false`: ERROR — list missing dependencies and which skill generates each one.
+- If `ready: true`: read the artifacts listed in `available` as additional context.
+- Read `.specify/memory/constitution.md` and validate output against its principles.
 
-### 1. Coletar Contexto
+### 1. Collect Context
 
-**Se `$ARGUMENTS.platform` existe:** usar como nome da plataforma.
-**Se vazio:** perguntar nome.
+**If `$ARGUMENTS.platform` exists:** use it as the platform name.
+**If empty:** prompt for the name.
 
-Verificar se ja existe arquivo em `platforms/<nome>/business/process.md`. Se existir, ler como base.
+Check if a file already exists at `platforms/<name>/business/process.md`. If it does, read it as a base.
 
-Ler obrigatoriamente:
-- `platforms/<nome>/business/vision.md` — extrair personas, batalhas criticas, segmentos
-- `platforms/<nome>/business/solution-overview.md` — extrair features, jornadas, prioridades
+Read the following (required):
+- `platforms/<name>/business/vision.md` — extract personas, critical battles, segments
+- `platforms/<name>/business/solution-overview.md` — extract features, journeys, priorities
 
-Identificar premissas implicitas nos documentos e apresentar perguntas estruturadas (perguntar tudo de uma vez):
+Identify implicit assumptions in the documents and present structured questions (ask all at once):
 
-| Categoria | Pergunta | Exemplo |
-|-----------|----------|---------|
-| **Premissas** | "No vision, [Persona X] faz [acao Y]. Assumo que o fluxo principal e [Z]. Correto?" | "Assumo que o dono da PME configura o agente sozinho, sem suporte tecnico. Correto?" |
-| **Premissas** | "A solution-overview lista [Feature]. Assumo que ela participa do fluxo [W]. Correto?" | "Assumo que 'transferir para humano' interrompe o fluxo automatizado. Correto?" |
-| **Trade-offs** | "Fluxo [A] pode ser detalhado (5+ passos) ou resumido (3 passos). Qual nivel?" | "Onboarding: detalhar cada etapa de configuracao ou resumir como 'configura e ativa'?" |
-| **Gaps** | "Nao encontrei como [situacao X] e tratada. Voce define ou eu proponho?" | "Nao encontrei o que acontece quando o cliente nao responde. Voce define ou eu proponho?" |
-| **Provocacao** | "[Fluxo obvio] parece essencial, mas [alternativa] pode gerar mais valor porque [razao]." | "Fluxo de 'configuracao manual' parece obvio, mas 'configuracao guiada automatica' pode reduzir churn em 40% porque elimina complexidade." |
+| Category | Question | Example |
+|----------|----------|---------|
+| **Assumptions** | "In the vision, [Persona X] does [action Y]. I assume the main flow is [Z]. Correct?" | "I assume the SMB owner configures the agent alone, without technical support. Correct?" |
+| **Assumptions** | "The solution-overview lists [Feature]. I assume it participates in flow [W]. Correct?" | "I assume 'transfer to human' interrupts the automated flow. Correct?" |
+| **Trade-offs** | "Flow [A] can be detailed (5+ steps) or summarized (3 steps). Which level?" | "Onboarding: detail each configuration step or summarize as 'configure and activate'?" |
+| **Gaps** | "I did not find how [situation X] is handled. Do you define it or should I propose?" | "I did not find what happens when the customer does not respond. Do you define it or should I propose?" |
+| **Challenge** | "[Obvious flow] seems essential, but [alternative] might generate more value because [reason]." | "'Manual configuration' flow seems obvious, but 'automated guided setup' could reduce churn by 40% because it eliminates complexity." |
 
-Apresentar lista candidata de 5-7 fluxos e pedir ao usuario para priorizar 3-5.
+Present a candidate list of 5-7 flows and ask the user to prioritize 3-5.
 
-Aguardar respostas ANTES de gerar.
+Wait for answers BEFORE generating.
 
-### 2. Gerar process.md
+### 2. Generate process.md
 
-Escrever o documento com **3-5 fluxos de negocio**, cada um como diagrama Mermaid sequenceDiagram com caminho feliz e caminho de excecao. Max 120 linhas total.
+Write the document with **3-5 business flows**, each as a Mermaid sequenceDiagram with a happy path and an exception path. Max 120 lines total.
 
 ```markdown
 ---
 title: "Business Process"
 updated: YYYY-MM-DD
 ---
-# <Nome> — Fluxos de Negocio
+# <Name> — Business Flows
 
-> Mapeamento dos fluxos de negocio principais. Cada fluxo mostra o caminho feliz e as excecoes. Ultima atualizacao: YYYY-MM-DD.
+> Mapping of the main business flows. Each flow shows the happy path and exceptions. Last updated: YYYY-MM-DD.
 
 ---
 
-## Visao Geral dos Fluxos
+## Flow Overview
 
-| # | Fluxo | Atores | Frequencia | Impacto |
-|---|-------|--------|------------|---------|
-| 1 | **[Nome do Fluxo]** | [quem participa] | [estimativa] | [por que importa] |
+| # | Flow | Actors | Frequency | Impact |
+|---|------|--------|-----------|--------|
+| 1 | **[Flow Name]** | [who participates] | [estimate] | [why it matters] |
 | 2 | ... | ... | ... | ... |
 
 ---
 
-## Fluxo 1: [Nome]
+## Flow 1: [Name]
 
-> [1 frase: o que esse fluxo resolve e por que e critico]
+> [1 sentence: what this flow resolves and why it is critical]
 
-### Caminho Feliz
+### Happy Path
 
 ```mermaid
 sequenceDiagram
-    participant [Ator 1]
-    participant [Ator 2]
-    participant [Plataforma]
-    [Ator 1]->>+[Plataforma]: [acao de negocio]
-    [Plataforma]->>-[Ator 1]: [resultado]
+    participant [Actor 1]
+    participant [Actor 2]
+    participant [Platform]
+    [Actor 1]->>+[Platform]: [business action]
+    [Platform]->>-[Actor 1]: [result]
 ```
 
-### Excecoes
+### Exceptions
 
 ```mermaid
 sequenceDiagram
-    participant [Ator 1]
-    participant [Plataforma]
-    [Ator 1]->>+[Plataforma]: [acao]
-    alt [condicao de excecao]
-        [Plataforma]->>-[Ator 1]: [tratamento]
+    participant [Actor 1]
+    participant [Platform]
+    [Actor 1]->>+[Platform]: [action]
+    alt [exception condition]
+        [Platform]->>-[Actor 1]: [handling]
     end
 ```
 
-**Premissas deste fluxo:**
-- [premissa 1] `[VALIDAR]` se nao confirmada
-- [premissa 2]
+**Assumptions for this flow:**
+- [assumption 1] `[VALIDATE]` if not confirmed
+- [assumption 2]
 
 ---
 
-## Fluxo 2: [Nome]
-[mesmo padrao]
+## Flow 2: [Name]
+[same pattern]
 
 ---
 
-## Premissas Globais
+## Global Assumptions
 
-| # | Premissa | Status |
-|---|----------|--------|
-| 1 | [premissa que afeta multiplos fluxos] | [VALIDAR] ou Confirmada |
+| # | Assumption | Status |
+|---|-----------|--------|
+| 1 | [assumption affecting multiple flows] | [VALIDATE] or Confirmed |
 
 ---
 
-## Glossario de Atores
+## Actor Glossary
 
-| Ator | Quem e | Aparece nos fluxos |
-|------|--------|-------------------|
-| **[Ator 1]** | [descricao curta] | 1, 2, 3 |
+| Actor | Who they are | Appears in flows |
+|-------|-------------|-----------------|
+| **[Actor 1]** | [short description] | 1, 2, 3 |
 ```
 
-### Regras de geracao:
+### Generation Rules:
 
-1. **Participantes:** somente atores de negocio (pessoas, papeis, "Plataforma" como caixa-preta). NUNCA componentes tecnicos.
-2. **Acoes:** linguagem de negocio. "Envia mensagem", nao "POST /api/messages". "Verifica pagamento", nao "Queries payment_status table".
-3. **Excecoes:** toda excecao deve ter tratamento claro do ponto de vista do usuario. "O que acontece quando X falha?"
-4. **Frequencia/Impacto:** quantificar quando possivel. Marcar `[VALIDAR]` se estimativa.
-5. **Max 120 linhas:** se precisar de mais, os fluxos estao detalhados demais. Abstrair.
-6. **3-5 fluxos:** priorizados por impacto no negocio. O fluxo mais critico primeiro.
+1. **Participants:** only business actors (people, roles, "Platform" as a black box). NEVER technical components.
+2. **Actions:** business language. "Sends message", not "POST /api/messages". "Verifies payment", not "Queries payment_status table".
+3. **Exceptions:** every exception must have clear handling from the user's perspective. "What happens when X fails?"
+4. **Frequency/Impact:** quantify when possible. Mark `[VALIDATE]` if estimated.
+5. **Max 120 lines:** if more is needed, the flows are too detailed. Abstract.
+6. **3-5 flows:** prioritized by business impact. Most critical flow first.
 
 ### 3. Auto-Review
 
-Antes de salvar, verificar:
+Before saving, verify:
 
-| # | Check | Acao se falhar |
-|---|-------|---------------|
-| 1 | Zero termos tecnicos (grep: API, SDK, framework, database, backend, frontend, deploy, server, endpoint, middleware, cache, queue, Python, Redis, Docker, Supabase, pgvector, webhook, microservice, CI/CD, ADR, pipeline, module, POST, GET, SQL, JSON) | Reescrever em linguagem de negocio |
-| 2 | Todo fluxo tem caminho feliz E caminho de excecao | Adicionar o que falta |
-| 3 | Participantes sao atores de negocio, nao componentes tecnicos | Renomear para papel de negocio |
-| 4 | Total < 120 linhas | Condensar — abstrair passos detalhados demais |
-| 5 | 3-5 fluxos (nem mais, nem menos sem justificativa) | Agrupar ou expandir |
-| 6 | Toda premissa marcada [VALIDAR] ou confirmada | Marcar |
-| 7 | Tabela Visao Geral presente com frequencia e impacto | Completar |
-| 8 | Glossario de Atores presente | Adicionar |
-| 9 | Toda decisao tem >=2 alternativas documentadas? | Adicionar alternativa |
-| 10 | Trade-offs explicitos (pros/cons)? | Adicionar pros/cons |
+| # | Check | Action on Failure |
+|---|-------|-------------------|
+| 1 | Zero technical terms (grep: API, SDK, framework, database, backend, frontend, deploy, server, endpoint, middleware, cache, queue, Python, Redis, Docker, Supabase, pgvector, webhook, microservice, CI/CD, ADR, pipeline, module, POST, GET, SQL, JSON) | Rewrite in business language |
+| 2 | Does every flow have a happy path AND an exception path? | Add the missing one |
+| 3 | Are participants business actors, not technical components? | Rename to business role |
+| 4 | Total < 120 lines? | Condense — abstract overly detailed steps |
+| 5 | 3-5 flows (no more, no fewer without justification)? | Group or expand |
+| 6 | Every assumption marked [VALIDATE] or confirmed? | Mark it |
+| 7 | Flow Overview table present with frequency and impact? | Complete it |
+| 8 | Actor Glossary present? | Add it |
+| 9 | Does every decision have >=2 documented alternatives? | Add alternative |
+| 10 | Explicit trade-offs (pros/cons)? | Add pros/cons |
 
-### 4. Gate de Aprovacao (human)
+### 4. Approval Gate (human)
 
-Apresentar ao usuario:
+Present to the user:
 
 ```
-## Resumo dos Fluxos de Negocio
+## Business Flow Summary
 
-**Fluxos mapeados:** <N>
-**Atores identificados:** [lista]
-**Excecoes cobertas:** <N>
+**Flows mapped:** <N>
+**Actors identified:** [list]
+**Exceptions covered:** <N>
 
-### Decisoes tomadas
-1. [Decisao]: [justificativa]
+### Decisions Made
+1. [Decision]: [justification]
 2. ...
 
-### Perguntas de validacao
-1. Os fluxos cobrem os cenarios mais criticos do negocio?
-2. Algum ator esta faltando ou sobrando?
-3. As excecoes refletem o que acontece na pratica?
-4. A priorizacao (ordem dos fluxos) faz sentido?
+### Validation Questions
+1. Do the flows cover the most critical business scenarios?
+2. Is any actor missing or unnecessary?
+3. Do the exceptions reflect what happens in practice?
+4. Does the prioritization (flow order) make sense?
 ```
 
-Aguardar aprovacao antes de salvar.
+Wait for approval before saving.
 
-### 5. Salvar + Relatorio
+### 5. Save + Report
 
-1. Salvar em `platforms/<nome>/business/process.md`
-2. Informar ao usuario:
+1. Save to `platforms/<name>/business/process.md`
+2. Present the following report:
 
 ```
-## Business Process gerado
+## Business Process Generated
 
-**Arquivo:** platforms/<nome>/business/process.md
-**Linhas:** <N>
-**Fluxos:** <N> (cada um com happy path + excecao)
+**File:** platforms/<name>/business/process.md
+**Lines:** <N>
+**Flows:** <N> (each with happy path + exception)
 
 ### Checks
-[x] Zero jargao tecnico
-[x] Todo fluxo com happy path + excecao
-[x] Participantes sao atores de negocio
-[x] Total < 120 linhas
-[x] Premissas marcadas
-[x] Visao Geral e Glossario presentes
+[x] Zero technical jargon
+[x] Every flow with happy path + exception
+[x] Participants are business actors
+[x] Total < 120 lines
+[x] Assumptions marked
+[x] Flow Overview and Glossary present
 
-### Proximo passo
-/tech-research <nome>
-⚠️ ATENCAO: tech-research e um gate 1-way-door — decisoes tecnologicas definem toda a arquitetura downstream.
+### Next Step
+/tech-research <name>
+WARNING: tech-research is a 1-way-door gate — technology decisions define the entire downstream architecture.
 ```
 
-## Tratamento de Erros
+## Error Handling
 
-| Problema | Acao |
-|----------|------|
-| Usuario nao sabe quais fluxos priorizar | Perguntar: "Sem qual fluxo o negocio para de funcionar?" (prioridade 1) / "Qual fluxo diferencia voce dos concorrentes?" (prioridade 2) |
-| Muitos fluxos candidatos (>7) | Agrupar similares. Ex: "Cadastro" + "Ativacao" = "Onboarding completo" |
-| Fluxo muito complexo (>15 passos) | Abstrair em sub-fluxos. Manter max 8-10 passos por diagrama |
-| Vision/solution-overview nao existem | ERROR: dependencias faltantes. Rodar `/solution-overview <nome>` primeiro |
-| Plataforma ja tem process.md | Ler como base, perguntar se quer reescrever do zero ou iterar |
-| Excecao sem tratamento claro | Perguntar ao usuario: "Quando [X] acontece, o que o [ator] faz?" |
+| Problem | Action |
+|---------|--------|
+| User does not know which flows to prioritize | Ask: "Without which flow does the business stop functioning?" (priority 1) / "Which flow differentiates you from competitors?" (priority 2) |
+| Too many candidate flows (>7) | Group similar ones. E.g., "Registration" + "Activation" = "Complete Onboarding" |
+| Flow too complex (>15 steps) | Abstract into sub-flows. Keep max 8-10 steps per diagram |
+| Vision/solution-overview do not exist | ERROR: missing dependencies. Run `/solution-overview <name>` first |
+| Platform already has process.md | Read as base; ask whether to rewrite from scratch or iterate |
+| Exception without clear handling | Ask the user: "When [X] happens, what does the [actor] do?" |

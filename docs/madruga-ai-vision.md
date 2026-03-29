@@ -312,8 +312,6 @@ Cada artefato tem UM dono (skill) e UM proposito. Nenhum artefato duplica inform
 2. Registra no portal (symlinks + LikeC4Diagram.tsx)
 3. Resultado: `platforms/<name>/` com toda a estrutura
 
-**`madruga/architecture-portal`** — Gerencia portal Starlight (serve, build, troubleshoot)
-
 **`madruga/vision-one-pager`** — Gera Vision Brief
 1. Playing to Win framework (11 perguntas)
 2. Gera `business/vision.md`
@@ -421,7 +419,7 @@ Formato Shape Up para pitches: Problem, Appetite, Solution, Rabbit Holes, Accept
 | Architecture source of truth | LikeC4 `.likec4` files | DSL tipado, views interativas, export JSON programatico |
 | Portal | Astro + Starlight + LikeC4 React | Auto-discovery, SSG, diagramas interativos |
 | Config | YAML (`platform.yaml` por plataforma) | Declarativo, humano-readable, sem overhead |
-| Storage | File-based (git) | Zero overhead operacional, versionado, diff-friendly |
+| Storage | File-based (git) → **DB-first com Supabase** (proposto) | Hoje: files-only. Proposta: DB (Supabase/Postgres) como source of truth para estado, metadados e relacoes; Git para conteudo narrativo e modelos LikeC4. Ver `docs/db-first-architecture.md` |
 | Spec pipeline | SpecKit (9 skills) | Progressao linear pitch → spec → plan → tasks |
 | Epics | Shape Up (folders autocontidos) | Portavel, git-friendly, cada epic contem tudo |
 | ADRs | Nygard (Context, Decision, Alternatives, Consequences) | Standard industry, rastreavel |
@@ -571,11 +569,10 @@ platforms:
 
 #### Etapa 3 — Conectar epics ao pipeline
 
-O engine hoje usa `madruga.db` (SQLite) para rastrear epics. Os 15 epics em `platforms/fulano/epics/` precisam ser registrados no SQLite para o daemon poder processa-los.
+O engine hoje usa `madruga.db` (SQLite) para rastrear epics. Com a proposta DB-first (`docs/db-first-architecture.md`), o destino final e Supabase (PostgreSQL). Transicao:
 
-Opcoes:
-- **A)** Script de import: le frontmatter dos `pitch.md` e insere no SQLite
-- **B)** `kanban_poll.py` detecta automaticamente (se integrado com Obsidian)
+- **Curto prazo**: SQLite como hoje — script de import le frontmatter dos `pitch.md` e insere no SQLite
+- **Medio prazo**: Migrar para Supabase (schema `platforms`, `epics`, `pipeline_runs`, `events`) — queries cross-platform, dashboard real-time, tracking de custo/tokens
 
 #### Etapa 4 — Estender SpeckitBridge para Vision Context
 
@@ -615,6 +612,38 @@ Apos validacao, marcar `services/madruga-ai/` no general como deprecated com REA
 ---
 
 ## O Que Vem Depois
+
+### DB-First com Supabase (proposta)
+
+Migracao de storage file-only para DB-first com Supabase. Pesquisa de mercado mostra que todos os frameworks de alta performance (Paperclip, Devin, Backstage, StrongDM) sao DB-backed. Detalhes completos em `docs/db-first-architecture.md`.
+
+**Principio**: Git = source of truth para conteudo (prose, codigo, modelos). DB = source of truth para estado, metadados, relacoes, tracking.
+
+**Schema core**: `platforms`, `epics`, `decisions`, `elements`, `element_relationships`, `tags`, `pipeline_runs`, `events`.
+
+**O que muda**:
+- Skills passam a fazer INSERT/UPDATE no Supabase ao criar/avancar artefatos
+- Portal le metadata do Supabase (queries SQL) em vez de filesystem scan
+- Cross-references (epic ↔ ADR ↔ element) via tabela `tags` — impact analysis real
+- Pipeline runs trackados com tokens, custo, duracao
+- Events append-only para auditoria e analytics
+
+**O que NAO muda**:
+- Vision, pitch, spec, plan prose continuam em Git (markdown)
+- LikeC4 model files continuam em Git (.likec4)
+- Templates e Copier continuam em Git
+
+**Implementacao incremental** (6 fases):
+1. Schema Supabase + `platform.py sync-to-db`
+2. Skills SpecKit escrevem no DB
+3. `vision-build.py` popula element_graph do LikeC4
+4. Portal le metadata do Supabase
+5. Cross-references via `tags`
+6. Events log + agent run tracking
+
+**Por que Supabase**: ja usamos para Fulano, ja pagamos, experiencia do time, pgvector, real-time, REST auto-gerado.
+
+---
 
 ### SpecKit Improvements
 

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Common functions and variables for all scripts
 
-# Find repository root by searching upward for .specify directory
-# This is the primary marker for spec-kit projects
+# Find repository root by searching upward for .specify directory.
+# This is the primary marker for spec-kit projects.
 find_specify_root() {
     local dir="${1:-$(pwd)}"
-    # Normalize to absolute path to prevent infinite loop with relative paths
-    # Use -- to handle paths starting with - (e.g., -P, -L)
+    # Normalize to absolute path to prevent infinite loop with relative paths.
+    # Use -- to handle paths starting with - (e.g., -P, -L).
     dir="$(cd -- "$dir" 2>/dev/null && pwd)" || return 1
     local prev_dir=""
     while true; do
@@ -14,7 +14,7 @@ find_specify_root() {
             echo "$dir"
             return 0
         fi
-        # Stop if we've reached filesystem root or dirname stops changing
+        # Stop if we have reached filesystem root or dirname stops changing
         if [ "$dir" = "/" ] || [ "$dir" = "$prev_dir" ]; then
             break
         fi
@@ -24,8 +24,8 @@ find_specify_root() {
     return 1
 }
 
-# Get repository root, prioritizing .specify directory over git
-# This prevents using a parent git repo when spec-kit is initialized in a subdirectory
+# Get repository root, prioritizing .specify directory over git.
+# This prevents using a parent git repo when spec-kit is initialized in a subdirectory.
 get_repo_root() {
     # First, look for .specify directory (spec-kit's own marker)
     local specify_root
@@ -45,7 +45,7 @@ get_repo_root() {
     (cd "$script_dir/../../.." && pwd)
 }
 
-# Get current branch, with fallback for non-git repositories
+# Get current branch, with fallback for non-git repositories.
 get_current_branch() {
     # First check if SPECIFY_FEATURE environment variable is set
     if [[ -n "${SPECIFY_FEATURE:-}" ]]; then
@@ -101,16 +101,16 @@ get_current_branch() {
     echo "main"  # Final fallback
 }
 
-# Check if we have git available at the spec-kit root level
-# Returns true only if git is installed and the repo root is inside a git work tree
-# Handles both regular repos (.git directory) and worktrees/submodules (.git file)
+# Check if we have git available at the spec-kit root level.
+# Returns true only if git is installed and the repo root is inside a git work tree.
+# Handles both regular repos (.git directory) and worktrees/submodules (.git file).
 has_git() {
     # First check if git command is available (before calling get_repo_root which may use git)
     command -v git >/dev/null 2>&1 || return 1
     local repo_root=$(get_repo_root)
     # Check if .git exists (directory or file for worktrees/submodules)
     [ -e "$repo_root/.git" ] || return 1
-    # Verify it's actually a valid git work tree
+    # Verify it is actually a valid git work tree
     git -C "$repo_root" rev-parse --is-inside-work-tree >/dev/null 2>&1
 }
 
@@ -118,7 +118,7 @@ check_feature_branch() {
     local branch="$1"
     local has_git_repo="$2"
 
-    # For non-git repos, we can't enforce branch naming but still provide output
+    # For non-git repos, we cannot enforce branch naming but still provide output
     if [[ "$has_git_repo" != "true" ]]; then
         echo "[specify] Warning: Git repository not detected; skipped branch validation" >&2
         return 0
@@ -135,8 +135,8 @@ check_feature_branch() {
 
 get_feature_dir() { echo "$1/specs/$2"; }
 
-# Find feature directory by numeric prefix instead of exact branch match
-# This allows multiple branches to work on the same spec (e.g., 004-fix-bug, 004-add-feature)
+# Find feature directory by numeric prefix instead of exact branch match.
+# This allows multiple branches to work on the same spec (e.g., 004-fix-bug, 004-add-feature).
 find_feature_dir_by_prefix() {
     local repo_root="$1"
     local branch_name="$2"
@@ -149,7 +149,7 @@ find_feature_dir_by_prefix() {
     elif [[ "$branch_name" =~ ^([0-9]{3})- ]]; then
         prefix="${BASH_REMATCH[1]}"
     else
-        # If branch doesn't have a recognized prefix, fall back to exact match
+        # If branch does not have a recognized prefix, fall back to exact match
         echo "$specs_dir/$branch_name"
         return
     fi
@@ -166,15 +166,15 @@ find_feature_dir_by_prefix() {
 
     # Handle results
     if [[ ${#matches[@]} -eq 0 ]]; then
-        # No match found - return the branch name path (will fail later with clear error)
+        # No match found — return the branch name path (will fail later with clear error)
         echo "$specs_dir/$branch_name"
     elif [[ ${#matches[@]} -eq 1 ]]; then
-        # Exactly one match - perfect!
+        # Exactly one match — use it
         echo "$specs_dir/${matches[0]}"
     else
-        # Multiple matches - this shouldn't happen with proper naming convention
+        # Multiple matches — this should not happen with proper naming convention
         echo "ERROR: Multiple spec directories found with prefix '$prefix': ${matches[*]}" >&2
-        echo "Please ensure only one spec directory exists per prefix." >&2
+        echo "Ensure only one spec directory exists per prefix." >&2
         return 1
     fi
 }
@@ -243,8 +243,8 @@ json_escape() {
     done
 }
 
-check_file() { [[ -f "$1" ]] && echo "  ✓ $2" || echo "  ✗ $2"; }
-check_dir() { [[ -d "$1" && -n $(ls -A "$1" 2>/dev/null) ]] && echo "  ✓ $2" || echo "  ✗ $2"; }
+check_file() { [[ -f "$1" ]] && echo "  [ok] $2" || echo "  [missing] $2"; }
+check_dir() { [[ -d "$1" && -n $(ls -A "$1" 2>/dev/null) ]] && echo "  [ok] $2" || echo "  [missing] $2"; }
 
 # Resolve a template name to a file path using the priority stack:
 #   1. .specify/templates/overrides/
@@ -327,4 +327,3 @@ except Exception:
     # Callers running under set -e should use: TEMPLATE=$(resolve_template ...) || true
     return 1
 }
-

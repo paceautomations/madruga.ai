@@ -1,219 +1,219 @@
 ---
-description: Mapeia codebase existente (brownfield) ou declara greenfield para qualquer plataforma
+description: Map an existing codebase (brownfield) or declare greenfield for any platform
 arguments:
   - name: platform
-    description: "Nome da plataforma/produto. Se vazio, pergunta."
+    description: "Platform/product name. If empty, prompt for it."
     required: false
-argument-hint: "[nome-da-plataforma]"
+argument-hint: "[platform-name]"
 ---
 
-# Codebase Map — Mapeamento de Codebase
+# Codebase Map — Codebase Analysis
 
-Detecta se o projeto e brownfield (codebase existente) ou greenfield (do zero). Se brownfield, analisa estrutura, dependencias, padroes e integracoes. Se greenfield, gera artefato minimo.
+Detect whether the project is brownfield (existing codebase) or greenfield (from scratch). If brownfield, analyze structure, dependencies, patterns, and integrations. If greenfield, generate a minimal artifact.
 
-**Node opcional no DAG** — se nao executado, nao bloqueia nenhum no downstream.
+**Optional DAG node** — if not executed, no downstream node is blocked.
 
-## Regra Cardinal: ZERO Achismo sobre Codebase
+## Cardinal Rule: ZERO Guesswork About Codebase
 
-Toda afirmacao sobre o codebase deve ser baseada em **leitura real de codigo**. Nenhuma suposicao sobre estrutura, padroes ou dependencias sem evidencia no filesystem.
+Every statement about the codebase MUST be based on **actual code reading**. No assumptions about structure, patterns, or dependencies without filesystem evidence.
 
-**NUNCA:**
-- Assumir que um padrao existe sem encontrar no codigo
-- Inferir dependencias sem ler package.json/requirements.txt/go.mod equivalente
-- Afirmar integracoes sem encontrar chamadas reais
-- Inventar metricas (linhas de codigo, cobertura) sem medir
+**NEVER:**
+- Assume a pattern exists without finding it in code
+- Infer dependencies without reading package.json/requirements.txt/go.mod or equivalent
+- Assert integrations without finding actual calls
+- Invent metrics (lines of code, coverage) without measuring
 
 ## Persona
 
-Staff Engineer. Analise objetiva e factual. Mapeia o que existe, sem julgar. Portugues BR.
+Staff Engineer. Objective, factual analysis. Map what exists without judging. Write all generated artifact content in Brazilian Portuguese (PT-BR).
 
-## Uso
+## Usage
 
-- `/codebase-map fulano` — Mapeia codebase da plataforma "fulano"
-- `/codebase-map` — Pergunta nome da plataforma
+- `/codebase-map fulano` — Map the codebase for platform "fulano"
+- `/codebase-map` — Prompt for platform name
 
-## Diretorio
+## Output Directory
 
-Salvar em `platforms/<nome>/research/codebase-context.md`.
+Save to `platforms/<name>/research/codebase-context.md`.
 
-## Instrucoes
+## Instructions
 
-### 0. Pre-requisitos
+### 0. Prerequisites
 
-Rodar `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <nome> --skill codebase-map` e parsear JSON.
-- Se `ready: false`: ERROR listando dependencias faltantes.
-- Se `ready: true`: ler artefatos em `available` como contexto.
-- Ler `.specify/memory/constitution.md`.
+Run `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <name> --skill codebase-map` and parse the JSON output.
+- If `ready: false`: ERROR listing missing dependencies.
+- If `ready: true`: read artifacts listed in `available` as context.
+- Read `.specify/memory/constitution.md`.
 
-### 1. Detectar Brownfield vs Greenfield
+### 1. Detect Brownfield vs Greenfield
 
-**Criterios de deteccao:**
+**Detection criteria:**
 
-| Criterio | Onde verificar | Resultado |
-|----------|---------------|-----------|
-| Campo `source_repo` no platform.yaml | `platforms/<nome>/platform.yaml` | Se existe → brownfield |
-| Diretorio `src/` no repo referenciado | Repo ou diretorio local | Se existe → brownfield |
-| Arquivos de dependencia (package.json, requirements.txt, go.mod, Cargo.toml, pom.xml) | Raiz do repo referenciado | Se existe → brownfield |
+| Criterion | Where to Check | Result |
+|-----------|---------------|--------|
+| `source_repo` field in platform.yaml | `platforms/<name>/platform.yaml` | If exists → brownfield |
+| `src/` directory in referenced repo | Repo or local directory | If exists → brownfield |
+| Dependency files (package.json, requirements.txt, go.mod, Cargo.toml, pom.xml) | Root of referenced repo | If exists → brownfield |
 
-**Se NENHUM criterio atendido → GREENFIELD.**
+**If NONE of the criteria are met → GREENFIELD.**
 
-### 2A. Fluxo Greenfield
+### 2A. Greenfield Flow
 
-Se greenfield, gerar artefato minimo:
+If greenfield, generate a minimal artifact:
 
 ```markdown
 ---
 title: "Codebase Context"
 updated: YYYY-MM-DD
 ---
-# <Nome> — Codebase Context
+# <Name> — Codebase Context
 
-> Projeto greenfield — nenhum codebase existente.
+> Greenfield project — no existing codebase.
 
 ## Status
 
-Greenfield. Nenhuma analise de codebase necessaria.
+Greenfield. No codebase analysis required.
 
-## Implicacoes
+## Implications
 
-- Nao ha divida tecnica pre-existente
-- Liberdade total para escolha de stack e padroes
-- Nao ha integracoes legadas a considerar
+- No pre-existing technical debt
+- Full freedom for stack and pattern choices
+- No legacy integrations to consider
 ```
 
-Pular para secao 5 (Salvar).
+Skip to section 5 (Save).
 
-### 2B. Fluxo Brownfield
+### 2B. Brownfield Flow
 
-Se brownfield, **spawnar Agent subagents em paralelo** para analise:
+If brownfield, **spawn Agent subagents in parallel** for analysis:
 
-**Agent 1 — Estrutura de Arquivos:**
-- Mapear arvore de diretorios (max 3 niveis)
-- Identificar diretorios principais e seu proposito
-- Contar arquivos por tipo/extensao
+**Agent 1 — File Structure:**
+- Map directory tree (max 3 levels)
+- Identify main directories and their purpose
+- Count files by type/extension
 
-**Agent 2 — Dependencias:**
-- Ler arquivos de dependencia (package.json, requirements.txt, etc.)
-- Listar dependencias diretas com versoes
-- Identificar frameworks e bibliotecas principais
+**Agent 2 — Dependencies:**
+- Read dependency files (package.json, requirements.txt, etc.)
+- List direct dependencies with versions
+- Identify main frameworks and libraries
 
-**Agent 3 — Padroes Detectados:**
-- Buscar padroes arquiteturais (MVC, hexagonal, DDD, monolith, microservices)
-- Identificar padroes de codigo (design patterns recorrentes)
-- Detectar convencoes de nomenclatura
+**Agent 3 — Detected Patterns:**
+- Search for architectural patterns (MVC, hexagonal, DDD, monolith, microservices)
+- Identify code patterns (recurring design patterns)
+- Detect naming conventions
 
-**Agent 4 — Integracoes:**
-- Buscar chamadas HTTP/gRPC/mensageria
-- Identificar servicos externos referenciados
-- Mapear pontos de integracao (APIs, webhooks, filas)
+**Agent 4 — Integrations:**
+- Search for HTTP/gRPC/messaging calls
+- Identify referenced external services
+- Map integration points (APIs, webhooks, queues)
 
-Consolidar resultados em `research/codebase-context.md`:
+Consolidate results into `research/codebase-context.md`:
 
 ```markdown
 ---
 title: "Codebase Context"
 updated: YYYY-MM-DD
 ---
-# <Nome> — Codebase Context
+# <Name> — Codebase Context
 
-> Analise do codebase existente. Ultima atualizacao: YYYY-MM-DD.
-
----
-
-## Resumo
-
-[2-3 linhas: linguagem principal, framework, tamanho aproximado]
+> Existing codebase analysis. Last updated: YYYY-MM-DD.
 
 ---
 
-## Estrutura de Arquivos
+## Summary
 
-[Arvore anotada — max 3 niveis com proposito de cada diretorio]
+[2-3 lines: primary language, framework, approximate size]
 
 ---
 
-## Stack Tecnologico
+## File Structure
 
-| Categoria | Tecnologia | Versao | Notas |
-|-----------|-----------|--------|-------|
-| Linguagem | ... | ... | ... |
+[Annotated tree — max 3 levels with purpose for each directory]
+
+---
+
+## Technology Stack
+
+| Category | Technology | Version | Notes |
+|----------|-----------|---------|-------|
+| Language | ... | ... | ... |
 | Framework | ... | ... | ... |
 | Database | ... | ... | ... |
 | Infra | ... | ... | ... |
 
 ---
 
-## Dependencias Principais
+## Key Dependencies
 
-| Dependencia | Versao | Proposito |
-|-------------|--------|-----------|
+| Dependency | Version | Purpose |
+|------------|---------|---------|
 | ... | ... | ... |
 
 ---
 
-## Padroes Detectados
+## Detected Patterns
 
-| Padrao | Evidencia | Arquivo(s) |
-|--------|-----------|-----------|
+| Pattern | Evidence | File(s) |
+|---------|----------|---------|
 | ... | ... | ... |
 
 ---
 
-## Integracoes
+## Integrations
 
-| Servico | Tipo | Endpoint/Topico | Arquivo(s) |
-|---------|------|----------------|-----------|
+| Service | Type | Endpoint/Topic | File(s) |
+|---------|------|----------------|---------|
 | ... | ... | ... | ... |
 
 ---
 
-## Observacoes
+## Observations
 
-[Riscos, divida tecnica evidente, areas que precisam de atencao]
+[Risks, evident technical debt, areas requiring attention]
 ```
 
 ### 3. Auto-Review
 
-| # | Check | Acao se falhar |
-|---|-------|---------------|
-| 1 | Toda afirmacao tem arquivo de evidencia? | Adicionar referencia ou remover |
-| 2 | Nenhuma suposicao sem leitura real? | Verificar ou marcar [NAO VERIFICADO] |
-| 3 | Brownfield/greenfield corretamente detectado? | Re-verificar criterios |
-| 4 | Dependencias com versao? | Ler arquivo de dependencia |
-| 5 | Max 150 linhas (brownfield) / 15 linhas (greenfield)? | Condensar |
+| # | Check | Action on Failure |
+|---|-------|-------------------|
+| 1 | Does every statement have a source file as evidence? | Add reference or remove |
+| 2 | Are there any assumptions without actual file reads? | Verify or mark [NOT VERIFIED] |
+| 3 | Is brownfield/greenfield correctly detected? | Re-check criteria |
+| 4 | Do dependencies include versions? | Read dependency file |
+| 5 | Within line limits: max 150 lines (brownfield) / 15 lines (greenfield)? | Condense |
 
 ### 4. Gate: Auto
 
-Este no tem gate **auto** — nao requer aprovacao humana. Salvar automaticamente.
+This node has an **auto** gate — no human approval required. Save automatically.
 
-### 5. Salvar + Relatorio
+### 5. Save + Report
 
-1. Salvar em `platforms/<nome>/research/codebase-context.md`
-2. Informar ao usuario:
+1. Save to `platforms/<name>/research/codebase-context.md`
+2. Report to user:
 
 ```
-## Codebase Map gerado
+## Codebase Map generated
 
-**Arquivo:** platforms/<nome>/research/codebase-context.md
-**Tipo:** [Greenfield | Brownfield]
-**Linhas:** <N>
+**File:** platforms/<name>/research/codebase-context.md
+**Type:** [Greenfield | Brownfield]
+**Lines:** <N>
 
 ### Checks
-[x] Deteccao brownfield/greenfield correta
-[x] [Se brownfield] Todas afirmacoes com evidencia
-[x] [Se brownfield] Dependencias com versao
-[x] Limite de linhas respeitado
+[x] Brownfield/greenfield detection correct
+[x] [If brownfield] All statements backed by evidence
+[x] [If brownfield] Dependencies include versions
+[x] Line limit respected
 
-### Nota
-Este e um no OPCIONAL do pipeline. Nenhum no downstream depende exclusivamente dele.
+### Note
+This is an OPTIONAL pipeline node. No downstream node depends exclusively on it.
 ```
 
-## Tratamento de Erros
+## Error Handling
 
-| Problema | Acao |
-|----------|------|
-| source_repo no platform.yaml aponta para repo inacessivel | Tratar como greenfield, avisar usuario |
-| Codebase muito grande (>10k arquivos) | Limitar analise aos 3 niveis principais, amostrar padroes |
-| Multiplas linguagens | Listar todas, focar na principal (mais arquivos) |
-| Sem arquivos de dependencia | Inferir stack pelos arquivos, marcar [INFERIDO] |
-| Platform.yaml sem campo source_repo | Verificar se ha src/ local, senao greenfield |
+| Issue | Action |
+|-------|--------|
+| source_repo in platform.yaml points to inaccessible repo | Treat as greenfield, warn user |
+| Codebase too large (>10k files) | Limit analysis to top 3 levels, sample patterns |
+| Multiple languages | List all, focus on primary (most files) |
+| No dependency files found | Infer stack from files, mark [INFERRED] |
+| platform.yaml missing source_repo field | Check for local src/, otherwise greenfield |

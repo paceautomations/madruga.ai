@@ -113,7 +113,7 @@ def _inject_platform_loader(name: str) -> bool:
     return True
 
 
-# ── Commands ──
+# -- Commands --
 
 
 def cmd_list() -> None:
@@ -171,7 +171,7 @@ def cmd_new(name: str) -> None:
     print(f"{'=' * 50}")
     print("\nNext steps:")
     print("  cd portal && npm run dev              # see it in the portal")
-    print(f"  /architecture-portal {name}           # generate architecture content")
+    print(f"  /pipeline-next {name}                 # see what to document next")
     print(f"  python3 .specify/scripts/platform.py lint {name}  # validate")
 
 
@@ -370,7 +370,7 @@ def cmd_register(name: str) -> None:
     print(f"\nPlatform '{name}' registered. Run: cd portal && npm run dev")
 
 
-# ── Main ──
+# -- Main --
 
 
 def main() -> None:

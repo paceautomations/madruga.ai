@@ -1,206 +1,206 @@
 ---
-description: Quebra projeto em epicos Shape Up com Problem, Appetite, Solution, Rabbit Holes e Acceptance Criteria
+description: Break a project into Shape Up epics with Problem, Appetite, Solution, Rabbit Holes, and Acceptance Criteria
 arguments:
   - name: platform
-    description: "Nome da plataforma/produto. Se vazio, pergunta."
+    description: "Platform/product name. If empty, prompt for it."
     required: false
-argument-hint: "[nome-da-plataforma]"
+argument-hint: "[platform-name]"
 handoffs:
-  - label: Gerar Roadmap
+  - label: Generate Roadmap
     agent: madruga/roadmap
-    prompt: Sequenciar epicos em roadmap de entrega baseado nas dependencias e riscos
+    prompt: Sequence epics into a delivery roadmap based on dependencies and risks
 ---
 
-# Epic Breakdown — Decomposicao em Epicos Shape Up
+# Epic Breakdown — Shape Up Epic Decomposition
 
-Quebra o projeto em epicos usando formato Shape Up: Problem, Appetite, Solution, Rabbit Holes, No-gos, Acceptance Criteria. Cada epico vira `epics/NNN-slug/pitch.md`.
+Break the project into epics using Shape Up format: Problem, Appetite, Solution, Rabbit Holes, No-gos, Acceptance Criteria. Each epic becomes `epics/NNN-slug/pitch.md`.
 
-## Regra Cardinal: ZERO Epico sem Problema Definido
+## Cardinal Rule: ZERO Epics Without a Defined Problem
 
-Se nao consigo explicar o problema em 2 frases, o epico esta mal definido. Todo epico parte de um problema real, nao de uma feature list.
+If the problem cannot be explained in 2 sentences, the epic is poorly defined. Every epic starts from a real problem, not from a feature list.
 
-**NUNCA:**
-- Criar epico a partir de feature ("fazer login") sem problema ("usuarios nao conseguem acessar")
-- Deixar escopo ambiguo entre epicos
-- Criar epico com appetite > 6w sem split
-- Omitir no-gos (o que NAO esta no escopo)
+**NEVER:**
+- Create an epic from a feature ("build login") without a problem ("users cannot access their accounts")
+- Leave scope ambiguous between epics
+- Create an epic with appetite > 6w without splitting
+- Omit no-gos (what is NOT in scope)
 
 ## Persona
 
-Product Manager / Architect. Dual hat: entende negocio E tecnica. Portugues BR.
+Product Manager / Architect. Dual hat: understands business AND technology. Write all generated artifact content in Brazilian Portuguese (PT-BR).
 
-## Uso
+## Usage
 
-- `/epic-breakdown fulano` — Quebra plataforma "fulano" em epicos
-- `/epic-breakdown` — Pergunta nome
+- `/epic-breakdown fulano` — Break platform "fulano" into epics
+- `/epic-breakdown` — Prompt for name
 
-## Diretorio
+## Output Directory
 
-Salvar em `platforms/<nome>/epics/NNN-slug/pitch.md`. Auto-numerar.
+Save to `platforms/<name>/epics/NNN-slug/pitch.md`. Auto-number.
 
-## Instrucoes
+## Instructions
 
-### 0. Pre-requisitos
+### 0. Prerequisites
 
-Rodar `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <nome> --skill epic-breakdown` e parsear JSON.
-- Se `ready: false`: ERROR listando dependencias faltantes.
-- Se `ready: true`: ler artefatos em `available`.
-- Ler `.specify/memory/constitution.md`.
+Run `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <name> --skill epic-breakdown` and parse the JSON output.
+- If `ready: false`: ERROR listing missing dependencies.
+- If `ready: true`: read artifacts listed in `available`.
+- Read `.specify/memory/constitution.md`.
 
-### 1. Coletar Contexto + Questionar
+### 1. Collect Context + Ask Questions
 
-**Leitura obrigatoria (contexto completo):**
+**Required reading (full context):**
 - `engineering/domain-model.md` — bounded contexts
-- `engineering/containers.md` — arquitetura
-- `engineering/context-map.md` — relacoes DDD
+- `engineering/containers.md` — architecture
+- `engineering/context-map.md` — DDD relationships
 - `business/*` — vision, solution-overview, process
-- `engineering/blueprint.md` — NFRs e concerns transversais
-- `decisions/ADR-*.md` — restricoes tecnologicas
+- `engineering/blueprint.md` — NFRs and cross-cutting concerns
+- `decisions/ADR-*.md` — technology constraints
 
-**Identificar boundaries naturais para epicos:**
-- 1 bounded context = candidato a 1 epico
-- 1 fluxo de negocio critico = candidato a 1 epico
-- Cross-cutting concerns = possivel epico de infra
+**Identify natural epic boundaries:**
+- 1 bounded context = candidate for 1 epic
+- 1 critical business flow = candidate for 1 epic
+- Cross-cutting concerns = possible infra epic
 
-**Perguntas Estruturadas:**
+**Structured Questions:**
 
-| Categoria | Pergunta |
-|-----------|----------|
-| **Premissas** | "Assumo [N] epicos baseado nos bounded contexts. Correto?" |
-| **Trade-offs** | "MVP com [2 epicos] ou entrega completa com [5]? Qual appetite?" |
-| **Gaps** | "Qual e o criterio de sucesso do MVP?" |
-| **Provocacao** | "Epico [X] parece grande demais (6w). Vale split em 2 de 2w?" |
+| Category | Question |
+|----------|----------|
+| **Assumptions** | "I assume [N] epics based on the bounded contexts. Correct?" |
+| **Trade-offs** | "MVP with [2 epics] or full delivery with [5]? What appetite?" |
+| **Gaps** | "What is the MVP success criterion?" |
+| **Challenge** | "Epic [X] seems too large (6w). Worth splitting into 2 of 2w?" |
 
-Aguardar respostas ANTES de gerar epicos.
+Wait for answers BEFORE generating epics.
 
-### 2. Gerar Epicos
+### 2. Generate Epics
 
-Para cada epico, criar diretorio e pitch:
+For each epic, create a directory and pitch:
 
 `epics/NNN-slug/pitch.md`
 
 ```markdown
 ---
-title: "Epic NNN: Titulo"
+title: "Epic NNN: Title"
 appetite: 2w | 6w
 priority: P1 | P2 | P3
 ---
-# Epic NNN: Titulo
+# Epic NNN: Title
 
 ## Problem
 
-[2-3 frases: qual problema este epico resolve. Ponto de vista do usuario/negocio.]
+[2-3 sentences: what problem this epic solves. From user/business perspective.]
 
 ## Appetite
 
-**[2w | 6w]** — [justificativa do tamanho]
+**[2w | 6w]** — [size justification]
 
 ## Solution
 
-[Approach de alto nivel. O que sera construido, nao como. 1-2 paragrafos.]
+[High-level approach. What will be built, not how. 1-2 paragraphs.]
 
-### Bounded Contexts envolvidos
-- [Context A] — [o que muda neste context]
-- [Context B] — [o que muda]
+### Bounded Contexts Involved
+- [Context A] — [what changes in this context]
+- [Context B] — [what changes]
 
-### Containers impactados
-- [Container X] — [o que muda]
+### Containers Impacted
+- [Container X] — [what changes]
 
 ## Rabbit Holes
 
-[Coisas que podem consumir tempo desnecessario. Onde NÃO se aprofundar.]
+[Things that can consume unnecessary time. Where NOT to go deep.]
 
-1. [Rabbit hole 1] — [por que evitar]
-2. [Rabbit hole 2] — [por que evitar]
+1. [Rabbit hole 1] — [why to avoid]
+2. [Rabbit hole 2] — [why to avoid]
 
 ## No-gos
 
-[Explicitamente fora do escopo deste epico.]
+[Explicitly out of scope for this epic.]
 
-1. [No-go 1] — [sera tratado em qual epico ou nunca]
+1. [No-go 1] — [will be addressed in which epic, or never]
 2. [No-go 2]
 
 ## Acceptance Criteria
 
-[Checklist testavel. Quando todos marcados, epico esta done.]
+[Testable checklist. When all items are checked, the epic is done.]
 
-- [ ] [Criterio 1 — mensuravel]
-- [ ] [Criterio 2]
-- [ ] [Criterio 3]
+- [ ] [Criterion 1 — measurable]
+- [ ] [Criterion 2]
+- [ ] [Criterion 3]
 
-## Dependencias
+## Dependencies
 
-- Depende de: [epico NNN] (se aplicavel)
-- Bloqueia: [epico NNN] (se aplicavel)
+- Depends on: [epic NNN] (if applicable)
+- Blocks: [epic NNN] (if applicable)
 ```
 
 ### 3. Auto-Review
 
-| # | Check | Acao se falhar |
-|---|-------|---------------|
-| 1 | Todo epico tem problema definido (nao feature)? | Reescrever como problema |
-| 2 | Appetite realista (2w ou 6w)? | Ajustar ou split |
-| 3 | No-gos explicitos? | Adicionar |
-| 4 | Acceptance criteria testaveis? | Tornar mensuravel |
-| 5 | Nenhum overlap de escopo entre epicos? | Resolver |
-| 6 | Bounded contexts mapeados para epicos? | Mapear |
-| 7 | Dependencias entre epicos acyclicas? | Resolver ciclos |
-| 8 | Toda decisao tem >=2 alternativas documentadas? | Adicionar |
-| 9 | Trade-offs explicitos? | Adicionar pros/cons |
-| 10 | Premissas marcadas [VALIDAR] ou com dado? | Marcar [VALIDAR] |
+| # | Check | Action on Failure |
+|---|-------|-------------------|
+| 1 | Does every epic have a defined problem (not a feature)? | Rewrite as a problem |
+| 2 | Is appetite realistic (2w or 6w)? | Adjust or split |
+| 3 | Are no-gos explicit? | Add them |
+| 4 | Are acceptance criteria testable? | Make them measurable |
+| 5 | Is there no scope overlap between epics? | Resolve |
+| 6 | Are bounded contexts mapped to epics? | Map them |
+| 7 | Are inter-epic dependencies acyclic? | Resolve cycles |
+| 8 | Does every decision have >=2 documented alternatives? | Add |
+| 9 | Are trade-offs explicit? | Add pros/cons |
+| 10 | Are assumptions marked [VALIDATE] or backed by data? | Mark [VALIDATE] |
 
-### 4. Gate de Aprovacao: 1-Way-Door
+### 4. Approval Gate: 1-Way-Door
 
-**ATENCAO: Gate 1-way-door.** Escopo dos epicos define TODA a implementacao downstream (roadmap, specs, tasks, codigo).
+**WARNING: 1-way-door gate.** Epic scope defines ALL downstream implementation (roadmap, specs, tasks, code).
 
-Apresentar:
+Present:
 
-| # | Epico | Problema | Appetite | Contexts | Deps |
-|---|-------|----------|----------|----------|------|
-| 1 | NNN: [titulo] | [resumo] | 2w/6w | [contexts] | [deps] |
+| # | Epic | Problem | Appetite | Contexts | Deps |
+|---|------|---------|----------|----------|------|
+| 1 | NNN: [title] | [summary] | 2w/6w | [contexts] | [deps] |
 
-**Para CADA epico, pedir confirmacao:**
+**For EACH epic, request confirmation:**
 
-> **Epico NNN: [titulo]**
-> Problema: [resumo]
+> **Epic NNN: [title]**
+> Problem: [summary]
 > Appetite: [Xw]
-> Inclui: [lista de scopo]
-> Exclui (no-gos): [lista]
-> Depende de: [epicos]
+> Includes: [scope list]
+> Excludes (no-gos): [list]
+> Depends on: [epics]
 >
-> **Confirma escopo? Isso define a implementacao. (sim/nao/ajustar)**
+> **Confirm scope? This defines the implementation. (yes/no/adjust)**
 
-### 5. Salvar + Relatorio
+### 5. Save + Report
 
 ```
-## Epicos gerados
+## Epics generated
 
-**Diretorio:** platforms/<nome>/epics/
-**Epicos:** <N>
-**Appetite total:** <N> semanas
+**Directory:** platforms/<name>/epics/
+**Epics:** <N>
+**Total appetite:** <N> weeks
 
-| Epico | Appetite | Prioridade |
-|-------|----------|-----------|
-| NNN: [titulo] | Xw | P1/P2/P3 |
+| Epic | Appetite | Priority |
+|------|----------|----------|
+| NNN: [title] | Xw | P1/P2/P3 |
 
 ### Checks
-[x] Problemas definidos (nao features)
-[x] Appetites realistas
-[x] No-gos explicitos
-[x] Acceptance criteria testaveis
-[x] Zero overlap de escopo
-[x] Aprovacao por epico (gate 1-way-door)
+[x] Problems defined (not features)
+[x] Appetites realistic
+[x] No-gos explicit
+[x] Acceptance criteria testable
+[x] Zero scope overlap
+[x] Per-epic approval (1-way-door gate)
 
-### Proximo Passo
-`/roadmap <nome>` — Sequenciar epicos em roadmap de entrega.
+### Next Step
+`/roadmap <name>` — Sequence epics into a delivery roadmap.
 ```
 
-## Tratamento de Erros
+## Error Handling
 
-| Problema | Acao |
-|----------|------|
-| Projeto muito pequeno (1 epico) | OK — 1 epico e valido |
-| Muitos epicos (>8) | Agrupar relacionados ou questionar granularidade |
-| Appetite total > 6 meses | Alertar sobre risco de escopo |
-| Dependencia circular entre epicos | Resolver split ou merge |
-| Context sem epico associado | Verificar se context e necessario agora |
+| Issue | Action |
+|-------|--------|
+| Very small project (1 epic) | OK — 1 epic is valid |
+| Too many epics (>8) | Group related ones or question granularity |
+| Total appetite > 6 months | Alert about scope risk |
+| Circular dependency between epics | Resolve via split or merge |
+| Context without an associated epic | Check whether the context is needed now |

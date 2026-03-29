@@ -1,87 +1,87 @@
 ---
-description: Recomenda proximo passo do pipeline DAG baseado em status e prioridade de layer
+description: Recommend the next pipeline DAG step based on status and layer priority
 arguments:
   - name: platform
-    description: "Nome da plataforma/produto. Se vazio, pergunta."
+    description: "Platform/product name. If empty, prompt for it."
     required: false
-argument-hint: "[nome-da-plataforma]"
+argument-hint: "[platform-name]"
 ---
 
-# Pipeline Next — Proximo Passo
+# Pipeline Next — Next Step Recommendation
 
-Skill read-only. Analisa status do pipeline e recomenda proximo no a executar. NAO auto-executa — apenas sugere.
+Read-only skill. Analyze the pipeline status and recommend the next node to execute. Does NOT auto-execute — only suggests.
 
-## Regra: NUNCA Auto-Executar
+## Rule: NEVER Auto-Execute
 
-Esta skill RECOMENDA. O usuario decide quando e se executa. Zero execucao automatica.
+This skill RECOMMENDS only. The user decides when and whether to execute. Zero automatic execution.
 
 ## Persona
 
-Pipeline Advisor. Conciso, direto. Portugues BR.
+Pipeline Advisor. Concise, direct. Write output in Brazilian Portuguese (PT-BR).
 
-## Uso
+## Usage
 
-- `/pipeline-next fulano` — Proximo passo para "fulano"
-- `/pipeline-next` — Pergunta plataforma
+- `/pipeline-next fulano` — Next step for "fulano"
+- `/pipeline-next` — Prompt for platform
 
-## Instrucoes
+## Instructions
 
-### 1. Coletar Status
+### 1. Collect Status
 
-Rodar: `.specify/scripts/bash/check-platform-prerequisites.sh --json --status --platform <nome>`
+Run: `.specify/scripts/bash/check-platform-prerequisites.sh --json --status --platform <name>`
 
-### 2. Analisar e Recomendar
+### 2. Analyze and Recommend
 
-**Filtrar nos com status=ready.**
+**Filter nodes with status=ready.**
 
-**Se 1 ready:**
+**If 1 ready:**
 ```
-## Proximo Passo Recomendado
+## Recommended Next Step
 
 **`/<skill> <platform>`**
-- O que faz: [descricao 1 linha]
-- Dependencias: [ja atendidas]
+- What it does: [1-line description]
+- Dependencies: [already met]
 - Gate: [human/auto/1-way-door]
 
-Para executar: `/<skill> <platform>`
+To execute: `/<skill> <platform>`
 ```
 
-**Se multiplos ready:**
-Listar todos e recomendar por esta logica de prioridade:
-1. **Non-optional antes de optional** (critical path primeiro)
-2. **Mais dependentes downstream primeiro** (desbloqueia mais work)
-3. **Layer como tiebreaker:** business > research > engineering > planning
+**If multiple ready:**
+List all and recommend using this priority logic:
+1. **Non-optional before optional** (critical path first)
+2. **Most downstream dependents first** (unblocks more work)
+3. **Layer as tiebreaker:** business > research > engineering > planning
 
-Dentro do mesmo layer: menos dependencias pendentes = primeiro.
+Within the same layer: fewer pending dependencies = first.
 
-**Se nenhum ready E todos done:**
+**If none ready AND all done:**
 ```
-## Pipeline Completo! 🎉
+## Pipeline Complete!
 
-Todas as 14 etapas estao done.
-Proximo: iniciar implementacao pelo primeiro epico do roadmap com `/discuss <platform> <NNN>` (onde NNN e o numero do epico).
+All 14 stages are done.
+Next: start implementation with the first epic from the roadmap using `/discuss <platform> <NNN>` (where NNN is the epic number).
 ```
 
-**Se nenhum ready E alguns blocked:**
+**If none ready AND some blocked:**
 ```
-## Nenhuma Etapa Disponivel
+## No Stage Available
 
-Bloqueadores:
-| Skill | Blocked por |
+Blockers:
+| Skill | Blocked by |
 |-------|-----------|
 | ... | ... |
 
-Resolva os bloqueadores primeiro.
+Resolve the blockers first.
 ```
 
-### 3. Apresentar
+### 3. Present
 
-Mostrar recomendacao. NAO executar. Aguardar usuario.
+Show the recommendation. Do NOT execute. Wait for the user.
 
-## Tratamento de Erros
+## Error Handling
 
-| Problema | Acao |
-|----------|------|
-| Script falha | ERROR: pre-requisito python3 nao instalado |
-| Platform.yaml sem pipeline section | ERROR: rodar `copier update` na plataforma |
-| Nome de plataforma invalido | Perguntar nome correto |
+| Issue | Action |
+|-------|--------|
+| Script fails | ERROR: python3 prerequisite not installed |
+| platform.yaml missing pipeline section | ERROR: run `copier update` on the platform |
+| Invalid platform name | Prompt for correct name |

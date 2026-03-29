@@ -1,55 +1,64 @@
 ---
-description: Verifica aderencia da implementacao vs spec, tasks e arquitetura com score de cobertura
+description: Verify implementation adherence against spec, tasks, and architecture with a coverage score
 arguments:
   - name: platform
-    description: "Nome da plataforma/produto."
+    description: "Platform/product name."
     required: false
   - name: epic
-    description: "Numero do epico (ex: 001)."
+    description: "Epic number (e.g., 001)."
     required: false
-argument-hint: "[plataforma] [numero-epico]"
+argument-hint: "[platform] [epic-number]"
+handoffs:
+  - label: QA Test (optional)
+    agent: madruga/test-ai
+    prompt: "Verify complete. If app is running, run QA tests with /test-ai."
+  - label: Reconcile Documentation
+    agent: madruga/reconcile
+    prompt: "Skip QA tests. Reconcile documentation with implementation."
 ---
 
-# Verify — Verificacao de Aderencia
+# Verify — Adherence Verification
 
-Compara implementacao vs spec (FRs cobertos?), vs tasks (phantom completions?), vs arquitetura (drift?). Gera report com score de aderencia.
+Compare implementation against spec (FRs covered?), tasks (phantom completions?), and architecture (drift?). Generate a report with an adherence score.
 
-## Regra Cardinal: ZERO Phantom Completion
+## Cardinal Rule: ZERO Phantom Completion
 
-Se uma task esta marcada [X] mas o codigo nao existe, e um **BLOCKER**. Nenhuma task considerada done sem evidencia no filesystem.
+If a task is marked [X] but the code does not exist, it is a **BLOCKER**. No task is considered done without filesystem evidence.
 
 ## Persona
 
-QA Lead / Auditor. Cético, factual. Portugues BR.
+QA Lead / Auditor. Skeptical, factual. Write generated artifacts in Brazilian Portuguese (PT-BR).
 
-## Uso
+## Usage
 
-- `/verify fulano 001` — Verifica epico 001 de "fulano"
-- `/verify` — Pergunta plataforma e epico
+- `/verify fulano 001` — Verify epic 001 of platform "fulano"
+- `/verify` — Prompt for the platform and epic
 
-## Diretorio
+## Output Directory
 
-Salvar em `platforms/<nome>/epics/<NNN>/verify-report.md`.
+Save to `platforms/<name>/epics/<NNN>/verify-report.md`.
 
-## Instrucoes
+## Instructions
 
-### 0. Pre-requisitos
+### 0. Prerequisites
 
-Rodar `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <nome> --skill verify` e parsear JSON.
-- Se `ready: false`: ERROR listando dependencias faltantes.
-- Se `ready: true`: ler artefatos em `available`.
-- Ler `.specify/memory/constitution.md`.
+Run `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <name> --skill verify` and parse the JSON output.
+- If `ready: false`: ERROR — list missing dependencies.
+- If `ready: true`: read artifacts listed in `available`.
+- Read `.specify/memory/constitution.md`.
 
-Verificar que spec.md e tasks.md existem para o epico (no spec dir correspondente).
+Confirm that spec.md and tasks.md exist for the epic (in the corresponding spec directory).
 
-### 1. Coletar Contexto + Verificar
+### 1. Collect Context + Verify
 
-- Ler spec.md — extrair functional requirements (FR-NNN)
-- Ler tasks.md — extrair tasks e status ([X] vs [ ])
-- Scan filesystem ou git diff — verificar codigo implementado
-- Ler architecture docs — verificar alinhamento
+- Read spec.md — extract functional requirements (FR-NNN)
+- Read tasks.md — extract tasks and their status ([X] vs [ ])
+- Scan the filesystem or git diff — verify implemented code
+- Read architecture docs — verify alignment
 
-### 2. Gerar Verify Report
+### 2. Generate Verify Report
+
+All generated content MUST be in PT-BR:
 
 ```markdown
 ---
@@ -64,7 +73,7 @@ updated: YYYY-MM-DD
 
 | FR | Descricao | Implementado? | Evidencia |
 |----|-----------|--------------|-----------|
-| FR-001 | ... | Sim/Nao/Parcial | [arquivo:linha] |
+| FR-001 | ... | Sim/Nao/Parcial | [file:line] |
 
 ## Phantom Completion Check
 
@@ -79,48 +88,48 @@ updated: YYYY-MM-DD
 | ... | ... | ... | Sim/Nao |
 
 ## Blockers
-[Lista de problemas criticos]
+[List of critical problems]
 
 ## Warnings
-[Lista de problemas nao-criticos]
+[List of non-critical problems]
 
 ## Recomendacoes
-[O que fazer para atingir 100%]
+[What to do to reach 100%]
 ```
 
 ### 3. Auto-Review
 
-| # | Check | Acao se falhar |
-|---|-------|---------------|
-| 1 | Todo FR verificado? | Verificar |
-| 2 | Toda task [X] tem evidencia? | Verificar |
-| 3 | Drift identificado? | Reportar |
-| 4 | Toda decisao tem >=2 alternativas documentadas? | Adicionar |
-| 5 | Trade-offs explicitos? | Adicionar |
-| 6 | Premissas marcadas [VALIDAR] ou com dado? | Marcar |
+| # | Check | Action on Failure |
+|---|-------|-------------------|
+| 1 | Every FR verified? | Verify it |
+| 2 | Every task marked [X] has evidence? | Verify it |
+| 3 | Drift identified? | Report it |
+| 4 | Every decision has >=2 documented alternatives? | Add them |
+| 5 | Explicit trade-offs? | Add them |
+| 6 | Assumptions marked [VALIDAR] or backed by data? | Mark them |
 
 ### 4. Gate: Auto-Escalate
 
-- Se score >= 80% E 0 blockers → **AUTO**: salvar report, reportar sucesso
-- Se score < 80% OU blockers encontrados → **ESCALATE**: apresentar report ao usuario com detalhes
+- If score >= 80% AND 0 blockers: **AUTO** — save the report, report success
+- If score < 80% OR blockers found: **ESCALATE** — present the report to the user with details
 
-### 5. Salvar + Relatorio
+### 5. Save + Report
 
 ```
-## Verificacao completa
+## Verification Complete
 
-**Arquivo:** platforms/<nome>/epics/<NNN>/verify-report.md
-**Linhas:** <N>
+**File:** platforms/<name>/epics/<NNN>/verify-report.md
+**Lines:** <N>
 **Score:** [N]%
 **Blockers:** <N>
 **Warnings:** <N>
 **Phantom completions:** <N>
 ```
 
-## Tratamento de Erros
+## Error Handling
 
-| Problema | Acao |
-|----------|------|
-| Sem spec.md | Sugerir `/speckit.specify` |
-| Sem tasks.md | Sugerir `/speckit.tasks` |
-| Sem codigo implementado | Score 0%, listar tudo como pendente |
+| Problem | Action |
+|---------|--------|
+| No spec.md | Suggest `/speckit.specify` |
+| No tasks.md | Suggest `/speckit.tasks` |
+| No code implemented | Score 0%, list everything as pending |

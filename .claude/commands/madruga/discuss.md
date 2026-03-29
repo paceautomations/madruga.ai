@@ -1,145 +1,145 @@
 ---
-description: Captura contexto e decisoes de implementacao antes do ciclo SpecKit para um epico
+description: Capture implementation context and decisions before the SpecKit cycle for an epic
 arguments:
   - name: platform
-    description: "Nome da plataforma/produto."
+    description: "Platform/product name."
     required: false
   - name: epic
-    description: "Numero do epico (ex: 001)."
+    description: "Epic number (e.g., 001)."
     required: false
-argument-hint: "[plataforma] [numero-epico]"
+argument-hint: "[platform] [epic-number]"
 handoffs:
-  - label: Iniciar Ciclo SpecKit
+  - label: Start SpecKit Cycle
     agent: speckit.specify
-    prompt: "Contexto capturado. Iniciar ciclo de implementacao com /speckit.specify."
+    prompt: "Context captured. Start implementation cycle with /speckit.specify."
 ---
 
-# Discuss — Contexto de Implementacao
+# Discuss — Implementation Context
 
-Captura decisoes e preferencias de implementacao antes de iniciar o ciclo SpecKit para um epico. Identifica "gray areas" e resolve ambiguidades.
+Capture implementation decisions and preferences before starting the SpecKit cycle for an epic. Identify gray areas and resolve ambiguities.
 
-## Regra Cardinal: ZERO Decisao sem Contexto Arquitetural
+## Cardinal Rule: ZERO Decisions Without Architectural Context
 
-Toda decisao de implementacao DEVE referenciar blueprint, ADRs ou domain model. Nenhuma escolha no vacuo.
+Every implementation decision MUST reference the blueprint, ADRs, or domain model. No choices made in a vacuum.
 
 ## Persona
 
-Staff Engineer. Conecta arquitetura com implementacao. Portugues BR.
+Staff Engineer. Bridge architecture and implementation. Write all generated artifact content in Brazilian Portuguese (PT-BR).
 
-## Uso
+## Usage
 
-- `/discuss fulano 001` — Discuss para epico 001 de "fulano"
-- `/discuss` — Pergunta plataforma e epico
+- `/discuss fulano 001` — Discuss epic 001 of "fulano"
+- `/discuss` — Prompt for platform and epic
 
-## Diretorio
+## Output Directory
 
-Salvar em `platforms/<nome>/epics/<N>/context.md`.
+Save to `platforms/<name>/epics/<N>/context.md`.
 
-## Instrucoes
+## Instructions
 
-### 0. Pre-requisitos
+### 0. Prerequisites
 
-Rodar `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <nome> --skill discuss` e parsear JSON.
-- Se `ready: false`: ERROR listando dependencias faltantes.
-- Se `ready: true`: ler artefatos em `available`.
-- Ler `.specify/memory/constitution.md`.
+Run `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <name> --skill discuss` and parse the JSON output.
+- If `ready: false`: ERROR listing missing dependencies.
+- If `ready: true`: read artifacts listed in `available`.
+- Read `.specify/memory/constitution.md`.
 
-Leitura adicional obrigatoria:
-- `epics/<NNN>/pitch.md` — escopo do epico
-- `engineering/blueprint.md` — stack e concerns
+Additional required reading:
+- `epics/<NNN>/pitch.md` — epic scope
+- `engineering/blueprint.md` — stack and concerns
 - `engineering/domain-model.md` — DDD
-- `engineering/containers.md` — arquitetura
-- `decisions/ADR-*.md` — decisoes relevantes
+- `engineering/containers.md` — architecture
+- `decisions/ADR-*.md` — relevant decisions
 
-### 1. Coletar Contexto + Questionar
+### 1. Collect Context + Ask Questions
 
-Por tipo de feature no epico:
+By feature type in the epic:
 
-| Tipo | Gray Areas Tipicas |
+| Type | Typical Gray Areas |
 |------|--------------------|
-| Visual/UI | Layout, responsive, design system, acessibilidade |
+| Visual/UI | Layout, responsive, design system, accessibility |
 | API | Error codes, pagination, rate limiting, versioning |
 | Data | Schema design, migration strategy, indexing, retention |
-| Integracao | Failure modes, retries, circuit breaker, timeouts |
+| Integration | Failure modes, retries, circuit breaker, timeouts |
 | Infra | Deploy strategy, scaling, monitoring thresholds |
 
-**Perguntas Estruturadas:**
+**Structured Questions:**
 
-| Categoria | Pergunta |
-|-----------|----------|
-| **Premissas** | "Assumo que [decisao do ADR-NNN] se aplica aqui. Correto?" |
-| **Trade-offs** | "Para [gray area]: [approach A simples] ou [approach B robusto]?" |
-| **Gaps** | "Blueprint nao especifica [detalhe X] para este epico. Definir?" |
-| **Provocacao** | "[Approach obvio] pode nao ser o melhor porque [razao]." |
+| Category | Question |
+|----------|----------|
+| **Assumptions** | "I assume [ADR-NNN decision] applies here. Correct?" |
+| **Trade-offs** | "For [gray area]: [simple approach A] or [robust approach B]?" |
+| **Gaps** | "Blueprint does not specify [detail X] for this epic. Define it?" |
+| **Challenge** | "[Obvious approach] may not be the best because [reason]." |
 
-Aguardar respostas ANTES de gerar.
+Wait for answers BEFORE generating.
 
-### 2. Gerar Context
+### 2. Generate Context
 
 ```markdown
 ---
 title: "Implementation Context — Epic <N>"
 updated: YYYY-MM-DD
 ---
-# Epic <N> — Contexto de Implementacao
+# Epic <N> — Implementation Context
 
-## Decisoes Capturadas
+## Captured Decisions
 
-| # | Area | Decisao | Referencia Arquitetural |
+| # | Area | Decision | Architectural Reference |
 |---|------|---------|----------------------|
-| 1 | [area] | [decisao] | ADR-NNN / blueprint / domain-model |
+| 1 | [area] | [decision] | ADR-NNN / blueprint / domain-model |
 
-## Gray Areas Resolvidas
+## Resolved Gray Areas
 
-[Para cada gray area: pergunta, resposta, rationale]
+[For each gray area: question, answer, rationale]
 
-## Constraints Aplicaveis
+## Applicable Constraints
 
-[Do blueprint/ADRs que impactam este epico]
+[From blueprint/ADRs that impact this epic]
 
-## Approach Sugerido
+## Suggested Approach
 
-[Resumo da abordagem de implementacao]
+[Summary of the implementation approach]
 ```
 
 ### 3. Auto-Review
 
-| # | Check | Acao se falhar |
-|---|-------|---------------|
-| 1 | Toda decisao referencia arquitetura? | Conectar |
-| 2 | Gray areas resolvidas? | Resolver ou marcar pendente |
-| 3 | Constraints do blueprint presentes? | Adicionar |
-| 4 | Toda decisao tem >=2 alternativas documentadas? | Adicionar |
-| 5 | Trade-offs explicitos (pros/cons)? | Adicionar pros/cons |
-| 6 | Premissas marcadas [VALIDAR] ou com dado? | Marcar [VALIDAR] |
+| # | Check | Action on Failure |
+|---|-------|-------------------|
+| 1 | Does every decision reference architecture? | Connect it |
+| 2 | Are gray areas resolved? | Resolve or mark as pending |
+| 3 | Are blueprint constraints present? | Add them |
+| 4 | Does every decision have >=2 documented alternatives? | Add |
+| 5 | Are trade-offs explicit (pros/cons)? | Add pros/cons |
+| 6 | Are assumptions marked [VALIDATE] or backed by data? | Mark [VALIDATE] |
 
 ### 4. Gate: Human
 
-Apresentar decisoes e gray areas resolvidas para validacao.
+Present captured decisions and resolved gray areas for validation.
 
-### 5. Salvar + Relatorio
+### 5. Save + Report
 
 ```
-## Contexto capturado
+## Context captured
 
-**Arquivo:** platforms/<nome>/epics/<NNN>/context.md
-**Linhas:** <N>
-**Decisoes:** <N>
-**Gray areas resolvidas:** <N>
+**File:** platforms/<name>/epics/<NNN>/context.md
+**Lines:** <N>
+**Decisions:** <N>
+**Resolved gray areas:** <N>
 
 ### Checks
-[x] Decisoes referenciam arquitetura
-[x] Gray areas resolvidas
-[x] Constraints do blueprint presentes
+[x] Decisions reference architecture
+[x] Gray areas resolved
+[x] Blueprint constraints present
 
-### Proximo passo
-`/speckit.specify` para iniciar ciclo de implementacao.
+### Next step
+`/speckit.specify` to start the implementation cycle.
 ```
 
-## Tratamento de Erros
+## Error Handling
 
-| Problema | Acao |
-|----------|------|
-| Epico nao existe | Sugerir `/epic-breakdown` primeiro |
-| Architecture docs incompletos | Listar gaps, sugerir completar pipeline |
-| Muitas gray areas (>10) | Priorizar as 5 mais criticas |
+| Issue | Action |
+|-------|--------|
+| Epic does not exist | Suggest running `/epic-breakdown` first |
+| Architecture docs incomplete | List gaps, suggest completing the pipeline |
+| Too many gray areas (>10) | Prioritize the 5 most critical |

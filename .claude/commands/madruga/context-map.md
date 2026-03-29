@@ -1,86 +1,86 @@
 ---
-description: Gera context map DDD com relacoes entre bounded contexts para qualquer plataforma
+description: Generate a DDD context map with relationships between bounded contexts for any platform
 arguments:
   - name: platform
-    description: "Nome da plataforma/produto. Se vazio, pergunta."
+    description: "Platform/product name. If empty, prompt for it."
     required: false
-argument-hint: "[nome-da-plataforma]"
+argument-hint: "[platform-name]"
 handoffs:
-  - label: Quebrar em Epicos (Shape Up)
+  - label: Break Down into Epics (Shape Up)
     agent: madruga/epic-breakdown
-    prompt: "Quebrar projeto em epicos Shape Up. ATENCAO: Gate 1-way-door — escopo dos epicos define toda a implementacao."
+    prompt: "Break project into Shape Up epics. WARNING: 1-way-door gate — epic scope defines the entire implementation."
 ---
 
-# Context Map — Mapa de Contextos DDD
+# Context Map — DDD Context Map
 
-Gera context map (~150 linhas) com relacoes entre bounded contexts usando padroes DDD (upstream/downstream, ACL, shared kernel, conformist, customer/supplier).
+Generate a context map (~150 lines) with relationships between bounded contexts using DDD patterns (upstream/downstream, ACL, shared kernel, conformist, customer/supplier).
 
-## Regra Cardinal: ZERO Relacao sem Padrao DDD
+## Cardinal Rule: ZERO Relationships Without a DDD Pattern
 
-Toda integracao entre bounded contexts DEVE ter padrao DDD explicito nomeado. Nenhuma relacao vaga tipo "se comunicam".
+Every integration between bounded contexts MUST have an explicitly named DDD pattern. No vague relationships like "they communicate."
 
-**NUNCA:**
-- Definir relacao sem nomear o padrao DDD
-- Usar "shared kernel" como padrao para tudo (e o mais acoplado)
-- Ignorar direcao upstream/downstream
-- Criar relacao sem justificativa de negocio
+**NEVER:**
+- Define a relationship without naming the DDD pattern
+- Use "shared kernel" as the default pattern for everything (it creates the strongest coupling)
+- Ignore upstream/downstream direction
+- Create a relationship without business justification
 
 ## Persona
 
-Staff Engineer / DDD Expert. Foco em desacoplamento e boundaries claras. Portugues BR.
+Staff Engineer / DDD Expert. Focus on decoupling and clear boundaries. Write all generated artifact content in Brazilian Portuguese (PT-BR).
 
-## Uso
+## Usage
 
-- `/context-map fulano` — Gera context map para "fulano"
-- `/context-map` — Pergunta nome
+- `/context-map fulano` — Generate context map for "fulano"
+- `/context-map` — Prompt for name
 
-## Diretorio
+## Output Directory
 
-Salvar em `platforms/<nome>/engineering/context-map.md`.
+Save to `platforms/<name>/engineering/context-map.md`.
 
-## Instrucoes
+## Instructions
 
-### 0. Pre-requisitos
+### 0. Prerequisites
 
-Rodar `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <nome> --skill context-map` e parsear JSON.
-- Se `ready: false`: ERROR listando dependencias faltantes.
-- Se `ready: true`: ler artefatos em `available`.
-- Ler `.specify/memory/constitution.md`.
+Run `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <name> --skill context-map` and parse the JSON output.
+- If `ready: false`: ERROR listing missing dependencies.
+- If `ready: true`: read artifacts listed in `available`.
+- Read `.specify/memory/constitution.md`.
 
-### 1. Coletar Contexto + Questionar
+### 1. Collect Context + Ask Questions
 
-**Leitura obrigatoria:**
-- `engineering/domain-model.md` — bounded contexts, agregados
-- `engineering/containers.md` — como contexts mapeiam para containers
-- `model/ddd-contexts.likec4` — naming de contexts para consistencia
+**Required reading:**
+- `engineering/domain-model.md` — bounded contexts, aggregates
+- `engineering/containers.md` — how contexts map to containers
+- `model/ddd-contexts.likec4` — context naming for consistency
 
-**Perguntas Estruturadas:**
+**Structured Questions:**
 
-| Categoria | Pergunta |
-|-----------|----------|
-| **Premissas** | "Assumo que [contexto A] e upstream de [contexto B]. Correto?" |
-| **Trade-offs** | "ACL (desacoplado, mais codigo) ou Conformist (acoplado, menos codigo) para [relacao]?" |
-| **Gaps** | "Relacao entre [X] e [Y] nao esta clara. Como se comunicam?" |
-| **Provocacao** | "Shared Kernel entre [A] e [B] cria acoplamento forte. Vale o trade-off?" |
+| Category | Question |
+|----------|----------|
+| **Assumptions** | "I assume [context A] is upstream of [context B]. Correct?" |
+| **Trade-offs** | "ACL (decoupled, more code) or Conformist (coupled, less code) for [relationship]?" |
+| **Gaps** | "The relationship between [X] and [Y] is unclear. How do they communicate?" |
+| **Challenge** | "Shared Kernel between [A] and [B] creates strong coupling. Is the trade-off worth it?" |
 
-Aguardar respostas ANTES de gerar.
+Wait for answers BEFORE generating.
 
-### 2. Gerar Context Map
+### 2. Generate Context Map
 
-Verificar se template existe em `.specify/templates/platform/template/engineering/context-map.md.jinja`.
+Check whether a template exists at `.specify/templates/platform/template/engineering/context-map.md.jinja`.
 
 ```markdown
 ---
 title: "Context Map"
 updated: YYYY-MM-DD
 ---
-# <Nome> — Context Map
+# <Name> — Context Map
 
-> Relacoes entre bounded contexts. Padroes DDD explicitos.
+> Relationships between bounded contexts. Explicit DDD patterns.
 
 ---
 
-## Diagrama de Contextos
+## Context Diagram
 
 ```mermaid
 graph TD
@@ -96,96 +96,96 @@ graph TD
 
 ---
 
-## Tabela de Relacoes
+## Relationship Table
 
-| Upstream | Downstream | Padrao | Direcao | Justificativa |
-|----------|-----------|--------|---------|--------------|
-| [Context A] | [Context B] | ACL | A → B | [por que ACL e nao conformist] |
-| [Context C] | [Context D] | Customer/Supplier | C → D | [justificativa] |
+| Upstream | Downstream | Pattern | Direction | Justification |
+|----------|-----------|---------|-----------|--------------|
+| [Context A] | [Context B] | ACL | A -> B | [why ACL and not conformist] |
+| [Context C] | [Context D] | Customer/Supplier | C -> D | [justification] |
 | ... | ... | ... | ... | ... |
 
 ---
 
-## Padroes Utilizados
+## Patterns Used
 
-| Padrao | Descricao | Quando Usar | Usado Em |
-|--------|-----------|------------|----------|
-| **Shared Kernel** | Codigo compartilhado entre contexts | Quando 2 contexts evoluem juntos | [se aplicavel] |
-| **ACL (Anti-Corruption Layer)** | Traduz modelo externo para interno | Quando upstream tem modelo diferente | [relacoes] |
-| **Conformist** | Downstream adota modelo do upstream | Quando upstream e estavel e confiavel | [relacoes] |
-| **Customer/Supplier** | Upstream se adapta ao downstream | Quando downstream tem poder de negociacao | [relacoes] |
-| **Open Host Service** | API publica padronizada | Quando muitos consumers | [relacoes] |
-| **Published Language** | Linguagem padrao de integracao | Quando precisa de formato neutro | [relacoes] |
+| Pattern | Description | When to Use | Used In |
+|---------|------------|------------|---------|
+| **Shared Kernel** | Shared code between contexts | When 2 contexts evolve together | [if applicable] |
+| **ACL (Anti-Corruption Layer)** | Translates external model to internal | When upstream has a different model | [relationships] |
+| **Conformist** | Downstream adopts upstream's model | When upstream is stable and reliable | [relationships] |
+| **Customer/Supplier** | Upstream adapts to downstream | When downstream has negotiation power | [relationships] |
+| **Open Host Service** | Standardized public API | When there are many consumers | [relationships] |
+| **Published Language** | Standard integration language | When a neutral format is needed | [relationships] |
 
 ---
 
-## Anti-Padroes a Evitar
+## Anti-Patterns to Avoid
 
-| Anti-Padrao | Risco | Como Detectar |
-|-------------|-------|--------------|
-| Big Ball of Mud | Sem boundaries claras | Todos contexts se comunicam com todos |
-| Shared Kernel excessivo | Acoplamento forte | >2 contexts compartilhando kernel |
-| God Context | 1 context faz tudo | Context com >5 agregados |
+| Anti-Pattern | Risk | How to Detect |
+|-------------|------|--------------|
+| Big Ball of Mud | No clear boundaries | All contexts communicate with all |
+| Excessive Shared Kernel | Strong coupling | >2 contexts sharing a kernel |
+| God Context | 1 context does everything | Context with >5 aggregates |
 ```
 
 ### 3. Auto-Review
 
-| # | Check | Acao se falhar |
-|---|-------|---------------|
-| 1 | Toda relacao tem padrao DDD nomeado? | Nomear |
-| 2 | Direcao upstream/downstream clara? | Definir |
-| 3 | Nenhuma relacao sem justificativa? | Justificar |
-| 4 | Padrao apropriado (nao "shared kernel para tudo")? | Reavaliar |
-| 5 | Diagrama Mermaid renderiza? | Corrigir |
-| 6 | Max 150 linhas? | Condensar |
-| 7 | Todos os contexts do domain-model presentes? | Adicionar faltantes |
-| 8 | Toda decisao tem >=2 alternativas documentadas? | Adicionar |
-| 9 | Trade-offs explicitos? | Adicionar pros/cons |
-| 10 | Premissas marcadas [VALIDAR] ou com dado? | Marcar [VALIDAR] |
+| # | Check | Action on Failure |
+|---|-------|-------------------|
+| 1 | Does every relationship have a named DDD pattern? | Name it |
+| 2 | Is the upstream/downstream direction clear? | Define it |
+| 3 | Does every relationship have a justification? | Justify |
+| 4 | Are patterns appropriate (not "shared kernel for everything")? | Re-evaluate |
+| 5 | Does the Mermaid diagram render? | Fix |
+| 6 | Max 150 lines? | Condense |
+| 7 | Are all contexts from the domain model present? | Add missing ones |
+| 8 | Does every decision have >=2 documented alternatives? | Add |
+| 9 | Are trade-offs explicit? | Add pros/cons |
+| 10 | Are assumptions marked [VALIDATE] or backed by data? | Mark [VALIDATE] |
 
-### 4. Gate de Aprovacao: Human
+### 4. Approval Gate: Human
 
-Apresentar ao usuario:
+Present to user:
 
-**Resumo do Context Map:**
+**Context Map Summary:**
 - Bounded Contexts: [N]
-- Relacoes: [N]
-- Padroes usados: [lista]
+- Relationships: [N]
+- Patterns used: [list]
 
-**Perguntas de validacao:**
-1. Direcoes upstream/downstream fazem sentido?
-2. Padroes escolhidos sao os mais adequados?
-3. Alguma relacao esta faltando?
-4. Shared kernel (se usado) e realmente necessario?
+**Validation Questions:**
+1. Do the upstream/downstream directions make sense?
+2. Are the chosen patterns the most appropriate?
+3. Is any relationship missing?
+4. Is shared kernel (if used) truly necessary?
 
-Aguardar aprovacao antes de salvar.
+Wait for approval before saving.
 
-### 5. Salvar + Relatorio
+### 5. Save + Report
 
 ```
-## Context Map gerado
+## Context Map generated
 
-**Arquivo:** platforms/<nome>/engineering/context-map.md
-**Linhas:** <N>
-**Relacoes:** <N>
-**Padroes usados:** [lista]
+**File:** platforms/<name>/engineering/context-map.md
+**Lines:** <N>
+**Relationships:** <N>
+**Patterns used:** [list]
 
 ### Checks
-[x] Toda relacao com padrao DDD
-[x] Direcoes upstream/downstream claras
-[x] Justificativas presentes
-[x] Todos contexts cobertos
+[x] Every relationship has a DDD pattern
+[x] Upstream/downstream directions clear
+[x] Justifications present
+[x] All contexts covered
 
-### Proximo Passo
-`/epic-breakdown <nome>` — Quebrar em epicos Shape Up.
-ATENCAO: Gate 1-way-door — escopo dos epicos define toda implementacao.
+### Next Step
+`/epic-breakdown <name>` — Break into Shape Up epics.
+WARNING: 1-way-door gate — epic scope defines the entire implementation.
 ```
 
-## Tratamento de Erros
+## Error Handling
 
-| Problema | Acao |
-|----------|------|
-| Apenas 1 bounded context | Context map trivial — 0 relacoes. Sugerir se precisa de mais contexts |
-| Relacoes circulares | Identificar e resolver — indica boundary errada |
-| Contexto sem relacoes (isolado) | Questionar: e realmente independente? |
-| Conflito domain-model vs containers | Alinhar — contexts devem mapear para containers |
+| Issue | Action |
+|-------|--------|
+| Only 1 bounded context | Trivial context map — 0 relationships. Suggest whether more contexts are needed |
+| Circular relationships | Identify and resolve — indicates wrong boundary |
+| Isolated context (no relationships) | Question: is it truly independent? |
+| Conflict between domain-model and containers | Align — contexts should map to containers |

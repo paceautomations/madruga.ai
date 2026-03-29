@@ -1,109 +1,109 @@
 ---
-description: Cria nova plataforma a partir do template Copier
+description: Create a new platform from the Copier template
 arguments:
   - name: platform
-    description: "Nome da plataforma em kebab-case (ex: meu-saas, energy-platform)"
+    description: "Platform name in kebab-case (e.g., my-saas, energy-platform)"
     required: false
-argument-hint: "[nome-da-plataforma]"
+argument-hint: "[platform-name]"
 handoffs:
-  - label: Gerar Vision One-Pager
+  - label: Generate Vision One-Pager
     agent: madruga/vision-one-pager
-    prompt: Gerar business vision para a nova plataforma
+    prompt: Generate business vision for the new platform
 ---
 
 # Platform New — Scaffolding
 
-Cria uma nova plataforma no repositorio madruga.ai usando o script `platform.py new`, que automaticamente:
-1. Scaffolda via Copier (estrutura completa)
-2. Injeta o import no LikeC4Diagram.tsx (diagramas funcionam automaticamente)
-3. Atualiza symlinks do portal (conteudo aparece no Starlight)
+Create a new platform in the madruga.ai repository using the `platform.py new` script, which automatically:
+1. Scaffolds via Copier (complete structure)
+2. Injects the import into LikeC4Diagram.tsx (diagrams work automatically)
+3. Updates portal symlinks (content appears in Starlight)
 
-Apos scaffold, seguir o pipeline DAG com `/vision-one-pager <nome>`.
+After scaffolding, follow the pipeline DAG with `/vision-one-pager <name>`.
 
-## Uso
+## Usage
 
-- `/platform-new meu-saas` — Cria plataforma "meu-saas"
-- `/platform-new` — Pergunta o nome e coleta contexto
+- `/platform-new my-saas` — Create platform "my-saas"
+- `/platform-new` — Prompt for name and collect context
 
-## Pre-requisitos
+## Prerequisites
 
-- `copier>=9.4.0` instalado (`pip install copier`)
+- `copier>=9.4.0` installed (`pip install copier`)
 - `likec4` CLI (`npm i -g likec4`)
 
-## Instrucoes
+## Instructions
 
-### 1. Coletar Nome e Contexto
+### 1. Collect Name and Context
 
-**Se `$ARGUMENTS.platform` existe:** usar como nome.
-**Se vazio:** perguntar o nome da plataforma (kebab-case).
+**If `$ARGUMENTS.platform` exists:** use as name.
+**If empty:** prompt for the platform name (kebab-case).
 
-Validar: `^[a-z][a-z0-9-]*$`. Se invalido, pedir novamente.
+Validate: `^[a-z][a-z0-9-]*$`. If invalid, prompt again.
 
-Coletar tambem (para passar ao copier via `-d`):
-- **Titulo** (ex: "Meu SaaS — Gestao de Pedidos")
-- **Descricao** (1 linha)
-- **Lifecycle**: design, development ou production
-- **Business flow**: incluir view de fluxo de negocio? (default: sim)
+Also collect (to pass to copier via `-d`):
+- **Title** (e.g., "My SaaS — Order Management")
+- **Description** (1 line)
+- **Lifecycle**: design, development, or production
+- **Business flow**: include business flow view? (default: yes)
 
-### 2. Criar Plataforma
+### 2. Create Platform
 
-Rodar o script que faz TUDO automaticamente:
+Run the script that handles EVERYTHING automatically:
 
 ```bash
-python3 .specify/scripts/platform.py new <nome>
+python3 .specify/scripts/platform.py new <name>
 ```
 
-**Em contexto nao-interativo** (quando o copier nao consegue fazer perguntas), usar:
+**In non-interactive context** (when copier cannot ask questions), use:
 
 ```bash
-copier copy .specify/templates/platform/ platforms/<nome>/ --trust --defaults \
-  -d platform_name=<nome> \
-  -d "platform_title=<titulo>" \
-  -d "platform_description=<descricao>" \
+copier copy .specify/templates/platform/ platforms/<name>/ --trust --defaults \
+  -d platform_name=<name> \
+  -d "platform_title=<title>" \
+  -d "platform_description=<description>" \
   -d lifecycle=<lifecycle> \
   -d include_business_flow=true \
   -d register_portal=false
 ```
 
-E depois registrar no portal (inject LikeC4 + symlinks):
+Then register in the portal (inject LikeC4 + symlinks):
 ```bash
-python3 .specify/scripts/platform.py register <nome>
+python3 .specify/scripts/platform.py register <name>
 ```
 
-### 3. Verificar
+### 3. Verify
 
 ```bash
-python3 .specify/scripts/platform.py lint <nome>
+python3 .specify/scripts/platform.py lint <name>
 python3 .specify/scripts/platform.py list
 ```
 
-### 4. Proximo Passo
+### 4. Next Step
 
-Informar ao usuario que a plataforma foi criada e o proximo passo e iniciar o pipeline de documentacao:
-
-```
-Plataforma '<nome>' criada com sucesso!
-
-Proximo passo: `/vision-one-pager <nome>` para iniciar o pipeline de documentacao.
-Use `/pipeline-status <nome>` para ver o status completo do pipeline.
-```
-
-### 5. Apresentar Resultado
+Inform the user that the platform was created and the next step is to start the documentation pipeline:
 
 ```
-## Plataforma Criada
+Platform '<name>' created successfully!
 
-**Nome:** <nome>
-**Diretorio:** platforms/<nome>/
+Next step: `/vision-one-pager <name>` to start the documentation pipeline.
+Use `/pipeline-status <name>` to see the full pipeline status.
+```
 
-### O que foi feito automaticamente
-- [x] Estrutura scaffoldada via Copier
-- [x] Import LikeC4 injetado em LikeC4Diagram.tsx
-- [x] Symlink criado no portal
-- [x] .copier-answers.yml gerado (habilita `copier update` futuro)
+### 5. Present Result
 
-### Estrutura
-platforms/<nome>/
+```
+## Platform Created
+
+**Name:** <name>
+**Directory:** platforms/<name>/
+
+### What was done automatically
+- [x] Structure scaffolded via Copier
+- [x] LikeC4 import injected into LikeC4Diagram.tsx
+- [x] Portal symlink created
+- [x] .copier-answers.yml generated (enables future `copier update`)
+
+### Structure
+platforms/<name>/
 ├── platform.yaml
 ├── .copier-answers.yml
 ├── business/vision.md, solution-overview.md
@@ -111,18 +111,18 @@ platforms/<nome>/
 ├── decisions/, epics/, research/
 └── model/ (spec.likec4, likec4.config.json, views.likec4, ...)
 
-### Proximo passo
-- `/vision-one-pager <nome>` — iniciar pipeline de documentacao (recomendado)
-- `/pipeline-status <nome>` — ver status do pipeline DAG
-- `cd portal && npm run dev` — ver no portal
+### Next step
+- `/vision-one-pager <name>` — start documentation pipeline (recommended)
+- `/pipeline-status <name>` — see pipeline DAG status
+- `cd portal && npm run dev` — view in portal
 ```
 
-## Tratamento de Erros
+## Error Handling
 
-| Problema | Acao |
-|----------|------|
-| copier nao instalado | `pip install copier` |
-| Plataforma ja existe | Perguntar: sobrescrever ou escolher outro nome |
-| Scaffold OK mas inject/symlinks falham | Rodar `python3 .specify/scripts/platform.py register <nome>` (faz inject + symlinks + validacao) |
-| Portal nao mostra a plataforma | Rodar `python3 .specify/scripts/platform.py register <nome>` e reiniciar `npm run dev` |
-| likec4 build falha no modelo vazio | Normal — o scaffold gera um `dynamic view businessFlow` vazio que da warning. Preencher o conteudo resolve. |
+| Issue | Action |
+|-------|--------|
+| copier not installed | `pip install copier` |
+| Platform already exists | Ask: overwrite or choose another name |
+| Scaffold OK but inject/symlinks fail | Run `python3 .specify/scripts/platform.py register <name>` (handles inject + symlinks + validation) |
+| Portal does not show the platform | Run `python3 .specify/scripts/platform.py register <name>` and restart `npm run dev` |
+| likec4 build fails on empty model | Normal — scaffold generates an empty `dynamic view businessFlow` that triggers a warning. Filling in the content resolves it. |

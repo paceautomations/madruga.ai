@@ -1,94 +1,94 @@
 ---
-description: Gera modelo de dominio DDD com bounded contexts, agregados, invariantes e diagramas LikeC4 para qualquer plataforma
+description: Generate a DDD domain model with bounded contexts, aggregates, invariants, and LikeC4 diagrams for any platform
 arguments:
   - name: platform
-    description: "Nome da plataforma/produto. Se vazio, pergunta."
+    description: "Platform/product name. If empty, prompt for it."
     required: false
-argument-hint: "[nome-da-plataforma]"
+argument-hint: "[platform-name]"
 handoffs:
-  - label: Definir Containers
+  - label: Define Containers
     agent: madruga/containers
-    prompt: "Definir arquitetura de containers a partir do modelo de dominio e blueprint validados."
+    prompt: "Define container architecture from the validated domain model and blueprint."
 ---
 
-# Domain Model — Modelo de Dominio DDD
+# Domain Model — DDD Domain Model
 
-Gera modelo de dominio completo com bounded contexts, agregados, entidades, value objects, invariantes, diagramas Mermaid (class diagrams), schemas SQL e arquivo LikeC4 DSL para diagramas interativos no portal.
+Generate a complete domain model with bounded contexts, aggregates, entities, value objects, invariants, Mermaid class diagrams, draft SQL schemas, and a LikeC4 DSL file for interactive portal diagrams.
 
-## Regra Cardinal: ZERO Bounded Context Sem Justificativa
+## Cardinal Rule: ZERO Bounded Contexts Without Justification
 
-Cada bounded context DEVE ter uma razao clara e documentada de separacao. Se dois contextos nao tem fronteira de negocio distinta, linguagem ubiqua diferente ou ciclo de vida independente — eles sao o MESMO contexto. Menos contextos bem justificados > muitos contextos por vaidade arquitetural.
+Every bounded context MUST have a clear, documented reason for separation. If two contexts lack a distinct business boundary, different ubiquitous language, or independent lifecycle — they are the SAME context. Fewer well-justified contexts > many contexts for architectural vanity.
 
-**NUNCA incluir no output:**
-- Bounded context sem justificativa explicita de separacao
-- Modelos anemicos (entidades com apenas getters/setters sem comportamento)
-- Agregados sem invariantes (se nao tem regra de negocio, nao e agregado)
-- Value objects sem imutabilidade ou validacao
-- Contextos duplicados disfarados com nomes diferentes
+**NEVER include in output:**
+- Bounded context without explicit separation justification
+- Anemic models (entities with only getters/setters and no behavior)
+- Aggregates without invariants (if there is no business rule, it is not an aggregate)
+- Value objects without immutability or validation
+- Duplicate contexts disguised with different names
 
-**Na duvida:** fundir contextos. Separar e facil depois; juntar contextos separados prematuramente e caro.
+**When in doubt:** merge contexts. Splitting is easy later; merging prematurely separated contexts is expensive.
 
 ## Persona
 
-Staff Engineer / DDD Expert com 15+ anos de experiencia. Foco em modelagem tatica e estrategica. Pragmatico — DDD e ferramenta, nao religiao. Desafia agregados grandes demais ("isso e God Object?") e pequenos demais ("isso e CRUD disfarado de DDD?"). Questiona toda fronteira de contexto. Portugues BR para prosa, ingles para codigo e schemas.
+Staff Engineer / DDD Expert with 15+ years of experience. Focus on tactical and strategic modeling. Pragmatic — DDD is a tool, not a religion. Challenge overly large aggregates ("Is this a God Object?") and overly small ones ("Is this CRUD disguised as DDD?"). Question every context boundary. Write all generated prose in Brazilian Portuguese (PT-BR); use English for code and schemas.
 
-## Uso
+## Usage
 
-- `/domain-model fulano` — Gera modelo de dominio para plataforma "fulano"
-- `/domain-model` — Pergunta nome da plataforma e coleta contexto
+- `/domain-model fulano` — Generate domain model for platform "fulano"
+- `/domain-model` — Prompt for platform name and collect context
 
-## Diretorio
+## Output Directory
 
-Salvar em:
-- `platforms/<nome>/engineering/domain-model.md` — Documento principal
-- `platforms/<nome>/model/ddd-contexts.likec4` — LikeC4 DSL para portal interativo
+Save to:
+- `platforms/<name>/engineering/domain-model.md` — Main document
+- `platforms/<name>/model/ddd-contexts.likec4` — LikeC4 DSL for interactive portal
 
-## Instrucoes
+## Instructions
 
-### 0. Pre-requisitos
+### 0. Prerequisites
 
-Rodar `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <nome> --skill domain-model` e parsear JSON.
-- Se `ready: false`: ERROR listando dependencias faltantes e qual skill gera cada uma.
-- Se `ready: true`: ler artefatos listados em `available` como contexto adicional.
-- Ler `.specify/memory/constitution.md` para validar output contra principios.
+Run `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <name> --skill domain-model` and parse the JSON output.
+- If `ready: false`: ERROR listing missing dependencies and which skill generates each one.
+- If `ready: true`: read artifacts listed in `available` as additional context.
+- Read `.specify/memory/constitution.md` to validate output against principles.
 
-### 1. Coletar Contexto
+### 1. Collect Context
 
-**Se `$ARGUMENTS.platform` existe:** usar como nome da plataforma.
-**Se vazio:** perguntar nome.
+**If `$ARGUMENTS.platform` exists:** use as platform name.
+**If empty:** prompt for name.
 
-Verificar se ja existem arquivos em:
-- `platforms/<nome>/engineering/domain-model.md` — se existir, ler como base
-- `platforms/<nome>/model/ddd-contexts.likec4` — se existir, ler como base
+Check whether these files already exist:
+- `platforms/<name>/engineering/domain-model.md` — if present, read as baseline
+- `platforms/<name>/model/ddd-contexts.likec4` — if present, read as baseline
 
-Ler obrigatoriamente:
-- `platforms/<nome>/engineering/blueprint.md` — extrair componentes, responsabilidades, decisoes tecnicas
-- `platforms/<nome>/business/process.md` — extrair fluxos de negocio, atores, acoes, excecoes
+Required reading:
+- `platforms/<name>/engineering/blueprint.md` — extract components, responsibilities, technical decisions
+- `platforms/<name>/business/process.md` — extract business flows, actors, actions, exceptions
 
-Complementar com leitura de artefatos disponiveis (se existirem):
-- `platforms/<nome>/business/vision.md` — personas e segmentos
-- `platforms/<nome>/business/solution-overview.md` — features e jornadas
-- `platforms/<nome>/decisions/ADR-*.md` — decisoes que impactam o dominio
-- `platforms/<nome>/research/tech-alternatives.md` — restricoes tecnologicas
+Supplementary reading (if available):
+- `platforms/<name>/business/vision.md` — personas and segments
+- `platforms/<name>/business/solution-overview.md` — features and journeys
+- `platforms/<name>/decisions/ADR-*.md` — decisions impacting the domain
+- `platforms/<name>/research/tech-alternatives.md` — technology constraints
 
-Identificar bounded contexts candidatos a partir dos fluxos de negocio e apresentar perguntas estruturadas (perguntar tudo de uma vez):
+Identify candidate bounded contexts from business flows and present structured questions (ask all at once):
 
-| Categoria | Pergunta | Exemplo |
-|-----------|----------|---------|
-| **Premissas** | "No blueprint, [Componente X] gerencia [Responsabilidade Y]. Assumo que isso forma o bounded context [Z]. Correto?" | "Assumo que 'Gestao de Agentes' e 'Gestao de Conversas' sao contextos separados porque tem ciclos de vida diferentes. Correto?" |
-| **Premissas** | "O fluxo [F] cruza [Contexto A] e [Contexto B]. Assumo que a fronteira e em [ponto]. Correto?" | "Assumo que a fronteira entre Atendimento e Cobranca e quando o cliente pede para falar com humano sobre pagamento." |
-| **Trade-offs** | "Agregado [A] pode ser grande (inclui [X, Y, Z]) ou dividido (agregados separados para cada). Qual tamanho?" | "Conversa pode incluir Mensagens inline ou Mensagens como agregado separado. Inline e simples mas limita queries." |
-| **Trade-offs** | "[Contexto A] e [Contexto B] podem ser Shared Kernel ou contextos separados com ACL. Qual abordagem?" | "Usuarios podem ser Shared Kernel ou cada contexto ter seu proprio User projection." |
-| **Gaps** | "Nao encontrei regras de negocio para [situacao X]. Voce define ou eu proponho?" | "Nao encontrei o que acontece quando uma conversa fica inativa por 24h. Timeout? Arquivo? Notifica?" |
-| **Provocacao** | "[N] bounded contexts parece muito/pouco para esse dominio. [Alternativa] pode ser melhor porque [razao]." | "5 bounded contexts para uma plataforma de chat parece over-engineering. 3 contextos com modulos internos pode ser mais pragmatico." |
+| Category | Question | Example |
+|----------|----------|---------|
+| **Assumptions** | "In the blueprint, [Component X] manages [Responsibility Y]. I assume this forms bounded context [Z]. Correct?" | "I assume 'Agent Management' and 'Conversation Management' are separate contexts because they have different lifecycles. Correct?" |
+| **Assumptions** | "Flow [F] crosses [Context A] and [Context B]. I assume the boundary is at [point]. Correct?" | "I assume the boundary between Support and Billing is when the customer asks to speak with a human about payment." |
+| **Trade-offs** | "Aggregate [A] can be large (includes [X, Y, Z]) or split (separate aggregates for each). What size?" | "Conversation can include Messages inline or Messages as a separate aggregate. Inline is simpler but limits queries." |
+| **Trade-offs** | "[Context A] and [Context B] can be Shared Kernel or separate contexts with ACL. Which approach?" | "Users can be Shared Kernel or each context can have its own User projection." |
+| **Gaps** | "I found no business rules for [situation X]. Do you define them or should I propose?" | "I found no rule for what happens when a conversation is inactive for 24h. Timeout? Archive? Notify?" |
+| **Challenge** | "[N] bounded contexts seems like too many/few for this domain. [Alternative] may be better because [reason]." | "5 bounded contexts for a chat platform seems like over-engineering. 3 contexts with internal modules may be more pragmatic." |
 
-Pesquisar padroes DDD recentes via Context7/web quando relevante (ex: aggregate sizing strategies, context mapping patterns 2025-2026).
+Research recent DDD patterns via Context7/web when relevant (e.g., aggregate sizing strategies, context mapping patterns 2025-2026).
 
-Apresentar mapa de contextos candidato e pedir validacao. Aguardar respostas ANTES de gerar.
+Present the candidate context map and request validation. Wait for answers BEFORE generating.
 
-### 2. Gerar Artefatos
+### 2. Generate Artifacts
 
-Gerar DOIS arquivos:
+Generate TWO files:
 
 #### 2a. engineering/domain-model.md
 
@@ -97,115 +97,115 @@ Gerar DOIS arquivos:
 title: "Domain Model"
 updated: YYYY-MM-DD
 ---
-# <Nome> — Modelo de Dominio
+# <Name> — Domain Model
 
-> Modelo de dominio DDD com bounded contexts, agregados, entidades, value objects e invariantes. Ultima atualizacao: YYYY-MM-DD.
+> DDD domain model with bounded contexts, aggregates, entities, value objects, and invariants. Last updated: YYYY-MM-DD.
 
 ---
 
-## Mapa de Contextos
+## Context Map
 
 ```mermaid
 graph LR
-    subgraph "<Nome da Plataforma>"
+    subgraph "<Platform Name>"
         A["Context A"] -->|"upstream/downstream"| B["Context B"]
         A -->|"shared kernel"| C["Context C"]
     end
 ```
 
-| # | Bounded Context | Proposito | Justificativa de Separacao | Agregados Principais |
-|---|----------------|-----------|---------------------------|---------------------|
-| 1 | **[Context A]** | [1 frase] | [por que e separado] | [lista] |
-| 2 | **[Context B]** | [1 frase] | [por que e separado] | [lista] |
+| # | Bounded Context | Purpose | Separation Justification | Key Aggregates |
+|---|----------------|---------|-------------------------|----------------|
+| 1 | **[Context A]** | [1 sentence] | [why it is separate] | [list] |
+| 2 | **[Context B]** | [1 sentence] | [why it is separate] | [list] |
 
 ---
 
-## Bounded Context 1: [Nome]
+## Bounded Context 1: [Name]
 
 ### Canvas
 
-| Aspecto | Descricao |
-|---------|-----------|
-| **Nome** | [nome do contexto] |
-| **Proposito** | [o que esse contexto resolve] |
-| **Linguagem Ubiqua** | [termos-chave deste contexto] |
-| **Agregados** | [lista de agregados] |
-| **Relacao com outros contextos** | [upstream/downstream/shared kernel/ACL] |
+| Aspect | Description |
+|--------|------------|
+| **Name** | [context name] |
+| **Purpose** | [what this context solves] |
+| **Ubiquitous Language** | [key terms in this context] |
+| **Aggregates** | [list of aggregates] |
+| **Relationship with other contexts** | [upstream/downstream/shared kernel/ACL] |
 
-### Agregados
+### Aggregates
 
-#### Agregado: [Nome]
+#### Aggregate: [Name]
 
-**Root Entity:** [NomeEntity]
+**Root Entity:** [EntityName]
 
 ```mermaid
 classDiagram
-    class NomeEntity {
+    class EntityName {
         +UUID id
-        +String campo1
+        +String field1
         +StatusEnum status
-        +criarAlgo() Result
-        +validarRegra() bool
+        +createSomething() Result
+        +validateRule() bool
     }
     class ValueObject1 {
-        +String valor
-        +validar() bool
+        +String value
+        +validate() bool
     }
-    NomeEntity --> ValueObject1
+    EntityName --> ValueObject1
 ```
 
-**Entidades:**
-- `NomeEntity` — [descricao e responsabilidade]
+**Entities:**
+- `EntityName` — [description and responsibility]
 
 **Value Objects:**
-- `ValueObject1` — [descricao, regra de validacao, por que e VO e nao entidade]
+- `ValueObject1` — [description, validation rule, why it is a VO and not an entity]
 
-**Invariantes:**
-| # | Invariante | Descricao | Quando verificar |
-|---|-----------|-----------|-----------------|
-| 1 | [nome curto] | [regra de negocio que DEVE ser sempre verdadeira] | [criacao/atualizacao/ambos] |
+**Invariants:**
+| # | Invariant | Description | When to Check |
+|---|-----------|------------|--------------|
+| 1 | [short name] | [business rule that MUST always be true] | [creation/update/both] |
 
-### Schema SQL (Draft)
+### SQL Schema (Draft)
 
 ```sql
--- Context: [Nome do Contexto]
--- Aggregate: [Nome do Agregado]
+-- Context: [Context Name]
+-- Aggregate: [Aggregate Name]
 
-CREATE TABLE nome_tabela (
+CREATE TABLE table_name (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    campo1 VARCHAR(255) NOT NULL,
-    status VARCHAR(50) NOT NULL DEFAULT 'ativo',
+    field1 VARCHAR(255) NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'active',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    -- FK para aggregate root se aplicavel
-    CONSTRAINT chk_status CHECK (status IN ('ativo', 'inativo'))
+    -- FK to aggregate root if applicable
+    CONSTRAINT chk_status CHECK (status IN ('active', 'inactive'))
 );
 
--- Indices para queries frequentes
-CREATE INDEX idx_nome_campo ON nome_tabela(campo1);
+-- Indexes for frequent queries
+CREATE INDEX idx_name_field ON table_name(field1);
 ```
 
 ---
 
-## Bounded Context 2: [Nome]
-[mesmo padrao]
+## Bounded Context 2: [Name]
+[same pattern]
 
 ---
 
-## Premissas e Decisoes
+## Assumptions and Decisions
 
-| # | Decisao | Alternativas Consideradas | Justificativa |
-|---|---------|--------------------------|---------------|
-| 1 | [decisao tomada] | [alt A] vs [alt B] | [por que essa] |
+| # | Decision | Alternatives Considered | Justification |
+|---|---------|------------------------|---------------|
+| 1 | [decision taken] | [alt A] vs [alt B] | [why this one] |
 
-| # | Premissa | Status |
-|---|----------|--------|
-| 1 | [premissa que afeta o modelo] | [VALIDAR] ou Confirmada |
+| # | Assumption | Status |
+|---|-----------|--------|
+| 1 | [assumption affecting the model] | [VALIDATE] or Confirmed |
 ````
 
 #### 2b. model/ddd-contexts.likec4
 
-Gerar arquivo LikeC4 DSL definindo elementos para cada bounded context com relacionamentos:
+Generate a LikeC4 DSL file defining elements for each bounded context with relationships:
 
 ```likec4
 // Domain Model — Bounded Contexts
@@ -223,142 +223,142 @@ specification {
 
 model {
   boundedContext contextA = "Context A" {
-    description "Proposito do contexto A"
+    description "Purpose of context A"
 
-    aggregate agregado1 = "Agregado 1" {
-      description "Root: EntidadeX"
+    aggregate aggregate1 = "Aggregate 1" {
+      description "Root: EntityX"
 
-      entity entidade1 = "Entidade 1" {
-        description "Descricao"
+      entity entity1 = "Entity 1" {
+        description "Description"
       }
       valueObject vo1 = "Value Object 1" {
-        description "Descricao"
+        description "Description"
       }
     }
   }
 
   boundedContext contextB = "Context B" {
-    description "Proposito do contexto B"
+    description "Purpose of context B"
 
-    aggregate agregado2 = "Agregado 2" {
-      description "Root: EntidadeY"
+    aggregate aggregate2 = "Aggregate 2" {
+      description "Root: EntityY"
     }
   }
 
-  // Relacionamentos entre contextos
-  contextA -> contextB "descricao do relacionamento"
+  // Relationships between contexts
+  contextA -> contextB "relationship description"
 }
 
 views {
   view contextMap of <platform> {
-    title "Mapa de Contextos — <Platform>"
+    title "Context Map — <Platform>"
     include *
   }
 }
 ```
 
-**Regras de geracao do LikeC4:**
-1. Usar `specification` para definir tipos customizados (boundedContext, aggregate, entity, valueObject)
-2. Cada bounded context como elemento top-level no `model`
-3. Agregados aninhados dentro dos contextos
-4. Relacionamentos entre contextos refletindo o context map
-5. View `contextMap` incluindo todos os elementos
-6. Comentarios em portugues para propositos, ingles para syntax
+**LikeC4 generation rules:**
+1. Use `specification` to define custom types (boundedContext, aggregate, entity, valueObject)
+2. Each bounded context as a top-level element in `model`
+3. Aggregates nested inside contexts
+4. Relationships between contexts reflecting the context map
+5. `contextMap` view including all elements
+6. Comments in Portuguese for purposes, English for syntax
 
 ### 3. Auto-Review
 
-Antes de salvar, verificar:
+Before saving, verify:
 
-| # | Check | Acao se falhar |
-|---|-------|---------------|
-| 1 | Todo bounded context tem justificativa de separacao documentada | Adicionar justificativa ou fundir contextos |
-| 2 | Zero modelos anemicos (entidades com apenas getters/setters sem comportamento) | Adicionar metodos de dominio ou rebaixar para VO |
-| 3 | Todo agregado tem pelo menos 1 invariante | Adicionar invariante ou questionar se e realmente agregado |
-| 4 | Toda decisao tem >=2 alternativas documentadas | Adicionar alternativas com pros/cons |
-| 5 | Toda premissa marcada [VALIDAR] ou confirmada | Marcar |
-| 6 | Diagramas Mermaid renderizam corretamente (syntax valida) | Corrigir syntax |
-| 7 | LikeC4 DSL com syntax valida (specification + model + views) | Corrigir syntax |
-| 8 | domain-model.md <= 250 linhas | Condensar — abstrair detalhes excessivos |
-| 9 | Pesquisou best practices DDD recentes (2025-2026) | Pesquisar |
-| 10 | Context map consistente entre .md e .likec4 (mesmos contextos e relacoes) | Sincronizar |
+| # | Check | Action on Failure |
+|---|-------|-------------------|
+| 1 | Does every bounded context have documented separation justification? | Add justification or merge contexts |
+| 2 | Zero anemic models (entities with only getters/setters and no behavior)? | Add domain methods or downgrade to VO |
+| 3 | Does every aggregate have at least 1 invariant? | Add invariant or question if it is really an aggregate |
+| 4 | Does every decision have >=2 documented alternatives? | Add alternatives with pros/cons |
+| 5 | Is every assumption marked [VALIDATE] or confirmed? | Mark it |
+| 6 | Do Mermaid diagrams render correctly (valid syntax)? | Fix syntax |
+| 7 | Is LikeC4 DSL syntax valid (specification + model + views)? | Fix syntax |
+| 8 | Is domain-model.md <= 250 lines? | Condense — abstract excessive details |
+| 9 | Were recent DDD best practices researched (2025-2026)? | Research |
+| 10 | Is the context map consistent between .md and .likec4 (same contexts and relationships)? | Synchronize |
 
-### 4. Gate de Aprovacao (human)
+### 4. Approval Gate (human)
 
-Apresentar ao usuario:
+Present to user:
 
 ```
-## Resumo do Modelo de Dominio
+## Domain Model Summary
 
 **Bounded Contexts:** <N>
-**Agregados totais:** <N>
-**Invariantes documentadas:** <N>
+**Total Aggregates:** <N>
+**Documented Invariants:** <N>
 
-### Mapa de Contextos (resumo visual)
+### Context Map (visual summary)
 [Context A] --upstream/downstream--> [Context B]
 [Context A] --shared kernel--> [Context C]
 
-### Decisoes de Fronteira
-1. [Contexto A] separado de [Contexto B] porque: [justificativa]
+### Boundary Decisions
+1. [Context A] separated from [Context B] because: [justification]
 2. ...
 
-### Decisoes de Agregado Sizing
-1. [Agregado X] inclui [Y, Z] porque: [justificativa]
+### Aggregate Sizing Decisions
+1. [Aggregate X] includes [Y, Z] because: [justification]
 2. ...
 
-### Perguntas de validacao
-1. Os bounded contexts refletem fronteiras reais do negocio?
-2. Algum agregado esta grande demais (God Object) ou pequeno demais (CRUD)?
-3. As invariantes cobrem as regras de negocio criticas?
-4. Os relacionamentos entre contextos fazem sentido?
-5. O schema SQL e compativel com as decisoes de ADR (banco escolhido)?
+### Validation Questions
+1. Do the bounded contexts reflect real business boundaries?
+2. Is any aggregate too large (God Object) or too small (CRUD)?
+3. Do the invariants cover critical business rules?
+4. Do the relationships between contexts make sense?
+5. Is the SQL schema compatible with the ADR database decision?
 ```
 
-Aguardar aprovacao antes de salvar.
+Wait for approval before saving.
 
-### 5. Salvar + Relatorio
+### 5. Save + Report
 
-1. Salvar `platforms/<nome>/engineering/domain-model.md`
-2. Salvar `platforms/<nome>/model/ddd-contexts.likec4`
-3. Informar ao usuario:
+1. Save `platforms/<name>/engineering/domain-model.md`
+2. Save `platforms/<name>/model/ddd-contexts.likec4`
+3. Report to user:
 
 ```
-## Domain Model gerado
+## Domain Model generated
 
-**Arquivos:**
-- platforms/<nome>/engineering/domain-model.md (<N> linhas)
-- platforms/<nome>/model/ddd-contexts.likec4 (<N> linhas)
+**Files:**
+- platforms/<name>/engineering/domain-model.md (<N> lines)
+- platforms/<name>/model/ddd-contexts.likec4 (<N> lines)
 
 **Bounded Contexts:** <N>
-**Agregados:** <N>
-**Invariantes:** <N>
+**Aggregates:** <N>
+**Invariants:** <N>
 
 ### Checks
-[x] Todo bounded context com justificativa de separacao
-[x] Zero modelos anemicos
-[x] Todo agregado com invariantes
-[x] Alternativas documentadas
-[x] Premissas marcadas
-[x] Mermaid syntax valida
-[x] LikeC4 syntax valida
-[x] domain-model.md <= 250 linhas
-[x] Context map consistente entre .md e .likec4
+[x] Every bounded context has separation justification
+[x] Zero anemic models
+[x] Every aggregate has invariants
+[x] Alternatives documented
+[x] Assumptions marked
+[x] Mermaid syntax valid
+[x] LikeC4 syntax valid
+[x] domain-model.md <= 250 lines
+[x] Context map consistent between .md and .likec4
 
-### Proximo passo
-/containers <nome>
-Definir arquitetura de containers a partir do modelo de dominio e blueprint validados.
+### Next step
+/containers <name>
+Define container architecture from the validated domain model and blueprint.
 ```
 
-## Tratamento de Erros
+## Error Handling
 
-| Problema | Acao |
-|----------|------|
-| Blueprint nao existe | ERROR: dependencia faltante. Rodar `/blueprint <nome>` primeiro |
-| business/process.md nao existe | ERROR: dependencia faltante. Rodar `/business-process <nome>` primeiro |
-| Dominio muito simples (1-2 entidades) | Questionar: "Esse dominio e simples o suficiente para CRUD puro? DDD pode ser over-engineering aqui." |
-| Muitos bounded contexts (>5 para dominio medio) | Alertar: "5+ bounded contexts geralmente indica over-engineering. Justifique cada separacao." |
-| Agregado com >5 entidades | Alertar: "Agregado grande demais. Considere dividir ou extrair value objects." |
-| Nenhuma invariante encontrada | Alertar: "Dominio sem invariantes = CRUD. Confirme se DDD e necessario ou se ha regras nao documentadas." |
-| Plataforma ja tem domain-model.md | Ler como base, perguntar se quer reescrever do zero ou iterar |
-| LikeC4 syntax error ao validar | Verificar specification/model/views, corrigir e re-validar |
-| Schema SQL conflita com ADR de banco | Ajustar SQL para o banco escolhido (ex: Postgres vs SQLite vs Supabase) |
-| Fluxos de negocio nao mapeiam para contextos | Revisitar process.md — pode indicar gap no mapeamento ou contexto implicito |
+| Issue | Action |
+|-------|--------|
+| Blueprint does not exist | ERROR: missing dependency. Run `/blueprint <name>` first |
+| business/process.md does not exist | ERROR: missing dependency. Run `/business-process <name>` first |
+| Very simple domain (1-2 entities) | Question: "Is this domain simple enough for pure CRUD? DDD may be over-engineering here." |
+| Too many bounded contexts (>5 for a medium domain) | Alert: "5+ bounded contexts usually indicates over-engineering. Justify each separation." |
+| Aggregate with >5 entities | Alert: "Aggregate too large. Consider splitting or extracting value objects." |
+| No invariants found | Alert: "Domain without invariants = CRUD. Confirm whether DDD is needed or if rules are undocumented." |
+| Platform already has domain-model.md | Read as baseline, ask whether to rewrite from scratch or iterate |
+| LikeC4 syntax error during validation | Check specification/model/views, fix and re-validate |
+| SQL schema conflicts with database ADR | Adjust SQL for the chosen database (e.g., Postgres vs SQLite vs Supabase) |
+| Business flows do not map to contexts | Revisit process.md — may indicate a gap in the mapping or an implicit context |

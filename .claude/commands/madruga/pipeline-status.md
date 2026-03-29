@@ -1,53 +1,53 @@
 ---
-description: Mostra status completo do pipeline DAG com tabela, Mermaid colorido e proximos passos
+description: Show full pipeline DAG status with table, colored Mermaid diagram, and next steps
 arguments:
   - name: platform
-    description: "Nome da plataforma/produto. Se vazio, pergunta."
+    description: "Platform/product name. If empty, prompt for it."
     required: false
-argument-hint: "[nome-da-plataforma]"
+argument-hint: "[platform-name]"
 ---
 
-# Pipeline Status — Visibilidade do Pipeline
+# Pipeline Status — Pipeline Visibility
 
-Skill read-only. Mostra status de todos os nos do pipeline DAG com tabela, diagrama Mermaid colorido e progresso.
+Read-only skill. Show the status of all pipeline DAG nodes with a table, colored Mermaid diagram, and progress summary.
 
-## Regra: Read-Only
+## Rule: Read-Only
 
-Esta skill NAO gera artefatos. Apenas le status e apresenta.
+This skill does NOT generate artifacts. It only reads status and presents it.
 
 ## Persona
 
-Pipeline Observer. Factual, visual. Portugues BR.
+Pipeline Observer. Factual, visual. Write output in Brazilian Portuguese (PT-BR).
 
-## Uso
+## Usage
 
-- `/pipeline-status fulano` — Status do pipeline de "fulano"
-- `/pipeline-status` — Pergunta plataforma
+- `/pipeline-status fulano` — Pipeline status for "fulano"
+- `/pipeline-status` — Prompt for platform
 
-## Instrucoes
+## Instructions
 
-### 1. Coletar Status
+### 1. Collect Status
 
-Rodar: `.specify/scripts/bash/check-platform-prerequisites.sh --json --status --platform <nome>`
+Run: `.specify/scripts/bash/check-platform-prerequisites.sh --json --status --platform <name>`
 
-Parsear JSON com nodes, status (done/ready/blocked), progress.
+Parse the JSON output for nodes, status (done/ready/blocked), and progress.
 
-Alem do JSON de status, ler `platforms/<nome>/platform.yaml` para obter as relacoes `depends` de cada node (necessario para construir o Mermaid DAG — o JSON de --status nao inclui edges).
+Additionally, read `platforms/<name>/platform.yaml` to obtain the `depends` relationships for each node (required to build the Mermaid DAG — the --status JSON does not include edges).
 
-### 2. Renderizar
+### 2. Render
 
-**Tabela de Status:**
+**Status Table:**
 
 ```
 | # | Skill | Status | Layer | Gate | Missing Deps |
 |---|-------|--------|-------|------|-------------|
-| 1 | vision | ✅ done | business | human | — |
-| 2 | blueprint | 🟡 ready | engineering | human | — |
-| 3 | containers | 🔴 blocked | engineering | human | domain-model |
-| 4 | codebase-map | ⬜ skipped | research | auto | — |
+| 1 | vision | done | business | human | — |
+| 2 | blueprint | ready | engineering | human | — |
+| 3 | containers | blocked | engineering | human | domain-model |
+| 4 | codebase-map | skipped | research | auto | — |
 ```
 
-**Mermaid DAG colorido:**
+**Colored Mermaid DAG:**
 
 ```mermaid
 graph TD
@@ -61,20 +61,20 @@ graph TD
     ...
 ```
 
-**Progresso:** N/<total> done | M ready | K blocked
-(Usar `progress.total` do JSON retornado pelo script)
+**Progress:** N/<total> done | M ready | K blocked
+(Use `progress.total` from the JSON returned by the script)
 
-**Para recomendacao do proximo passo:** `/pipeline-next <nome>`
+**For next step recommendation:** `/pipeline-next <name>`
 
-### 3. Apresentar
+### 3. Present
 
-Mostrar tabela + Mermaid + progresso + sugestao de proximo. NAO executar nada.
+Show table + Mermaid + progress + next step suggestion. Do NOT execute anything.
 
-## Tratamento de Erros
+## Error Handling
 
-| Problema | Acao |
-|----------|------|
-| Script falha (python3 nao encontrado) | ERROR: pre-requisito python3 nao instalado |
-| Platform.yaml nao existe | ERROR: plataforma nao encontrada. Rodar `/platform-new` primeiro |
-| Pipeline section ausente no platform.yaml | ERROR: platform.yaml sem secao `pipeline:`. Rodar `copier update` na plataforma |
-| Nome de plataforma invalido | Perguntar nome correto |
+| Issue | Action |
+|-------|--------|
+| Script fails (python3 not found) | ERROR: python3 prerequisite not installed |
+| platform.yaml does not exist | ERROR: platform not found. Run `/platform-new` first |
+| Missing pipeline section in platform.yaml | ERROR: platform.yaml has no `pipeline:` section. Run `copier update` on the platform |
+| Invalid platform name | Prompt for correct name |

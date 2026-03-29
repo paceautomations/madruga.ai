@@ -1,192 +1,192 @@
 ---
-description: Gera estrutura de pastas anotada com convencoes de nomenclatura e boundaries de modulos
+description: Generate an annotated folder structure with naming conventions and module boundaries
 arguments:
   - name: platform
-    description: "Nome da plataforma/produto. Se vazio, pergunta."
+    description: "Platform/product name. If empty, prompt for it."
     required: false
-argument-hint: "[nome-da-plataforma]"
+argument-hint: "[platform-name]"
 handoffs: []
 ---
 
-# Folder Architecture — Estrutura de Pastas
+# Folder Architecture — Folder Structure
 
-Gera estrutura de pastas anotada (~150 linhas) com proposito de cada diretorio, convencoes de nomenclatura e boundaries de modulos.
+Generate an annotated folder structure (~150 lines) with the purpose of each directory, naming conventions, and module boundaries.
 
-## Regra Cardinal: ZERO Pasta sem Proposito
+## Cardinal Rule: ZERO Directories Without a Purpose
 
-Cada diretorio DEVE ter razao clara de existencia. Se nao consigo explicar em 1 frase por que existe, nao deveria existir.
+Every directory MUST have a clear reason to exist. If its purpose cannot be explained in 1 sentence, it should not exist.
 
-**NUNCA:**
-- Criar pasta vazia "para o futuro"
-- Copiar estrutura de outro projeto sem adaptar
-- Criar pasta que duplica responsabilidade de outra
-- Aninhar mais de 4 niveis sem justificativa
+**NEVER:**
+- Create empty directories "for the future"
+- Copy structure from another project without adapting
+- Create a directory that duplicates another's responsibility
+- Nest more than 4 levels without justification
 
 ## Persona
 
-Staff Engineer com 15+ anos. Estrutura deve ser navegavel por alguem novo no projeto em 5 minutos. Portugues BR.
+Staff Engineer with 15+ years of experience. Structure must be navigable by someone new to the project in 5 minutes. Write all generated artifact content in Brazilian Portuguese (PT-BR).
 
-## Uso
+## Usage
 
-- `/folder-arch fulano` — Gera folder architecture para "fulano"
-- `/folder-arch` — Pergunta nome
+- `/folder-arch fulano` — Generate folder architecture for "fulano"
+- `/folder-arch` — Prompt for name
 
-## Diretorio
+## Output Directory
 
-Salvar em `platforms/<nome>/engineering/folder-structure.md`.
+Save to `platforms/<name>/engineering/folder-structure.md`.
 
-## Instrucoes
+## Instructions
 
-### 0. Pre-requisitos
+### 0. Prerequisites
 
-Rodar `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <nome> --skill folder-arch` e parsear JSON.
-- Se `ready: false`: ERROR listando dependencias faltantes.
-- Se `ready: true`: ler artefatos em `available`.
-- Ler `.specify/memory/constitution.md`.
+Run `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <name> --skill folder-arch` and parse the JSON output.
+- If `ready: false`: ERROR listing missing dependencies.
+- If `ready: true`: read artifacts listed in `available`.
+- Read `.specify/memory/constitution.md`.
 
-### 1. Coletar Contexto + Questionar
+### 1. Collect Context + Ask Questions
 
-**Leitura obrigatoria:**
-- `engineering/blueprint.md` — stack, concerns, topologia
-- `decisions/ADR-*.md` — decisoes que impactam estrutura
+**Required reading:**
+- `engineering/blueprint.md` — stack, concerns, topology
+- `decisions/ADR-*.md` — decisions that impact structure
 
-**Identificar convencoes da stack:**
-- A partir dos ADRs, identificar framework/linguagem principal
-- Pesquisar via Context7 a estrutura recomendada pelo framework
+**Identify stack conventions:**
+- From the ADRs, identify the primary framework/language
+- Research via Context7 the recommended framework structure
 - Web search: "[framework] project structure best practices 2026"
-- Adaptar ao tamanho do projeto (nao usar estrutura enterprise para MVP)
+- Adapt to project size (do not use enterprise structure for an MVP)
 
-**Perguntas Estruturadas:**
+**Structured Questions:**
 
-| Categoria | Pergunta |
-|-----------|----------|
-| **Premissas** | "Assumo monorepo/polyrepo. Correto?" |
-| **Trade-offs** | "Feature-based (src/features/X) ou layer-based (src/models, src/services)?" |
-| **Gaps** | "Blueprint nao especifica onde ficam [testes/configs/scripts]. Definir?" |
-| **Provocacao** | "Estrutura flat (poucos niveis) pode ser melhor que deep nesting para este projeto." |
+| Category | Question |
+|----------|----------|
+| **Assumptions** | "I assume monorepo/polyrepo. Correct?" |
+| **Trade-offs** | "Feature-based (src/features/X) or layer-based (src/models, src/services)?" |
+| **Gaps** | "Blueprint does not specify where [tests/configs/scripts] go. Define?" |
+| **Challenge** | "A flat structure (few levels) may be better than deep nesting for this project." |
 
-Aguardar respostas ANTES de gerar.
+Wait for answers BEFORE generating.
 
-### 2. Gerar Folder Structure
+### 2. Generate Folder Structure
 
 ```markdown
 ---
 title: "Folder Structure"
 updated: YYYY-MM-DD
 ---
-# <Nome> — Folder Structure
+# <Name> — Folder Structure
 
-> Estrutura de pastas anotada. Cada diretorio tem proposito documentado.
+> Annotated folder structure. Every directory has a documented purpose.
 
 ---
 
-## Arvore Anotada
+## Annotated Tree
 
-[Arvore com max 3-4 niveis, cada diretorio com comentario]
+[Tree with max 3-4 levels, each directory annotated]
 
 ```
-<nome>/
-├── src/                     # Codigo fonte principal
-│   ├── domain/              # Bounded contexts e agregados (DDD)
-│   │   ├── [context-a]/     # [Proposito do contexto A]
-│   │   └── [context-b]/     # [Proposito do contexto B]
-│   ├── infra/               # Adaptadores de infraestrutura
-│   │   ├── db/              # Repositories e migrations
-│   │   ├── http/            # Controllers e middleware
-│   │   └── messaging/       # Event handlers e publishers
-│   ├── shared/              # Utilitarios cross-cutting
-│   │   ├── errors/          # Error types padronizados
+<name>/
+├── src/                     # Main source code
+│   ├── domain/              # Bounded contexts and aggregates (DDD)
+│   │   ├── [context-a]/     # [Purpose of context A]
+│   │   └── [context-b]/     # [Purpose of context B]
+│   ├── infra/               # Infrastructure adapters
+│   │   ├── db/              # Repositories and migrations
+│   │   ├── http/            # Controllers and middleware
+│   │   └── messaging/       # Event handlers and publishers
+│   ├── shared/              # Cross-cutting utilities
+│   │   ├── errors/          # Standardized error types
 │   │   └── config/          # Configuration loading
 │   └── main.[ext]           # Entry point
-├── tests/                   # Testes (espelha src/)
-│   ├── unit/                # Testes unitarios
-│   ├── integration/         # Testes de integracao
-│   └── e2e/                 # Testes end-to-end
-├── scripts/                 # Scripts de automacao
-├── docs/                    # Documentacao tecnica
-├── config/                  # Configuracoes (env, deploy)
-└── [outros conforme stack]
+├── tests/                   # Tests (mirrors src/)
+│   ├── unit/                # Unit tests
+│   ├── integration/         # Integration tests
+│   └── e2e/                 # End-to-end tests
+├── scripts/                 # Automation scripts
+├── docs/                    # Technical documentation
+├── config/                  # Configuration files (env, deploy)
+└── [others per stack]
 ```
 
 ---
 
-## Convencoes de Nomenclatura
+## Naming Conventions
 
-| Tipo | Convencao | Exemplo |
+| Type | Convention | Example |
 |------|-----------|---------|
-| Diretorios | kebab-case | `user-auth/` |
-| Arquivos [linguagem] | [convencao da linguagem] | `user_service.py` / `UserService.ts` |
-| Testes | [convencao] | `test_user_service.py` / `UserService.test.ts` |
+| Directories | kebab-case | `user-auth/` |
+| Files [language] | [language convention] | `user_service.py` / `UserService.ts` |
+| Tests | [convention] | `test_user_service.py` / `UserService.test.ts` |
 | Configs | kebab-case | `docker-compose.yml` |
 
 ---
 
-## Boundaries de Modulos
+## Module Boundaries
 
-| Modulo | Pode importar de | NAO pode importar de |
-|--------|-----------------|---------------------|
+| Module | Can Import From | CANNOT Import From |
+|--------|----------------|-------------------|
 | domain/ | shared/ | infra/ |
 | infra/ | domain/, shared/ | — |
-| shared/ | — (sem deps internas) | domain/, infra/ |
+| shared/ | — (no internal deps) | domain/, infra/ |
 
 ---
 
-## Decisoes de Estrutura
+## Structure Decisions
 
-| Decisao | Escolha | Alternativa | Razao |
-|---------|---------|-------------|-------|
-| Organizacao | [feature/layer] | [outra] | [razao] |
-| Nesting max | [N niveis] | [mais/menos] | [razao] |
-| Testes | [junto/separado] | [outra] | [razao] |
+| Decision | Choice | Alternative | Reason |
+|----------|--------|------------|--------|
+| Organization | [feature/layer] | [other] | [reason] |
+| Max nesting | [N levels] | [more/fewer] | [reason] |
+| Tests | [colocated/separate] | [other] | [reason] |
 ```
 
 ### 3. Auto-Review
 
-| # | Check | Acao se falhar |
-|---|-------|---------------|
-| 1 | Todo diretorio tem anotacao de proposito? | Adicionar |
-| 2 | Nenhuma pasta vazia/sem proposito? | Remover ou justificar |
-| 3 | Estrutura compativel com stack dos ADRs? | Ajustar |
-| 4 | Max 4 niveis de nesting? | Flatten |
-| 5 | Boundaries de modulo claras? | Definir |
-| 6 | Convencoes de nomenclatura documentadas? | Adicionar |
-| 7 | Max 150 linhas? | Condensar |
-| 8 | Toda decisao tem >=2 alternativas documentadas? | Adicionar alternativa |
-| 9 | Trade-offs explicitos (pros/cons)? | Adicionar pros/cons |
-| 10 | Premissas marcadas [VALIDAR] ou com dado? | Marcar [VALIDAR] |
+| # | Check | Action on Failure |
+|---|-------|-------------------|
+| 1 | Does every directory have a purpose annotation? | Add it |
+| 2 | Are there any empty/purposeless directories? | Remove or justify |
+| 3 | Is the structure compatible with the stack from ADRs? | Adjust |
+| 4 | Max 4 nesting levels? | Flatten |
+| 5 | Are module boundaries clear? | Define them |
+| 6 | Are naming conventions documented? | Add them |
+| 7 | Max 150 lines? | Condense |
+| 8 | Does every decision have >=2 documented alternatives? | Add alternative |
+| 9 | Are trade-offs explicit (pros/cons)? | Add pros/cons |
+| 10 | Are assumptions marked [VALIDATE] or backed by data? | Mark [VALIDATE] |
 
-### 4. Gate de Aprovacao: Human
+### 4. Approval Gate: Human
 
-Apresentar:
-- Arvore resumida (1 nivel)
-- Decisoes-chave (feature vs layer, nesting, testes)
-- Perguntas: "Faz sentido para sua equipe?", "Alguma pasta faltando?"
+Present:
+- Summarized tree (1 level)
+- Key decisions (feature vs layer, nesting, tests)
+- Questions: "Does this make sense for your team?", "Any missing directories?"
 
-### 5. Salvar + Relatorio
+### 5. Save + Report
 
 ```
-## Folder Architecture gerada
+## Folder Architecture generated
 
-**Arquivo:** platforms/<nome>/engineering/folder-structure.md
-**Linhas:** <N>
-**Diretorios top-level:** <N>
-**Niveis max:** <N>
+**File:** platforms/<name>/engineering/folder-structure.md
+**Lines:** <N>
+**Top-level directories:** <N>
+**Max levels:** <N>
 
 ### Checks
-[x] Todo diretorio com proposito
-[x] Zero pastas orfas
-[x] Boundaries documentadas
-[x] Convencoes definidas
+[x] Every directory has a purpose
+[x] Zero orphan directories
+[x] Boundaries documented
+[x] Conventions defined
 
-### Proximo Passo
-folder-arch e terminal no DAG. Verificar `/pipeline-status <nome>` para outros skills pendentes (domain-model, containers, etc.).
+### Next Step
+folder-arch is terminal in the DAG. Check `/pipeline-status <name>` for other pending skills (domain-model, containers, etc.).
 ```
 
-## Tratamento de Erros
+## Error Handling
 
-| Problema | Acao |
-|----------|------|
-| Framework nao tem estrutura padrao | Propor baseado em best practices da linguagem |
-| Projeto muito pequeno | Estrutura flat (2 niveis max) — nao forcar complexidade |
-| Conflito com codebase existente (brownfield) | Ler codebase-context.md e propor migracao gradual |
-| Equipe nao definiu monorepo/polyrepo | Perguntar — impacta toda a estrutura |
+| Issue | Action |
+|-------|--------|
+| Framework has no standard structure | Propose based on language best practices |
+| Very small project | Flat structure (2 levels max) — do not force complexity |
+| Conflict with existing codebase (brownfield) | Read codebase-context.md and propose gradual migration |
+| Team has not defined monorepo/polyrepo | Ask — it impacts the entire structure |

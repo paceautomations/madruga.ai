@@ -1,117 +1,117 @@
 ---
-description: Gera roadmap de entrega com sequencia de epicos, dependencias e definicao de MVP
+description: Generate a delivery roadmap with epic sequencing, dependencies, and MVP definition
 arguments:
   - name: platform
-    description: "Nome da plataforma/produto. Se vazio, pergunta."
+    description: "Platform/product name. If empty, prompt for it."
     required: false
-argument-hint: "[nome-da-plataforma]"
+argument-hint: "[platform-name]"
 handoffs:
-  - label: Iniciar Implementacao por Epico
+  - label: Start Implementation by Epic
     agent: madruga/discuss
-    prompt: "Pipeline de documentacao completo! Iniciar implementacao por epico com discuss."
+    prompt: "Documentation pipeline complete! Start per-epic implementation with discuss."
 ---
 
-# Roadmap — Sequencia de Entrega
+# Roadmap — Delivery Sequence
 
-Gera roadmap com sequencia de epicos, dependencias, milestones e definicao de MVP. Ultima etapa do pipeline principal de documentacao.
+Generate a roadmap with epic sequencing, dependencies, milestones, and MVP definition. Final stage of the main documentation pipeline.
 
-## Regra Cardinal: ZERO Milestone sem Entrega Concreta
+## Cardinal Rule: ZERO Milestones Without Concrete Delivery
 
-Todo marco deve ter epico associado com acceptance criteria testavel. Nenhum milestone vago tipo "fase 1 completa".
+Every milestone must have an associated epic with testable acceptance criteria. No vague milestones like "phase 1 complete."
 
-**NUNCA:**
-- Criar milestone sem epico associado
-- Sequenciar por preferencia ao inves de dependencia/risco
-- Ignorar dependencias entre epicos
-- Criar timeline sem considerar appetite dos epicos
+**NEVER:**
+- Create a milestone without an associated epic
+- Sequence by preference instead of dependency/risk
+- Ignore inter-epic dependencies
+- Create a timeline without considering epic appetites
 
 ## Persona
 
-Product Manager / Architect. Dual hat: entende entrega de valor E dependencias tecnicas. Portugues BR.
+Product Manager / Architect. Dual hat: understands value delivery AND technical dependencies. Write all generated artifact content in Brazilian Portuguese (PT-BR).
 
-## Uso
+## Usage
 
-- `/roadmap fulano` — Gera roadmap para "fulano"
-- `/roadmap` — Pergunta nome
+- `/roadmap fulano` — Generate roadmap for "fulano"
+- `/roadmap` — Prompt for name
 
-## Diretorio
+## Output Directory
 
-Salvar em `platforms/<nome>/planning/roadmap.md`.
+Save to `platforms/<name>/planning/roadmap.md`.
 
-## Instrucoes
+## Instructions
 
-### 0. Pre-requisitos
+### 0. Prerequisites
 
-Rodar `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <nome> --skill roadmap` e parsear JSON.
-- Se `ready: false`: ERROR listando dependencias faltantes.
-- Se `ready: true`: ler artefatos em `available`.
-- Ler `.specify/memory/constitution.md`.
+Run `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <name> --skill roadmap` and parse the JSON output.
+- If `ready: false`: ERROR listing missing dependencies.
+- If `ready: true`: read artifacts listed in `available`.
+- Read `.specify/memory/constitution.md`.
 
-### 1. Coletar Contexto + Questionar
+### 1. Collect Context + Ask Questions
 
-**Leitura obrigatoria:**
-- `epics/*/pitch.md` — todos os epicos com appetite e dependencias
-- `engineering/blueprint.md` — NFRs que constrangem sequencia
-- `engineering/containers.md` — infraestrutura compartilhada
-- `business/vision.md` — prioridades de negocio
+**Required reading:**
+- `epics/*/pitch.md` — all epics with appetite and dependencies
+- `engineering/blueprint.md` — NFRs that constrain sequencing
+- `engineering/containers.md` — shared infrastructure
+- `business/vision.md` — business priorities
 
-**Perguntas Estruturadas:**
+**Structured Questions:**
 
-| Categoria | Pergunta |
-|-----------|----------|
-| **Premissas** | "Assumo que MVP = [epicos P1]. Correto?" |
-| **Trade-offs** | "Risk-first (resolver incertezas cedo) ou value-first (entregar valor rapido)?" |
-| **Gaps** | "Ha deadline externo? Restricao de equipe/budget?" |
-| **Provocacao** | "Se pudesse entregar apenas 1 epico, qual seria?" |
+| Category | Question |
+|----------|----------|
+| **Assumptions** | "I assume MVP = [P1 epics]. Correct?" |
+| **Trade-offs** | "Risk-first (resolve uncertainties early) or value-first (deliver value fast)?" |
+| **Gaps** | "Is there an external deadline? Team/budget constraints?" |
+| **Challenge** | "If you could deliver only 1 epic, which one?" |
 
-Aguardar respostas ANTES de gerar roadmap.
+Wait for answers BEFORE generating the roadmap.
 
-### 2. Gerar Roadmap
+### 2. Generate Roadmap
 
 ```markdown
 ---
 title: "Roadmap"
 updated: YYYY-MM-DD
 ---
-# <Nome> — Roadmap de Entrega
+# <Name> — Delivery Roadmap
 
-> Sequencia de epicos, milestones e MVP.
+> Epic sequence, milestones, and MVP definition.
 
 ---
 
 ## MVP
 
-**Epicos no MVP:** [lista com appetite total]
-**Criterio de MVP:** [o que define "produto minimo viavel"]
-**Appetite total MVP:** [N semanas]
+**MVP Epics:** [list with total appetite]
+**MVP Criterion:** [what defines "minimum viable product"]
+**Total MVP Appetite:** [N weeks]
 
 ---
 
-## Sequencia de Entrega
+## Delivery Sequence
 
 ```mermaid
 gantt
-    title Roadmap <Nome>
+    title Roadmap <Name>
     dateFormat YYYY-MM-DD
     section MVP
-    Epic NNN: titulo    :a1, YYYY-MM-DD, Xw
-    Epic NNN: titulo    :a2, after a1, Xw
+    Epic NNN: title    :a1, YYYY-MM-DD, Xw
+    Epic NNN: title    :a2, after a1, Xw
     section Post-MVP
-    Epic NNN: titulo    :a3, after a2, Xw
+    Epic NNN: title    :a3, after a2, Xw
 ```
 
 ---
 
-## Tabela de Epicos
+## Epic Table
 
-| Ordem | Epico | Appetite | Deps | Risco | Milestone |
-|-------|-------|----------|------|-------|-----------|
-| 1 | NNN: [titulo] | Xw | — | [alto/medio/baixo] | MVP |
+| Order | Epic | Appetite | Deps | Risk | Milestone |
+|-------|------|----------|------|------|-----------|
+| 1 | NNN: [title] | Xw | — | [high/medium/low] | MVP |
 | 2 | ... | ... | NNN | ... | ... |
 
 ---
 
-## Dependencias
+## Dependencies
 
 ```mermaid
 graph LR
@@ -124,68 +124,69 @@ graph LR
 
 ## Milestones
 
-| Milestone | Epicos | Criterio de Sucesso | Estimativa |
-|-----------|--------|-------------------|-----------|
-| MVP | [lista] | [criterio testavel] | [data ou semana] |
-| v1.0 | [lista] | [criterio] | [data] |
+| Milestone | Epics | Success Criterion | Estimate |
+|-----------|-------|-------------------|----------|
+| MVP | [list] | [testable criterion] | [date or week] |
+| v1.0 | [list] | [criterion] | [date] |
 
 ---
 
-## Riscos do Roadmap
+## Roadmap Risks
 
-| Risco | Impacto | Probabilidade | Mitigacao |
-|-------|---------|--------------|-----------|
+| Risk | Impact | Probability | Mitigation |
+|------|--------|-------------|-----------|
 | ... | ... | ... | ... |
 ```
 
 ### 3. Auto-Review
 
-| # | Check | Acao se falhar |
-|---|-------|---------------|
-| 1 | Todos os epicos de epics/ incluidos? | Adicionar faltantes |
-| 2 | Dependencias acyclicas? | Resolver |
-| 3 | MVP claramente definido? | Definir |
-| 4 | Timeline realista (soma appetites)? | Ajustar |
-| 5 | Milestones com criterios testaveis? | Tornar mensuravel |
-| 6 | Mermaid Gantt renderiza? | Corrigir |
-| 7 | Toda decisao tem >=2 alternativas documentadas? | Adicionar |
-| 8 | Trade-offs explicitos? | Adicionar pros/cons |
-| 9 | Premissas marcadas [VALIDAR] ou com dado? | Marcar [VALIDAR] |
+| # | Check | Action on Failure |
+|---|-------|-------------------|
+| 1 | Are all epics from epics/ included? | Add missing ones |
+| 2 | Are dependencies acyclic? | Resolve |
+| 3 | Is MVP clearly defined? | Define it |
+| 4 | Is the timeline realistic (sum of appetites)? | Adjust |
+| 5 | Do milestones have testable criteria? | Make measurable |
+| 6 | Does the Mermaid Gantt render? | Fix |
+| 7 | Does every decision have >=2 documented alternatives? | Add |
+| 8 | Are trade-offs explicit? | Add pros/cons |
+| 9 | Are assumptions marked [VALIDATE] or backed by data? | Mark [VALIDATE] |
 
-### 4. Gate de Aprovacao: Human
+### 4. Approval Gate: Human
 
-Apresentar Gantt, MVP definition, sequencia. Perguntas: "MVP esta correto?", "Sequencia faz sentido?", "Riscos aceitaveis?"
+Present Gantt, MVP definition, sequence. Questions: "Is the MVP correct?", "Does the sequence make sense?", "Are risks acceptable?"
 
-### 5. Salvar + Relatorio
+### 5. Save + Report
 
 ```
-## Roadmap gerado
+## Roadmap generated
 
-**Arquivo:** platforms/<nome>/planning/roadmap.md
-**Epicos:** <N>
-**MVP:** <N> epicos, <N> semanas
-**Total:** <N> semanas
+**File:** platforms/<name>/planning/roadmap.md
+**Epics:** <N>
+**MVP:** <N> epics, <N> weeks
+**Total:** <N> weeks
 
 ### Checks
-[x] Todos epicos incluidos
-[x] Dependencias acyclicas
-[x] MVP definido
-[x] Milestones com criterios
+[x] All epics included
+[x] Dependencies acyclic
+[x] MVP defined
+[x] Milestones with criteria
 
-### 🎉 Pipeline de Documentacao Completo!
-Proximos passos por epico:
-1. `/discuss <nome>` — Capturar contexto de implementacao
-2. `/speckit.specify` — Iniciar ciclo SpecKit
-3. Implementar wave por wave
-4. `/verify <nome>` — Verificar aderencia
-5. `/reconcile <nome>` — Atualizar documentacao
+### Documentation Pipeline Complete!
+Next steps per epic:
+1. `/discuss <name>` — Capture implementation context
+2. `/speckit.specify` — Start SpecKit cycle
+3. Implement wave by wave
+4. `/verify <name>` — Verify adherence
+5. `/test-ai` — (opcional) QA test if app is running
+6. `/reconcile <name>` — Update documentation
 ```
 
-## Tratamento de Erros
+## Error Handling
 
-| Problema | Acao |
-|----------|------|
-| Apenas 1 epico | Roadmap trivial — 1 milestone |
-| Dependencias circulares | Resolver antes de gerar |
-| Sem deadline | Usar appetite como estimativa relativa |
-| Equipe indefinida | Notar que paralelismo depende de tamanho da equipe |
+| Issue | Action |
+|-------|--------|
+| Only 1 epic | Trivial roadmap — 1 milestone |
+| Circular dependencies | Resolve before generating |
+| No deadline | Use appetite as relative estimate |
+| Team size undefined | Note that parallelism depends on team size |

@@ -1,50 +1,50 @@
 ---
-description: Gera/atualiza STATE.md com progresso da sessao atual — tasks, decisoes, problemas, proximos passos
+description: Generate or update STATE.md with current session progress — tasks, decisions, issues, next steps
 arguments:
   - name: platform
-    description: "Nome da plataforma/produto."
+    description: "Platform/product name."
     required: false
   - name: context
-    description: "Contexto breve da sessao (ex: 'wave 3 implementation')."
+    description: "Brief session context (e.g., 'wave 3 implementation')."
     required: false
-argument-hint: "[plataforma] [contexto-da-sessao]"
+argument-hint: "[platform] [session-context]"
 ---
 
-# Checkpoint — Estado da Sessao
+# Checkpoint — Session State
 
-Skill leve. Gera ou atualiza STATE.md com progresso da sessao: tasks completadas, decisoes, problemas e proximos passos. Baseado em dados reais (git log, tasks.md, filesystem).
+Lightweight skill. Generate or update STATE.md with session progress: completed tasks, decisions, issues, and next steps. Based on real data (git log, tasks.md, filesystem).
 
-## Regra Cardinal: ZERO Informacao Inventada
+## Cardinal Rule: ZERO Invented Information
 
-Tudo baseado em git log, tasks.md e filesystem real. Nenhuma suposicao.
+Base everything on git log, tasks.md, and the real filesystem. No assumptions.
 
 ## Persona
 
-Session Recorder. Factual, conciso. Portugues BR.
+Session Recorder. Factual, concise. Write all generated artifact content in Brazilian Portuguese (PT-BR).
 
-## Uso
+## Usage
 
-- `/checkpoint wave 3` — Checkpoint da sessao com contexto
-- `/checkpoint` — Checkpoint generico
+- `/checkpoint wave 3` — Session checkpoint with context
+- `/checkpoint` — Generic checkpoint
 
-## Instrucoes
+## Instructions
 
-### 0. Pre-requisitos
+### 0. Prerequisites
 
-Rodar `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <nome> --skill checkpoint` e parsear JSON (se plataforma fornecida).
-- Ler `.specify/memory/constitution.md`.
-- Verificar se tasks.md existe (spec dir ou raiz).
+Run `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <name> --skill checkpoint` and parse the JSON output (if platform is provided).
+- Read `.specify/memory/constitution.md`.
+- Check whether tasks.md exists (spec dir or root).
 
-### 1. Coletar Dados
+### 1. Collect Data
 
-- STATE.md existente (se houver — para append)
-- tasks.md — tasks marcadas [X]
-- `git log --oneline -20` — commits recentes
-- `git diff --stat` — arquivos alterados
+- Existing STATE.md (if present — for appending)
+- tasks.md — tasks marked [X]
+- `git log --oneline -20` — recent commits
+- `git diff --stat` — changed files
 
-### 2. Gerar/Atualizar STATE.md
+### 2. Generate/Update STATE.md
 
-Se STATE.md existe, adicionar nova sessao. Se nao, criar.
+If STATE.md exists, append a new session section. If not, create it.
 
 ```markdown
 # STATE — [Feature/Context]
@@ -52,52 +52,52 @@ Se STATE.md existe, adicionar nova sessao. Se nao, criar.
 **Session**: YYYY-MM-DD
 **Branch**: `branch-name`
 
-## Concluido
+## Completed
 
-[Tasks marcadas [X] nesta sessao]
+[Tasks marked [X] in this session]
 
-## Decisoes Tomadas
+## Decisions Made
 
-[Decisoes tomadas e por que — extrair de commits/contexto]
+[Decisions taken and why — extract from commits/context]
 
-## Problemas e Solucoes
+## Issues and Solutions
 
-[Problemas encontrados e como resolvidos]
+[Issues encountered and how they were resolved]
 
-## Proximos Passos
+## Next Steps
 
-[Derivado das tasks pendentes]
+[Derived from pending tasks]
 
-## Arquivos Alterados
+## Changed Files
 
-[Lista de arquivos criados/modificados]
+[List of created/modified files]
 ```
 
 ### 3. Auto-Review
 
-| # | Check | Acao se falhar |
-|---|-------|---------------|
-| 1 | Todas tasks [X] tem commits correspondentes? | Verificar git log |
-| 2 | Nenhuma informacao inventada? | Cruzar com git log/filesystem |
-| 3 | Proximos passos derivados de tasks pendentes reais? | Verificar tasks.md |
+| # | Check | Action on Failure |
+|---|-------|-------------------|
+| 1 | Do all [X] tasks have corresponding commits? | Verify via git log |
+| 2 | Is there any invented information? | Cross-check with git log/filesystem |
+| 3 | Are next steps derived from real pending tasks? | Verify against tasks.md |
 
 ### 4. Gate: Auto
 
-Sem aprovacao humana. Salvar imediatamente.
+No human approval required. Save immediately.
 
-### 5. Salvar + Relatorio
+### 5. Save + Report
 
 ```
-## Checkpoint salvo
+## Checkpoint saved
 
-**Arquivo:** [path/STATE.md]
-**Tasks done esta sessao:** <N>
-**Proximos passos:** <N>
+**File:** [path/STATE.md]
+**Tasks done this session:** <N>
+**Next steps:** <N>
 ```
 
-## Tratamento de Erros
+## Error Handling
 
-| Problema | Acao |
-|----------|------|
-| Sem tasks.md | Criar STATE.md minimo baseado em git log |
-| Sem git repo | Criar STATE.md baseado apenas em filesystem |
+| Issue | Action |
+|-------|--------|
+| No tasks.md found | Create minimal STATE.md based on git log |
+| No git repo | Create STATE.md based on filesystem only |

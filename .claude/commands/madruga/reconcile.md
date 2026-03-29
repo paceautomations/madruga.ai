@@ -1,115 +1,115 @@
 ---
-description: Detecta drift entre implementacao e documentacao e propoe atualizacoes
+description: Detect drift between implementation and documentation and propose updates
 arguments:
   - name: platform
-    description: "Nome da plataforma/produto."
+    description: "Platform/product name."
     required: false
-argument-hint: "[nome-da-plataforma]"
+argument-hint: "[platform-name]"
 handoffs:
-  - label: Verificar Status do Pipeline
+  - label: Check Pipeline Status
     agent: madruga/pipeline-status
-    prompt: "Documentacao atualizada. Verificar status do pipeline."
+    prompt: "Documentation updated. Check pipeline status."
 ---
 
-# Reconcile — Deteccao e Correcao de Drift
+# Reconcile — Drift Detection and Correction
 
-Compara implementacao (git diff / PR) com documentacao de arquitetura. Identifica drift e propoe atualizacoes nos docs afetados.
+Compare implementation (git diff / PR) with architecture documentation. Identify drift and propose updates to affected docs.
 
-## Regra Cardinal: ZERO Drift Silencioso
+## Cardinal Rule: ZERO Silent Drift
 
-Todo desvio entre implementacao e documentacao deve ser explicitado. Nenhuma mudanca de arquitetura pode existir sem atualizacao correspondente nos docs.
+Every deviation between implementation and documentation must be made explicit. No architecture change can exist without a corresponding doc update.
 
 ## Persona
 
-Architect / Documentation Guardian. Portugues BR.
+Architect / Documentation Guardian. Write all generated artifact content in Brazilian Portuguese (PT-BR).
 
-## Uso
+## Usage
 
-- `/reconcile fulano` — Reconcilia "fulano" pos-implementacao
-- `/reconcile` — Pergunta plataforma
+- `/reconcile fulano` — Reconcile "fulano" post-implementation
+- `/reconcile` — Prompt for platform
 
-## Diretorio
+## Output Directory
 
-Atualiza docs existentes em `platforms/<nome>/`. Report em `reconcile-report.md`.
+Update existing docs in `platforms/<name>/`. Report saved to `reconcile-report.md`.
 
-## Instrucoes
+## Instructions
 
-### 0. Pre-requisitos
+### 0. Prerequisites
 
-Rodar `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <nome> --skill reconcile` e parsear JSON.
-- Se `ready: false`: ERROR listando dependencias faltantes.
-- Se `ready: true`: ler artefatos em `available`.
-- Ler `.specify/memory/constitution.md`.
+Run `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <name> --skill reconcile` and parse the JSON output.
+- If `ready: false`: ERROR listing missing dependencies.
+- If `ready: true`: read artifacts listed in `available`.
+- Read `.specify/memory/constitution.md`.
 
-### 1. Coletar Contexto + Detectar Drift
+### 1. Collect Context + Detect Drift
 
-Ler:
-- `git diff` ou `git log` recente
+Read:
+- `git diff` or recent `git log`
 - `business/*` — vision, solution-overview, process
 - `engineering/*` — blueprint, domain-model, containers, context-map
-- `model/*.likec4` — modelos LikeC4
+- `model/*.likec4` — LikeC4 models
 
-**Categorias de drift:**
+**Drift categories:**
 
-| Categoria | Como Detectar |
-|-----------|--------------|
-| Scope drift | Features implementadas nao estao no solution-overview |
-| Architecture drift | Implementacao diverge do blueprint/ADRs |
-| Model drift | Containers/contexts mudaram mas LikeC4 nao atualizado |
-| Domain drift | Novas entidades/agregados nao no domain-model |
+| Category | How to Detect |
+|----------|--------------|
+| Scope drift | Implemented features not in solution-overview |
+| Architecture drift | Implementation diverges from blueprint/ADRs |
+| Model drift | Containers/contexts changed but LikeC4 not updated |
+| Domain drift | New entities/aggregates not in domain-model |
 
-**Perguntas Estruturadas:**
+**Structured Questions:**
 
-| Categoria | Pergunta |
-|-----------|----------|
-| **Premissas** | "Assumo que mudanca em [X] foi intencional. Correto?" |
-| **Trade-offs** | "Atualizar docs agora (completo) ou marcar para proximo sprint (rapido)?" |
-| **Gaps** | "Nao sei se mudanca em [X] afeta [doc Y]. Verificar?" |
-| **Provocacao** | "Drift em [area] pode indicar que o ADR original precisa ser revisado." |
+| Category | Question |
+|----------|----------|
+| **Assumptions** | "I assume the change in [X] was intentional. Correct?" |
+| **Trade-offs** | "Update docs now (complete) or mark for next sprint (fast)?" |
+| **Gaps** | "I am not sure if the change in [X] affects [doc Y]. Verify?" |
+| **Challenge** | "Drift in [area] may indicate the original ADR needs revision." |
 
-Aguardar respostas ANTES de propor atualizacoes.
+Wait for answers BEFORE proposing updates.
 
-### 2. Propor Atualizacoes
+### 2. Propose Updates
 
-Para cada drift detectado, gerar proposta estruturada:
+For each detected drift, generate a structured proposal:
 
-| # | Drift | Doc Afetado | Mudanca Proposta | Severidade |
-|---|-------|-------------|-----------------|-----------|
-| 1 | [descricao] | [arquivo] | [o que mudar] | alta/media/baixa |
+| # | Drift | Affected Doc | Proposed Change | Severity |
+|---|-------|-------------|----------------|----------|
+| 1 | [description] | [file] | [what to change] | high/medium/low |
 
 ### 3. Auto-Review
 
-| # | Check | Acao se falhar |
-|---|-------|---------------|
-| 1 | Todo drift identificado? | Re-scan |
-| 2 | Atualizacoes consistentes entre docs? | Verificar cross-references |
-| 3 | LikeC4 syntax valida? | Corrigir |
-| 4 | Toda proposta tem >=2 alternativas? | Adicionar alternativa |
-| 5 | Trade-offs explicitos? | Adicionar pros/cons |
-| 6 | Premissas marcadas [VALIDAR] ou com dado? | Marcar [VALIDAR] |
+| # | Check | Action on Failure |
+|---|-------|-------------------|
+| 1 | Is all drift identified? | Re-scan |
+| 2 | Are updates consistent across docs? | Verify cross-references |
+| 3 | Is LikeC4 syntax valid? | Fix |
+| 4 | Does every proposal have >=2 alternatives? | Add alternative |
+| 5 | Are trade-offs explicit? | Add pros/cons |
+| 6 | Are assumptions marked [VALIDATE] or backed by data? | Mark [VALIDATE] |
 
 ### 4. Gate: Human
 
-Apresentar drift report e atualizacoes propostas. Pedir aprovacao antes de aplicar.
+Present the drift report and proposed updates. Request approval before applying.
 
-### 5. Salvar + Relatorio
+### 5. Save + Report
 
 ```
-## Reconciliacao completa
+## Reconciliation complete
 
-**Arquivo:** platforms/<nome>/reconcile-report.md
-**Linhas:** <N>
-**Drifts detectados:** <N>
-**Docs atualizados:** <N>
-**Categorias:** [scope/architecture/model/domain]
+**File:** platforms/<name>/reconcile-report.md
+**Lines:** <N>
+**Drifts detected:** <N>
+**Docs updated:** <N>
+**Categories:** [scope/architecture/model/domain]
 
-Proximo: `/pipeline-status <nome>` para verificar estado do pipeline.
+Next: `/pipeline-status <name>` to check pipeline state.
 ```
 
-## Tratamento de Erros
+## Error Handling
 
-| Problema | Acao |
-|----------|------|
-| Sem git diff (nada mudou) | Reportar "zero drift" |
-| Docs de arquitetura incompletos | Listar gaps, sugerir completar pipeline |
-| Drift muito grande | Sugerir re-executar skills afetadas |
+| Issue | Action |
+|-------|--------|
+| No git diff (nothing changed) | Report "zero drift" |
+| Architecture docs incomplete | List gaps, suggest completing the pipeline |
+| Drift too large | Suggest re-running affected skills |

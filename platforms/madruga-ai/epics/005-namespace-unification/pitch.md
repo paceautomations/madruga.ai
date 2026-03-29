@@ -17,7 +17,7 @@ arch:
 O sistema tem dois namespaces que confundem usuarios e LLMs:
 
 1. **speckit.\*** — skills do pipeline spec-to-code (specify, plan, tasks, clarify, analyze, etc.)
-2. **madruga.\*** — skills de arquitetura (platform-new, architecture-portal, vision-one-pager, solution-overview)
+2. **madruga.\*** — skills de arquitetura (pipeline DAG: platform-new, vision-one-pager, solution-overview, etc.)
 
 Isso causa:
 - **Confusao de naming** — usuario digita `/speckit.specify` mas pensa "madruga". Ou vice-versa.

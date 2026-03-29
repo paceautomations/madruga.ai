@@ -130,7 +130,7 @@ Each platform is documented incrementally via **atomic skills** orchestrated by 
 platform-new → vision → solution-overview → business-process
 → tech-research → adr-gen → blueprint → folder-arch
                                       → domain-model → containers → context-map
-→ epic-breakdown → roadmap → [per-epic: discuss → SpecKit → verify → reconcile]
+→ epic-breakdown → roadmap → [per-epic: discuss → SpecKit → verify → test-ai? → reconcile]
 ```
 
 ### Gate Types

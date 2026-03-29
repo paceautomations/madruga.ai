@@ -1,232 +1,232 @@
 ---
-description: Gera blueprint de engenharia com concerns transversais, NFRs e topologia de deploy para qualquer plataforma
+description: Generate an engineering blueprint with cross-cutting concerns, NFRs, and deploy topology for any platform
 arguments:
   - name: platform
-    description: "Nome da plataforma/produto. Se vazio, pergunta."
+    description: "Platform/product name. If empty, prompt the user."
     required: false
-argument-hint: "[nome-da-plataforma]"
+argument-hint: "[platform-name]"
 handoffs:
-  - label: Definir Folder Architecture
+  - label: Define Folder Architecture
     agent: madruga/folder-arch
-    prompt: Definir estrutura de pastas baseada no blueprint aprovado
-  - label: Gerar Domain Model (DDD)
+    prompt: Define folder structure based on the approved blueprint
+  - label: Generate Domain Model (DDD)
     agent: madruga/domain-model
-    prompt: Gerar modelo de dominio DDD baseado no blueprint e fluxos de negocio
+    prompt: Generate DDD domain model based on the blueprint and business flows
 ---
 
-# Blueprint — Engenharia de Plataforma
+# Blueprint — Platform Engineering
 
-Gera blueprint de engenharia (~200 linhas) com concerns transversais, NFRs, topologia de deploy, data map e glossario tecnico. Referencia ADRs e business layer.
+Generate an engineering blueprint (~200 lines) covering cross-cutting concerns, NFRs, deploy topology, data map, and technical glossary. Reference ADRs and the business layer.
 
-## Regra Cardinal: ZERO Over-Engineering
+## Cardinal Rule: ZERO Over-Engineering
 
-Se nao consigo explicar uma decisao em 1 paragrafo, esta complexo demais. Toda escolha arquitetural deve ser **a coisa mais simples que funciona** para o contexto atual.
+If you cannot explain a decision in 1 paragraph, it is too complex. Every architectural choice must be **the simplest thing that works** for the current context.
 
-**NUNCA:**
-- Adicionar camada de abstracao "para o futuro"
-- Escolher tecnologia complexa quando simples resolve
-- Copiar arquitetura de FAANG sem justificar para o tamanho do projeto
-- Incluir concern transversal sem problema real que resolve
+**NEVER:**
+- Add an abstraction layer "for the future"
+- Choose a complex technology when a simple one suffices
+- Copy FAANG architecture without justifying it for the project's scale
+- Include a cross-cutting concern without a real problem it solves
 
-**SEMPRE perguntar:** "Isso e a coisa mais simples que funciona?"
+**ALWAYS ask:** "Is this the simplest thing that works?"
 
 ## Persona
 
-Staff Engineer com 15+ anos. Obcecado por simplicidade. Referencia patterns reais (Netflix, Shopify, Stripe) mas adapta ao tamanho do projeto. Portugues BR.
+Staff Engineer with 15+ years of experience. Obsessed with simplicity. Reference real-world patterns (Netflix, Shopify, Stripe) but adapt to the project's scale. Write prose in Brazilian Portuguese (PT-BR).
 
-## Uso
+## Usage
 
-- `/blueprint fulano` — Gera blueprint para plataforma "fulano"
-- `/blueprint` — Pergunta nome da plataforma
+- `/blueprint fulano` — Generate blueprint for the "fulano" platform
+- `/blueprint` — Prompt for the platform name
 
-## Diretorio
+## Output Directory
 
-Salvar em `platforms/<nome>/engineering/blueprint.md`.
+Save to `platforms/<name>/engineering/blueprint.md`.
 
-## Instrucoes
+## Instructions
 
-### 0. Pre-requisitos
+### 0. Prerequisites
 
-Rodar `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <nome> --skill blueprint` e parsear JSON.
-- Se `ready: false`: ERROR listando dependencias faltantes.
-- Se `ready: true`: ler artefatos em `available`.
-- Ler `.specify/memory/constitution.md`.
+Run `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <name> --skill blueprint` and parse the JSON output.
+- If `ready: false`: ERROR — list missing dependencies.
+- If `ready: true`: read the artifacts listed in `available`.
+- Read `.specify/memory/constitution.md`.
 
-### 1. Coletar Contexto + Questionar
+### 1. Collect Context + Ask Questions
 
-**Leitura obrigatoria:**
-- `decisions/ADR-*.md` — todas as decisoes tecnologicas aprovadas
+**Required reading:**
+- `decisions/ADR-*.md` — all approved technology decisions
 - `business/*` — vision, solution-overview, process
-- `research/codebase-context.md` — se existir (brownfield)
+- `research/codebase-context.md` — if present (brownfield project)
 
-**Para cada concern transversal:**
-- Usar Context7 para pesquisar best practices da stack escolhida (nos ADRs)
-- Web search: "[tecnologia] [concern] best practices 2026"
+**For each cross-cutting concern:**
+- Use Context7 to research best practices for the stack chosen in the ADRs
+- Web search: "[technology] [concern] best practices 2026"
 
-**Perguntas Estruturadas:**
+**Structured Questions:**
 
-| Categoria | Pergunta |
-|-----------|----------|
-| **Premissas** | "Assumo que [concern X] e necessario porque [razao]. Correto?" |
-| **Trade-offs** | "Para logging: [structured JSON] (simples, busca facil) ou [ELK stack] (poderoso, complexo). Qual?" |
-| **Gaps** | "ADRs nao cobrem [observabilidade/seguranca]. Definir agora?" |
-| **Provocacao** | "Voce realmente precisa de [concern]? Netflix tem, mas com 100x sua escala." |
+| Category | Question |
+|----------|----------|
+| **Assumptions** | "I assume [concern X] is needed because [reason]. Correct?" |
+| **Trade-offs** | "For logging: [structured JSON] (simple, easy search) or [ELK stack] (powerful, complex). Which?" |
+| **Gaps** | "ADRs do not cover [observability/security]. Define now?" |
+| **Challenge** | "Do you really need [concern]? Netflix has it, but at 100x your scale." |
 
-Aguardar respostas ANTES de gerar.
+Wait for answers BEFORE generating.
 
-### 2. Gerar Blueprint
+### 2. Generate Blueprint
 
-Verificar se template existe em `.specify/templates/platform/template/engineering/blueprint.md.jinja` e usar sua estrutura.
+Check if the template exists at `.specify/templates/platform/template/engineering/blueprint.md.jinja` and follow its structure.
 
 ```markdown
 ---
 title: "Engineering Blueprint"
 updated: YYYY-MM-DD
 ---
-# <Nome> — Engineering Blueprint
+# <Name> — Engineering Blueprint
 
-> Decisoes de engenharia, concerns transversais e topologia. Ultima atualizacao: YYYY-MM-DD.
+> Engineering decisions, cross-cutting concerns, and topology. Last updated: YYYY-MM-DD.
 
 ---
 
-## Stack Tecnologico
+## Technology Stack
 
-[Tabela resumo derivada dos ADRs — nao repetir detalhes, referenciar ADR-NNN]
+[Summary table derived from ADRs — do not repeat details, reference ADR-NNN]
 
-| Categoria | Escolha | ADR |
-|-----------|---------|-----|
+| Category | Choice | ADR |
+|----------|--------|-----|
 | ... | ... | ADR-NNN |
 
 ---
 
-## Concerns Transversais
+## Cross-Cutting Concerns
 
-### Autenticacao & Autorizacao
-[Approach, padrao, referencia a ADR se aplicavel]
+### Authentication & Authorization
+[Approach, pattern, reference to ADR if applicable]
 
-### Logging & Observabilidade
-[Structured logging, metricas, tracing — o minimo necessario]
+### Logging & Observability
+[Structured logging, metrics, tracing — the minimum necessary]
 
-### Tratamento de Erros
-[Padrao de error handling, error codes, retry policy]
+### Error Handling
+[Error handling pattern, error codes, retry policy]
 
-### Configuracao
-[Como configs sao gerenciadas — env vars, config files, feature flags]
+### Configuration
+[How configs are managed — env vars, config files, feature flags]
 
-### Seguranca
-[OWASP top 10 relevantes, input validation, secrets management]
+### Security
+[Relevant OWASP top 10, input validation, secrets management]
 
-[Adicionar apenas concerns que o projeto REALMENTE precisa]
+[Add only concerns the project ACTUALLY needs]
 
 ---
 
 ## NFRs (Non-Functional Requirements)
 
-| NFR | Target | Metrica | Como Medir |
-|-----|--------|---------|-----------|
-| Latencia P95 | < Xms | response time | [ferramenta] |
-| Disponibilidade | X% | uptime | [ferramenta] |
-| Throughput | X req/s | requests/sec | [ferramenta] |
-| Recovery | RTO Xmin | time to recover | [processo] |
+| NFR | Target | Metric | How to Measure |
+|-----|--------|--------|----------------|
+| P95 Latency | < Xms | response time | [tool] |
+| Availability | X% | uptime | [tool] |
+| Throughput | X req/s | requests/sec | [tool] |
+| Recovery | RTO Xmin | time to recover | [process] |
 
 ---
 
-## Topologia de Deploy
+## Deploy Topology
 
-[Diagrama Mermaid com containers/servicos e como se conectam]
+[Mermaid diagram with containers/services and how they connect]
 
 ```mermaid
 graph LR
   ...
 ```
 
-| Container | Tecnologia | Responsabilidade |
-|-----------|-----------|-----------------|
+| Container | Technology | Responsibility |
+|-----------|-----------|----------------|
 | ... | ... | ... |
 
 ---
 
 ## Data Map
 
-| Store | Tipo | Dados | Tamanho estimado |
-|-------|------|-------|-----------------|
+| Store | Type | Data | Estimated Size |
+|-------|------|------|----------------|
 | ... | ... | ... | ... |
 
 ---
 
-## Glossario Tecnico
+## Technical Glossary
 
-| Termo | Definicao |
-|-------|-----------|
+| Term | Definition |
+|------|-----------|
 | ... | ... |
 ```
 
 ### 3. Auto-Review
 
-| # | Check | Acao se falhar |
-|---|-------|---------------|
-| 1 | Todo NFR tem target mensuravel? | Adicionar numero |
-| 2 | Todo concern tem justificativa ("porque precisamos")? | Justificar ou remover |
-| 3 | Nenhum over-engineering ("para o futuro")? | Simplificar |
-| 4 | Referencia ADRs para decisoes de stack? | Adicionar referencia |
-| 5 | Max 200 linhas? | Condensar |
-| 6 | Referencia patterns reais (empresas/projetos)? | Adicionar |
-| 7 | Topologia tem diagrama Mermaid? | Adicionar |
-| 8 | Cada decisao responde "e a coisa mais simples que funciona?"? | Revalidar |
+| # | Check | Action on Failure |
+|---|-------|-------------------|
+| 1 | Does every NFR have a measurable target? | Add a number |
+| 2 | Does every concern have a justification ("why we need it")? | Justify or remove |
+| 3 | No over-engineering ("for the future")? | Simplify |
+| 4 | References ADRs for stack decisions? | Add references |
+| 5 | Max 200 lines? | Condense |
+| 6 | References real-world patterns (companies/projects)? | Add |
+| 7 | Does the topology include a Mermaid diagram? | Add |
+| 8 | Does each decision answer "is this the simplest thing that works?"? | Revalidate |
 
-### 4. Gate de Aprovacao: Human
+### 4. Approval Gate: Human
 
-Apresentar ao usuario:
+Present to the user:
 
-**Resumo do Blueprint:**
-- Stack: [resumo]
-- Concerns: [N] transversais incluidos
-- NFRs: [lista com targets]
+**Blueprint Summary:**
+- Stack: [summary]
+- Concerns: [N] cross-cutting concerns included
+- NFRs: [list with targets]
 - Containers: [N]
 
-**Decisoes-chave:**
-| # | Decisao | Alternativa mais simples | Alternativa mais robusta | Escolha |
-|---|---------|------------------------|------------------------|---------|
+**Key Decisions:**
+| # | Decision | Simpler Alternative | More Robust Alternative | Choice |
+|---|----------|---------------------|------------------------|--------|
 | 1 | ... | ... | ... | ... |
 
-**Perguntas de validacao:**
-1. O blueprint reflete a complexidade NECESSARIA (nao mais)?
-2. Algum concern e desnecessario para o momento atual?
-3. NFR targets sao realistas?
-4. Posso seguir para folder-arch e domain-model?
+**Validation Questions:**
+1. Does the blueprint reflect the NECESSARY complexity (no more)?
+2. Is any concern unnecessary for the current moment?
+3. Are the NFR targets realistic?
+4. May I proceed to folder-arch and domain-model?
 
-### 5. Salvar + Relatorio
+### 5. Save + Report
 
-1. Salvar em `platforms/<nome>/engineering/blueprint.md`
-2. Informar:
+1. Save to `platforms/<name>/engineering/blueprint.md`
+2. Present the following report:
 
 ```
-## Blueprint gerado
+## Blueprint Generated
 
-**Arquivo:** platforms/<nome>/engineering/blueprint.md
-**Linhas:** <N>
-**Concerns:** <N> transversais
-**NFRs:** <N> com targets
+**File:** platforms/<name>/engineering/blueprint.md
+**Lines:** <N>
+**Concerns:** <N> cross-cutting
+**NFRs:** <N> with targets
 
 ### Checks
-[x] NFRs com targets mensuraveis
-[x] Concerns justificados
+[x] NFRs with measurable targets
+[x] Concerns justified
 [x] Zero over-engineering
-[x] ADRs referenciados
-[x] Max 200 linhas
-[x] Diagrama de topologia presente
+[x] ADRs referenced
+[x] Max 200 lines
+[x] Deploy topology diagram present
 
-### Proximos Passos (paralelos)
-- `/folder-arch <nome>` — Definir estrutura de pastas
-- `/domain-model <nome>` — Gerar modelo de dominio DDD
+### Next Steps (parallel)
+- `/folder-arch <name>` — Define folder structure
+- `/domain-model <name>` — Generate DDD domain model
 ```
 
-## Tratamento de Erros
+## Error Handling
 
-| Problema | Acao |
-|----------|------|
-| ADRs incompletos ou conflitantes | Listar conflitos, pedir resolucao antes de gerar |
-| Projeto muito simples (1 servico) | Gerar blueprint minimo — nao forcar complexidade |
-| Muitos concerns (>7) | Perguntar: "Quais sao os 5 mais criticos agora?" |
-| NFRs sem baseline | Marcar [DEFINIR] e sugerir defaults por tipo de app |
-| Sem codebase-context | OK — tratar como greenfield |
+| Problem | Action |
+|---------|--------|
+| ADRs incomplete or conflicting | List conflicts; request resolution before generating |
+| Very simple project (1 service) | Generate a minimal blueprint — do not force complexity |
+| Too many concerns (>7) | Ask: "What are the 5 most critical ones right now?" |
+| NFRs without baseline | Mark [TO DEFINE] and suggest defaults by app type |
+| No codebase-context | OK — treat as greenfield |

@@ -41,11 +41,13 @@ def _bc_ids(data: dict) -> list[str]:
 
 
 def validate_model(model_dir: Path) -> None:
+    """Validate the LikeC4 model by running likec4 build."""
     subprocess.run(["likec4", "build", str(model_dir)], check=True, timeout=60)
     print(f"[ok] Model validated: {model_dir}")
 
 
 def export_json(model_dir: Path) -> dict:
+    """Export LikeC4 model to JSON and return parsed data."""
     out_file = model_dir / "output" / "likec4.json"
     out_file.parent.mkdir(exist_ok=True)
     subprocess.run(
@@ -68,6 +70,7 @@ def export_json(model_dir: Path) -> dict:
 
 
 def export_png(model_dir: Path) -> None:
+    """Export all views as PNG images."""
     output_dir = model_dir / "output"
     output_dir.mkdir(exist_ok=True)
     subprocess.run(
@@ -80,6 +83,7 @@ def export_png(model_dir: Path) -> None:
 
 
 def _containers_table(data: dict) -> str:
+    """Build markdown table of platform containers."""
     rows = []
     bc_prefixes = tuple(f"{bc_id}." for bc_id in _bc_ids(data))
 
@@ -90,16 +94,17 @@ def _containers_table(data: dict) -> str:
             continue
 
         title = _esc(el.get("title", eid.split(".")[-1]))
-        tech = _esc(el.get("technology", "—"))
-        port = _esc(el.get("metadata", {}).get("port", "—"))
+        tech = _esc(el.get("technology", "-"))
+        port = _esc(el.get("metadata", {}).get("port", "-"))
         desc = _esc(_desc_text(el))
         rows.append(f"| **{title}** | {tech} | {port} | {desc} |")
 
-    header = "| Container | Tech | Porta | Responsabilidade |\n|-----------|------|-------|------------------|\n"
+    header = "| Container | Tech | Port | Responsibility |\n|-----------|------|------|----------------|\n"
     return header + "\n".join(rows)
 
 
 def _domains_table(data: dict) -> str:
+    """Build markdown table of bounded contexts (domains)."""
     rows = []
     for i, bc_id in enumerate(_bc_ids(data), 1):
         bc = data["elements"][bc_id]
@@ -120,22 +125,23 @@ def _domains_table(data: dict) -> str:
             if "supporting" in tags
             else "Generic"
             if "generic" in tags
-            else "—"
+            else "-"
         )
 
         # Avoid duplication if title already contains the pattern (e.g. "Conversation (Core)")
-        if pattern != "—" and pattern.lower() in title.lower():
+        if pattern != "-" and pattern.lower() in title.lower():
             label = title
         else:
             label = f"{title} ({pattern})"
 
         rows.append(f"| {i} | **{label}** | {', '.join(modules)} | {desc} |")
 
-    header = "| # | Dominio | Modulos | Responsabilidade |\n|---|---------|---------|------------------|\n"
+    header = "| # | Domain | Modules | Responsibility |\n|---|--------|---------|----------------|\n"
     return header + "\n".join(rows)
 
 
 def _integrations_table(data: dict) -> str:
+    """Build markdown table of external integrations."""
     rows = []
     count = 0
 
@@ -155,13 +161,13 @@ def _integrations_table(data: dict) -> str:
             data["elements"].get(target_id, {}).get("title", target_id.split(".")[-1])
         )
 
-        title = _esc(rel.get("title", "—"))
+        title = _esc(rel.get("title", "-"))
         meta = rel.get("metadata", {})
-        freq = _esc(meta.get("frequency", "—"))
-        payload_desc = _esc(meta.get("data", "—"))
-        fallback = _esc(meta.get("fallback", "—"))
+        freq = _esc(meta.get("frequency", "-"))
+        payload_desc = _esc(meta.get("data", "-"))
+        fallback = _esc(meta.get("fallback", "-"))
 
-        direction = f"{source_name} → {target_name}"
+        direction = f"{source_name} -> {target_name}"
         rows.append(
             f"| {count} | **{title}** | {_esc(tech)} | {direction} | {freq} | {payload_desc} | {fallback} |"
         )
@@ -169,7 +175,7 @@ def _integrations_table(data: dict) -> str:
         if count >= MAX_INTEGRATION_ROWS:
             break
 
-    header = "| # | Sistema | Protocolo | Direcao | Frequencia | Dados | Fallback |\n|---|---------|-----------|---------|-----------|-------|----------|\n"
+    header = "| # | System | Protocol | Direction | Frequency | Data | Fallback |\n|---|--------|----------|-----------|-----------|------|----------|\n"
     return header + "\n".join(rows)
 
 
@@ -187,6 +193,7 @@ def _rel_kind_label(kind: str) -> str:
 
 
 def _ddd_relations_table(data: dict) -> str:
+    """Build markdown table of DDD inter-domain relationships."""
     rows = []
     bc_ids = set(_bc_ids(data))
     bc_prefixes = tuple(f"{bc_id}." for bc_id in bc_ids)
@@ -197,7 +204,7 @@ def _ddd_relations_table(data: dict) -> str:
         return kind in (BC_KIND, MODULE_KIND) or eid in bc_ids
 
     def _bc_name(eid: str) -> str:
-        """Get the bounded context name for an element (module → parent BC)."""
+        """Get the bounded context name for an element (module -> parent BC)."""
         el = data["elements"].get(eid, {})
         if el.get("kind") == BC_KIND or eid in bc_ids:
             return _esc(el.get("title", eid.split(".")[-1]))
@@ -222,7 +229,7 @@ def _ddd_relations_table(data: dict) -> str:
 
         rows.append(f"| {source_name} | {target_name} | {label} | {desc} |")
 
-    header = "| Upstream | Downstream | Tipo | Descricao |\n|----------|-----------|------|----------|\n"
+    header = "| Upstream | Downstream | Type | Description |\n|----------|-----------|------|-------------|\n"
     return header + "\n".join(rows)
 
 
@@ -253,9 +260,10 @@ def update_markdown(md_path: Path, marker: str, content: str) -> bool:
 def build(
     platform: str, validate_only: bool = False, do_export_png: bool = False
 ) -> None:
+    """Main build pipeline: validate, export JSON, populate markdown tables."""
     model_dir = PLATFORMS_DIR / platform / "model"
     if not model_dir.exists():
-        print(f"[error] Model dir not found: {model_dir}")
+        print(f"[error] Model directory not found: {model_dir}")
         sys.exit(1)
 
     if validate_only:
