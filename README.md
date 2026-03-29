@@ -61,8 +61,10 @@ PLANNING                                    epic-breakdown ←──┘
 
 ### Ciclo Per-Epic (pos-roadmap)
 
+**Obrigatorio: cada epic roda em branch `epic/<platform>/<NNN-slug>`.** `epic-context` cria a branch. Merge via PR apos reconcile.
+
 ```
-epic-context → specify → clarify → plan → tasks → analyze → implement → verify → qa (opcional) → reconcile
+epic-context (cria branch) → specify → clarify → plan → tasks → analyze → implement → verify → qa (opcional) → reconcile → PR/merge
 ```
 
 ### Estimativas de Tempo

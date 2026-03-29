@@ -7,6 +7,22 @@ Skills reference this file and add artifact-specific steps 1 (context) and 2 (ge
 
 ## Step 0: Prerequisites
 
+### Branch Guard (epic cycle skills ONLY)
+
+For any epic cycle skill (epic-context, specify, plan, tasks, implement, verify, qa, reconcile):
+
+```bash
+current_branch=$(git branch --show-current)
+```
+
+- If `current_branch` is `main` → **ERROR**: "Epic work MUST happen on a feature branch. Run `/epic-context <platform> <epic>` first to create branch `epic/<platform>/<NNN-slug>`."
+- If `current_branch` starts with `epic/` → OK, proceed.
+- Exception: `epic-context` itself creates the branch (see epic-context.md Step 0).
+
+**This is a hard stop. Do NOT proceed with any epic cycle work on main.**
+
+### Dependency Check
+
 Run the prerequisites check from the repo root:
 
 ```

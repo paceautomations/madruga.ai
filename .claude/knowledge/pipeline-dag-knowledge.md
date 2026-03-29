@@ -229,9 +229,20 @@ handoffs:
 
 After the pipeline completes (roadmap done), each epic follows this cycle:
 
+### Branch Requirement (MANDATORY)
+
+**Every epic MUST run on a dedicated branch.** NEVER commit epic work directly to main.
+
+- **Branch naming**: `epic/<platform>/<NNN-slug>` (e.g., `epic/fulano/001-channel-pipeline`)
+- **Created by**: `epic-context` (Step 1) — the first skill in the cycle creates the branch
+- **Merged by**: User after reconcile completes — via PR or manual merge
+- **Guard**: All epic cycle skills check `git branch --show-current` and STOP if on main (see pipeline-contract-base.md Step 0)
+
+### Cycle Steps
+
 | Step | Skill | Gate | Purpose |
 |------|-------|------|---------|
-| 1 | epic-context | human | Capture implementation context and decisions |
+| 1 | epic-context | human | **Create branch** + capture implementation context |
 | 2 | speckit.specify | human | Feature specification |
 | 3 | speckit.clarify | human | Reduce ambiguity in spec before planning |
 | 4 | speckit.plan | human | Design artifacts |

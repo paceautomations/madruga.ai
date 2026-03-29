@@ -184,9 +184,11 @@ After the pipeline completes (roadmap done), each epic follows:
 epic-context → specify → clarify → plan → tasks → analyze → implement → analyze → verify → qa? → reconcile
 ```
 
+**MANDATORY: Every epic runs on a dedicated branch `epic/<platform>/<NNN-slug>`.** `epic-context` creates the branch. All subsequent skills verify they are NOT on main (branch guard in pipeline-contract-base.md Step 0). Merge to main via PR after reconcile.
+
 | Step | Skill | Gate | Purpose |
 |------|-------|------|---------|
-| 1 | `epic-context` | human | Capture implementation context and decisions |
+| 1 | `epic-context` | human | **Create branch** + capture implementation context |
 | 2 | `speckit.specify` | human | Feature specification |
 | 3 | `speckit.clarify` | human | Reduce ambiguity in spec before planning |
 | 4 | `speckit.plan` | human | Design artifacts |

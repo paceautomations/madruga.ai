@@ -67,7 +67,8 @@ epic-breakdown → roadmap
 - Define QUANDO entregar (epics Shape Up)
 
 ### Ciclo por Epic (~2-4h cada)
-epic-context → specify → plan → tasks → implement → verify → reconcile
+epic-context (cria branch) → specify → plan → tasks → implement → verify → reconcile → PR/merge
+IMPORTANTE: cada epic roda em branch dedicada `epic/<platform>/<NNN-slug>`
 
 Tempo total estimado: ~7h para pipeline completo + 2-4h por epic.
 ```

@@ -39,7 +39,28 @@ Save to `platforms/<name>/epics/<N>/context.md`.
 
 ## Instructions
 
-Additional required reading:
+### 0. Create Feature Branch
+
+**CRITICAL**: Before ANY work on this epic, create a dedicated branch. NEVER work on main.
+
+```bash
+# Check current branch
+current_branch=$(git branch --show-current)
+if [ "$current_branch" = "main" ]; then
+    git checkout -b epic/<platform>/<NNN-slug>
+fi
+```
+
+Branch naming: `epic/<platform>/<NNN-slug>` (e.g., `epic/fulano/001-channel-pipeline`).
+
+If the branch already exists (resuming work), just checkout:
+```bash
+git checkout epic/<platform>/<NNN-slug>
+```
+
+**Do NOT proceed if on main.** All epic work MUST happen on a feature branch.
+
+### Additional required reading:
 - `epics/<NNN>/pitch.md` — epic scope
 - `engineering/blueprint.md` — stack and concerns
 - `engineering/domain-model.md` — DDD
