@@ -10,6 +10,13 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const yaml = require('js-yaml');
 
+/** Phase → Starlight badge variant mapping */
+const phaseBadgeVariant = {
+  now: 'success',
+  next: 'caution',
+  later: 'note',
+};
+
 // Resolve platforms dir relative to the repo root (works in both dev and build)
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -45,65 +52,113 @@ export function discoverPlatforms(platformsDir) {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/**
+ * Discover epics for a platform by reading pitch.md frontmatter.
+ * Returns sorted array of { dir, id, title, status, phase }.
+ */
+export function discoverEpics(platformName, platformsDir) {
+  const dir = platformsDir ?? PLATFORMS_DIR;
+  const epicsDir = path.join(dir, platformName, 'epics');
+  if (!fs.existsSync(epicsDir)) return [];
+
+  return fs
+    .readdirSync(epicsDir, { withFileTypes: true })
+    .filter((d) => d.isDirectory())
+    .map((d) => {
+      const pitchPath = path.join(epicsDir, d.name, 'pitch.md');
+      if (!fs.existsSync(pitchPath)) return null;
+      const content = fs.readFileSync(pitchPath, 'utf8');
+      const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
+      if (!fmMatch) return null;
+      const fm = yaml.load(fmMatch[1]);
+      return {
+        dir: d.name,
+        id: fm.id ?? d.name.split('-')[0],
+        title: fm.title ?? d.name,
+        status: fm.status ?? 'planned',
+        phase: fm.phase ?? 'later',
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => String(a.id).localeCompare(String(b.id)));
+}
+
 export function buildSidebar(platforms) {
-  return platforms.map((p) => ({
-    label: p.title || p.name,
-    collapsed: true,
-    items: [
-      {
-        label: 'Business',
-        items: [
-          { slug: `${p.name}/business/vision` },
-          ...(p.views.flows?.length
-            ? [{ label: 'Business Process', link: `/${p.name}/business-flow/` }]
-            : []),
-          { slug: `${p.name}/business/solution-overview` },
-        ],
-      },
-      {
-        label: 'Engineering',
-        items: [
-          { label: 'System Landscape', link: `/${p.name}/landscape/` },
-          { label: 'Containers', link: `/${p.name}/containers/` },
-          {
-            label: 'Context Map',
-            items: [
-              { label: 'Context Map', link: `/${p.name}/context-map/` },
-              ...p.views.structural
-                .filter((v) => v.id.endsWith('Detail'))
-                .map((v) => ({
-                  label: v.label,
-                  link: `/${p.name}/bc/${v.id.replace('Detail', '').toLowerCase()}/`,
-                })),
-            ],
-          },
-          { slug: `${p.name}/engineering/domain-model` },
-          { slug: `${p.name}/engineering/integrations` },
-          { slug: `${p.name}/engineering/blueprint` },
-        ],
-      },
-      {
-        label: 'Planning',
-        items: [
-          { label: 'Roadmap', link: `/${p.name}/roadmap/` },
-          { label: 'Epics', autogenerate: { directory: `${p.name}/epics` } },
-        ],
-      },
-      {
-        label: 'ADRs',
-        collapsed: true,
-        items: [
-          { label: 'Decision Overviews', link: `/${p.name}/decisions/` },
-          { label: 'ADRs', autogenerate: { directory: `${p.name}/decisions` } },
-        ],
-      },
-      {
-        label: 'Research',
-        collapsed: true,
-        autogenerate: { directory: `${p.name}/research` },
-      },
-    ],
-  }));
+  return platforms.map((p) => {
+    const epics = discoverEpics(p.name);
+    const epicItems = epics.map((e) => ({
+      label: `${e.id} · ${e.title}`,
+      link: `/${p.name}/epics/${e.dir}/pitch/`,
+      badge: phaseBadgeVariant[e.phase]
+        ? { text: e.phase, variant: phaseBadgeVariant[e.phase] }
+        : undefined,
+    }));
+
+    return {
+      label: p.title || p.name,
+      collapsed: true,
+      items: [
+        {
+          label: 'Business',
+          items: [
+            { slug: `${p.name}/business/vision` },
+            ...(p.views.flows?.length
+              ? [{ label: 'Business Process', link: `/${p.name}/business-flow/` }]
+              : []),
+            { slug: `${p.name}/business/solution-overview` },
+          ],
+        },
+        {
+          label: 'Engineering',
+          items: [
+            { label: 'System Landscape', link: `/${p.name}/landscape/` },
+            { label: 'Containers', link: `/${p.name}/containers/` },
+            {
+              label: 'Context Map',
+              items: [
+                { label: 'Context Map', link: `/${p.name}/context-map/` },
+                ...p.views.structural
+                  .filter((v) => v.id.endsWith('Detail'))
+                  .map((v) => ({
+                    label: v.label,
+                    link: `/${p.name}/bc/${v.id.replace('Detail', '').toLowerCase()}/`,
+                  })),
+              ],
+            },
+            { slug: `${p.name}/engineering/domain-model` },
+            { slug: `${p.name}/engineering/integrations` },
+            { slug: `${p.name}/engineering/blueprint` },
+          ],
+        },
+        {
+          label: 'Planning',
+          items: [
+            { label: 'Roadmap', link: `/${p.name}/roadmap/` },
+            {
+              label: 'Epics',
+              collapsed: true,
+              items: epicItems.length > 0
+                ? epicItems
+                : [{ label: 'Nenhum epic cadastrado', link: `/${p.name}/roadmap/` }],
+            },
+          ],
+        },
+        {
+          label: 'ADRs',
+          collapsed: true,
+          items: [
+            { label: 'Decision Overviews', link: `/${p.name}/decisions/` },
+            { label: 'ADRs', autogenerate: { directory: `${p.name}/decisions` } },
+          ],
+        },
+        {
+          label: 'Research',
+          collapsed: true,
+          autogenerate: { directory: `${p.name}/research` },
+        },
+      ],
+    };
+  });
 }
 
 export function buildViewPaths(platform) {

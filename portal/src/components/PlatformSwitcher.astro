@@ -1,0 +1,50 @@
+---
+import { discoverPlatforms } from '../lib/platforms.mjs';
+
+const platforms = discoverPlatforms();
+const pathname = Astro.url.pathname;
+const match = pathname.match(/^\/([^/]+)\//);
+const currentPlatform = match ? match[1] : '';
+---
+
+{platforms.length > 1 && (
+  <div class="platform-switcher">
+    <select
+      id="platform-select"
+      aria-label="Selecionar plataforma"
+    >
+      {platforms.map((p) => (
+        <option value={p.name} selected={p.name === currentPlatform}>
+          {p.title || p.name}
+        </option>
+      ))}
+    </select>
+    <svg class="platform-switcher-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="6 9 12 15 18 9" />
+    </svg>
+  </div>
+)}
+
+<script>
+  const select = document.getElementById('platform-select') as HTMLSelectElement | null;
+  if (select) {
+    select.addEventListener('change', () => {
+      const newPlatform = select.value;
+      const pathname = window.location.pathname;
+      const match = pathname.match(/^\/([^/]+)(\/.*)/);
+      if (match) {
+        const rest = match[2];
+        // Try same path on new platform; common sections that exist on all platforms
+        const commonPaths = ['/business/vision/', '/business/solution-overview/', '/landscape/', '/containers/', '/context-map/', '/roadmap/', '/engineering/domain-model/', '/engineering/integrations/', '/engineering/blueprint/', '/business-flow/'];
+        if (commonPaths.some(p => rest === p || rest.startsWith(p))) {
+          window.location.href = `/${newPlatform}${rest}`;
+        } else {
+          // Platform-specific page (epic, ADR, etc.) — go to vision
+          window.location.href = `/${newPlatform}/business/vision/`;
+        }
+      } else {
+        window.location.href = `/${newPlatform}/business/vision/`;
+      }
+    });
+  }
+</script>

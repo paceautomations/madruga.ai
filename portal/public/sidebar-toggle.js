@@ -23,13 +23,15 @@ document.addEventListener('DOMContentLoaded', function () {
     },
   ];
 
+  var sectionLabels = icons.map(function (i) { return i.label; });
+
   // SVG icons for toggle
   var chevronLeftSvg = '<svg viewBox="0 0 24 24"><polyline points="11 17 6 12 11 7"/><polyline points="18 17 13 12 18 7"/></svg>';
   var chevronRightSvg = '<svg viewBox="0 0 24 24"><polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/></svg>';
 
   var collapsed = localStorage.getItem('sidebar-collapsed') === 'true';
 
-  // ── Create the single toggle button (fixed position, always visible) ──
+  // ── Create the single toggle button ──
   var toggleBtn = document.createElement('button');
   toggleBtn.className = 'sidebar-toggle-btn';
   toggleBtn.setAttribute('aria-label', 'Toggle sidebar');
@@ -38,18 +40,40 @@ document.addEventListener('DOMContentLoaded', function () {
   var rail = document.createElement('div');
   rail.className = 'sidebar-icon-rail';
 
-  // Navigation icons in rail
+  var railIcons = [];
   icons.forEach(function (icon, i) {
     var el = document.createElement('button');
     el.className = 'rail-icon';
     el.setAttribute('data-tooltip', icon.label);
+    el.setAttribute('data-section', icon.label);
     el.setAttribute('aria-label', icon.label);
     el.innerHTML = icon.svg;
     el.addEventListener('click', function () {
       navigateToSection(i);
     });
     rail.appendChild(el);
+    railIcons.push(el);
   });
+
+  // ── Detect active section from sidebar ──
+  function updateActiveRailIcon() {
+    var activeSectionIndex = -1;
+    var activeLink = document.querySelector('.sidebar-pane a[aria-current="page"]');
+    if (activeLink) {
+      var parentDetails = activeLink.closest('details');
+      while (parentDetails) {
+        var summary = parentDetails.querySelector(':scope > summary .large');
+        if (summary) {
+          var idx = sectionLabels.indexOf(summary.textContent.trim());
+          if (idx !== -1) activeSectionIndex = idx;
+        }
+        parentDetails = parentDetails.parentElement ? parentDetails.parentElement.closest('details') : null;
+      }
+    }
+    railIcons.forEach(function (icon, i) {
+      icon.classList.toggle('active', i === activeSectionIndex);
+    });
+  }
 
   // ── State management ──
   function applyState(isCollapsed) {
@@ -57,10 +81,12 @@ document.addEventListener('DOMContentLoaded', function () {
       document.body.classList.add('sidebar-collapsed');
       toggleBtn.innerHTML = chevronRightSvg;
       toggleBtn.title = 'Expand sidebar (Ctrl+\\)';
+      toggleBtn.setAttribute('aria-expanded', 'false');
     } else {
       document.body.classList.remove('sidebar-collapsed');
       toggleBtn.innerHTML = chevronLeftSvg;
       toggleBtn.title = 'Collapse sidebar (Ctrl+\\)';
+      toggleBtn.setAttribute('aria-expanded', 'true');
     }
   }
 
@@ -70,19 +96,22 @@ document.addEventListener('DOMContentLoaded', function () {
     applyState(false);
 
     setTimeout(function () {
-      var topDetails = document.querySelector('.sidebar-pane .top-level > li > details');
-      if (topDetails) {
-        topDetails.open = true;
-        var nested = topDetails.querySelectorAll(':scope > ul > li > details');
-        if (nested[index]) {
-          nested[index].open = true;
-          nested[index].scrollIntoView({ behavior: 'smooth', block: 'start' });
+      var summaries = document.querySelectorAll('.sidebar-pane details > summary .large');
+      for (var i = 0; i < summaries.length; i++) {
+        if (sectionLabels.indexOf(summaries[i].textContent.trim()) === index) {
+          var details = summaries[i].closest('details');
+          if (details) {
+            details.open = true;
+            details.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+          break;
         }
       }
     }, 50);
   }
 
   applyState(collapsed);
+  updateActiveRailIcon();
 
   // ── Toggle click ──
   toggleBtn.addEventListener('click', function () {
@@ -105,8 +134,10 @@ document.addEventListener('DOMContentLoaded', function () {
   var resizeHandle = document.createElement('div');
   resizeHandle.className = 'sidebar-resize-handle';
 
+  // Only restore saved width if user has explicitly resized before
+  var userHasResized = localStorage.getItem('sidebar-resized') === 'true';
   var savedWidth = localStorage.getItem('sidebar-width');
-  if (savedWidth && !collapsed) {
+  if (userHasResized && savedWidth && !collapsed) {
     document.documentElement.style.setProperty('--sl-sidebar-width', savedWidth + 'px');
   }
 
@@ -125,6 +156,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var newWidth = Math.min(Math.max(e.clientX, 180), 600);
     document.documentElement.style.setProperty('--sl-sidebar-width', newWidth + 'px');
     localStorage.setItem('sidebar-width', String(newWidth));
+    localStorage.setItem('sidebar-resized', 'true');
   });
 
   document.addEventListener('mouseup', function () {

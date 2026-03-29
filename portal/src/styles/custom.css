@@ -4,11 +4,12 @@
 
 /* ── 1. Theme Variables ── */
 :root {
-  --sl-font: 'Poppins', 'Inter', system-ui, sans-serif;
+  --sl-font: 'Inter', system-ui, sans-serif;
   --sl-font-mono: 'JetBrains Mono', 'Fira Code', monospace;
   --sl-color-accent-low: #e0f2fe;
   --sl-color-accent: #0284c7;
   --sl-color-accent-high: #0c4a6e;
+  --sl-sidebar-width: 280px;
   --sl-content-width: 100%;
   --sl-content-pad-x: 2rem;
 }
@@ -32,6 +33,7 @@ mobile-starlight-toc {
 .sidebar-pane {
   overflow-y: auto;
   overflow-x: hidden;
+  transition: width 0.2s ease, opacity 0.15s ease;
 }
 
 /* ── 4. Icon Rail (collapsed sidebar) ── */
@@ -41,8 +43,8 @@ mobile-starlight-toc {
   left: 0;
   bottom: 0;
   width: 48px;
-  background: var(--sl-color-bg-sidebar, #fff);
-  border-right: 1px solid var(--sl-color-hairline-shade, #e2e8f0);
+  background: var(--sl-color-bg-sidebar);
+  border-right: 1px solid var(--sl-color-hairline-shade);
   display: none;
   flex-direction: column;
   align-items: center;
@@ -62,7 +64,7 @@ body.sidebar-collapsed .sidebar-icon-rail {
   left: 12px;
   right: 12px;
   height: 1px;
-  background: var(--sl-color-hairline-shade, #e2e8f0);
+  background: var(--sl-color-hairline-shade);
 }
 
 .rail-icon {
@@ -72,7 +74,7 @@ body.sidebar-collapsed .sidebar-icon-rail {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #64748b;
+  color: var(--sl-color-gray-3);
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
   position: relative;
@@ -82,8 +84,13 @@ body.sidebar-collapsed .sidebar-icon-rail {
 }
 
 .rail-icon:hover {
-  background: #f1f5f9;
-  color: #0f172a;
+  background: var(--sl-color-gray-6);
+  color: var(--sl-color-white);
+}
+
+.rail-icon.active {
+  background: var(--sl-color-gray-6);
+  color: var(--sl-color-text-accent);
 }
 
 .rail-icon svg {
@@ -102,8 +109,8 @@ body.sidebar-collapsed .sidebar-icon-rail {
   left: calc(100% + 8px);
   top: 50%;
   transform: translateY(-50%);
-  background: #1e293b;
-  color: #f8fafc;
+  background: var(--sl-color-gray-1);
+  color: var(--sl-color-gray-7);
   font-size: 12px;
   font-weight: 500;
   padding: 4px 10px;
@@ -145,9 +152,9 @@ body.sidebar-collapsed .main-frame {
   width: 30px;
   height: 30px;
   border-radius: 6px;
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
-  color: #94a3b8;
+  border: 1px solid var(--sl-color-hairline-shade);
+  background: var(--sl-color-bg-sidebar);
+  color: var(--sl-color-gray-3);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -172,18 +179,18 @@ body.sidebar-collapsed .sidebar-toggle-btn {
 }
 
 .sidebar-toggle-btn:hover {
-  background: #f1f5f9;
-  color: #334155;
-  border-color: #cbd5e1;
+  background: var(--sl-color-gray-6);
+  color: var(--sl-color-gray-2);
+  border-color: var(--sl-color-gray-4);
 }
 
 /* ── 6. Resize Handle ── */
 .sidebar-resize-handle {
   position: fixed;
   top: var(--sl-nav-height, 3.5rem);
-  left: calc(var(--sl-sidebar-width, 18.75rem) - 2px);
+  left: calc(var(--sl-sidebar-width, 18.75rem) - 3px);
   bottom: 0;
-  width: 4px;
+  width: 6px;
   cursor: col-resize;
   z-index: 100;
   background: transparent;
@@ -192,7 +199,7 @@ body.sidebar-collapsed .sidebar-toggle-btn {
 
 .sidebar-resize-handle:hover,
 .sidebar-resize-handle:active {
-  background: var(--sl-color-accent, #0284c7);
+  background: var(--sl-color-accent);
 }
 
 body.sidebar-collapsed .sidebar-resize-handle {
@@ -233,7 +240,9 @@ main:has(.diagram-fullscreen) {
 
 /* ── 8. Typography ── */
 .content-panel h1#_top {
-  font-size: 1.75rem;
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   margin-bottom: 0.5rem;
 }
 
@@ -242,16 +251,31 @@ main:has(.diagram-fullscreen) {
   display: none;
 }
 
-.sl-markdown-content h1 { font-size: 1.75rem; }
-.sl-markdown-content h2 { font-size: 1.35rem; margin-top: 1.5rem; }
-.sl-markdown-content h3 { font-size: 1.1rem; }
+.sl-markdown-content h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.sl-markdown-content h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-top: 2rem;
+  margin-bottom: 0.75rem;
+}
+
+.sl-markdown-content h3 {
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.sl-markdown-content h4 {
+  font-size: 1.05rem;
+  font-weight: 500;
+}
 
 .sl-markdown-content > :first-child {
   margin-top: 0.25rem;
-}
-
-.sl-markdown-content .heading-wrapper a.anchor-link {
-  display: none !important;
 }
 
 .sl-markdown-content > .sl-heading-wrapper.level-h1:first-child,
@@ -262,4 +286,134 @@ main:has(.diagram-fullscreen) {
 /* ── 9. Navigation Overrides ── */
 .pagination-links {
   display: none !important;
+}
+
+/* ── 10. Responsive Tables ── */
+.sl-markdown-content table {
+  display: block;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── 11. Accessibility ── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* ── 12. Platform Switcher ── */
+.platform-switcher {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.platform-switcher select {
+  appearance: none;
+  background: var(--sl-color-gray-6);
+  color: var(--sl-color-white);
+  border: 1px solid var(--sl-color-hairline-shade);
+  border-radius: 6px;
+  padding: 0.35rem 2rem 0.35rem 0.75rem;
+  font-size: var(--sl-text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  line-height: 1.4;
+}
+
+.platform-switcher select:hover {
+  background: var(--sl-color-gray-5);
+  border-color: var(--sl-color-gray-4);
+}
+
+.platform-switcher select:focus-visible {
+  outline: 2px solid var(--sl-color-accent);
+  outline-offset: 2px;
+}
+
+.platform-switcher-icon {
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--sl-color-gray-3);
+  width: 16px;
+  height: 16px;
+}
+
+/* ── 13. Index Page Cards ── */
+.platform-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+.platform-card {
+  border: 1px solid var(--sl-color-hairline-shade);
+  border-radius: 12px;
+  padding: 1.5rem;
+  text-decoration: none;
+  color: inherit;
+  transition: box-shadow 0.2s, border-color 0.2s, transform 0.15s;
+  display: block;
+}
+
+.platform-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  border-color: var(--sl-color-accent);
+  transform: translateY(-2px);
+}
+
+.platform-card h2 {
+  margin-top: 0 !important;
+  margin-bottom: 0.5rem;
+  font-size: 1.25rem;
+}
+
+.platform-card p {
+  color: var(--sl-color-gray-2);
+  margin-bottom: 0.75rem;
+}
+
+.platform-card .badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.75em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: var(--sl-color-accent-low);
+  color: var(--sl-color-accent-high);
+}
+
+/* ── 14. Loading Spinner ── */
+.diagram-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 1rem;
+  color: var(--sl-color-gray-3);
+}
+
+.diagram-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--sl-color-gray-5);
+  border-top-color: var(--sl-color-accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }

@@ -175,11 +175,16 @@ Present Gantt, MVP definition, sequence. Questions: "Is the MVP correct?", "Does
 ### Documentation Pipeline Complete!
 Next steps per epic:
 1. `/discuss <name>` — Capture implementation context
-2. `/speckit.specify` — Start SpecKit cycle
-3. Implement wave by wave
-4. `/verify <name>` — Verify adherence
-5. `/test-ai` — (opcional) QA test if app is running
-6. `/reconcile <name>` — Update documentation
+2. `/speckit.specify` — Feature specification
+3. `/speckit.clarify` — Clarify ambiguities
+4. `/speckit.plan` — Design artifacts
+5. `/speckit.tasks` — Task breakdown
+6. `/speckit.analyze` — Pre-implementation consistency check
+7. `/speckit.implement` — Execute tasks
+8. `/speckit.analyze` — Post-implementation consistency check
+9. `/verify <name>` — Verify adherence
+10. `/test-ai` — (opcional) QA test if app is running
+11. `/reconcile <name>` — Update documentation
 ```
 
 ## Error Handling

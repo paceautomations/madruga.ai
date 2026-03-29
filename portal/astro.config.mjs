@@ -25,7 +25,7 @@ export default defineConfig({
       routeMiddleware: './src/routeData.ts',
       customCss: ['./src/styles/custom.css'],
       components: {
-        TableOfContents: './src/components/Empty.astro',
+        Header: './src/components/CustomHeader.astro',
       },
       head: [
         { tag: 'script', attrs: { src: '/sidebar-toggle.js', defer: true } },

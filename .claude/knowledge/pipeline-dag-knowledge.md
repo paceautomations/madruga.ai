@@ -232,11 +232,15 @@ After the pipeline completes (roadmap done), each epic follows this cycle:
 |------|-------|------|---------|
 | 1 | discuss | human | Capture implementation context and decisions |
 | 2 | speckit.specify | human | Feature specification |
-| 3 | speckit.plan + tasks | human | Design artifacts and task breakdown |
-| 4 | speckit.implement | auto | Execute tasks |
-| 5 | verify | auto-escalate | Check spec adherence |
-| 6 | test-ai | human (optional) | QA test running app via Playwright |
-| 7 | reconcile | human | Detect and fix documentation drift |
+| 3 | speckit.clarify | human | Reduce ambiguity in spec before planning |
+| 4 | speckit.plan | human | Design artifacts |
+| 5 | speckit.tasks | human | Task breakdown |
+| 6 | speckit.analyze | auto | Pre-implementation consistency check (spec/plan/tasks) |
+| 7 | speckit.implement | auto | Execute tasks |
+| 8 | speckit.analyze | auto | Post-implementation consistency check |
+| 9 | verify | auto-escalate | Check spec adherence |
+| 10 | test-ai | human (optional) | QA test running app via Playwright |
+| 11 | reconcile | human | Detect and fix documentation drift |
 
 **test-ai is optional** — skip when:
 - Epic has no web-facing features

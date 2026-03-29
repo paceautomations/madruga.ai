@@ -1,4 +1,5 @@
-import { lazy, Suspense, useMemo } from 'react';
+import { lazy, Suspense, useMemo, Component } from 'react';
+import type { ReactNode } from 'react';
 
 // Static import map — Vite requires static analysis for virtual modules.
 // Add new platforms here when they are created.
@@ -11,6 +12,48 @@ interface Props {
   viewId: string;
   platform: string;
   viewPaths: Record<string, string>;
+}
+
+class DiagramErrorBoundary extends Component<
+  { children: ReactNode },
+  { error: Error | null }
+> {
+  state = { error: null as Error | null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '100%',
+          gap: '0.5rem',
+          color: 'var(--sl-color-gray-3)',
+        }}>
+          <p>Erro ao carregar diagrama.</p>
+          <code style={{ fontSize: '0.85em', opacity: 0.7 }}>
+            {this.state.error.message}
+          </code>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function LoadingSpinner() {
+  return (
+    <div className="diagram-loading">
+      <div className="diagram-spinner" />
+      <span>Carregando diagrama...</span>
+    </div>
+  );
 }
 
 export default function LikeC4Diagram({ viewId, platform, viewPaths }: Props) {
@@ -48,21 +91,10 @@ export default function LikeC4Diagram({ viewId, platform, viewPaths }: Props) {
   }, [platform, viewId, viewPaths]);
 
   return (
-    <Suspense
-      fallback={
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            height: '100%',
-          }}
-        >
-          Carregando diagrama...
-        </div>
-      }
-    >
-      <DiagramComponent />
-    </Suspense>
+    <DiagramErrorBoundary>
+      <Suspense fallback={<LoadingSpinner />}>
+        <DiagramComponent />
+      </Suspense>
+    </DiagramErrorBoundary>
   );
 }
