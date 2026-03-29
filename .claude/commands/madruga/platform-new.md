@@ -5,6 +5,10 @@ arguments:
     description: "Nome da plataforma em kebab-case (ex: meu-saas, energy-platform)"
     required: false
 argument-hint: "[nome-da-plataforma]"
+handoffs:
+  - label: Gerar Vision One-Pager
+    agent: madruga/vision-one-pager
+    prompt: Gerar business vision para a nova plataforma
 ---
 
 # Platform New — Scaffolding + Arquitetura Completa

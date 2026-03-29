@@ -5,6 +5,10 @@ arguments:
     description: "Nome da plataforma/produto. Se vazio, pergunta."
     required: false
 argument-hint: "[nome-da-plataforma]"
+handoffs:
+  - label: Gerar Solution Overview
+    agent: madruga/solution-overview
+    prompt: Gerar solution overview baseado no vision validado
 ---
 
 # Vision One-Pager — Playing to Win
@@ -40,6 +44,13 @@ Estrategista senior Bain/McKinsey. Objetivo, direto, cada frase com informacao. 
 Salvar em `platforms/<nome>/business/vision.md`. Criar diretorio se nao existir.
 
 ## Instrucoes
+
+### 0. Pre-requisitos
+
+Rodar `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <nome> --skill vision` e parsear JSON.
+- Se `ready: false`: ERROR listando dependencias faltantes e qual skill gera cada uma.
+- Se `ready: true`: ler artefatos listados em `available` como contexto adicional.
+- Ler `.specify/memory/constitution.md` para validar output contra principios.
 
 ### 1. Coletar Contexto
 

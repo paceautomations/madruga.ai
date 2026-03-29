@@ -18,6 +18,11 @@ _skip_if_exists:
   - "model/ddd-contexts.likec4"
   - "model/relationships.likec4"
   - "model/views.likec4"
+  - "business/process.md"
+  - "engineering/folder-structure.md"
+  - "planning/*"
+  - "research/codebase-context.md"
+  - "research/tech-alternatives.md"
 
 _exclude:
   - tests/

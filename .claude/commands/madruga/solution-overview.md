@@ -5,6 +5,10 @@ arguments:
     description: "Nome da plataforma/produto. Se vazio, pergunta."
     required: false
 argument-hint: "[nome-da-plataforma]"
+handoffs:
+  - label: Gerar Business Process
+    agent: madruga/business-process
+    prompt: Gerar fluxos de negocio baseados no vision e solution overview validados
 ---
 
 # Solution Overview — Feature Map Priorizado
@@ -40,6 +44,13 @@ Product manager senior. Foco em valor para o usuario, nao em como construir. Por
 Salvar em `platforms/<nome>/business/solution-overview.md`. Criar diretorio se nao existir.
 
 ## Instrucoes
+
+### 0. Pre-requisitos
+
+Rodar `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <nome> --skill solution-overview` e parsear JSON.
+- Se `ready: false`: ERROR listando dependencias faltantes e qual skill gera cada uma.
+- Se `ready: true`: ler artefatos listados em `available` como contexto adicional.
+- Ler `.specify/memory/constitution.md` para validar output contra principios.
 
 ### 1. Coletar Contexto
 
