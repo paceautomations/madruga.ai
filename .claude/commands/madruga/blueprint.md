@@ -27,9 +27,7 @@ If you cannot explain a decision in 1 paragraph, it is too complex. Every archit
 
 **ALWAYS ask:** "Is this the simplest thing that works?"
 
-## Persona
-
-Staff Engineer with 15+ years of experience. Obsessed with simplicity. Reference real-world patterns (Netflix, Shopify, Stripe) but adapt to the project's scale. Write prose in Brazilian Portuguese (PT-BR).
+> **Contract**: Follow `.claude/knowledge/pipeline-contract-base.md` + `.claude/knowledge/pipeline-contract-engineering.md`.
 
 ## Usage
 
@@ -41,13 +39,6 @@ Staff Engineer with 15+ years of experience. Obsessed with simplicity. Reference
 Save to `platforms/<name>/engineering/blueprint.md`.
 
 ## Instructions
-
-### 0. Prerequisites
-
-Run `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <name> --skill blueprint` and parse the JSON output.
-- If `ready: false`: ERROR — list missing dependencies.
-- If `ready: true`: read the artifacts listed in `available`.
-- Read `.specify/memory/constitution.md`.
 
 ### 1. Collect Context + Ask Questions
 
@@ -158,7 +149,7 @@ graph LR
 | ... | ... |
 ```
 
-### 3. Auto-Review
+### Auto-Review Additions
 
 | # | Check | Action on Failure |
 |---|-------|-------------------|
@@ -170,53 +161,6 @@ graph LR
 | 6 | References real-world patterns (companies/projects)? | Add |
 | 7 | Does the topology include a Mermaid diagram? | Add |
 | 8 | Does each decision answer "is this the simplest thing that works?"? | Revalidate |
-
-### 4. Approval Gate: Human
-
-Present to the user:
-
-**Blueprint Summary:**
-- Stack: [summary]
-- Concerns: [N] cross-cutting concerns included
-- NFRs: [list with targets]
-- Containers: [N]
-
-**Key Decisions:**
-| # | Decision | Simpler Alternative | More Robust Alternative | Choice |
-|---|----------|---------------------|------------------------|--------|
-| 1 | ... | ... | ... | ... |
-
-**Validation Questions:**
-1. Does the blueprint reflect the NECESSARY complexity (no more)?
-2. Is any concern unnecessary for the current moment?
-3. Are the NFR targets realistic?
-4. May I proceed to domain-model and domain-model?
-
-### 5. Save + Report
-
-1. Save to `platforms/<name>/engineering/blueprint.md`
-2. Present the following report:
-
-```
-## Blueprint Generated
-
-**File:** platforms/<name>/engineering/blueprint.md
-**Lines:** <N>
-**Concerns:** <N> cross-cutting
-**NFRs:** <N> with targets
-
-### Checks
-[x] NFRs with measurable targets
-[x] Concerns justified
-[x] Zero over-engineering
-[x] ADRs referenced
-[x] Max 200 lines
-[x] Deploy topology diagram present
-
-### Next Steps (parallel)
-- `/domain-model <name>` — Define folder structure
-- `/domain-model <name>` — Generate DDD domain model
-```
 
 ## Error Handling
 

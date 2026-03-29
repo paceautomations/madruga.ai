@@ -25,9 +25,7 @@ Every integration between bounded contexts MUST have an explicitly named DDD pat
 - Ignore upstream/downstream direction
 - Create a relationship without business justification
 
-## Persona
-
-Staff Engineer / DDD Expert. Focus on decoupling and clear boundaries. Write all generated artifact content in Brazilian Portuguese (PT-BR).
+> **Contract**: Follow `.claude/knowledge/pipeline-contract-base.md` + `.claude/knowledge/pipeline-contract-engineering.md`.
 
 ## Usage
 
@@ -39,13 +37,6 @@ Staff Engineer / DDD Expert. Focus on decoupling and clear boundaries. Write all
 Save to `platforms/<name>/engineering/context-map.md`.
 
 ## Instructions
-
-### 0. Prerequisites
-
-Run `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <name> --skill context-map` and parse the JSON output.
-- If `ready: false`: ERROR listing missing dependencies.
-- If `ready: true`: read artifacts listed in `available`.
-- Read `.specify/memory/constitution.md`.
 
 ### 1. Collect Context + Ask Questions
 
@@ -128,7 +119,7 @@ graph TD
 | God Context | 1 context does everything | Context with >5 aggregates |
 ```
 
-### 3. Auto-Review
+### Auto-Review Additions
 
 | # | Check | Action on Failure |
 |---|-------|-------------------|
@@ -139,47 +130,6 @@ graph TD
 | 5 | Does the Mermaid diagram render? | Fix |
 | 6 | Max 150 lines? | Condense |
 | 7 | Are all contexts from the domain model present? | Add missing ones |
-| 8 | Does every decision have >=2 documented alternatives? | Add |
-| 9 | Are trade-offs explicit? | Add pros/cons |
-| 10 | Are assumptions marked [VALIDATE] or backed by data? | Mark [VALIDATE] |
-
-### 4. Approval Gate: Human
-
-Present to user:
-
-**Context Map Summary:**
-- Bounded Contexts: [N]
-- Relationships: [N]
-- Patterns used: [list]
-
-**Validation Questions:**
-1. Do the upstream/downstream directions make sense?
-2. Are the chosen patterns the most appropriate?
-3. Is any relationship missing?
-4. Is shared kernel (if used) truly necessary?
-
-Wait for approval before saving.
-
-### 5. Save + Report
-
-```
-## Context Map generated
-
-**File:** platforms/<name>/engineering/context-map.md
-**Lines:** <N>
-**Relationships:** <N>
-**Patterns used:** [list]
-
-### Checks
-[x] Every relationship has a DDD pattern
-[x] Upstream/downstream directions clear
-[x] Justifications present
-[x] All contexts covered
-
-### Next Step
-`/epic-breakdown <name>` — Break into Shape Up epics.
-WARNING: 1-way-door gate — epic scope defines the entire implementation.
-```
 
 ## Error Handling
 

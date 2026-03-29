@@ -20,6 +20,8 @@ Create a new platform in the madruga.ai repository using the `platform.py new` s
 
 After scaffolding, follow the pipeline DAG with `/vision <name>`.
 
+> **Contract**: Follow `.claude/knowledge/pipeline-contract-base.md` + `.claude/knowledge/pipeline-contract-business.md`.
+
 ## Usage
 
 - `/platform-new my-saas` — Create platform "my-saas"

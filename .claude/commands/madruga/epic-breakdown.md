@@ -25,9 +25,7 @@ If the problem cannot be explained in 2 sentences, the epic is poorly defined. E
 - Create an epic with appetite > 6w without splitting
 - Omit no-gos (what is NOT in scope)
 
-## Persona
-
-Product Manager / Architect. Dual hat: understands business AND technology. Write all generated artifact content in Brazilian Portuguese (PT-BR).
+> **Contract**: Follow `.claude/knowledge/pipeline-contract-base.md` + `.claude/knowledge/pipeline-contract-planning.md`.
 
 ## Usage
 
@@ -39,13 +37,6 @@ Product Manager / Architect. Dual hat: understands business AND technology. Writ
 Save to `platforms/<name>/epics/NNN-slug/pitch.md`. Auto-number.
 
 ## Instructions
-
-### 0. Prerequisites
-
-Run `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <name> --skill epic-breakdown` and parse the JSON output.
-- If `ready: false`: ERROR listing missing dependencies.
-- If `ready: true`: read artifacts listed in `available`.
-- Read `.specify/memory/constitution.md`.
 
 ### 1. Collect Context + Ask Questions
 
@@ -134,7 +125,7 @@ priority: P1 | P2 | P3
 - Blocks: [epic NNN] (if applicable)
 ```
 
-### 3. Auto-Review
+### Auto-Review Additions
 
 | # | Check | Action on Failure |
 |---|-------|-------------------|
@@ -145,55 +136,6 @@ priority: P1 | P2 | P3
 | 5 | Is there no scope overlap between epics? | Resolve |
 | 6 | Are bounded contexts mapped to epics? | Map them |
 | 7 | Are inter-epic dependencies acyclic? | Resolve cycles |
-| 8 | Does every decision have >=2 documented alternatives? | Add |
-| 9 | Are trade-offs explicit? | Add pros/cons |
-| 10 | Are assumptions marked [VALIDATE] or backed by data? | Mark [VALIDATE] |
-
-### 4. Approval Gate: 1-Way-Door
-
-**WARNING: 1-way-door gate.** Epic scope defines ALL downstream implementation (roadmap, specs, tasks, code).
-
-Present:
-
-| # | Epic | Problem | Appetite | Contexts | Deps |
-|---|------|---------|----------|----------|------|
-| 1 | NNN: [title] | [summary] | 2w/6w | [contexts] | [deps] |
-
-**For EACH epic, request confirmation:**
-
-> **Epic NNN: [title]**
-> Problem: [summary]
-> Appetite: [Xw]
-> Includes: [scope list]
-> Excludes (no-gos): [list]
-> Depends on: [epics]
->
-> **Confirm scope? This defines the implementation. (yes/no/adjust)**
-
-### 5. Save + Report
-
-```
-## Epics generated
-
-**Directory:** platforms/<name>/epics/
-**Epics:** <N>
-**Total appetite:** <N> weeks
-
-| Epic | Appetite | Priority |
-|------|----------|----------|
-| NNN: [title] | Xw | P1/P2/P3 |
-
-### Checks
-[x] Problems defined (not features)
-[x] Appetites realistic
-[x] No-gos explicit
-[x] Acceptance criteria testable
-[x] Zero scope overlap
-[x] Per-epic approval (1-way-door gate)
-
-### Next Step
-`/roadmap <name>` — Sequence epics into a delivery roadmap.
-```
 
 ## Error Handling
 

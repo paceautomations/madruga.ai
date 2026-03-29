@@ -25,9 +25,7 @@ One container = one reason to exist. If two containers do the same thing, merge 
 - Omit communication protocols between containers
 - Create a container without a clear owner (which bounded context it belongs to)
 
-## Persona
-
-Staff Engineer with 15+ years of experience. Focus on operational simplicity. "Can this be done with fewer containers?" Write all generated artifact content in Brazilian Portuguese (PT-BR).
+> **Contract**: Follow `.claude/knowledge/pipeline-contract-base.md` + `.claude/knowledge/pipeline-contract-engineering.md`.
 
 ## Usage
 
@@ -42,13 +40,6 @@ Save to:
 - `platforms/<name>/model/views.likec4`
 
 ## Instructions
-
-### 0. Prerequisites
-
-Run `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <name> --skill containers` and parse the JSON output.
-- If `ready: false`: ERROR listing missing dependencies.
-- If `ready: true`: read artifacts listed in `available`.
-- Read `.specify/memory/constitution.md`.
 
 ### 1. Collect Context + Ask Questions
 
@@ -133,7 +124,7 @@ graph TD
 - Views for the interactive portal
 - Main container view
 
-### 3. Auto-Review
+### Auto-Review Additions
 
 | # | Check | Action on Failure |
 |---|-------|-------------------|
@@ -144,56 +135,11 @@ graph TD
 | 5 | Is LikeC4 syntax valid? | Fix |
 | 6 | Max 200 lines (.md)? | Condense |
 | 7 | Is data ownership clear? | Define it |
-| 8 | Does every decision have >=2 documented alternatives? | Add |
-| 9 | Are trade-offs explicit (pros/cons)? | Add pros/cons |
-| 10 | Are assumptions marked [VALIDATE] or backed by data? | Mark [VALIDATE] |
-| 11 | Is .md consistent with .likec4? | Align |
+| 8 | Is .md consistent with .likec4? | Align |
 
-### 4. Approval Gate: Human
+### LikeC4 Validation
 
-Present to user:
-
-**Container Architecture Summary:**
-- Containers: [N]
-- Communications: [N]
-- Pattern: [modular monolith / microservices / hybrid]
-
-**Key Decisions:**
-| # | Decision | Simple Alternative | Robust Alternative | Choice |
-|---|---------|-------------------|-------------------|--------|
-| 1 | ... | ... | ... | ... |
-
-**Validation Questions:**
-1. Can this be done with fewer containers?
-2. Do the communication protocols make sense?
-3. Is data ownership correct?
-4. Are per-container NFRs realistic?
-
-Wait for approval before saving.
-
-### 5. Save + Report
-
-```
-## Containers generated
-
-**Files:**
-- platforms/<name>/engineering/containers.md (<N> lines)
-- platforms/<name>/model/platform.likec4
-- platforms/<name>/model/views.likec4
-
-**Containers:** <N>
-**Communications:** <N>
-
-### Checks
-[x] Single responsibility per container
-[x] Zero orphan containers
-[x] Protocols defined
-[x] NFRs with targets
-[x] LikeC4 syntax valid
-
-### Next Step
-`/context-map <name>`
-```
+After saving `.likec4` files, validate by running `likec4 build` in the model directory. Reference `.claude/knowledge/likec4-syntax.md` for syntax. Fix all errors before proceeding to the gate.
 
 ## Error Handling
 

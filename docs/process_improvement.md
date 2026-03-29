@@ -1277,15 +1277,15 @@ Quando precisar multi-user, portal real-time, ou pgvector:
 
 | ID | Item | Status | Epic | Evidência |
 |----|------|--------|------|-----------|
-| A1 | Knowledge files em camadas (boilerplate) | **PENDENTE** | 008 | Skills ainda têm contrato completo inline. Aguarda epic 008 |
+| A1 | Knowledge files em camadas (boilerplate) | **DONE** | 008 | 4 contract files + 19 skills refatoradas. -749 linhas (18% redução) |
 | A2 | HANDOFF blocks nos artefatos | **DONE** | 007 | 14 skills DAG + pipeline com bloco YAML `handoff:` no footer. `handoff_template` no DAG knowledge |
-| A3 | Staleness detection (content hash) | **PARCIAL** | 006 | `pipeline_nodes.output_hash` existe. `compute_file_hash()` em db.py. `get_stale_nodes()` implementado. Falta integração no step 5 das skills |
+| A3 | Staleness detection (content hash) | **DONE** | 006+008 | Schema + db.py implementados (006). Instrução de integração no step 5 do contract-base (008) |
 | A4 | Idempotência adr/epic-breakdown (registry) | **PARCIAL** | 006 | Schema `decisions` com `source_decision_key` e `slug` existe. Falta integração no skill `adr` |
 | A5 | `test-ai` salva em `obsidian-vault/` | **DONE** | 007 | Renomeado para `qa`. Salva em `epics/<NNN>/qa-report.md`. Path hardcoded eliminado |
-| A6 | LikeC4 validation | **PENDENTE** | 008 | Nenhum knowledge file criado. `likec4 build` não integrado |
+| A6 | LikeC4 validation | **DONE** | 008 | `likec4-syntax.md` (150 linhas). domain-model + containers rodam `likec4 build` pós-geração |
 | A7 | Merge folder-arch em blueprint | **DONE** | 007 | `folder-arch.md` deletado. Blueprint template tem §5 Folder Structure. DAG 14→13 nós |
-| A8 | Auto-review tiered | **PENDENTE** | 008 | Skills ainda usam checkbox list. Sem tiers por gate type |
-| A9 | `platform-new` não segue contrato 6 passos | **PENDENTE** | 008 | Skill não alterada |
+| A8 | Auto-review tiered | **DONE** | 008 | 3 tiers em contract-base: Tier 1 (auto/exec), Tier 2 (human/scorecard), Tier 3 (1-way-door/adversarial) |
+| A9 | `platform-new` não segue contrato 6 passos | **DONE** | 008 | Referencia contract-base. Contrato de 6 passos acessível via knowledge file |
 | A10 | `/pipeline` não cobre epic cycle | **DONE** | 007 | `pipeline-status` + `pipeline-next` mergeados em `/pipeline`. Lê SQLite L1+L2. Mermaid com cores por status |
 | A11 | Risco de alucinação em tech-research | **PENDENTE** | — | Sem guardrails adicionados. Cardinal Rule já previne parcialmente |
 | A12 | DAG duplicado em CLAUDE.md e knowledge | **PARCIAL** | 007 | CLAUDE.md reduzido (19 skills, tabela compacta). Knowledge file é referência completa. Mas CLAUDE.md ainda tem ~15 linhas de detalhe que poderiam ir para knowledge |
@@ -1304,7 +1304,7 @@ Quando precisar multi-user, portal real-time, ou pgvector:
 | M10 | Save reports verbosos | **PENDENTE** | — | — |
 | M11 | `platform.py` não valida nome | **PENDENTE** | — | — |
 | M12 | checklist e constitution órfãos | **DOCUMENTADO** | — | Listados como utility skills em CLAUDE.md |
-| M13 | Personas decorativas | **PENDENTE** | 008 | Personas inalteradas |
+| M13 | Personas decorativas | **DONE** | 008 | Diretivas comportamentais em pipeline-dag-knowledge.md §4 e contract files |
 | M14 | Validação de conteúdo no prerequisites | **PARCIAL** | 006 | `artifact_provenance` table existe. Falta integração em `check-platform-prerequisites.sh` |
 
 ### Baixa Prioridade / Quick Wins
@@ -1331,15 +1331,15 @@ Quando precisar multi-user, portal real-time, ou pgvector:
 | 1 | `copier update` + lint | **DONE** | Epic 007 (manual + re-seed) |
 | 2 | SQLite + `db.py` | **DONE** | Epic 006 — schema, migrations, CRUD, seed, 24 testes |
 | 3 | Unificação diretório + DAG dois níveis | **DONE** | Epic 007 — `--base-dir`, `epic_cycle`, `--epic` flag |
-| 4 | Knowledge files em camadas | **PENDENTE** | Epic 008 (próximo) |
-| 5 | Auto-review tiered | **PENDENTE** | Epic 008 (próximo) |
+| 4 | Knowledge files em camadas | **DONE** | Epic 008 — 4 contract files, 19 skills refatoradas |
+| 5 | Auto-review tiered | **DONE** | Epic 008 — 3 tiers em contract-base |
 | 6 | Merge folder-arch + renaming | **DONE** | Epic 007 |
-| 7 | LikeC4 validation | **PENDENTE** | Epic 008 (próximo) |
+| 7 | LikeC4 validation | **DONE** | Epic 008 — likec4-syntax.md + likec4 build em 2 skills |
 | 8 | HANDOFF blocks | **DONE** | Epic 007 — 15 skills |
 | 9 | `/pipeline` unificado | **DONE** | Epic 007 |
 | 10 | Hallucination guardrails | **PENDENTE** | — |
 
-**Resumo: 6/10 DONE, 1/10 PARCIAL, 3/10 PENDENTE.**
+**Resumo: 9/10 DONE, 1/10 PENDENTE (hallucination guardrails).**
 
 ### Resíduos Corrigidos Nesta Revisão (2026-03-29)
 

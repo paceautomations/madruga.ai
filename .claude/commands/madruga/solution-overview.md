@@ -30,9 +30,7 @@ This document describes **what the product does from the user's perspective**. T
 
 **When in doubt:** if a sentence only makes sense to an engineer, rewrite it in language that an SMB owner would understand.
 
-## Persona
-
-Senior Bain/McKinsey product strategist. Focus on user value, not how to build it. Write generated artifacts in Brazilian Portuguese (PT-BR).
+> **Contract**: Follow `.claude/knowledge/pipeline-contract-base.md` + `.claude/knowledge/pipeline-contract-business.md`.
 
 ## Usage
 
@@ -44,13 +42,6 @@ Senior Bain/McKinsey product strategist. Focus on user value, not how to build i
 Save to `platforms/<name>/business/solution-overview.md`. Create the directory if it does not exist.
 
 ## Instructions
-
-### 0. Prerequisites
-
-Run `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <name> --skill solution-overview` and parse the JSON output.
-- If `ready: false`: ERROR — list missing dependencies and which skill generates each one.
-- If `ready: true`: read artifacts listed in `available` as additional context.
-- Read `.specify/memory/constitution.md` to validate the output against project principles.
 
 ### 1. Collect Context + Ask Questions
 
@@ -140,72 +131,16 @@ updated: YYYY-MM-DD
 4. **Principles:** max 5. Derive from the vision if it exists.
 5. **Personas:** max 4. Always include the end user (the one receiving the service), not just the person who configures it.
 
-### 3. Auto-Review
-
-Before saving, verify:
+### Auto-Review Additions
 
 | # | Check | Action on Failure |
 |---|-------|-------------------|
 | 1 | Zero technical terms (scan for: API, SDK, framework, database, backend, frontend, deploy, server, endpoint, middleware, cache, queue, Python, Redis, Docker, Supabase, pgvector, webhook, microservice, CI/CD, ADR, pipeline, module) | Rewrite in product language |
 | 2 | Every feature has both description AND value | Complete the missing fields |
-| 3 | Every decision has >=2 documented alternatives | Add an alternative |
-| 4 | Explicit trade-offs (pros/cons) | Add pros/cons |
-| 5 | Assumptions marked [VALIDAR] or backed by data | Mark [VALIDAR] |
-| 6 | No section exceeds 30 lines | Trim |
-| 7 | Total under 120 lines | Condense |
-| 8 | Max 15 features in the map | Group similar features |
-| 9 | Max 5 principles | Prioritize |
-
-### 4. Approval Gate (human)
-
-Present to the user:
-
-```
-## Solution Overview Summary
-
-**Personas:** [list]
-**Features:** <N> (Now: <n>, Next: <n>, Later: <n>)
-**Principles:** [list]
-
-### Decisions Made
-1. [Decision]: [rationale]
-2. ...
-
-### Validation Questions
-1. Do the personas cover all user types?
-2. Does the Now/Next/Later prioritization reflect reality?
-3. Is any important feature missing?
-4. Do the product principles guide future decisions?
-```
-
-Wait for approval before saving.
-
-### 5. Save + Report
-
-1. Save to `platforms/<name>/business/solution-overview.md`
-2. Report to the user:
-
-```
-## Solution Overview Generated
-
-**File:** platforms/<name>/business/solution-overview.md
-**Lines:** <N>
-**Features:** <N> (Now: <n>, Next: <n>, Later: <n>)
-
-### Checks
-[x] Zero technical jargon
-[x] Features with description and value
-[x] Decisions with alternatives
-[x] Explicit trade-offs
-[x] Assumptions marked
-[x] Sections <= 30 lines
-[x] Total < 120 lines
-[x] Max 15 features
-[x] Max 5 principles
-
-### Next Step
-`/business-process <name>`
-```
+| 3 | No section exceeds 30 lines | Trim |
+| 4 | Total under 120 lines | Condense |
+| 5 | Max 15 features in the map | Group similar features |
+| 6 | Max 5 principles | Prioritize |
 
 ## Error Handling
 

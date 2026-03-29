@@ -12,6 +12,8 @@ argument-hint: "[platform] [session-context]"
 
 # Checkpoint — Session State
 
+> **Contract**: Follow step 0 from `.claude/knowledge/pipeline-contract-base.md`.
+
 Lightweight skill. Generate or update STATE.md with session progress: completed tasks, decisions, issues, and next steps. Based on real data (git log, tasks.md, filesystem).
 
 ## Cardinal Rule: ZERO Invented Information
@@ -28,12 +30,6 @@ Session Recorder. Factual, concise. Write all generated artifact content in Braz
 - `/checkpoint` — Generic checkpoint
 
 ## Instructions
-
-### 0. Prerequisites
-
-Run `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <name> --skill checkpoint` and parse the JSON output (if platform is provided).
-- Read `.specify/memory/constitution.md`.
-- Check whether tasks.md exists (spec dir or root).
 
 ### 1. Collect Data
 

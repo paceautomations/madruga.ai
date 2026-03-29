@@ -29,9 +29,7 @@ Every technology recommendation MUST be backed by research evidence. No suggesti
 
 **Every factual claim MUST have a verifiable URL or reference.** No URL → mark as `[FONTE NÃO VERIFICADA]`.
 
-## Persona
-
-Senior Tech Research Analyst. Objective, data-driven, skeptical. Research before opining. When data is unavailable, mark [INCONCLUSIVE RESEARCH]. Write generated artifacts in Brazilian Portuguese (PT-BR).
+> **Contract**: Follow `.claude/knowledge/pipeline-contract-base.md`.
 
 ## Usage
 
@@ -43,13 +41,6 @@ Senior Tech Research Analyst. Objective, data-driven, skeptical. Research before
 Save to `platforms/<name>/research/tech-alternatives.md`.
 
 ## Instructions
-
-### 0. Prerequisites
-
-Run `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <name> --skill tech-research` and parse the JSON output.
-- If `ready: false`: ERROR — list missing dependencies and which skill generates each one.
-- If `ready: true`: read artifacts listed in `available` as context.
-- Read `.specify/memory/constitution.md` to validate the output against project principles.
 
 ### 1. Collect Context + Identify Decisions
 
@@ -197,7 +188,7 @@ updated: YYYY-MM-DD
 2. [source 2]
 ```
 
-### 3. Auto-Review
+### Auto-Review Additions
 
 | # | Check | Action on Failure |
 |---|-------|-------------------|
@@ -206,57 +197,8 @@ updated: YYYY-MM-DD
 | 3 | No opinion without evidence? | Convert to sourced claim or remove |
 | 4 | Matrix has measurable criteria? | Add metrics |
 | 5 | Recommendation references the matrix in its justification? | Connect to criteria |
-| 6 | Assumptions marked with [VALIDAR]? | Mark them |
-| 7 | Max 350 lines total? | Condense |
-| 8 | Research is recent (2025-2026)? | Verify dates |
-
-### 4. Approval Gate: 1-Way-Door
-
-**WARNING: This is a 1-way-door gate.** Technology decisions defined here constrain ALL downstream architecture (ADRs, blueprint, containers, DDD, epics).
-
-Present to the user:
-
-**Technology decisions summary:**
-
-| # | Decision | Recommendation | Alternatives | Confidence |
-|---|----------|---------------|-------------|-----------|
-| 1 | ... | ... | [A, B, C] | High/Medium |
-
-**For EACH decision, request explicit confirmation:**
-
-> **Decision N: [title]**
-> Recommendation: [chosen alternative]
-> Rejected alternatives: [list with brief reason]
-> Impact: [what this decision locks in for ADRs, blueprint, etc.]
->
-> **Confirm [choice]? This defines [Y] for the rest of the project. (yes/no/adjust)**
-
-Wait for confirmation on ALL decisions before saving.
-
-### 5. Save + Report
-
-1. Save to `platforms/<name>/research/tech-alternatives.md`
-2. Report to the user:
-
-```
-## Tech Research Complete
-
-**File:** platforms/<name>/research/tech-alternatives.md
-**Decisions:** <N>
-**Alternatives researched:** <total>
-**Lines:** <N>
-
-### Checks
-[x] Each decision with >= 3 alternatives
-[x] Claims with sources
-[x] Matrix with measurable criteria
-[x] Assumptions marked
-[x] Explicit per-decision approval (1-way-door gate)
-
-### Next Step
-`/adr <name>` — Generate formal ADRs for each approved decision.
-WARNING: ADR is also a 1-way-door gate.
-```
+| 6 | Max 350 lines total? | Condense |
+| 7 | Research is recent (2025-2026)? | Verify dates |
 
 ## Error Handling
 

@@ -14,6 +14,8 @@ handoffs:
 
 # QA — Human-Like QA via Playwright
 
+> **Contract**: Follow steps 0 and 5 from `.claude/knowledge/pipeline-contract-base.md`.
+
 Test web applications the way a human QA would: navigate, interact, observe visually, diagnose bugs, and fix them. Fully automatic pipeline after a feature is built.
 
 ## Usage

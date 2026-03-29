@@ -23,9 +23,7 @@ Every statement about the codebase MUST be based on **actual code reading**. No 
 - Assert integrations without finding actual calls
 - Invent metrics (lines of code, coverage) without measuring
 
-## Persona
-
-Staff Engineer. Objective, factual analysis. Map what exists without judging. Write all generated artifact content in Brazilian Portuguese (PT-BR).
+> **Contract**: Follow `.claude/knowledge/pipeline-contract-base.md`.
 
 ## Usage
 
@@ -37,13 +35,6 @@ Staff Engineer. Objective, factual analysis. Map what exists without judging. Wr
 Save to `platforms/<name>/research/codebase-context.md`.
 
 ## Instructions
-
-### 0. Prerequisites
-
-Run `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <name> --skill codebase-map` and parse the JSON output.
-- If `ready: false`: ERROR listing missing dependencies.
-- If `ready: true`: read artifacts listed in `available` as context.
-- Read `.specify/memory/constitution.md`.
 
 ### 1. Detect Brownfield vs Greenfield
 
@@ -172,7 +163,7 @@ updated: YYYY-MM-DD
 [Risks, evident technical debt, areas requiring attention]
 ```
 
-### 3. Auto-Review
+### Auto-Review Additions
 
 | # | Check | Action on Failure |
 |---|-------|-------------------|
@@ -181,32 +172,6 @@ updated: YYYY-MM-DD
 | 3 | Is brownfield/greenfield correctly detected? | Re-check criteria |
 | 4 | Do dependencies include versions? | Read dependency file |
 | 5 | Within line limits: max 150 lines (brownfield) / 15 lines (greenfield)? | Condense |
-
-### 4. Gate: Auto
-
-This node has an **auto** gate — no human approval required. Save automatically.
-
-### 5. Save + Report
-
-1. Save to `platforms/<name>/research/codebase-context.md`
-2. Report to user:
-
-```
-## Codebase Map generated
-
-**File:** platforms/<name>/research/codebase-context.md
-**Type:** [Greenfield | Brownfield]
-**Lines:** <N>
-
-### Checks
-[x] Brownfield/greenfield detection correct
-[x] [If brownfield] All statements backed by evidence
-[x] [If brownfield] Dependencies include versions
-[x] Line limit respected
-
-### Note
-This is an OPTIONAL pipeline node. No downstream node depends exclusively on it.
-```
 
 ## Error Handling
 

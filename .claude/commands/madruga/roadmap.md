@@ -25,9 +25,7 @@ Every milestone must have an associated epic with testable acceptance criteria. 
 - Ignore inter-epic dependencies
 - Create a timeline without considering epic appetites
 
-## Persona
-
-Product Manager / Architect. Dual hat: understands value delivery AND technical dependencies. Write all generated artifact content in Brazilian Portuguese (PT-BR).
+> **Contract**: Follow `.claude/knowledge/pipeline-contract-base.md` + `.claude/knowledge/pipeline-contract-planning.md`.
 
 ## Usage
 
@@ -39,13 +37,6 @@ Product Manager / Architect. Dual hat: understands value delivery AND technical 
 Save to `platforms/<name>/planning/roadmap.md`.
 
 ## Instructions
-
-### 0. Prerequisites
-
-Run `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <name> --skill roadmap` and parse the JSON output.
-- If `ready: false`: ERROR listing missing dependencies.
-- If `ready: true`: read artifacts listed in `available`.
-- Read `.specify/memory/constitution.md`.
 
 ### 1. Collect Context + Ask Questions
 
@@ -138,7 +129,7 @@ graph LR
 | ... | ... | ... | ... |
 ```
 
-### 3. Auto-Review
+### Auto-Review Additions
 
 | # | Check | Action on Failure |
 |---|-------|-------------------|
@@ -148,44 +139,6 @@ graph LR
 | 4 | Is the timeline realistic (sum of appetites)? | Adjust |
 | 5 | Do milestones have testable criteria? | Make measurable |
 | 6 | Does the Mermaid Gantt render? | Fix |
-| 7 | Does every decision have >=2 documented alternatives? | Add |
-| 8 | Are trade-offs explicit? | Add pros/cons |
-| 9 | Are assumptions marked [VALIDATE] or backed by data? | Mark [VALIDATE] |
-
-### 4. Approval Gate: Human
-
-Present Gantt, MVP definition, sequence. Questions: "Is the MVP correct?", "Does the sequence make sense?", "Are risks acceptable?"
-
-### 5. Save + Report
-
-```
-## Roadmap generated
-
-**File:** platforms/<name>/planning/roadmap.md
-**Epics:** <N>
-**MVP:** <N> epics, <N> weeks
-**Total:** <N> weeks
-
-### Checks
-[x] All epics included
-[x] Dependencies acyclic
-[x] MVP defined
-[x] Milestones with criteria
-
-### Documentation Pipeline Complete!
-Next steps per epic:
-1. `/epic-context <name>` — Capture implementation context
-2. `/speckit.specify` — Feature specification
-3. `/speckit.clarify` — Clarify ambiguities
-4. `/speckit.plan` — Design artifacts
-5. `/speckit.tasks` — Task breakdown
-6. `/speckit.analyze` — Pre-implementation consistency check
-7. `/speckit.implement` — Execute tasks
-8. `/speckit.analyze` — Post-implementation consistency check
-9. `/verify <name>` — Verify adherence
-10. `/qa` — (opcional) QA test if app is running
-11. `/reconcile <name>` — Update documentation
-```
 
 ## Error Handling
 

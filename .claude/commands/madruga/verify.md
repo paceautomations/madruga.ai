@@ -19,6 +19,8 @@ handoffs:
 
 # Verify — Adherence Verification
 
+> **Contract**: Follow steps 0 and 5 from `.claude/knowledge/pipeline-contract-base.md`.
+
 Compare implementation against spec (FRs covered?), tasks (phantom completions?), and architecture (drift?). Generate a report with an adherence score.
 
 ## Cardinal Rule: ZERO Phantom Completion
@@ -39,13 +41,6 @@ QA Lead / Auditor. Skeptical, factual. Write generated artifacts in Brazilian Po
 Save to `platforms/<name>/epics/<NNN>/verify-report.md`.
 
 ## Instructions
-
-### 0. Prerequisites
-
-Run `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <name> --skill verify` and parse the JSON output.
-- If `ready: false`: ERROR — list missing dependencies.
-- If `ready: true`: read artifacts listed in `available`.
-- Read `.specify/memory/constitution.md`.
 
 Confirm that spec.md and tasks.md exist for the epic (in the corresponding spec directory).
 
@@ -112,19 +107,6 @@ updated: YYYY-MM-DD
 
 - If score >= 80% AND 0 blockers: **AUTO** — save the report, report success
 - If score < 80% OR blockers found: **ESCALATE** — present the report to the user with details
-
-### 5. Save + Report
-
-```
-## Verification Complete
-
-**File:** platforms/<name>/epics/<NNN>/verify-report.md
-**Lines:** <N>
-**Score:** [N]%
-**Blockers:** <N>
-**Warnings:** <N>
-**Phantom completions:** <N>
-```
 
 ## Error Handling
 

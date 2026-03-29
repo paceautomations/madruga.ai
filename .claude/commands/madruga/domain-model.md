@@ -28,9 +28,7 @@ Every bounded context MUST have a clear, documented reason for separation. If tw
 
 **When in doubt:** merge contexts. Splitting is easy later; merging prematurely separated contexts is expensive.
 
-## Persona
-
-Staff Engineer / DDD Expert with 15+ years of experience. Focus on tactical and strategic modeling. Pragmatic — DDD is a tool, not a religion. Challenge overly large aggregates ("Is this a God Object?") and overly small ones ("Is this CRUD disguised as DDD?"). Question every context boundary. Write all generated prose in Brazilian Portuguese (PT-BR); use English for code and schemas.
+> **Contract**: Follow `.claude/knowledge/pipeline-contract-base.md` + `.claude/knowledge/pipeline-contract-engineering.md`.
 
 ## Usage
 
@@ -44,13 +42,6 @@ Save to:
 - `platforms/<name>/model/ddd-contexts.likec4` — LikeC4 DSL for interactive portal
 
 ## Instructions
-
-### 0. Prerequisites
-
-Run `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <name> --skill domain-model` and parse the JSON output.
-- If `ready: false`: ERROR listing missing dependencies and which skill generates each one.
-- If `ready: true`: read artifacts listed in `available` as additional context.
-- Read `.specify/memory/constitution.md` to validate output against principles.
 
 ### 1. Collect Context
 
@@ -265,88 +256,22 @@ views {
 5. `contextMap` view including all elements
 6. Comments in Portuguese for purposes, English for syntax
 
-### 3. Auto-Review
-
-Before saving, verify:
+### Auto-Review Additions
 
 | # | Check | Action on Failure |
 |---|-------|-------------------|
 | 1 | Does every bounded context have documented separation justification? | Add justification or merge contexts |
 | 2 | Zero anemic models (entities with only getters/setters and no behavior)? | Add domain methods or downgrade to VO |
 | 3 | Does every aggregate have at least 1 invariant? | Add invariant or question if it is really an aggregate |
-| 4 | Does every decision have >=2 documented alternatives? | Add alternatives with pros/cons |
-| 5 | Is every assumption marked [VALIDATE] or confirmed? | Mark it |
-| 6 | Do Mermaid diagrams render correctly (valid syntax)? | Fix syntax |
-| 7 | Is LikeC4 DSL syntax valid (specification + model + views)? | Fix syntax |
-| 8 | Is domain-model.md <= 250 lines? | Condense — abstract excessive details |
-| 9 | Were recent DDD best practices researched (2025-2026)? | Research |
-| 10 | Is the context map consistent between .md and .likec4 (same contexts and relationships)? | Synchronize |
+| 4 | Do Mermaid diagrams render correctly (valid syntax)? | Fix syntax |
+| 5 | Is LikeC4 DSL syntax valid (specification + model + views)? | Fix syntax |
+| 6 | Is domain-model.md <= 250 lines? | Condense — abstract excessive details |
+| 7 | Were recent DDD best practices researched (2025-2026)? | Research |
+| 8 | Is the context map consistent between .md and .likec4 (same contexts and relationships)? | Synchronize |
 
-### 4. Approval Gate (human)
+### LikeC4 Validation
 
-Present to user:
-
-```
-## Domain Model Summary
-
-**Bounded Contexts:** <N>
-**Total Aggregates:** <N>
-**Documented Invariants:** <N>
-
-### Context Map (visual summary)
-[Context A] --upstream/downstream--> [Context B]
-[Context A] --shared kernel--> [Context C]
-
-### Boundary Decisions
-1. [Context A] separated from [Context B] because: [justification]
-2. ...
-
-### Aggregate Sizing Decisions
-1. [Aggregate X] includes [Y, Z] because: [justification]
-2. ...
-
-### Validation Questions
-1. Do the bounded contexts reflect real business boundaries?
-2. Is any aggregate too large (God Object) or too small (CRUD)?
-3. Do the invariants cover critical business rules?
-4. Do the relationships between contexts make sense?
-5. Is the SQL schema compatible with the ADR database decision?
-```
-
-Wait for approval before saving.
-
-### 5. Save + Report
-
-1. Save `platforms/<name>/engineering/domain-model.md`
-2. Save `platforms/<name>/model/ddd-contexts.likec4`
-3. Report to user:
-
-```
-## Domain Model generated
-
-**Files:**
-- platforms/<name>/engineering/domain-model.md (<N> lines)
-- platforms/<name>/model/ddd-contexts.likec4 (<N> lines)
-
-**Bounded Contexts:** <N>
-**Aggregates:** <N>
-**Invariants:** <N>
-
-### Checks
-[x] Every bounded context has separation justification
-[x] Zero anemic models
-[x] Every aggregate has invariants
-[x] Alternatives documented
-[x] Assumptions marked
-[x] Mermaid syntax valid
-[x] LikeC4 syntax valid
-[x] domain-model.md <= 250 lines
-[x] Context map consistent between .md and .likec4
-
-### Next step
-/containers <name>
-Define container architecture from the validated domain model and blueprint.
-```
+After saving `.likec4` files, validate by running `likec4 build` in the model directory. Reference `.claude/knowledge/likec4-syntax.md` for syntax. Fix all errors before proceeding to the gate.
 
 ## Error Handling
 

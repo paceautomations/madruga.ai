@@ -9,6 +9,8 @@ argument-hint: "[platform-name]"
 
 # Pipeline — Status + Next Step
 
+> **Contract**: Follow step 0 from `.claude/knowledge/pipeline-contract-base.md`.
+
 Unified read-only skill. Shows pipeline DAG status at both levels (L1: platform, L2: epic cycle) with tables, colored Mermaid diagrams, progress summary, and next step recommendation.
 
 ## Rule: Read-Only, NEVER Auto-Execute

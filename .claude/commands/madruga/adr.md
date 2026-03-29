@@ -26,9 +26,7 @@ Every architectural decision MUST have **at least 3 evaluated alternatives** wit
 - Create an ADR for a trivial decision that does not impact architecture
 - Fabricate sources. Every reference MUST have a verifiable URL or specific document title. No URL → mark as `[FONTE NÃO VERIFICADA]`
 
-## Persona
-
-Staff Engineer with 15+ years of experience. Document decisions for "future me" who will need to understand why this choice was made. Brutally honest about trade-offs. Write prose in Brazilian Portuguese (PT-BR).
+> **Contract**: Follow `.claude/knowledge/pipeline-contract-base.md` + `.claude/knowledge/pipeline-contract-engineering.md`.
 
 ## Usage
 
@@ -40,13 +38,6 @@ Staff Engineer with 15+ years of experience. Document decisions for "future me" 
 Save to `platforms/<name>/decisions/ADR-NNN-kebab-case.md`. Auto-number starting from the highest existing ADR number + 1.
 
 ## Instructions
-
-### 0. Prerequisites
-
-Run `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <name> --skill adr` and parse the JSON output.
-- If `ready: false`: ERROR — list missing dependencies and which skill generates each one.
-- If `ready: true`: read the artifacts listed in `available` as context.
-- Read `.specify/memory/constitution.md` and validate output against its principles.
 
 ### 1. Collect Context + Ask Questions
 
@@ -141,7 +132,7 @@ Reference the business layer and project constraints.
 - [source 2]
 ```
 
-### 3. Auto-Review
+### Auto-Review Additions
 
 | # | Check | Action on Failure |
 |---|-------|-------------------|
@@ -153,56 +144,6 @@ Reference the business layer and project constraints.
 | 6 | Kebab-case file names? | Rename |
 | 7 | Does each alternative have both pros AND cons? | Complete |
 | 8 | References with real sources (not fabricated)? | Verify or remove |
-
-### 4. Approval Gate: 1-Way-Door
-
-**WARNING: This is a 1-way-door gate.** Architectural decisions defined here constrain ALL downstream artifacts (blueprint, containers, DDD, epics).
-
-Present to the user:
-
-**Summary of Generated ADRs:**
-
-| # | ADR | Decision | Chosen Alternative | Rejected Alternatives |
-|---|-----|----------|-------------------|----------------------|
-| 1 | ADR-NNN: [title] | [what it decides] | [choice] | [A, B] |
-| 2 | ... | ... | ... | ... |
-
-**For EACH ADR, request explicit confirmation:**
-
-> **ADR-NNN: [title]**
-> Decision: [summary of choice]
-> Rejected alternatives: [list]
-> Downstream impact: [what this decision defines for blueprint, containers, etc.]
->
-> **Confirm this decision? (yes/no/adjust)**
-
-Wait for confirmation of ALL ADRs before saving. If any is rejected, return to step 2 for that specific decision.
-
-### 5. Save + Report
-
-1. Save each ADR to `platforms/<name>/decisions/ADR-NNN-kebab-case.md`
-2. Present the following report:
-
-```
-## ADRs Generated
-
-**Directory:** platforms/<name>/decisions/
-**ADRs created:** <N>
-
-| ADR | Title | Decision |
-|-----|-------|----------|
-| ADR-NNN | ... | ... |
-
-### Checks
-[x] Each ADR with >= 3 alternatives
-[x] Full Nygard format
-[x] Honest consequences (positive AND negative)
-[x] Sequential numbering
-[x] Explicit per-ADR approval (1-way-door gate)
-
-### Next Step
-`/blueprint <name>` — Generate engineering blueprint based on the approved ADRs.
-```
 
 ## Error Handling
 

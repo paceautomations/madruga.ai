@@ -31,9 +31,7 @@ This document describes **how the business works from the perspective of the act
 
 **When in doubt:** if a participant or flow step only makes sense to an engineer, rewrite it in language a small business owner would understand. E.g., "System processes payment" instead of "Payment microservice calls Stripe API".
 
-## Persona
-
-Senior Bain/McKinsey strategist. Focus on value flows, operational bottlenecks, and business exceptions. Objective, direct, every flow justified. Quantify impact when possible. Mark `[VALIDATE]` when data is missing. Write prose in Brazilian Portuguese (PT-BR).
+> **Contract**: Follow `.claude/knowledge/pipeline-contract-base.md` + `.claude/knowledge/pipeline-contract-business.md`.
 
 ## Usage
 
@@ -45,13 +43,6 @@ Senior Bain/McKinsey strategist. Focus on value flows, operational bottlenecks, 
 Save to `platforms/<name>/business/process.md`. Create the directory if it does not exist.
 
 ## Instructions
-
-### 0. Prerequisites
-
-Run `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <name> --skill business-process` and parse the JSON output.
-- If `ready: false`: ERROR — list missing dependencies and which skill generates each one.
-- If `ready: true`: read the artifacts listed in `available` as additional context.
-- Read `.specify/memory/constitution.md` and validate output against its principles.
 
 ### 1. Collect Context
 
@@ -164,9 +155,7 @@ sequenceDiagram
 5. **Max 120 lines:** if more is needed, the flows are too detailed. Abstract.
 6. **3-5 flows:** prioritized by business impact. Most critical flow first.
 
-### 3. Auto-Review
-
-Before saving, verify:
+### Auto-Review Additions
 
 | # | Check | Action on Failure |
 |---|-------|-------------------|
@@ -178,57 +167,6 @@ Before saving, verify:
 | 6 | Every assumption marked [VALIDATE] or confirmed? | Mark it |
 | 7 | Flow Overview table present with frequency and impact? | Complete it |
 | 8 | Actor Glossary present? | Add it |
-| 9 | Does every decision have >=2 documented alternatives? | Add alternative |
-| 10 | Explicit trade-offs (pros/cons)? | Add pros/cons |
-
-### 4. Approval Gate (human)
-
-Present to the user:
-
-```
-## Business Flow Summary
-
-**Flows mapped:** <N>
-**Actors identified:** [list]
-**Exceptions covered:** <N>
-
-### Decisions Made
-1. [Decision]: [justification]
-2. ...
-
-### Validation Questions
-1. Do the flows cover the most critical business scenarios?
-2. Is any actor missing or unnecessary?
-3. Do the exceptions reflect what happens in practice?
-4. Does the prioritization (flow order) make sense?
-```
-
-Wait for approval before saving.
-
-### 5. Save + Report
-
-1. Save to `platforms/<name>/business/process.md`
-2. Present the following report:
-
-```
-## Business Process Generated
-
-**File:** platforms/<name>/business/process.md
-**Lines:** <N>
-**Flows:** <N> (each with happy path + exception)
-
-### Checks
-[x] Zero technical jargon
-[x] Every flow with happy path + exception
-[x] Participants are business actors
-[x] Total < 120 lines
-[x] Assumptions marked
-[x] Flow Overview and Glossary present
-
-### Next Step
-/tech-research <name>
-WARNING: tech-research is a 1-way-door gate — technology decisions define the entire downstream architecture.
-```
 
 ## Error Handling
 

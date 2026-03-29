@@ -30,9 +30,7 @@ This document is **exclusively about the business**. Technical decisions, archit
 
 **When in doubt:** if a sentence only makes sense to an engineer, it does not belong in this document. Rewrite it in language that an investor or business executive would understand.
 
-## Persona
-
-Senior Bain/McKinsey strategist. Objective, direct, every sentence carries information. Quantify everything. Mark `[VALIDAR]` when data is unavailable. Write generated artifacts in Brazilian Portuguese (PT-BR).
+> **Contract**: Follow `.claude/knowledge/pipeline-contract-base.md` + `.claude/knowledge/pipeline-contract-business.md`.
 
 ## Usage
 
@@ -44,13 +42,6 @@ Senior Bain/McKinsey strategist. Objective, direct, every sentence carries infor
 Save to `platforms/<name>/business/vision.md`. Create the directory if it does not exist.
 
 ## Instructions
-
-### 0. Prerequisites
-
-Run `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <name> --skill vision` and parse the JSON output.
-- If `ready: false`: ERROR — list missing dependencies and which skill generates each one.
-- If `ready: true`: read artifacts listed in `available` as additional context.
-- Read `.specify/memory/constitution.md` to validate the output against project principles.
 
 ### 1. Collect Context + Ask Questions
 
@@ -214,81 +205,19 @@ Se qualquer uma for falsa, a tese precisa ser revisada:
 > Padronizar estes termos em todos os documentos, codigo, e comunicacao do projeto.
 ```
 
-### 3. Auto-Review
+### Auto-Review Additions
 
-Before saving, verify:
+Beyond contract-base checks, verify:
 
 | # | Check | Action on Failure |
 |---|-------|-------------------|
-| 1 | Zero technical terms (scan for: API, SDK, framework, database, backend, frontend, deploy, server, endpoint, middleware, cache, queue, Python, Redis, Docker, Supabase, pgvector, webhook, microservice, CI/CD, ADR) | Rewrite in business language. See "Cardinal Rule" above. |
+| 1 | Zero technical terms (scan for: API, SDK, framework, database, backend, frontend, deploy, server, endpoint, middleware, cache, queue, Python, Redis, Docker, webhook, microservice, CI/CD, ADR) | Rewrite in business language. See Cardinal Rule. Exception: proper names of competitor products. |
 | 2 | Every metric has a number | Add number or mark `[VALIDAR]` |
-| 3 | Every decision has >=2 documented alternatives | Add an alternative |
-| 4 | Explicit trade-offs (pros/cons) | Add pros/cons |
-| 5 | Assumptions marked [VALIDAR] or backed by data | Mark [VALIDAR] |
-| 6 | No section exceeds 30 lines | Trim — a one-pager has no long sections |
-| 7 | Total under 200 lines | Condense the largest sections |
-| 8 | Landscape has max 5 players (including the platform) | Remove the least relevant |
-| 9 | Critical battles has max 5 items | Prioritize the most critical |
-| 10 | Moat is truly defensible (not an easily copied feature) | Reframe or be honest |
-| 11 | Ubiquitous Language section present with min 5 terms | Add domain terms |
-
-**Exception for check 1:** Proper names of competitor products/companies are allowed even if they are technical (e.g., "Botpress", "WhatsApp"). The check targets generic technical jargon, not proper names.
-
-### 4. Approval Gate (human)
-
-Present to the user:
-
-```
-## Vision One-Pager Summary
-
-**Framework:** Playing to Win (7 sections)
-**North Star Metric:** [chosen metric]
-**Moat:** [identified moat]
-
-### Decisions Made
-1. [Decision]: [rationale]
-2. ...
-
-### Validation Questions
-1. Does the thesis reflect business reality?
-2. Is the moat truly defensible or is it a copyable feature?
-3. Do the market numbers (TAM/SAM/SOM) make sense?
-4. Do the risks cover the most critical scenarios?
-5. Is the ubiquitous language complete for the domain?
-```
-
-Wait for approval before saving.
-
-### 5. Save + Report
-
-1. Save to `platforms/<name>/business/vision.md`
-2. Report to the user:
-
-```
-## Vision One-Pager Generated
-
-**File:** platforms/<name>/business/vision.md
-**Lines:** <N>
-**Framework:** Playing to Win (7 sections)
-
-### Checks
-[x] Zero technical jargon
-[x] Metrics with numbers
-[x] Decisions with alternatives
-[x] Explicit trade-offs
-[x] Assumptions marked
-[x] Sections <= 30 lines
-[x] Total < 200 lines
-[x] Landscape <= 5 players
-[x] Moat is defensible
-[x] Ubiquitous Language present (min 5 terms)
-
-### Sections Requiring Validation
-- [list of items marked [VALIDAR], if any]
-
-### Next Step
-`/solution-overview <name>`
-```
+| 3 | No section exceeds 30 lines | Trim — a one-pager has no long sections |
+| 4 | Total under 200 lines | Condense the largest sections |
+| 5 | Landscape has max 5 players | Remove the least relevant |
+| 6 | Moat is truly defensible (not easily copied feature) | Reframe or be honest |
+| 7 | Ubiquitous Language section present with min 5 terms | Add domain terms |
 
 ## Error Handling
 

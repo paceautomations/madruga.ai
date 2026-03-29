@@ -16,6 +16,8 @@ handoffs:
 
 # Epic Context — Implementation Context
 
+> **Contract**: Follow steps 0 and 5 from `.claude/knowledge/pipeline-contract-base.md`.
+
 Capture implementation decisions and preferences before starting the SpecKit cycle for an epic. Identify gray areas and resolve ambiguities.
 
 ## Cardinal Rule: ZERO Decisions Without Architectural Context
@@ -36,13 +38,6 @@ Staff Engineer. Bridge architecture and implementation. Write all generated arti
 Save to `platforms/<name>/epics/<N>/context.md`.
 
 ## Instructions
-
-### 0. Prerequisites
-
-Run `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <name> --skill epic-context` and parse the JSON output.
-- If `ready: false`: ERROR listing missing dependencies.
-- If `ready: true`: read artifacts listed in `available`.
-- Read `.specify/memory/constitution.md`.
 
 Additional required reading:
 - `epics/<NNN>/pitch.md` — epic scope
@@ -116,25 +111,6 @@ updated: YYYY-MM-DD
 ### 4. Gate: Human
 
 Present captured decisions and resolved gray areas for validation.
-
-### 5. Save + Report
-
-```
-## Context captured
-
-**File:** platforms/<name>/epics/<NNN>/context.md
-**Lines:** <N>
-**Decisions:** <N>
-**Resolved gray areas:** <N>
-
-### Checks
-[x] Decisions reference architecture
-[x] Gray areas resolved
-[x] Blueprint constraints present
-
-### Next step
-`/speckit.specify` to start the implementation cycle.
-```
 
 ## Error Handling
 

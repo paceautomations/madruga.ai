@@ -13,6 +13,8 @@ handoffs:
 
 # Reconcile — Drift Detection and Correction
 
+> **Contract**: Follow steps 0 and 5 from `.claude/knowledge/pipeline-contract-base.md`.
+
 Compare implementation (git diff / PR) with architecture documentation. Identify drift and propose updates to affected docs.
 
 ## Cardinal Rule: ZERO Silent Drift
@@ -33,13 +35,6 @@ Architect / Documentation Guardian. Write all generated artifact content in Braz
 Update existing docs in `platforms/<name>/`. Report saved to `reconcile-report.md`.
 
 ## Instructions
-
-### 0. Prerequisites
-
-Run `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <name> --skill reconcile` and parse the JSON output.
-- If `ready: false`: ERROR listing missing dependencies.
-- If `ready: true`: read artifacts listed in `available`.
-- Read `.specify/memory/constitution.md`.
 
 ### 1. Collect Context + Detect Drift
 
@@ -91,20 +86,6 @@ For each detected drift, generate a structured proposal:
 ### 4. Gate: Human
 
 Present the drift report and proposed updates. Request approval before applying.
-
-### 5. Save + Report
-
-```
-## Reconciliation complete
-
-**File:** platforms/<name>/reconcile-report.md
-**Lines:** <N>
-**Drifts detected:** <N>
-**Docs updated:** <N>
-**Categories:** [scope/architecture/model/domain]
-
-Next: `/pipeline <name>` to check pipeline state.
-```
 
 ## Error Handling
 
