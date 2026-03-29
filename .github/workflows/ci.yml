@@ -59,11 +59,12 @@ jobs:
       - run: pip install copier pyyaml pytest
       - run: |
           copier copy .specify/templates/platform/ /tmp/ci-test-plat \
-            --defaults \
+            --trust --defaults \
             -d platform_name=ci-test \
             -d platform_title="CI Test Platform" \
             -d platform_description="Automated CI validation" \
-            -d lifecycle=design
+            -d lifecycle=design \
+            -d register_portal=false
       - run: |
           python3 -c "
           import yaml
