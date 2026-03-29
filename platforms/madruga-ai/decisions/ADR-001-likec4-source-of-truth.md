@@ -1,4 +1,5 @@
 ---
+status: accepted
 title: "ADR-001: LikeC4 como Source of Truth"
 ---
 # ADR-001: LikeC4 como Source of Truth para Modelos Arquiteturais

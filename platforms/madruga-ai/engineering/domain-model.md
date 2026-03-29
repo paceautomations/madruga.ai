@@ -348,27 +348,36 @@ classDiagram
 ### Schema SQL (SQLite — madruga.db)
 
 ```sql
-CREATE TABLE epics (
-    id          TEXT PRIMARY KEY,
-    title       TEXT NOT NULL,
-    status      TEXT NOT NULL DEFAULT 'pending',  -- pending, in_progress, blocked, completed, failed
-    phase       TEXT NOT NULL DEFAULT 'specify',  -- specify, plan, tasks, implement, persona_interview, review, vision
-    context     TEXT,          -- JSON serializado com contexto acumulado
-    started_at  TEXT NOT NULL,
-    updated_at  TEXT NOT NULL,
-    completed_at TEXT,
-    error_detail TEXT
+CREATE TABLE IF NOT EXISTS epics (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    objective TEXT NOT NULL DEFAULT '',
+    priority TEXT DEFAULT 'P2',
+    target_repo TEXT DEFAULT 'general',
+    phase TEXT DEFAULT 'inbox',
+    status TEXT DEFAULT 'pending',
+    scope TEXT DEFAULT '',
+    acceptance_criteria TEXT DEFAULT '',
+    estimated_tasks INTEGER DEFAULT 0,
+    spec_path TEXT DEFAULT '',
+    plan_path TEXT DEFAULT '',
+    tasks_path TEXT DEFAULT '',
+    pr_number INTEGER,
+    milestone_id TEXT,
+    cost_usd REAL DEFAULT 0.0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE phase_runs (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    epic_id     TEXT NOT NULL REFERENCES epics(id),
-    phase       TEXT NOT NULL,
-    status      TEXT NOT NULL DEFAULT 'running',  -- running, success, failed
-    started_at  TEXT NOT NULL,
-    finished_at TEXT,
-    artifacts   TEXT,          -- JSON array de caminhos produzidos
-    error       TEXT
+CREATE TABLE IF NOT EXISTS usage_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    epic_id TEXT REFERENCES epics(id),
+    phase TEXT,
+    model TEXT NOT NULL,
+    call_type TEXT NOT NULL DEFAULT 'claude_p',
+    duration_ms INTEGER,
+    throttled BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 ```
 
@@ -496,31 +505,59 @@ classDiagram
 ### Schema SQL (SQLite — madruga.db)
 
 ```sql
-CREATE TABLE patterns (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    category    TEXT NOT NULL,     -- debate, decision, clarify
-    pattern     TEXT NOT NULL,     -- descricao do padrao identificado
-    frequency   INTEGER DEFAULT 1,
-    last_seen   TEXT NOT NULL,
-    metadata    TEXT              -- JSON com detalhes adicionais
+CREATE TABLE IF NOT EXISTS debates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    epic_id TEXT NOT NULL,
+    phase TEXT NOT NULL,
+    round INTEGER NOT NULL,
+    critic TEXT NOT NULL,
+    severity TEXT NOT NULL,
+    finding TEXT NOT NULL,
+    resolved BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE learning (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    source      TEXT NOT NULL,     -- debate, decision, review
-    lesson      TEXT NOT NULL,
-    confidence  REAL DEFAULT 0.5,
-    created_at  TEXT NOT NULL,
+CREATE TABLE IF NOT EXISTS decisions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    epic_id TEXT NOT NULL,
+    phase TEXT NOT NULL,
+    title TEXT NOT NULL,
+    door_type TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    alternatives TEXT DEFAULT '',
+    chosen TEXT DEFAULT '',
+    rationale TEXT DEFAULT '',
+    adr_path TEXT DEFAULT '',
+    status TEXT DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    resolved_at TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS patterns (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    category TEXT NOT NULL,
+    pattern TEXT NOT NULL,
+    frequency INTEGER DEFAULT 1,
+    last_seen TEXT NOT NULL,
+    metadata TEXT
+);
+
+CREATE TABLE IF NOT EXISTS learning (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source TEXT NOT NULL,
+    lesson TEXT NOT NULL,
+    confidence REAL DEFAULT 0.5,
+    created_at TEXT NOT NULL,
     applied_count INTEGER DEFAULT 0
 );
 
-CREATE TABLE persona_accuracy (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    persona     TEXT NOT NULL,
-    topic       TEXT NOT NULL,
-    predicted   TEXT,
-    actual      TEXT,
-    accurate    INTEGER,          -- 0 ou 1
+CREATE TABLE IF NOT EXISTS persona_accuracy (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    persona TEXT NOT NULL,
+    topic TEXT NOT NULL,
+    predicted TEXT,
+    actual TEXT,
+    accurate INTEGER,
     evaluated_at TEXT NOT NULL
 );
 ```

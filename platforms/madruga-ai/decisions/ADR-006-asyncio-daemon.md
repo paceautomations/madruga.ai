@@ -1,4 +1,5 @@
 ---
+status: accepted
 title: "ADR-006: asyncio Daemon 24/7"
 ---
 # ADR-006: asyncio Daemon 24/7 para Execucao Autonoma

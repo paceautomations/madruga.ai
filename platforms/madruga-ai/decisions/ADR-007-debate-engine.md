@@ -1,4 +1,5 @@
 ---
+status: accepted
 title: "ADR-007: Multi-Persona Debate Engine"
 ---
 # ADR-007: Multi-Persona Debate Engine para Qualidade de Specs

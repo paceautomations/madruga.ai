@@ -1,4 +1,5 @@
 ---
+status: accepted
 title: "ADR-002: Copier para Scaffolding"
 ---
 # ADR-002: Copier para Scaffolding de Plataformas

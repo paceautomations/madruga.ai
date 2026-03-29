@@ -1,4 +1,5 @@
 ---
+status: accepted
 title: "ADR-005: SpeckitBridge Compositor"
 ---
 # ADR-005: SpeckitBridge como Compositor de Skills e Templates

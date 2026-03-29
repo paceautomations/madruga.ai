@@ -31,9 +31,15 @@ Isso causa:
 
 ## Solucao
 
-Unificar tudo sob namespace `madruga.*`:
+Unificar as 9 skills speckit e as 4 skills de arquitetura sob namespace unico `madruga.*`:
 
-1. Renomear skills em `.claude/commands/`:
+1. **Atualizar referencias primeiro** (antes de renomear arquivos):
+   - CLAUDE.md — atualizar toda a secao SpecKit Workflow
+   - README.md — atualizar referencias ao namespace
+   - Todos os skills que referenciam outros skills internamente
+   - SpeckitBridge — atualizar para ler skills dos novos paths `madruga.*`
+
+2. **Renomear skills em `.claude/commands/`** (via migration script):
    - `speckit.specify.md` → `madruga.specify.md`
    - `speckit.plan.md` → `madruga.plan.md`
    - `speckit.tasks.md` → `madruga.tasks.md`
@@ -44,24 +50,25 @@ Unificar tudo sob namespace `madruga.*`:
    - `speckit.constitution.md` → `madruga.constitution.md`
    - `speckit.checklist.md` → `madruga.checklist.md`
 
-2. Renomear templates em `.specify/templates/`:
+3. **Renomear templates em `.specify/templates/`**:
    - Manter estrutura interna, apenas prefixo externo muda
 
-3. Atualizar referencias:
-   - CLAUDE.md
-   - README.md
-   - Todos os skills que referenciam outros skills
-   - SpeckitBridge → MadrugaBridge (ou manter nome interno, so renomear skills)
-
-4. Manter backward compatibility temporaria:
+4. **Manter backward compatibility temporaria**:
    - Symlinks `speckit.* → madruga.*` por 30 dias
    - Warning no stderr quando skill antiga e invocada
 
 ## Rabbit Holes
 
-- **Nao renomear internals do SpeckitBridge** — nomes internos (classes, funcoes) podem ficar como estao. O rename e apenas na interface publica (nomes de skills)
+- **Nao renomear arquivos em disco antes de atualizar todas as referencias** — primeiro atualizar CLAUDE.md, skills que referenciam outros skills, SpeckitBridge config. Depois renomear arquivos. Usar migration script, nao rename manual.
+- **Nao renomear internals do SpeckitBridge** — nomes internos (classes, funcoes) podem ficar como estao. O rename e apenas na interface publica (nomes de skills). SpeckitBridge precisa ser atualizado para ler dos novos paths.
 - **Nao renomear `.specify/` directory** — e o diretorio de templates, nao o namespace publico. Manter.
-- **Nao fazer rename parcial** — ou renomeia tudo de uma vez, ou nao faz. Namespace misto e pior que dois namespaces
+- **Nao fazer rename parcial** — ou renomeia tudo de uma vez, ou nao faz. Namespace misto e pior que dois namespaces.
+
+## No-gos
+
+- **Nao mudar comportamento de nenhuma skill** — e rename puro. Se uma skill faz X antes, faz X depois. Zero mudancas funcionais.
+- **Nao remover symlinks de backward compatibility antes de 30 dias** — usuarios e automacoes precisam de tempo para migrar.
+- **Nao renomear o diretorio `.specify/`** — e infraestrutura interna, nao faz parte do namespace publico que usuarios veem.
 
 ## Criterios de Aceitacao
 

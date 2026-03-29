@@ -27,7 +27,7 @@ Pipelines longos (specify → implement) acumulam contexto no mesmo processo Cla
 
 ## Solucao
 
-Executar cada fase do pipeline como um **subagent fresco** (nova invocacao `claude -p`):
+Executar cada fase do pipeline como um **subagent fresco** (nova invocacao `claude -p`). Cada wave recebe: (1) task list relevante, (2) estado acumulado das waves anteriores via artefatos, e (3) contexto Vision relevante da plataforma.
 
 1. **Wave 1 (SPECIFY)**: `claude -p` recebe pitch.md + constitution + template-specify → gera spec.md
 2. **Wave 2 (CLARIFY)**: `claude -p` recebe spec.md + template-clarify → gera perguntas + spec atualizada
@@ -36,13 +36,20 @@ Executar cada fase do pipeline como um **subagent fresco** (nova invocacao `clau
 5. **Wave 5 (TASKS)**: `claude -p` recebe plan.md + template-tasks → gera tasks.md
 6. **Wave 6-N (IMPLEMENT)**: `claude -p` por task, recebendo apenas task + codebase context relevante
 
-Cada wave recebe **apenas o artefato da fase anterior**, nao o historico completo. O pipeline runner gerencia o handoff entre waves, persistindo artefatos intermediarios no filesystem.
+Cada wave recebe **apenas o artefato da fase anterior + contexto Vision**, nao o historico completo. O pipeline runner gerencia o handoff entre waves, persistindo artefatos intermediarios no filesystem. O estado acumulado e passado via filesystem, nunca via context window.
 
 ## Rabbit Holes
 
-- **Nao tentar compartilhar contexto entre waves** — o ponto e justamente isolar. Se uma fase precisa de info de outra, essa info deve estar no artefato (spec.md, plan.md), nao no context window
-- **Nao otimizar prematuramente** — comece com 1 wave por fase. Se alguma fase for rapida demais para justificar um subprocess, merge later
-- **Nao paralelizar waves** — fases sao sequenciais por natureza (plan depende de spec)
+- **Nao tentar fazer waves stateless** — waves precisam de estado das waves anteriores. O que muda e que o estado vem do artefato persistido (spec.md, plan.md), nao da context window do LLM.
+- **Nao tentar compartilhar contexto entre waves** — o ponto e justamente isolar. Se uma fase precisa de info de outra, essa info deve estar no artefato, nao no context window.
+- **Nao over-paralelizar** — waves sequenciais com contexto fresco e o objetivo. Paralelismo e tentador mas quebraria dependencias entre fases.
+- **Nao otimizar prematuramente** — comece com 1 wave por fase. Se alguma fase for rapida demais para justificar um subprocess, merge later.
+
+## No-gos
+
+- **Nao manter historico de conversacao entre waves** — cada wave comeca do zero. Se algo e importante, deve estar serializado no artefato.
+- **Nao implementar retry automatico de waves falhas** — se uma wave falha, o pipeline para e reporta. Retry inteligente e escopo futuro.
+- **Nao customizar prompts por wave na v1** — usar os mesmos templates existentes. Otimizacao de prompts para contexto reduzido vem depois.
 
 ## Criterios de Aceitacao
 

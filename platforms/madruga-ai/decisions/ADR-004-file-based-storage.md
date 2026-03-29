@@ -1,4 +1,5 @@
 ---
+status: accepted
 title: "ADR-004: Git File-Based Storage"
 ---
 # ADR-004: Git File-Based Storage como Persistencia Primaria

@@ -1,4 +1,5 @@
 ---
+status: accepted
 title: "ADR-008: MECE Artifact Model"
 ---
 # ADR-008: MECE Artifact Model para Documentacao

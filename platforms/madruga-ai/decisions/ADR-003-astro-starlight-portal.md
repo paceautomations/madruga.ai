@@ -1,4 +1,5 @@
 ---
+status: accepted
 title: "ADR-003: Astro + Starlight Portal"
 ---
 # ADR-003: Astro + Starlight para Portal de Documentacao

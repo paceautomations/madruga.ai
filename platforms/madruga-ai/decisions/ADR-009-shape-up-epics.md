@@ -1,4 +1,5 @@
 ---
+status: accepted
 title: "ADR-009: Shape Up Epics"
 ---
 # ADR-009: Shape Up Pitches para Gestao de Epics
