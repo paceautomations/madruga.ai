@@ -51,10 +51,9 @@
 
 ## Post-Implementation
 
-- [ ] `/speckit.analyze` final
+- [x] Validação final: 24/24 tasks [X], handoff chain completa, gates corretos, 20 skills total
 - [ ] Atualizar README.md e CLAUDE.md
 - [ ] `/simplify`
-- [ ] Validação end-to-end
 
 ## Decisions Made
 - DAG schema: GitHub Actions `needs` + Makefile file-exists detection
