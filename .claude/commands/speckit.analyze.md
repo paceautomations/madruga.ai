@@ -14,6 +14,8 @@ You **MUST** consider the user input before proceeding (if not empty).
 
 ## Goal
 
+**Epic Dir Support**: When this skill is invoked in the context of a platform epic (e.g., via `/epic-context` → handoff), set `export SPECIFY_BASE_DIR=platforms/<name>/epics/<NNN-slug>/` before invoking any SpecKit bash scripts. This ensures all artifacts (spec.md, plan.md, tasks.md, etc.) are created within the epic directory instead of `specs/`.
+
 Identify inconsistencies, duplications, ambiguities, and underspecified items across the three core artifacts (`spec.md`, `plan.md`, `tasks.md`) before implementation. This command MUST run only after `/speckit.tasks` has successfully produced a complete `tasks.md`.
 
 ---

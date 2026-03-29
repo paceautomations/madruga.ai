@@ -204,3 +204,10 @@ Present:
 | Total appetite > 6 months | Alert about scope risk |
 | Circular dependency between epics | Resolve via split or merge |
 | Context without an associated epic | Check whether the context is needed now |
+
+---
+handoff:
+  from: epic-breakdown
+  to: roadmap
+  context: "Epics definidos com pitch, appetite, e acceptance criteria. Roadmap deve sequenciar entrega."
+  blockers: []

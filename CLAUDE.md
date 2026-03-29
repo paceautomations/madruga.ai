@@ -41,7 +41,7 @@ Language: documentation and comments are in **Brazilian Portuguese**. Code is in
 │   ├── src/lib/platforms.mjs  # Platform discovery + dynamic sidebar builder
 │   └── src/pages/[platform]/  # Dynamic routes for all platforms
 ├── .claude/
-│   ├── commands/madruga/      # 21 skills: 14 DAG nodes + 6 utilities + test-ai
+│   ├── commands/madruga/      # 19 skills: 13 DAG nodes + 5 utilities + qa
 │   ├── knowledge/             # Knowledge files loaded on-demand by skills
 │   └── settings.local.json    # Permissions and MCP server config
 └── docs/                      # Legacy docs
@@ -128,9 +128,8 @@ Each platform is documented incrementally via **atomic skills** orchestrated by 
 
 ```
 platform-new → vision → solution-overview → business-process
-→ tech-research → adr-gen → blueprint → folder-arch
-                                      → domain-model → containers → context-map
-→ epic-breakdown → roadmap → [per-epic: discuss → SpecKit → verify → test-ai? → reconcile]
+→ tech-research → adr → blueprint → domain-model → containers → context-map
+→ epic-breakdown → roadmap → [per-epic: epic-context → SpecKit → verify → qa? → reconcile]
 ```
 
 ### Gate Types
@@ -139,50 +138,48 @@ platform-new → vision → solution-overview → business-process
 |------|----------|
 | `human` | Always pauses for approval |
 | `auto` | Proceeds automatically |
-| `1-way-door` | Always pauses — irreversible decisions (tech-research, adr-gen, epic-breakdown) |
+| `1-way-door` | Always pauses — irreversible decisions (tech-research, adr, epic-breakdown) |
 | `auto-escalate` | Auto if OK, escalates if blockers (verify) |
 
 ### Key Commands
 
 ```bash
 # Pipeline status and navigation
-/pipeline-status <platform>    # Table + Mermaid DAG + progress
-/pipeline-next <platform>      # Recommend next step (NO auto-execute)
+/pipeline <platform>           # Table + Mermaid DAG + progress + next step
 
 # Prerequisite check
 .specify/scripts/bash/check-platform-prerequisites.sh --json --status --platform <name>
 ```
 
-### DAG Nodes (14 skills)
+### DAG Nodes (13 skills)
 
 | # | Skill | Output | Depends on | Layer | Gate |
 |---|-------|--------|------------|-------|------|
 | 1 | `platform-new` | platform.yaml | — | business | human |
-| 2 | `vision-one-pager` | business/vision.md | platform-new | business | human |
+| 2 | `vision` | business/vision.md | platform-new | business | human |
 | 3 | `solution-overview` | business/solution-overview.md | vision | business | human |
 | 4 | `business-process` | business/process.md | solution-overview | business | human |
 | 5 | `tech-research` | research/tech-alternatives.md | business-process | research | 1-way-door |
 | 6 | `codebase-map` | research/codebase-context.md | vision | research | auto (optional) |
-| 7 | `adr-gen` | decisions/ADR-*.md | tech-research | engineering | 1-way-door |
-| 8 | `blueprint` | engineering/blueprint.md | adr-gen | engineering | human |
-| 9 | `folder-arch` | engineering/folder-structure.md | blueprint | engineering | human |
-| 10 | `domain-model` | engineering/domain-model.md + model/ddd-contexts.likec4 | blueprint, business-process | engineering | human |
-| 11 | `containers` | engineering/containers.md + model/platform.likec4 | domain-model, blueprint | engineering | human |
-| 12 | `context-map` | engineering/context-map.md | domain-model, containers | engineering | human |
-| 13 | `epic-breakdown` | epics/*/pitch.md | domain-model, containers, context-map | planning | 1-way-door |
-| 14 | `roadmap` | planning/roadmap.md | epic-breakdown | planning | human |
+| 7 | `adr` | decisions/ADR-*.md | tech-research | engineering | 1-way-door |
+| 8 | `blueprint` | engineering/blueprint.md | adr | engineering | human |
+| 9 | `domain-model` | engineering/domain-model.md + model/ddd-contexts.likec4 | blueprint, business-process | engineering | human |
+| 10 | `containers` | engineering/containers.md + model/platform.likec4 | domain-model, blueprint | engineering | human |
+| 11 | `context-map` | engineering/context-map.md | domain-model, containers | engineering | human |
+| 12 | `epic-breakdown` | epics/*/pitch.md | domain-model, containers, context-map | planning | 1-way-door |
+| 13 | `roadmap` | planning/roadmap.md | epic-breakdown | planning | human |
 
 ### Per-Epic Implementation Cycle
 
 After the pipeline completes (roadmap done), each epic follows:
 
 ```
-discuss → specify → clarify → plan → tasks → analyze → implement → analyze → verify → test-ai? → reconcile
+epic-context → specify → clarify → plan → tasks → analyze → implement → analyze → verify → qa? → reconcile
 ```
 
 | Step | Skill | Gate | Purpose |
 |------|-------|------|---------|
-| 1 | `discuss` | human | Capture implementation context and decisions |
+| 1 | `epic-context` | human | Capture implementation context and decisions |
 | 2 | `speckit.specify` | human | Feature specification |
 | 3 | `speckit.clarify` | human | Reduce ambiguity in spec before planning |
 | 4 | `speckit.plan` | human | Design artifacts |
@@ -191,17 +188,16 @@ discuss → specify → clarify → plan → tasks → analyze → implement →
 | 7 | `speckit.implement` | auto | Execute tasks |
 | 8 | `speckit.analyze` | auto | Post-implementation consistency check |
 | 9 | `verify` | auto-escalate | Check implementation vs spec/tasks/architecture |
-| 10 | `test-ai` | human (optional) | QA test running app via Playwright |
+| 10 | `qa` | human (optional) | QA test running app via Playwright |
 | 11 | `reconcile` | human | Detect and fix drift between implementation and docs |
 
-**test-ai is optional** — skip when epic has no web-facing features, app isn't running, or Playwright MCP is unavailable. Runs before reconcile because its heal loop may modify code, creating new drift.
+**qa is optional** — skip when epic has no web-facing features, app isn't running, or Playwright MCP is unavailable. Runs before reconcile because its heal loop may modify code, creating new drift.
 
 ### Utility Skills
 
 | Skill | Purpose |
 |-------|---------|
-| `pipeline-status` | Table + Mermaid DAG + progress for a platform |
-| `pipeline-next` | Recommend next step (NO auto-execute) |
+| `pipeline` | Table + Mermaid DAG + progress + next step for a platform |
 | `checkpoint` | Save STATE.md with session progress |
 
 ### Skill Contract
@@ -222,7 +218,7 @@ The `.claude/commands/speckit.*.md` skills form a feature specification pipeline
 ## Key Conventions
 
 - **AUTO markers**: Never manually edit content between `<!-- AUTO:name -->` and `<!-- /AUTO:name -->` markers in engineering docs — these are regenerated by `vision-build.py`
-- **platform.yaml**: Declarative manifest defining available views, lifecycle stage, and build commands for each platform. Pipeline DAG (14 nodes) is defined in `.claude/knowledge/pipeline-dag-knowledge.md`
+- **platform.yaml**: Declarative manifest defining available views, lifecycle stage, and build commands for each platform. Pipeline DAG (13 nodes) is defined in `.claude/knowledge/pipeline-dag-knowledge.md`
 - Python code in this repo uses **ruff** for formatting and linting
 
 ## Principles
@@ -261,6 +257,8 @@ After completing any implementation task (new code or refactor touching 3+ files
 ## Active Technologies
 - Python 3.11+ (stdlib only: sqlite3, hashlib, json, pathlib, uuid) + Zero — apenas stdlib Python (002-sqlite-foundation)
 - SQLite 3 (WAL mode, foreign_keys=ON, busy_timeout=5000) (002-sqlite-foundation)
+- Bash 5.x + Python 3.11+ (stdlib only) + pyyaml (já presente), sqlite3 (stdlib) (003-directory-unification)
+- SQLite WAL mode (`.pipeline/madruga.db`) — schema já inclui `epic_nodes` table (001_initial.sql) (003-directory-unification)
 
 ## Recent Changes
 - 002-sqlite-foundation: Added Python 3.11+ (stdlib only: sqlite3, hashlib, json, pathlib, uuid) + Zero — apenas stdlib Python

@@ -70,6 +70,8 @@ Given that feature description, do this:
      - "Create a dashboard for analytics" → "analytics-dashboard"
      - "Fix payment processing timeout bug" → "fix-payment-timeout"
 
+   **Epic Dir Support**: When this skill is invoked in the context of a platform epic (e.g., via `/epic-context` → handoff), set `export SPECIFY_BASE_DIR=platforms/<name>/epics/<NNN-slug>/` before invoking any SpecKit bash scripts. This ensures all artifacts (spec.md, plan.md, tasks.md, etc.) are created within the epic directory instead of `specs/`.
+
 2. **Create the feature branch** by running the script with `--short-name` (and `--json`). In sequential mode, do NOT pass `--number` — the script auto-detects the next available number. In timestamp mode, the script generates a `YYYYMMDD-HHMMSS` prefix automatically:
 
    **Branch numbering mode**: Before running the script, check if `.specify/init-options.json` exists and read the `branch_numbering` value.

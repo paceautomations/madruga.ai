@@ -189,3 +189,10 @@ WARNING: 1-way-door gate — epic scope defines the entire implementation.
 | Circular relationships | Identify and resolve — indicates wrong boundary |
 | Isolated context (no relationships) | Question: is it truly independent? |
 | Conflict between domain-model and containers | Align — contexts should map to containers |
+
+---
+handoff:
+  from: context-map
+  to: epic-breakdown
+  context: "Context map completo. Epic breakdown deve quebrar em epics Shape Up. WARNING: 1-way-door."
+  blockers: []

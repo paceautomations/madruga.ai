@@ -32,8 +32,8 @@ Staff Engineer with 15+ years of experience. Document decisions for "future me" 
 
 ## Usage
 
-- `/adr-gen fulano` — Generate ADRs for the "fulano" platform
-- `/adr-gen` — Prompt for the platform name
+- `/adr fulano` — Generate ADRs for the "fulano" platform
+- `/adr` — Prompt for the platform name
 
 ## Output Directory
 
@@ -43,7 +43,7 @@ Save to `platforms/<name>/decisions/ADR-NNN-kebab-case.md`. Auto-number starting
 
 ### 0. Prerequisites
 
-Run `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <name> --skill adr-gen` and parse the JSON output.
+Run `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <name> --skill adr` and parse the JSON output.
 - If `ready: false`: ERROR — list missing dependencies and which skill generates each one.
 - If `ready: true`: read the artifacts listed in `available` as context.
 - Read `.specify/memory/constitution.md` and validate output against its principles.
@@ -214,3 +214,10 @@ Wait for confirmation of ALL ADRs before saving. If any is rejected, return to s
 | Existing ADRs conflict with new ones | Propose updating old ADR status to "superseded" |
 | Fewer than 3 real alternatives | Research more. If genuinely only 2 exist: document with explicit justification for why no 3rd is viable |
 | User rejects a decision at the gate | Return to step 1 with new constraints for that decision |
+
+---
+handoff:
+  from: adr
+  to: blueprint
+  context: "ADRs aprovados. Blueprint deve consolidar concerns transversais."
+  blockers: []

@@ -40,7 +40,7 @@ pipeline:
       gate: human
 
     - id: vision
-      skill: "madruga:vision-one-pager"
+      skill: "madruga:vision"
       outputs: ["business/vision.md"]
       depends: ["platform-new"]
       layer: business
@@ -75,8 +75,8 @@ pipeline:
       gate: auto
       optional: true
 
-    - id: adr-gen
-      skill: "madruga:adr-gen"
+    - id: adr
+      skill: "madruga:adr"
       output_pattern: "decisions/ADR-*.md"
       depends: ["tech-research"]
       layer: engineering
@@ -85,14 +85,7 @@ pipeline:
     - id: blueprint
       skill: "madruga:blueprint"
       outputs: ["engineering/blueprint.md"]
-      depends: ["adr-gen"]
-      layer: engineering
-      gate: human
-
-    - id: folder-arch
-      skill: "madruga:folder-arch"
-      outputs: ["engineering/folder-structure.md"]
-      depends: ["blueprint"]
+      depends: ["adr"]
       layer: engineering
       gate: human
 
@@ -130,3 +123,71 @@ pipeline:
       depends: ["epic-breakdown"]
       layer: planning
       gate: human
+
+  epic_cycle:
+    nodes:
+      - id: epic-context
+        skill: "madruga:epic-context"
+        outputs: ["{epic}/context.md"]
+        depends: []
+        gate: human
+
+      - id: specify
+        skill: "speckit.specify"
+        outputs: ["{epic}/spec.md"]
+        depends: ["epic-context"]
+        gate: human
+
+      - id: clarify
+        skill: "speckit.clarify"
+        outputs: ["{epic}/spec.md"]
+        depends: ["specify"]
+        gate: human
+        optional: true
+        skip_condition: "spec.md has 0 [NEEDS CLARIFICATION] markers"
+
+      - id: plan
+        skill: "speckit.plan"
+        outputs: ["{epic}/plan.md"]
+        depends: ["specify"]
+        gate: human
+
+      - id: tasks
+        skill: "speckit.tasks"
+        outputs: ["{epic}/tasks.md"]
+        depends: ["plan"]
+        gate: human
+
+      - id: analyze
+        skill: "speckit.analyze"
+        outputs: ["{epic}/analyze-report.md"]
+        depends: ["tasks"]
+        gate: auto
+
+      - id: implement
+        skill: "speckit.implement"
+        outputs: ["{epic}/tasks.md"]
+        depends: ["analyze"]
+        gate: auto
+
+      - id: verify
+        skill: "madruga:verify"
+        outputs: ["{epic}/verify-report.md"]
+        depends: ["implement"]
+        gate: auto-escalate
+
+      - id: qa
+        skill: "madruga:qa"
+        outputs: ["{epic}/qa-report.md"]
+        depends: ["verify"]
+        gate: human
+        optional: true
+        skip_condition: "epic has no web-facing features or app not running"
+
+      - id: reconcile
+        skill: "madruga:reconcile"
+        outputs: ["{epic}/reconcile-report.md"]
+        depends: ["verify"]
+        gate: human
+        optional: true
+        skip_condition: "verify score >= 95% and zero drift"

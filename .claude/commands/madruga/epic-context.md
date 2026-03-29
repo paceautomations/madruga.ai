@@ -14,7 +14,7 @@ handoffs:
     prompt: "Context captured. Start implementation cycle with /speckit.specify."
 ---
 
-# Discuss — Implementation Context
+# Epic Context — Implementation Context
 
 Capture implementation decisions and preferences before starting the SpecKit cycle for an epic. Identify gray areas and resolve ambiguities.
 
@@ -28,8 +28,8 @@ Staff Engineer. Bridge architecture and implementation. Write all generated arti
 
 ## Usage
 
-- `/discuss fulano 001` — Discuss epic 001 of "fulano"
-- `/discuss` — Prompt for platform and epic
+- `/epic-context fulano 001` — Capture context for epic 001 of "fulano"
+- `/epic-context` — Prompt for platform and epic
 
 ## Output Directory
 
@@ -39,7 +39,7 @@ Save to `platforms/<name>/epics/<N>/context.md`.
 
 ### 0. Prerequisites
 
-Run `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <name> --skill discuss` and parse the JSON output.
+Run `.specify/scripts/bash/check-platform-prerequisites.sh --json --platform <name> --skill epic-context` and parse the JSON output.
 - If `ready: false`: ERROR listing missing dependencies.
 - If `ready: true`: read artifacts listed in `available`.
 - Read `.specify/memory/constitution.md`.
@@ -143,3 +143,10 @@ Present captured decisions and resolved gray areas for validation.
 | Epic does not exist | Suggest running `/epic-breakdown` first |
 | Architecture docs incomplete | List gaps, suggest completing the pipeline |
 | Too many gray areas (>10) | Prioritize the 5 most critical |
+
+---
+handoff:
+  from: epic-context
+  to: specify
+  context: "Contexto de implementação capturado. Spec deve endereçar decisões e constraints documentadas."
+  blockers: []

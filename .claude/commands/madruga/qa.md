@@ -9,28 +9,28 @@ arguments:
 handoffs:
   - label: Reconcile Documentation
     agent: madruga/reconcile
-    prompt: "QA complete. Reconcile documentation — test-ai may have healed code that creates drift."
+    prompt: "QA complete. Reconcile documentation — qa may have healed code that creates drift."
 ---
 
-# Test AI — Human-Like QA via Playwright
+# QA — Human-Like QA via Playwright
 
 Test web applications the way a human QA would: navigate, interact, observe visually, diagnose bugs, and fix them. Fully automatic pipeline after a feature is built.
 
 ## Usage
 
-- `/test-ai` — Auto-detect feature (git diff), generate scenarios, test, fix, report
-- `/test-ai http://localhost:3000` — Test a specific URL with the full pipeline
-- `/test-ai explore http://localhost:3000` — Free exploratory navigation (no plan)
-- `/test-ai setup` — Generate a knowledge file for the current project (interactive)
-- `/test-ai setup resenhai-expo` — Generate knowledge with a specific name
-- `/test-ai heal` — Re-enter the heal loop for findings from the current session
+- `/qa` — Auto-detect feature (git diff), generate scenarios, test, fix, report
+- `/qa http://localhost:3000` — Test a specific URL with the full pipeline
+- `/qa explore http://localhost:3000` — Free exploratory navigation (no plan)
+- `/qa setup` — Generate a knowledge file for the current project (interactive)
+- `/qa setup resenhai-expo` — Generate knowledge with a specific name
+- `/qa heal` — Re-enter the heal loop for findings from the current session
 
 ## Prerequisites
 
 - Playwright MCP configured (browser_navigate, browser_snapshot, browser_take_screenshot, etc.)
 - App running at an accessible URL (localhost or staging)
-- `.claude/knowledge/test-ai-template.md` — template for generating project knowledge
-- `.claude/knowledge/test-ai-<project>.md` — (OPTIONAL) project-specific context. Created via `/test-ai setup`
+- `.claude/knowledge/qa-template.md` — template for generating project knowledge
+- `.claude/knowledge/qa-<project>.md` — (OPTIONAL) project-specific context. Created via `/qa setup`
 
 ---
 
@@ -41,15 +41,15 @@ Test web applications the way a human QA would: navigate, interact, observe visu
 1. **Parse arguments:**
    - `$ARGUMENTS` contains "setup": go to Phase Setup
    - `$ARGUMENTS` contains "explore": exploratory mode, skip to Phase 3
-   - `$ARGUMENTS` contains "heal": go to Phase 4 (requires FAIL findings in the current session; if none exist, respond "Run `/test-ai` first")
+   - `$ARGUMENTS` contains "heal": go to Phase 4 (requires FAIL findings in the current session; if none exist, respond "Run `/qa` first")
    - `$ARGUMENTS` contains a URL (http/https): use as base_url
    - `$ARGUMENTS` is empty: default mode (full pipeline)
 
 2. **Search for project knowledge (optional):**
    ```
-   Glob .claude/knowledge/test-ai-*.md
+   Glob .claude/knowledge/qa-*.md
    ```
-   - Filter: ignore `test-ai-template.md` (it is the template)
+   - Filter: ignore `qa-template.md` (it is the template)
    - If file(s) found: read the most relevant one (match by current directory/repo name)
    - If NOT found: proceed without it — infer everything from the diff (zero config)
 
@@ -76,9 +76,9 @@ Test web applications the way a human QA would: navigate, interact, observe visu
 
 ### Phase Setup — Generate Project Knowledge
 
-**Trigger:** `/test-ai setup` or `/test-ai setup <name>`
+**Trigger:** `/qa setup` or `/qa setup <name>`
 
-1. **Read the template:** `.claude/knowledge/test-ai-template.md`
+1. **Read the template:** `.claude/knowledge/qa-template.md`
 
 2. **Explore the project automatically:**
    - `package.json` / `requirements.txt` — stack, scripts (dev, start, seed)
@@ -104,10 +104,10 @@ Test web applications the way a human QA would: navigate, interact, observe visu
    5. Primary viewport for each screen (mobile/desktop/responsive)
    ```
 
-5. **Save** to `.claude/knowledge/test-ai-<name>.md`
+5. **Save** to `.claude/knowledge/qa-<name>.md`
    - Name: kebab-case of the project or `$ARGUMENTS`
 
-6. **Confirm:** "Knowledge created. The next `/test-ai` run will use it automatically."
+6. **Confirm:** "Knowledge created. The next `/qa` run will use it automatically."
 
 ---
 
@@ -387,7 +387,7 @@ Re-execute ONLY the failed scenario.
 ## Example — Typical Post-Feature Usage
 
 ```
-> /test-ai
+> /qa
 
 📋 Test Plan — Dashboard (8 scenarios: 3 S1, 3 S2, 2 S3)
 

@@ -6,21 +6,29 @@ set -e
 JSON_MODE=false
 ARGS=()
 
-for arg in "$@"; do
+i=1
+while [ $i -le $# ]; do
+    arg="${!i}"
     case "$arg" in
         --json)
             JSON_MODE=true
             ;;
+        --base-dir)
+            i=$((i + 1))
+            export SPECIFY_BASE_DIR="${!i}"
+            ;;
         --help|-h)
-            echo "Usage: $0 [--json]"
-            echo "  --json    Output results in JSON format"
-            echo "  --help    Show this help message"
+            echo "Usage: $0 [--json] [--base-dir <path>]"
+            echo "  --json           Output results in JSON format"
+            echo "  --base-dir <path> Use custom base directory instead of specs/"
+            echo "  --help           Show this help message"
             exit 0
             ;;
         *)
             ARGS+=("$arg")
             ;;
     esac
+    i=$((i + 1))
 done
 
 # Get script directory and load common functions

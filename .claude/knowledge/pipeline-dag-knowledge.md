@@ -5,19 +5,18 @@ Skills reference this file to understand node dependencies, gate types, personas
 
 ---
 
-## 1. Canonical DAG (14 nodes)
+## 1. Canonical DAG (13 nodes)
 
 | ID | Skill | Outputs | Depends | Layer | Gate | Optional |
 |----|-------|---------|---------|-------|------|----------|
 | platform-new | madruga:platform-new | platform.yaml | — | business | human | no |
-| vision | madruga:vision-one-pager | business/vision.md | platform-new | business | human | no |
+| vision | madruga:vision | business/vision.md | platform-new | business | human | no |
 | solution-overview | madruga:solution-overview | business/solution-overview.md | vision | business | human | no |
 | business-process | madruga:business-process | business/process.md | solution-overview | business | human | no |
 | tech-research | madruga:tech-research | research/tech-alternatives.md | business-process | research | 1-way-door | no |
 | codebase-map | madruga:codebase-map | research/codebase-context.md | vision | research | auto | YES |
-| adr-gen | madruga:adr-gen | decisions/ADR-*.md (output_pattern) | tech-research | engineering | 1-way-door | no |
-| blueprint | madruga:blueprint | engineering/blueprint.md | adr-gen | engineering | human | no |
-| folder-arch | madruga:folder-arch | engineering/folder-structure.md | blueprint | engineering | human | no |
+| adr | madruga:adr | decisions/ADR-*.md (output_pattern) | tech-research | engineering | 1-way-door | no |
+| blueprint | madruga:blueprint | engineering/blueprint.md | adr | engineering | human | no |
 | domain-model | madruga:domain-model | engineering/domain-model.md, model/ddd-contexts.likec4 | blueprint, business-process | engineering | human | no |
 | containers | madruga:containers | engineering/containers.md, model/platform.likec4 | domain-model, blueprint | engineering | human | no |
 | context-map | madruga:context-map | engineering/context-map.md | domain-model, containers | engineering | human | no |
@@ -121,7 +120,7 @@ After saving the artifact, update the database:
 |------|----------|-------------|----------|
 | human | Always pause for approval | Always | vision, blueprint, DDD |
 | auto | Never pause, proceed automatically | Never | codebase-map, checkpoint |
-| 1-way-door | Always pause, even in autonomous mode | Always, with per-decision confirmation | tech-research, adr-gen, epic-breakdown |
+| 1-way-door | Always pause, even in autonomous mode | Always, with per-decision confirmation | tech-research, adr, epic-breakdown |
 | auto-escalate | Auto if OK, escalate if blockers | Only when problems detected | verify |
 
 ### 1-way-door details
@@ -193,23 +192,17 @@ handoffs:
     agent: madruga/tech-research
     prompt: "Research technology alternatives. WARNING: This is a 1-way-door gate — technology choices constrain all downstream architecture."
 
-# tech-research -> adr-gen (with 1-way-door warning)
+# tech-research -> adr (with 1-way-door warning)
 handoffs:
   - label: Generate ADRs
-    agent: madruga/adr-gen
+    agent: madruga/adr
     prompt: "Generate Architecture Decision Records from validated tech research. WARNING: 1-way-door — ADRs define the technical foundation."
 
-# adr-gen -> blueprint
+# adr -> blueprint
 handoffs:
   - label: Generate Blueprint
     agent: madruga/blueprint
-    prompt: Generate engineering blueprint based on approved ADRs
-
-# blueprint -> folder-arch
-handoffs:
-  - label: Define Folder Architecture
-    agent: madruga/folder-arch
-    prompt: Define folder structure based on approved blueprint
+    prompt: Generate engineering blueprint based on approved ADRs (includes folder structure)
 
 # domain-model -> containers
 handoffs:
@@ -238,7 +231,7 @@ After the pipeline completes (roadmap done), each epic follows this cycle:
 
 | Step | Skill | Gate | Purpose |
 |------|-------|------|---------|
-| 1 | discuss | human | Capture implementation context and decisions |
+| 1 | epic-context | human | Capture implementation context and decisions |
 | 2 | speckit.specify | human | Feature specification |
 | 3 | speckit.clarify | human | Reduce ambiguity in spec before planning |
 | 4 | speckit.plan | human | Design artifacts |
@@ -247,12 +240,12 @@ After the pipeline completes (roadmap done), each epic follows this cycle:
 | 7 | speckit.implement | auto | Execute tasks |
 | 8 | speckit.analyze | auto | Post-implementation consistency check |
 | 9 | verify | auto-escalate | Check spec adherence |
-| 10 | test-ai | human (optional) | QA test running app via Playwright |
+| 10 | qa | human (optional) | QA test running app via Playwright |
 | 11 | reconcile | human | Detect and fix documentation drift |
 
-**test-ai is optional** — skip when:
+**qa is optional** — skip when:
 - Epic has no web-facing features
 - App is not running / Playwright MCP not available
 - Epic is infrastructure or data-only
 
-**test-ai heal loop** may modify code, which is why reconcile runs AFTER test-ai.
+**qa heal loop** may modify code, which is why reconcile runs AFTER qa.

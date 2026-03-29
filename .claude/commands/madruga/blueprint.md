@@ -6,9 +6,6 @@ arguments:
     required: false
 argument-hint: "[platform-name]"
 handoffs:
-  - label: Define Folder Architecture
-    agent: madruga/folder-arch
-    prompt: Define folder structure based on the approved blueprint
   - label: Generate Domain Model (DDD)
     agent: madruga/domain-model
     prompt: Generate DDD domain model based on the blueprint and business flows
@@ -193,7 +190,7 @@ Present to the user:
 1. Does the blueprint reflect the NECESSARY complexity (no more)?
 2. Is any concern unnecessary for the current moment?
 3. Are the NFR targets realistic?
-4. May I proceed to folder-arch and domain-model?
+4. May I proceed to domain-model and domain-model?
 
 ### 5. Save + Report
 
@@ -217,7 +214,7 @@ Present to the user:
 [x] Deploy topology diagram present
 
 ### Next Steps (parallel)
-- `/folder-arch <name>` — Define folder structure
+- `/domain-model <name>` — Define folder structure
 - `/domain-model <name>` — Generate DDD domain model
 ```
 
@@ -230,3 +227,10 @@ Present to the user:
 | Too many concerns (>7) | Ask: "What are the 5 most critical ones right now?" |
 | NFRs without baseline | Mark [TO DEFINE] and suggest defaults by app type |
 | No codebase-context | OK — treat as greenfield |
+
+---
+handoff:
+  from: blueprint
+  to: domain-model
+  context: "Blueprint aprovado com concerns, NFRs, e folder structure. Domain model deve modelar bounded contexts."
+  blockers: []

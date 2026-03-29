@@ -36,8 +36,8 @@ Senior Bain/McKinsey strategist. Objective, direct, every sentence carries infor
 
 ## Usage
 
-- `/vision-one-pager fulano` — Generate one-pager for platform "fulano"
-- `/vision-one-pager` — Prompt for the platform name and collect context
+- `/vision fulano` — Generate one-pager for platform "fulano"
+- `/vision` — Prompt for the platform name and collect context
 
 ## Output Directory
 
@@ -298,3 +298,10 @@ Wait for approval before saving.
 | No market data | Use estimates with `[ESTIMAR]` and recommend sources (SEBRAE, IBGE, Statista) |
 | Platform already has a vision | Read as baseline, ask whether to rewrite from scratch or iterate |
 | More than 5 relevant competitors | Force prioritization: "Which 4 define the competitive space?" |
+
+---
+handoff:
+  from: vision
+  to: solution-overview
+  context: "Vision validada. Solution overview deve detalhar feature map e priorização."
+  blockers: []

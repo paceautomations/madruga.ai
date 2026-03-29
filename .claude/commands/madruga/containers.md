@@ -203,3 +203,10 @@ Wait for approval before saving.
 | Too many containers (>8) | Challenge: "Do you have a team to maintain 8 services?" |
 | LikeC4 syntax error | Validate against spec before saving |
 | Conflict with blueprint topology | Align with blueprint, propose update if needed |
+
+---
+handoff:
+  from: containers
+  to: context-map
+  context: "Containers definidos. Context map deve mapear relações entre bounded contexts."
+  blockers: []
