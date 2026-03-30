@@ -547,7 +547,6 @@ def cmd_status(name: str | None, show_all: bool, as_json: bool) -> None:
 
             # Build DAG edges and node metadata from platform.yaml
             pipeline_cfg = manifest.get("pipeline", {})
-            yaml_nodes = {n["id"]: n for n in pipeline_cfg.get("nodes", [])}
             dag_edges = {n["id"]: n.get("depends", []) for n in pipeline_cfg.get("nodes", [])}
 
             # Query DB
@@ -578,7 +577,6 @@ def cmd_status(name: str | None, show_all: bool, as_json: bool) -> None:
 
             # L2 epics
             epics_data = []
-            epic_cycle_nodes = pipeline_cfg.get("epic_cycle", {}).get("nodes", [])
             for epic in get_epics(conn, pname):
                 epic_db_nodes = get_epic_nodes(conn, pname, epic["epic_id"])
                 epic_status = get_epic_status(conn, pname, epic["epic_id"])
