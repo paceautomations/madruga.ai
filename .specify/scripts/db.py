@@ -4,11 +4,22 @@ db.py — SQLite thin wrapper for madruga.ai pipeline state.
 Uses Python stdlib: sqlite3, hashlib, json, pathlib, os, logging.
 seed_from_filesystem() additionally requires pyyaml.
 
+Concurrency: SQLite is single-writer. WAL mode + busy_timeout=5000ms handle
+short contention, but concurrent long-running writes (e.g., two parallel CI jobs
+or Claude Code sessions) may hit SQLITE_BUSY. Avoid running multiple writers
+against the same DB file simultaneously.
+
 Usage:
     from db import get_conn, migrate, upsert_platform, ...
-    migrate()  # run once, idempotent
-    conn = get_conn()
-    upsert_platform(conn, 'fulano', name='Fulano', repo_path='platforms/fulano')
+    with get_conn() as conn:       # preferred: auto-closes on exit
+        migrate(conn)
+        upsert_platform(conn, 'fulano', name='Fulano', repo_path='platforms/fulano')
+    # or for batch operations:
+    with get_conn() as conn:
+        with transaction(conn) as txn:
+            upsert_platform(txn, ...)  # individual commits suppressed
+            upsert_pipeline_node(txn, ...)
+        # single commit here
 """
 
 from __future__ import annotations
@@ -18,16 +29,15 @@ import json
 import logging
 import os
 import sqlite3
-
-import yaml
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
+import yaml
 
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-DB_PATH = REPO_ROOT / ".pipeline" / "madruga.db"
-MIGRATIONS_DIR = REPO_ROOT / ".pipeline" / "migrations"
+from config import DB_PATH, MIGRATIONS_DIR, REPO_ROOT  # noqa: F401
+
+logger = logging.getLogger(__name__)
 _FTS5_AVAILABLE: bool | None = None
 
 
@@ -51,8 +61,39 @@ def _now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def get_conn(db_path: Path | str | None = None) -> sqlite3.Connection:
-    """Create connection with WAL, FK, busy_timeout. Auto-creates directory."""
+class _ClosingConnection:
+    """sqlite3.Connection wrapper that auto-closes on context exit.
+
+    sqlite3's native `with` only commits/rollbacks — it does NOT close.
+    This wrapper adds auto-close while proxying all connection methods.
+    """
+
+    __slots__ = ("_conn",)
+
+    def __init__(self, conn: sqlite3.Connection):
+        object.__setattr__(self, "_conn", conn)
+
+    def __enter__(self) -> sqlite3.Connection:
+        return self._conn
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._conn.close()
+        return False
+
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
+    def __repr__(self):
+        return f"<_ClosingConnection wrapping {self._conn!r}>"
+
+
+def get_conn(db_path: Path | str | None = None) -> _ClosingConnection:
+    """Create connection with WAL, FK, busy_timeout. Auto-creates directory.
+
+    Supports both manual and context manager usage:
+        conn = get_conn()          # manual close required
+        with get_conn() as conn:   # auto-closes on exit
+    """
     path = Path(db_path) if db_path else DB_PATH
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(path))
@@ -60,7 +101,46 @@ def get_conn(db_path: Path | str | None = None) -> sqlite3.Connection:
     conn.execute("PRAGMA foreign_keys=ON")
     conn.execute("PRAGMA busy_timeout=5000")
     conn.row_factory = sqlite3.Row
-    return conn
+    return _ClosingConnection(conn)
+
+
+class _BatchConnection:
+    """Proxy that suppresses individual commit()/rollback() for batched operations.
+
+    Usage:
+        with transaction(conn) as txn:
+            upsert_platform(txn, ...)  # commit() inside is a no-op
+            upsert_pipeline_node(txn, ...)
+        # single commit happens here on success, rollback on exception
+    """
+
+    def __init__(self, conn: sqlite3.Connection):
+        self._conn = conn
+
+    def commit(self):
+        pass  # suppressed — will commit on context exit
+
+    def rollback(self):
+        pass  # suppressed — outer transaction() handles rollback on exception
+
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
+
+@contextmanager
+def transaction(conn: sqlite3.Connection):
+    """Batch multiple writes into a single transaction.
+
+    Suppresses individual conn.commit() calls inside the block,
+    issuing one commit on successful exit or rollback on exception.
+    """
+    batch = _BatchConnection(conn)
+    try:
+        yield batch
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
 
 
 def _split_sql_statements(sql: str) -> list[str]:
@@ -149,6 +229,17 @@ def migrate(conn: sqlite3.Connection | None = None, migrations_dir: Path | None 
                 raise
     if own_conn:
         conn.close()
+
+
+def to_relative_path(path: str | Path) -> str:
+    """Convert absolute path to relative (to REPO_ROOT) if inside the repo."""
+    import config as _cfg  # read at call time so test patches work
+
+    p = Path(path).resolve()
+    try:
+        return str(p.relative_to(_cfg.REPO_ROOT))
+    except ValueError:
+        return str(p)  # outside repo, keep absolute
 
 
 def compute_file_hash(path: str | Path) -> str:
@@ -357,8 +448,8 @@ def insert_decision(conn: sqlite3.Connection, platform_id: str, skill: str, titl
             superseded_by, source_decision_key, file_path,
             decisions_json, assumptions_json, open_questions_json,
             content_hash, decision_type, context, consequences, tags_json,
-            created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            body, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(decision_id) DO UPDATE SET
              platform_id = excluded.platform_id,
              epic_id = excluded.epic_id,
@@ -378,6 +469,7 @@ def insert_decision(conn: sqlite3.Connection, platform_id: str, skill: str, titl
              context = excluded.context,
              consequences = excluded.consequences,
              tags_json = excluded.tags_json,
+             body = excluded.body,
              updated_at = excluded.updated_at
         """,
         (
@@ -400,6 +492,7 @@ def insert_decision(conn: sqlite3.Connection, platform_id: str, skill: str, titl
             kwargs.get("context"),
             kwargs.get("consequences"),
             kwargs.get("tags_json", "[]"),
+            kwargs.get("body"),
             _now(),
             _now(),
         ),
@@ -536,7 +629,7 @@ def _parse_adr_markdown(file_path: Path) -> dict | None:
         "context": sections.get("Contexto", ""),
         "consequences": sections.get("Consequencias", ""),
         "body": body,
-        "file_path": str(file_path),
+        "file_path": to_relative_path(file_path),
     }
 
 
@@ -546,10 +639,11 @@ def import_adr_from_markdown(conn: sqlite3.Connection, file_path: Path, platform
     if parsed is None:
         return None
     content_hash = compute_file_hash(file_path)
-    # Check if already imported with same hash
+    rel_path = to_relative_path(file_path)
+    # Check if already imported with same hash (try both relative and absolute for migration)
     existing = conn.execute(
-        "SELECT decision_id, content_hash FROM decisions WHERE platform_id=? AND file_path=?",
-        (platform_id, str(file_path)),
+        "SELECT decision_id, content_hash FROM decisions WHERE platform_id=? AND (file_path=? OR file_path=?)",
+        (platform_id, rel_path, str(file_path)),
     ).fetchone()
     if existing and existing["content_hash"] == content_hash:
         logger.debug("Skipping unchanged ADR: %s", file_path)
@@ -565,13 +659,14 @@ def import_adr_from_markdown(conn: sqlite3.Connection, file_path: Path, platform
         number=parsed["number"],
         slug=parsed["slug"],
         status=parsed["status"].lower(),
-        file_path=str(file_path),
+        file_path=rel_path,
         content_hash=content_hash,
         context=parsed["context"],
         consequences=parsed["consequences"],
         decisions=[parsed["decision"]],
         assumptions=[],
         open_questions=[],
+        body=parsed.get("body"),
     )
 
 
@@ -609,29 +704,41 @@ def export_decision_to_markdown(conn: sqlite3.Connection, decision_id: str, outp
     else:
         fname = f"decision-{decision_id[:8]}.md"
 
-    # Build Nygard format
-    context = d.get("context") or ""
-    consequences = d.get("consequences") or ""
-    now_str = _now()[:10]
-    created = (d.get("created_at") or now_str)[:10]
-    updated = (d.get("updated_at") or now_str)[:10]
+    # Use stored body for lossless round-trip when available
+    stored_body = d.get("body")
+    if stored_body:
+        # Reconstruct original frontmatter + body
+        frontmatter = yaml.dump(
+            {"title": title, "status": status, "decision": decision_text, "alternatives": "", "rationale": ""},
+            default_flow_style=False,
+            allow_unicode=True,
+            sort_keys=False,
+        ).strip()
+        content = f"---\n{frontmatter}\n---\n{stored_body}\n"
+    else:
+        # Fallback: generate template-based markdown
+        context = d.get("context") or ""
+        consequences = d.get("consequences") or ""
+        now_str = _now()[:10]
+        created = (d.get("created_at") or now_str)[:10]
+        updated = (d.get("updated_at") or now_str)[:10]
 
-    frontmatter = yaml.dump(
-        {"title": title, "status": status, "decision": decision_text, "alternatives": "", "rationale": ""},
-        default_flow_style=False,
-        allow_unicode=True,
-        sort_keys=False,
-    ).strip()
+        frontmatter = yaml.dump(
+            {"title": title, "status": status, "decision": decision_text, "alternatives": "", "rationale": ""},
+            default_flow_style=False,
+            allow_unicode=True,
+            sort_keys=False,
+        ).strip()
 
-    content = (
-        f"---\n{frontmatter}\n---\n"
-        f"# {title}\n"
-        f"**Status:** {status} | **Data:** {created} | **Atualizado:** {updated}\n\n"
-        f"## Contexto\n{context}\n\n"
-        f"## Decisao\n{decision_text}\n\n"
-        f"## Alternativas consideradas\n\n\n"
-        f"## Consequencias\n{consequences}\n"
-    )
+        content = (
+            f"---\n{frontmatter}\n---\n"
+            f"# {title}\n"
+            f"**Status:** {status} | **Data:** {created} | **Atualizado:** {updated}\n\n"
+            f"## Contexto\n{context}\n\n"
+            f"## Decisao\n{decision_text}\n\n"
+            f"## Alternativas consideradas\n\n\n"
+            f"## Consequencias\n{consequences}\n"
+        )
 
     output_dir.mkdir(parents=True, exist_ok=True)
     out_path = output_dir / fname
@@ -640,7 +747,7 @@ def export_decision_to_markdown(conn: sqlite3.Connection, decision_id: str, outp
     file_hash = compute_file_hash(out_path)
     conn.execute(
         "UPDATE decisions SET file_path=?, content_hash=? WHERE decision_id=?",
-        (str(out_path), file_hash, decision_id),
+        (to_relative_path(out_path), file_hash, decision_id),
     )
     conn.commit()
     logger.info("Exported decision to %s", out_path)
@@ -795,7 +902,7 @@ def _parse_memory_markdown(file_path: Path) -> dict | None:
         "description": fm.get("description", ""),
         "type": fm.get("type", "project"),
         "content": parts[2].strip(),
-        "file_path": str(file_path),
+        "file_path": to_relative_path(file_path),
     }
 
 
@@ -805,9 +912,11 @@ def import_memory_from_markdown(conn: sqlite3.Connection, file_path: Path) -> st
     if parsed is None:
         return None
     content_hash = compute_file_hash(file_path)
+    rel_path = to_relative_path(file_path)
+    # Try both relative and absolute paths for migration compatibility
     existing = conn.execute(
-        "SELECT memory_id, content_hash FROM memory_entries WHERE file_path=?",
-        (str(file_path),),
+        "SELECT memory_id, content_hash FROM memory_entries WHERE file_path=? OR file_path=?",
+        (rel_path, str(file_path)),
     ).fetchone()
     if existing and existing["content_hash"] == content_hash:
         return existing["memory_id"]
@@ -819,7 +928,7 @@ def import_memory_from_markdown(conn: sqlite3.Connection, file_path: Path) -> st
         parsed["content"],
         memory_id=memory_id,
         description=parsed["description"],
-        file_path=str(file_path),
+        file_path=rel_path,
         content_hash=content_hash,
         source="import",
     )
@@ -1117,7 +1226,11 @@ def get_epic_status(conn: sqlite3.Connection, platform_id: str, epic_id: str) ->
 
 
 def seed_from_filesystem(conn: sqlite3.Connection, platform_id: str, platform_dir: str | Path) -> dict:
-    """Import existing state from filesystem into DB. Idempotent."""
+    """Import existing state from filesystem into DB. Idempotent.
+
+    Uses transaction() to batch all writes into a single commit instead of
+    committing after each upsert/insert (~80 individual commits for 1 platform).
+    """
 
     pdir = Path(platform_dir)
     yaml_path = pdir / "platform.yaml"
@@ -1128,96 +1241,97 @@ def seed_from_filesystem(conn: sqlite3.Connection, platform_id: str, platform_di
     with open(yaml_path) as f:
         manifest = yaml.safe_load(f)
 
-    upsert_platform(
-        conn,
-        platform_id,
-        name=manifest.get("name", platform_id),
-        title=manifest.get("title", ""),
-        lifecycle=manifest.get("lifecycle", "design"),
-        repo_path=f"platforms/{platform_id}",
-        metadata=json.dumps({k: manifest[k] for k in ("views", "serve", "build") if k in manifest}),
-    )
-
-    nodes_seeded = 0
-    pipeline = manifest.get("pipeline", {})
-    for node in pipeline.get("nodes", []):
-        nid = node["id"]
-        outputs = node.get("outputs", [])
-        pattern = node.get("output_pattern")
-        if pattern:
-            import glob as glob_mod
-
-            found = glob_mod.glob(str(pdir / pattern))
-            exists = len(found) > 0
-            output_files = [str(Path(f).relative_to(pdir)) for f in found]
-        else:
-            exists = all((pdir / o).exists() for o in outputs)
-            output_files = outputs
-
-        status = "done" if exists else "pending"
-        output_hash = None
-        if exists and outputs and not pattern:
-            first_output = pdir / outputs[0]
-            if first_output.exists():
-                output_hash = compute_file_hash(first_output)
-
-        upsert_pipeline_node(
-            conn,
+    with transaction(conn) as txn:
+        upsert_platform(
+            txn,
             platform_id,
-            nid,
-            status,
-            output_hash=output_hash,
-            output_files=json.dumps(output_files),
-            completed_by=node.get("skill"),
+            name=manifest.get("name", platform_id),
+            title=manifest.get("title", ""),
+            lifecycle=manifest.get("lifecycle", "design"),
+            repo_path=f"platforms/{platform_id}",
+            metadata=json.dumps({k: manifest[k] for k in ("views", "serve", "build") if k in manifest}),
         )
-        # Populate artifact_provenance for done nodes
-        if status == "done":
-            for ofile in output_files:
-                full_path = pdir / ofile
-                if full_path.exists() and full_path.is_file():
-                    insert_provenance(
-                        conn,
+
+        nodes_seeded = 0
+        pipeline = manifest.get("pipeline", {})
+        for node in pipeline.get("nodes", []):
+            nid = node["id"]
+            outputs = node.get("outputs", [])
+            pattern = node.get("output_pattern")
+            if pattern:
+                import glob as glob_mod
+
+                found = glob_mod.glob(str(pdir / pattern))
+                exists = len(found) > 0
+                output_files = [str(Path(f).relative_to(pdir)) for f in found]
+            else:
+                exists = all((pdir / o).exists() for o in outputs)
+                output_files = outputs
+
+            status = "done" if exists else "pending"
+            output_hash = None
+            if exists and outputs and not pattern:
+                first_output = pdir / outputs[0]
+                if first_output.exists():
+                    output_hash = compute_file_hash(first_output)
+
+            upsert_pipeline_node(
+                txn,
+                platform_id,
+                nid,
+                status,
+                output_hash=output_hash,
+                output_files=json.dumps(output_files),
+                completed_by=node.get("skill"),
+            )
+            # Populate artifact_provenance for done nodes
+            if status == "done":
+                for ofile in output_files:
+                    full_path = pdir / ofile
+                    if full_path.exists() and full_path.is_file():
+                        insert_provenance(
+                            txn,
+                            platform_id,
+                            ofile,
+                            generated_by=node.get("skill", f"madruga:{nid}"),
+                            output_hash=compute_file_hash(full_path),
+                        )
+            insert_event(
+                txn,
+                platform_id,
+                "node",
+                nid,
+                "seeded",
+                actor="seed",
+                payload={"status": status},
+            )
+            nodes_seeded += 1
+
+        epics_seeded = 0
+        epics_dir = pdir / "epics"
+        if epics_dir.exists():
+            for epic_dir in sorted(epics_dir.iterdir()):
+                pitch = epic_dir / "pitch.md"
+                if epic_dir.is_dir() and pitch.exists():
+                    epic_id = epic_dir.name
+                    with open(pitch) as f:
+                        first_lines = f.read(500)
+                    title_line = ""
+                    for line in first_lines.split("\n"):
+                        if line.startswith("title:"):
+                            title_line = line.split(":", 1)[1].strip().strip('"').strip("'")
+                            break
+                        if line.startswith("# "):
+                            title_line = line[2:].strip()
+                            break
+                    upsert_epic(
+                        txn,
                         platform_id,
-                        ofile,
-                        generated_by=node.get("skill", f"madruga:{nid}"),
-                        output_hash=compute_file_hash(full_path),
+                        epic_id,
+                        title=title_line or epic_id,
+                        file_path=f"epics/{epic_id}/pitch.md",
                     )
-        insert_event(
-            conn,
-            platform_id,
-            "node",
-            nid,
-            "seeded",
-            actor="seed",
-            payload={"status": status},
-        )
-        nodes_seeded += 1
-
-    epics_seeded = 0
-    epics_dir = pdir / "epics"
-    if epics_dir.exists():
-        for epic_dir in sorted(epics_dir.iterdir()):
-            pitch = epic_dir / "pitch.md"
-            if epic_dir.is_dir() and pitch.exists():
-                epic_id = epic_dir.name
-                with open(pitch) as f:
-                    first_lines = f.read(500)
-                title_line = ""
-                for line in first_lines.split("\n"):
-                    if line.startswith("title:"):
-                        title_line = line.split(":", 1)[1].strip().strip('"').strip("'")
-                        break
-                    if line.startswith("# "):
-                        title_line = line[2:].strip()
-                        break
-                upsert_epic(
-                    conn,
-                    platform_id,
-                    epic_id,
-                    title=title_line or epic_id,
-                    file_path=f"epics/{epic_id}/pitch.md",
-                )
-                epics_seeded += 1
+                    epics_seeded += 1
 
     logger.info("Seeded %s: %d nodes, %d epics", platform_id, nodes_seeded, epics_seeded)
     return {"status": "ok", "nodes": nodes_seeded, "epics": epics_seeded}

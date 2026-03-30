@@ -1,6 +1,6 @@
 ---
 description: Comprehensive testing specialist — static analysis, test suites, code review, API validation, and browser QA
-disable-model-invocation: true
+disable-model-invocation: true  # Intentional: QA is human-gated, must be invoked by user directly
 argument-hint: "[URL] or [explore <URL>] or [setup] or [heal]"
 arguments:
   - name: target

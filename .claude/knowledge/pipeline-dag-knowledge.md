@@ -256,6 +256,8 @@ After L1 completes (roadmap done), the pipeline continues into L2. Each epic fro
 | 10 | qa | human | Comprehensive testing — static analysis, tests, code review, browser QA |
 | 11 | reconcile | human | Detect and fix documentation drift |
 
+**Note:** `clarify` is optional — `plan` depends on `specify`, not `clarify`. Skip clarify when spec has 0 `[NEEDS CLARIFICATION]` markers.
+
 **qa is mandatory** — always runs. Testing layers auto-adapt:
 - Static analysis + code review + build verification: always available
 - Automated test suites: when test files exist

@@ -39,9 +39,7 @@ def setup_platform(tmp_path):
     migrations_dir.mkdir()
 
     # Copy real migration files
-    real_migrations = (
-        Path(__file__).parent.parent.parent.parent / ".pipeline" / "migrations"
-    )
+    real_migrations = Path(__file__).parent.parent.parent.parent / ".pipeline" / "migrations"
     for f in sorted(real_migrations.glob("*.sql")):
         (migrations_dir / f.name).write_text(f.read_text())
 
@@ -120,9 +118,7 @@ def test_record_save_l2_epic(setup_platform):
         from db import get_conn as gc, upsert_epic, upsert_platform
 
         conn = gc(db_path)
-        upsert_platform(
-            conn, "test-plat", name="test-plat", repo_path="platforms/test-plat"
-        )
+        upsert_platform(conn, "test-plat", name="test-plat", repo_path="platforms/test-plat")
         upsert_epic(conn, "test-plat", "001-test-epic", title="Test Epic")
         conn.close()
 
@@ -166,9 +162,7 @@ def test_reseed(setup_platform):
 
         # Verify platform was created
         conn = get_conn(db_path)
-        plat = conn.execute(
-            "SELECT * FROM platforms WHERE platform_id='test-plat'"
-        ).fetchone()
+        plat = conn.execute("SELECT * FROM platforms WHERE platform_id='test-plat'").fetchone()
         assert plat is not None
         conn.close()
     finally:

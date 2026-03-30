@@ -14,11 +14,11 @@ def test_epic_cycle_exists(scaffold: Path):
     assert "epic_cycle" in pipeline, "Missing epic_cycle section in platform.yaml"
 
 
-def test_epic_cycle_has_10_nodes(scaffold: Path):
-    """epic_cycle contains exactly 10 nodes."""
+def test_epic_cycle_has_11_nodes(scaffold: Path):
+    """epic_cycle contains exactly 11 nodes."""
     content = yaml.safe_load((scaffold / "platform.yaml").read_text())
     nodes = content["pipeline"]["epic_cycle"]["nodes"]
-    assert len(nodes) == 10, f"Expected 10 epic_cycle nodes, got {len(nodes)}"
+    assert len(nodes) == 11, f"Expected 11 epic_cycle nodes, got {len(nodes)}"
 
 
 def test_epic_cycle_node_ids(scaffold: Path):
@@ -33,6 +33,7 @@ def test_epic_cycle_node_ids(scaffold: Path):
         "tasks",
         "analyze",
         "implement",
+        "analyze-post",
         "verify",
         "qa",
         "reconcile",
@@ -67,6 +68,7 @@ def test_epic_cycle_optional_nodes(scaffold: Path):
         "tasks",
         "analyze",
         "implement",
+        "analyze-post",
         "verify",
         "qa",
     ]:

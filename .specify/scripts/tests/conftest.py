@@ -15,9 +15,7 @@ def tmp_db(tmp_path):
     from db import get_conn, migrate
 
     db_path = tmp_path / "test.db"
-    migrations_dir = (
-        Path(__file__).parent.parent.parent.parent / ".pipeline" / "migrations"
-    )
+    migrations_dir = Path(__file__).parent.parent.parent.parent / ".pipeline" / "migrations"
     conn = get_conn(db_path)
     migrate(conn, migrations_dir)
     yield conn
@@ -61,9 +59,7 @@ pipeline:
 
     # Create some "done" artifacts
     (pdir / "business").mkdir()
-    (pdir / "business" / "vision.md").write_text(
-        "---\ntitle: Vision\n---\n# Vision\nContent here.\n"
-    )
+    (pdir / "business" / "vision.md").write_text("---\ntitle: Vision\n---\n# Vision\nContent here.\n")
 
     # Create epics
     epic_dir = pdir / "epics" / "001-test-epic"

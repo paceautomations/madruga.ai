@@ -81,7 +81,7 @@ Follow-up TODOs: None
 - **No exceptions**: TDD applies to all code, including scripts and one-off tools
 
 ### VIII. Collaborative Decision Making
-- **Ask, don't assume**: Use AskQuestionTool for important decisions
+- **Ask, don't assume**: Ask the user directly for important decisions
 - **Clarify ambiguity**: When requirements are unclear, ask before proceeding
 - **Validate approach**: Before major architectural decisions, seek input
 - **Present options**: When multiple paths exist, present them with trade-offs

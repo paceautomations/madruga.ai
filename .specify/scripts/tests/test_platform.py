@@ -13,9 +13,7 @@ if _scripts_dir not in sys.path:
 # Import as 'plat' to avoid collision with stdlib 'platform'
 import importlib.util
 
-_spec = importlib.util.spec_from_file_location(
-    "plat", Path(__file__).parent.parent / "platform.py"
-)
+_spec = importlib.util.spec_from_file_location("plat", Path(__file__).parent.parent / "platform.py")
 plat = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(plat)
 

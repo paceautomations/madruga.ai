@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
 import yaml
 
 
@@ -104,38 +103,33 @@ def test_kebab_case_validation(tmp_path: Path, template_root: Path):
             pass  # Expected: validation error
 
 
-@pytest.mark.skip(
-    reason="copier update requires git-tagged template; validate manually via E2E"
-)
-def test_skip_if_exists_on_update(
-    scaffold_git: Path, template_root: Path, default_data: dict
-):
-    """Files in _skip_if_exists are not overwritten by copier update.
+def test_skip_if_exists_config(template_root: Path):
+    """copier.yml declares _skip_if_exists for user-modified files.
 
-    This test requires the _template/ directory to be a git-tagged repo.
-    Copier's three-way merge needs version references from .copier-answers.yml.
-    Validate manually: tag the template, scaffold, modify a skipped file, run copier update.
+    Full copier update E2E testing requires a git-tagged remote template
+    (copier needs _commit refs for three-way merge). This test validates
+    that the _skip_if_exists config is correctly defined.
     """
-    pass
+    copier_yml = yaml.safe_load((template_root / "copier.yml").read_text())
+    skip_list = copier_yml.get("_skip_if_exists", [])
+    assert isinstance(skip_list, list), "_skip_if_exists should be a list"
+    assert len(skip_list) > 0, "_skip_if_exists should not be empty"
+    # Key user-editable files should be protected
+    skip_str = " ".join(str(s) for s in skip_list)
+    assert "vision.md" in skip_str or "business/" in skip_str or "*" in skip_str, (
+        "Business docs should be in _skip_if_exists"
+    )
 
 
-@pytest.mark.skip(
-    reason="copier update requires git-tagged template; validate manually via E2E"
-)
-def test_spec_syncs_on_update(
-    scaffold_git: Path, template_root: Path, default_data: dict
-):
-    """spec.likec4 is updated when template changes on copier update.
-
-    This test requires the _template/ directory to be a git-tagged repo.
-    Validate manually: tag the template, modify spec.likec4, tag again, run copier update.
-    """
-    pass
+def test_spec_not_in_skip_list(template_root: Path):
+    """spec.likec4 should NOT be in _skip_if_exists (it must sync on update)."""
+    copier_yml = yaml.safe_load((template_root / "copier.yml").read_text())
+    skip_list = copier_yml.get("_skip_if_exists", [])
+    for entry in skip_list:
+        assert "spec.likec4" not in str(entry), f"spec.likec4 should not be skipped on update, but found in: {entry}"
 
 
-def test_conditional_business_flow(
-    tmp_path: Path, template_root: Path, default_data: dict
-):
+def test_conditional_business_flow(tmp_path: Path, template_root: Path, default_data: dict):
     """include_business_flow=false removes the businessFlow view."""
     from copier import run_copy
 
@@ -146,16 +140,12 @@ def test_conditional_business_flow(
     run_copy(str(template_root), str(dst), data=data, unsafe=True, defaults=True)
 
     views = (dst / "model" / "views.likec4").read_text()
-    assert "businessFlow" not in views, (
-        "businessFlow view should not exist when disabled"
-    )
+    assert "businessFlow" not in views, "businessFlow view should not exist when disabled"
 
     platform_yaml = yaml.safe_load((dst / "platform.yaml").read_text())
     flows = platform_yaml.get("views", {}).get("flows", [])
     flow_ids = [f["id"] for f in flows] if flows else []
-    assert "businessFlow" not in flow_ids, (
-        "businessFlow should not be in platform.yaml flows"
-    )
+    assert "businessFlow" not in flow_ids, "businessFlow should not be in platform.yaml flows"
 
 
 def test_likec4_config_json(scaffold: Path, default_data: dict):
@@ -175,9 +165,5 @@ def test_no_jinja_artifacts(scaffold: Path):
             content = f.read_text()
         except UnicodeDecodeError:
             continue
-        assert "{{" not in content, (
-            f"Jinja artifact '{{{{' found in {f.relative_to(scaffold)}"
-        )
-        assert "{%" not in content, (
-            f"Jinja artifact '{{% %}}' found in {f.relative_to(scaffold)}"
-        )
+        assert "{{" not in content, f"Jinja artifact '{{{{' found in {f.relative_to(scaffold)}"
+        assert "{%" not in content, f"Jinja artifact '{{% %}}' found in {f.relative_to(scaffold)}"
