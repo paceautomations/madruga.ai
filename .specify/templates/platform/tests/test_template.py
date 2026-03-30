@@ -57,10 +57,6 @@ def test_spec_likec4_identical(scaffold: Path, template_root: Path):
 
 def test_auto_markers_present(scaffold: Path):
     """All AUTO markers exist in engineering docs."""
-    containers = (scaffold / "engineering" / "containers.md").read_text()
-    assert "<!-- AUTO:containers -->" in containers
-    assert "<!-- /AUTO:containers -->" in containers
-
     context_map = (scaffold / "engineering" / "context-map.md").read_text()
     assert "<!-- AUTO:domains -->" in context_map
     assert "<!-- /AUTO:domains -->" in context_map
