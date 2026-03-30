@@ -1,11 +1,12 @@
 # Pipeline DAG Knowledge
 
-Reference knowledge file for the madruga.ai pipeline DAG system.
+Reference knowledge file for the madruga.ai pipeline — a **single continuous flow of 24 skills** (L1: 13 platform nodes + L2: 11 per-epic nodes) that takes a platform from conception to implemented, tested code.
+
 Skills reference this file to understand node dependencies, gate types, personas, and the uniform contract.
 
 ---
 
-## 1. Canonical DAG (13 nodes)
+## 1. L1 — Platform Foundation (13 nodes, runs once per platform)
 
 | ID | Skill | Outputs | Depends | Layer | Gate | Optional |
 |----|-------|---------|---------|-------|------|----------|
@@ -226,9 +227,9 @@ handoffs:
 
 ---
 
-## 8. Per-Epic Implementation Cycle
+## 8. L2 — Epic Implementation Cycle (11 nodes per epic)
 
-After the pipeline completes (roadmap done), each epic follows this cycle:
+After L1 completes (roadmap done), the pipeline continues into L2. Each epic from the roadmap follows this cycle on a dedicated branch:
 
 ### Branch Requirement (MANDATORY)
 
@@ -252,12 +253,13 @@ After the pipeline completes (roadmap done), each epic follows this cycle:
 | 7 | speckit.implement | auto | Execute tasks |
 | 8 | speckit.analyze | auto | Post-implementation consistency check |
 | 9 | verify | auto-escalate | Check spec adherence |
-| 10 | qa | human (optional) | QA test running app via Playwright |
+| 10 | qa | human | Comprehensive testing — static analysis, tests, code review, browser QA |
 | 11 | reconcile | human | Detect and fix documentation drift |
 
-**qa is optional** — skip when:
-- Epic has no web-facing features
-- App is not running / Playwright MCP not available
-- Epic is infrastructure or data-only
+**qa is mandatory** — always runs. Testing layers auto-adapt:
+- Static analysis + code review + build verification: always available
+- Automated test suites: when test files exist
+- API testing: when server is running + API endpoints detected
+- Browser testing: when Playwright MCP available + web features + app running
 
 **qa heal loop** may modify code, which is why reconcile runs AFTER qa.

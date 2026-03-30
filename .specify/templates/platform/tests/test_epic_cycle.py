@@ -52,15 +52,13 @@ def test_epic_cycle_nodes_have_required_fields(scaffold: Path):
 
 
 def test_epic_cycle_optional_nodes(scaffold: Path):
-    """clarify, qa, and reconcile are marked optional."""
+    """clarify and reconcile are marked optional."""
     content = yaml.safe_load((scaffold / "platform.yaml").read_text())
     nodes = content["pipeline"]["epic_cycle"]["nodes"]
     node_map = {n["id"]: n for n in nodes}
 
-    for opt_id in ["clarify", "qa", "reconcile"]:
-        assert node_map[opt_id].get("optional") is True, (
-            f"Node {opt_id} should be optional"
-        )
+    for opt_id in ["clarify", "reconcile"]:
+        assert node_map[opt_id].get("optional") is True, f"Node {opt_id} should be optional"
 
     for req_id in [
         "epic-context",
@@ -70,10 +68,9 @@ def test_epic_cycle_optional_nodes(scaffold: Path):
         "analyze",
         "implement",
         "verify",
+        "qa",
     ]:
-        assert not node_map[req_id].get("optional"), (
-            f"Node {req_id} should not be optional"
-        )
+        assert not node_map[req_id].get("optional"), f"Node {req_id} should not be optional"
 
 
 def test_epic_cycle_outputs_use_epic_placeholder(scaffold: Path):
@@ -82,9 +79,7 @@ def test_epic_cycle_outputs_use_epic_placeholder(scaffold: Path):
     nodes = content["pipeline"]["epic_cycle"]["nodes"]
     for node in nodes:
         for output in node["outputs"]:
-            assert "{epic}" in output, (
-                f"Node {node['id']} output '{output}' missing {{epic}} placeholder"
-            )
+            assert "{epic}" in output, f"Node {node['id']} output '{output}' missing {{epic}} placeholder"
 
 
 def test_pipeline_nodes_count_13(scaffold: Path):

@@ -9,12 +9,9 @@ arguments:
     required: false
 argument-hint: "[platform] [epic-number]"
 handoffs:
-  - label: QA Test (optional)
+  - label: QA Testing
     agent: madruga/qa
-    prompt: "Verify complete. If app is running, run QA tests with /qa."
-  - label: Reconcile Documentation
-    agent: madruga/reconcile
-    prompt: "Skip QA tests. Reconcile documentation with implementation."
+    prompt: "Verify complete. Run comprehensive QA testing."
 ---
 
 # Verify — Adherence Verification
@@ -120,5 +117,5 @@ updated: YYYY-MM-DD
 handoff:
   from: verify
   to: qa
-  context: "Verificação de aderência concluída. QA deve testar features web-facing via Playwright (opcional)."
+  context: "Verificação de aderência concluída. QA deve executar testes abrangentes (análise estática, testes, code review, browser se disponível)."
   blockers: []

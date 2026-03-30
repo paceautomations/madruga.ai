@@ -175,13 +175,11 @@ pipeline:
         outputs: ["{epic}/qa-report.md"]
         depends: ["verify"]
         gate: human
-        optional: true
-        skip_condition: "epic has no web-facing features or app not running"
 
       - id: reconcile
         skill: "madruga:reconcile"
         outputs: ["{epic}/reconcile-report.md"]
-        depends: ["verify"]
+        depends: ["qa"]
         gate: human
         optional: true
         skip_condition: "verify score >= 95% and zero drift"

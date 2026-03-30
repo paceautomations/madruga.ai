@@ -8,12 +8,12 @@ argument-hint: "[platform-name]"
 handoffs:
   - label: Start Implementation by Epic
     agent: madruga/epic-context
-    prompt: "Documentation pipeline complete! Start per-epic implementation with epic-context."
+    prompt: "L1 complete! Continue pipeline into L2 — start first epic with epic-context."
 ---
 
 # Roadmap — Delivery Sequence
 
-Generate a roadmap with epic sequencing, dependencies, milestones, and MVP definition. Final stage of the main documentation pipeline.
+Generate a roadmap with epic sequencing, dependencies, milestones, and MVP definition. Final L1 node — after this, the pipeline continues into L2 (epic-context → implement → qa → reconcile for each epic).
 
 ## Cardinal Rule: ZERO Milestones Without Concrete Delivery
 
