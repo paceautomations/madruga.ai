@@ -649,6 +649,20 @@ def import_adr_from_markdown(conn: sqlite3.Connection, file_path: Path, platform
         logger.debug("Skipping unchanged ADR: %s", file_path)
         return existing["decision_id"]
 
+    # Record audit event when an existing decision changes
+    if existing and existing["content_hash"] != content_hash:
+        try:
+            insert_event(
+                conn,
+                platform_id,
+                "decision",
+                existing["decision_id"],
+                "updated",
+                payload={"old_hash": existing["content_hash"], "new_hash": content_hash},
+            )
+        except Exception:
+            logger.warning("Failed to record decision change event for %s", file_path)
+
     decision_id = existing["decision_id"] if existing else os.urandom(8).hex()
     return insert_decision(
         conn,
@@ -901,6 +915,7 @@ def _parse_memory_markdown(file_path: Path) -> dict | None:
         "name": fm.get("name", file_path.stem),
         "description": fm.get("description", ""),
         "type": fm.get("type", "project"),
+        "platform_id": fm.get("platform"),
         "content": parts[2].strip(),
         "file_path": to_relative_path(file_path),
     }
@@ -921,17 +936,33 @@ def import_memory_from_markdown(conn: sqlite3.Connection, file_path: Path) -> st
     if existing and existing["content_hash"] == content_hash:
         return existing["memory_id"]
     memory_id = existing["memory_id"] if existing else os.urandom(8).hex()
-    return insert_memory(
-        conn,
-        parsed["type"],
-        parsed["name"],
-        parsed["content"],
-        memory_id=memory_id,
-        description=parsed["description"],
-        file_path=rel_path,
-        content_hash=content_hash,
-        source="import",
-    )
+    platform_id = parsed.get("platform_id")
+    try:
+        return insert_memory(
+            conn,
+            parsed["type"],
+            parsed["name"],
+            parsed["content"],
+            memory_id=memory_id,
+            platform_id=platform_id,
+            description=parsed["description"],
+            file_path=rel_path,
+            content_hash=content_hash,
+            source="import",
+        )
+    except sqlite3.IntegrityError:
+        logger.warning("Invalid platform_id '%s' in %s — importing without platform", platform_id, file_path)
+        return insert_memory(
+            conn,
+            parsed["type"],
+            parsed["name"],
+            parsed["content"],
+            memory_id=memory_id,
+            description=parsed["description"],
+            file_path=rel_path,
+            content_hash=content_hash,
+            source="import",
+        )
 
 
 def import_all_memories(conn: sqlite3.Connection, memory_dir: Path) -> int:
@@ -955,8 +986,11 @@ def export_memory_to_markdown(conn: sqlite3.Connection, memory_id: str, output_d
     d = dict(row)
     slug = d["name"].replace(" ", "_").lower()
     fname = f"{d['type']}_{slug}.md"
+    fm_dict = {"name": d["name"], "description": d.get("description") or "", "type": d["type"]}
+    if d.get("platform_id"):
+        fm_dict["platform"] = d["platform_id"]
     frontmatter = yaml.dump(
-        {"name": d["name"], "description": d.get("description") or "", "type": d["type"]},
+        fm_dict,
         default_flow_style=False,
         allow_unicode=True,
         sort_keys=False,
@@ -968,7 +1002,7 @@ def export_memory_to_markdown(conn: sqlite3.Connection, memory_id: str, output_d
     file_hash = compute_file_hash(out_path)
     conn.execute(
         "UPDATE memory_entries SET file_path=?, content_hash=? WHERE memory_id=?",
-        (str(out_path), file_hash, memory_id),
+        (to_relative_path(out_path), file_hash, memory_id),
     )
     conn.commit()
     logger.info("Exported memory to %s", out_path)
@@ -990,14 +1024,28 @@ def sync_memories_to_markdown(conn: sqlite3.Connection, output_dir: Path) -> int
 # ══════════════════════════════════════
 
 
-def search_memories(conn: sqlite3.Connection, query: str, type_: str | None = None) -> list[dict]:
-    """Full-text search across memory entries using FTS5."""
+def search_memories(
+    conn: sqlite3.Connection,
+    query: str,
+    type_: str | None = None,
+    platform_id: str | None = None,
+) -> list[dict]:
+    """Full-text search across memory entries using FTS5.
+
+    Args:
+        query: Search query string.
+        type_: Optional memory type filter.
+        platform_id: Optional platform filter. None means search all platforms.
+    """
     if not _check_fts5():
         sql = "SELECT * FROM memory_entries WHERE (name LIKE ? OR content LIKE ?)"
         params: list = [f"%{query}%", f"%{query}%"]
         if type_:
             sql += " AND type=?"
             params.append(type_)
+        if platform_id is not None:
+            sql += " AND platform_id=?"
+            params.append(platform_id)
         return [dict(r) for r in conn.execute(sql, params).fetchall()]
 
     sql = "SELECT m.* FROM memory_entries m JOIN memory_fts f ON m.rowid = f.rowid WHERE memory_fts MATCH ? "
@@ -1005,6 +1053,9 @@ def search_memories(conn: sqlite3.Connection, query: str, type_: str | None = No
     if type_:
         sql += "AND m.type=? "
         params.append(type_)
+    if platform_id is not None:
+        sql += "AND m.platform_id=? "
+        params.append(platform_id)
     sql += "ORDER BY rank"
     return [dict(r) for r in conn.execute(sql, params).fetchall()]
 
