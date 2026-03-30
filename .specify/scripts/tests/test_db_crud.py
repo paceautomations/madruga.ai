@@ -205,3 +205,145 @@ def test_compute_file_hash_full_length(tmp_path):
     assert h.startswith("sha256:")
     hex_part = h[len("sha256:") :]
     assert len(hex_part) == 64  # full SHA-256
+
+
+# ══════════════════════════════════════
+# Platform repo binding tests
+# ══════════════════════════════════════
+
+
+def test_upsert_platform_with_repo_fields(tmp_db):
+    """Repo fields are stored and retrieved correctly."""
+    from db import upsert_platform, get_platform
+
+    upsert_platform(
+        tmp_db,
+        "p1",
+        name="P1",
+        repo_path="platforms/p1",
+        repo_org="myorg",
+        repo_name="my-repo",
+        base_branch="develop",
+        epic_branch_prefix="epic/p1/",
+        tags_json='["tag1", "tag2"]',
+    )
+    p = get_platform(tmp_db, "p1")
+    assert p["repo_org"] == "myorg"
+    assert p["repo_name"] == "my-repo"
+    assert p["base_branch"] == "develop"
+    assert p["epic_branch_prefix"] == "epic/p1/"
+    assert p["tags_json"] == '["tag1", "tag2"]'
+
+
+def test_upsert_platform_preserves_repo_fields(tmp_db):
+    """COALESCE preserves existing repo fields when new params are None."""
+    from db import upsert_platform, get_platform
+
+    upsert_platform(
+        tmp_db,
+        "p1",
+        name="P1",
+        repo_path="platforms/p1",
+        repo_org="org1",
+        repo_name="repo1",
+        base_branch="main",
+    )
+    # Second upsert without repo fields
+    upsert_platform(tmp_db, "p1", name="P1 Updated", repo_path="platforms/p1")
+    p = get_platform(tmp_db, "p1")
+    assert p["name"] == "P1 Updated"
+    assert p["repo_org"] == "org1"  # preserved
+    assert p["repo_name"] == "repo1"  # preserved
+    assert p["base_branch"] == "main"  # preserved
+
+
+def test_upsert_platform_without_repo_fields(tmp_db):
+    """Platforms without repo fields have None values (backward compat)."""
+    from db import upsert_platform, get_platform
+
+    upsert_platform(tmp_db, "legacy", name="Legacy", repo_path="platforms/legacy")
+    p = get_platform(tmp_db, "legacy")
+    assert p["repo_org"] is None
+    assert p["repo_name"] is None
+    # base_branch and tags_json are None when explicitly passed as None via upsert
+    # (SQLite DEFAULT only applies to INSERT without the column)
+    assert p["base_branch"] is None
+    assert p["tags_json"] is None
+
+
+# ══════════════════════════════════════
+# Local config tests
+# ══════════════════════════════════════
+
+
+def test_set_get_local_config(tmp_db):
+    """Round-trip set/get for local_config."""
+    from db import set_local_config, get_local_config
+
+    set_local_config(tmp_db, "repos_base_dir", "~/repos")
+    assert get_local_config(tmp_db, "repos_base_dir") == "~/repos"
+
+    # Overwrite
+    set_local_config(tmp_db, "repos_base_dir", "/opt/repos")
+    assert get_local_config(tmp_db, "repos_base_dir") == "/opt/repos"
+
+
+def test_get_local_config_default(tmp_db):
+    """Missing key returns default."""
+    from db import get_local_config
+
+    assert get_local_config(tmp_db, "nonexistent") is None
+    assert get_local_config(tmp_db, "nonexistent", "fallback") == "fallback"
+
+
+def test_get_active_platform(tmp_db):
+    """Active platform shorthand works."""
+    from db import set_local_config, get_active_platform
+
+    assert get_active_platform(tmp_db) is None
+    set_local_config(tmp_db, "active_platform", "fulano")
+    assert get_active_platform(tmp_db) == "fulano"
+
+
+def test_resolve_repo_path_external(tmp_db):
+    """Platform with repo_org/repo_name resolves via convention."""
+    from db import upsert_platform, set_local_config, resolve_repo_path
+
+    upsert_platform(
+        tmp_db,
+        "ext",
+        name="Ext",
+        repo_path="platforms/ext",
+        repo_org="myorg",
+        repo_name="ext-api",
+    )
+    set_local_config(tmp_db, "repos_base_dir", "/home/user/repos")
+    path = resolve_repo_path(tmp_db, "ext")
+    assert path == "/home/user/repos/myorg/ext-api"
+
+
+def test_resolve_repo_path_self_ref(tmp_db):
+    """Self-referencing platform (madruga.ai) resolves to REPO_ROOT."""
+    from config import REPO_ROOT
+    from db import upsert_platform, resolve_repo_path
+
+    upsert_platform(
+        tmp_db,
+        "madruga-ai",
+        name="Madruga AI",
+        repo_path="platforms/madruga-ai",
+        repo_org="paceautomations",
+        repo_name="madruga.ai",
+    )
+    path = resolve_repo_path(tmp_db, "madruga-ai")
+    assert path == str(REPO_ROOT)
+
+
+def test_resolve_repo_path_legacy(tmp_db):
+    """Platform without repo fields falls back to platforms/{id}."""
+    from config import REPO_ROOT
+    from db import upsert_platform, resolve_repo_path
+
+    upsert_platform(tmp_db, "old", name="Old", repo_path="platforms/old")
+    path = resolve_repo_path(tmp_db, "old")
+    assert path == str(REPO_ROOT / "platforms" / "old")

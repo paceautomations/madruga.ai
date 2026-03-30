@@ -262,17 +262,29 @@ def upsert_platform(
     title: str = "",
     lifecycle: str = "design",
     metadata: str = "{}",
+    repo_org: str | None = None,
+    repo_name: str | None = None,
+    base_branch: str | None = None,
+    epic_branch_prefix: str | None = None,
+    tags_json: str | None = None,
 ) -> None:
     conn.execute(
         """INSERT INTO platforms
-           (platform_id, name, title, lifecycle, repo_path, metadata, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+           (platform_id, name, title, lifecycle, repo_path, metadata,
+            repo_org, repo_name, base_branch, epic_branch_prefix, tags_json,
+            created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(platform_id) DO UPDATE SET
              name = excluded.name,
              title = excluded.title,
              lifecycle = excluded.lifecycle,
              repo_path = excluded.repo_path,
              metadata = excluded.metadata,
+             repo_org = COALESCE(excluded.repo_org, platforms.repo_org),
+             repo_name = COALESCE(excluded.repo_name, platforms.repo_name),
+             base_branch = COALESCE(excluded.base_branch, platforms.base_branch),
+             epic_branch_prefix = COALESCE(excluded.epic_branch_prefix, platforms.epic_branch_prefix),
+             tags_json = COALESCE(excluded.tags_json, platforms.tags_json),
              updated_at = excluded.updated_at
         """,
         (
@@ -282,6 +294,11 @@ def upsert_platform(
             lifecycle,
             repo_path,
             metadata,
+            repo_org,
+            repo_name,
+            base_branch,
+            epic_branch_prefix,
+            tags_json,
             _now(),
             _now(),
         ),
@@ -293,6 +310,64 @@ def upsert_platform(
 def get_platform(conn: sqlite3.Connection, platform_id: str) -> dict | None:
     row = conn.execute("SELECT * FROM platforms WHERE platform_id=?", (platform_id,)).fetchone()
     return dict(row) if row else None
+
+
+# ══════════════════════════════════════
+# Local Config (machine-specific settings)
+# ══════════════════════════════════════
+
+
+def set_local_config(conn: sqlite3.Connection, key: str, value: str) -> None:
+    """Set a machine-local config value (e.g., active_platform, repos_base_dir)."""
+    conn.execute(
+        """INSERT INTO local_config (key, value, updated_at)
+           VALUES (?, ?, ?)
+           ON CONFLICT(key) DO UPDATE SET
+             value = excluded.value,
+             updated_at = excluded.updated_at
+        """,
+        (key, value, _now()),
+    )
+    conn.commit()
+
+
+def get_local_config(conn: sqlite3.Connection, key: str, default: str | None = None) -> str | None:
+    """Get a machine-local config value."""
+    row = conn.execute("SELECT value FROM local_config WHERE key=?", (key,)).fetchone()
+    return row[0] if row else default
+
+
+def get_active_platform(conn: sqlite3.Connection) -> str | None:
+    """Shorthand for getting the active platform from local_config."""
+    return get_local_config(conn, "active_platform")
+
+
+def resolve_repo_path(conn: sqlite3.Connection, platform_id: str) -> str:
+    """Resolve the local filesystem path for a platform's code repository.
+
+    Resolution order:
+    1. If platform has repo_org + repo_name → {repos_base_dir}/{repo_org}/{repo_name}
+    2. If platform's repo_name matches its own id (self-ref) → REPO_ROOT
+    3. Fallback → REPO_ROOT / "platforms" / platform_id
+    """
+
+    platform = get_platform(conn, platform_id)
+    if not platform:
+        return str(REPO_ROOT / "platforms" / platform_id)
+
+    repo_org = platform.get("repo_org")
+    repo_name = platform.get("repo_name")
+
+    if repo_org and repo_name:
+        # Check self-referencing (code lives in this repo)
+        if repo_name == "madruga.ai" or platform.get("repo_path") == ".":
+            return str(REPO_ROOT)
+        # Convention: {repos_base_dir}/{org}/{repo_name}
+        base = get_local_config(conn, "repos_base_dir", str(REPO_ROOT.parent.parent))
+        return str(Path(base).expanduser() / repo_org / repo_name)
+
+    # Legacy fallback: platform dir inside this repo
+    return str(REPO_ROOT / "platforms" / platform_id)
 
 
 # ══════════════════════════════════════
@@ -1292,6 +1367,9 @@ def seed_from_filesystem(conn: sqlite3.Connection, platform_id: str, platform_di
     with open(yaml_path) as f:
         manifest = yaml.safe_load(f)
 
+    repo = manifest.get("repo", {})
+    tags = manifest.get("tags", [])
+
     with transaction(conn) as txn:
         upsert_platform(
             txn,
@@ -1301,6 +1379,11 @@ def seed_from_filesystem(conn: sqlite3.Connection, platform_id: str, platform_di
             lifecycle=manifest.get("lifecycle", "design"),
             repo_path=f"platforms/{platform_id}",
             metadata=json.dumps({k: manifest[k] for k in ("views", "serve", "build") if k in manifest}),
+            repo_org=repo.get("org"),
+            repo_name=repo.get("name"),
+            base_branch=repo.get("base_branch"),
+            epic_branch_prefix=repo.get("epic_branch_prefix"),
+            tags_json=json.dumps(tags) if tags else None,
         )
 
         nodes_seeded = 0

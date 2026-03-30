@@ -34,6 +34,12 @@ name: test-plat
 title: "Test Platform"
 lifecycle: design
 version: "0.1.0"
+repo:
+  org: testorg
+  name: test-repo
+  base_branch: main
+  epic_branch_prefix: "epic/test-plat/"
+tags: [test, sample]
 model: model/
 pipeline:
   nodes:

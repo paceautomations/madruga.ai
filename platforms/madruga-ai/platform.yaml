@@ -3,6 +3,12 @@ title: "Madruga AI — Architecture Documentation & Spec-to-Code System"
 description: "Sistema de documentacao arquitetural e pipeline spec-to-code para plataformas digitais"
 lifecycle: development
 version: "0.1.0"
+repo:
+  org: paceautomations
+  name: madruga.ai
+  base_branch: main
+  epic_branch_prefix: "epic/madruga-ai/"
+tags: [architecture, documentation, spec-to-code]
 model: model/
 views:
   structural:

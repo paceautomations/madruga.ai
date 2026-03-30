@@ -100,3 +100,94 @@ def test_name_validation_regex():
     assert not re.match(pattern, "UPPER")
     assert not re.match(pattern, "-starts-dash")
     assert not re.match(pattern, "has_underscore")
+
+
+# ══════════════════════════════════════
+# Active platform (use/current) tests
+# ══════════════════════════════════════
+
+
+def test_cmd_use_sets_active(tmp_path, capsys):
+    """cmd_use sets active_platform in DB."""
+    old_platforms = plat.PLATFORMS_DIR
+    plat.PLATFORMS_DIR = tmp_path
+
+    _create_platform(tmp_path, "alpha")
+
+    # Patch DB to use temp
+    from db import get_conn, migrate, get_active_platform
+    import db as db_mod
+
+    db_path = tmp_path / "test.db"
+    old_db = db_mod.DB_PATH
+    db_mod.DB_PATH = db_path
+
+    try:
+        with get_conn(db_path) as conn:
+            migrate(conn)
+
+        plat.cmd_use("alpha")
+        captured = capsys.readouterr()
+        assert "Active platform set to: alpha" in captured.out
+
+        with get_conn(db_path) as conn:
+            assert get_active_platform(conn) == "alpha"
+    finally:
+        plat.PLATFORMS_DIR = old_platforms
+        db_mod.DB_PATH = old_db
+
+
+def test_cmd_use_invalid_platform(tmp_path):
+    """cmd_use exits with error for non-existent platform."""
+    old = plat.PLATFORMS_DIR
+    plat.PLATFORMS_DIR = tmp_path
+
+    import pytest
+
+    try:
+        with pytest.raises(SystemExit) as exc_info:
+            plat.cmd_use("nonexistent")
+        assert exc_info.value.code == 1
+    finally:
+        plat.PLATFORMS_DIR = old
+
+
+def test_cmd_current_when_set(tmp_path, capsys):
+    """cmd_current shows the active platform."""
+    from db import get_conn, migrate, set_local_config
+    import db as db_mod
+
+    db_path = tmp_path / "test.db"
+    old_db = db_mod.DB_PATH
+    db_mod.DB_PATH = db_path
+
+    try:
+        with get_conn(db_path) as conn:
+            migrate(conn)
+            set_local_config(conn, "active_platform", "fulano")
+
+        plat.cmd_current()
+        captured = capsys.readouterr()
+        assert "Active platform: fulano" in captured.out
+    finally:
+        db_mod.DB_PATH = old_db
+
+
+def test_cmd_current_when_unset(tmp_path, capsys):
+    """cmd_current shows message when no active platform."""
+    from db import get_conn, migrate
+    import db as db_mod
+
+    db_path = tmp_path / "test.db"
+    old_db = db_mod.DB_PATH
+    db_mod.DB_PATH = db_path
+
+    try:
+        with get_conn(db_path) as conn:
+            migrate(conn)
+
+        plat.cmd_current()
+        captured = capsys.readouterr()
+        assert "No active platform set" in captured.out
+    finally:
+        db_mod.DB_PATH = old_db

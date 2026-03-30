@@ -129,16 +129,26 @@ graph LR
 | ... | ... | ... | ... |
 ```
 
+### Important: Lightweight Epic Entries
+
+The roadmap includes a "Proximos Epics (candidatos)" table with **planned but not yet created** epics. These are roadmap-only entries — no `epics/NNN-slug/` directory or `pitch.md` file exists for them. Epic files are only created when the epic is prioritized for implementation (entering L2 cycle via `/epic-context`).
+
+When updating the roadmap:
+- **Shipped epics** go in the "Epics Shipped" section with full details
+- **Planned epics** go in the "Proximos Epics" table with just: number, title, description, complexity, suggested priority
+- **Never create epic directories** for planned epics from the roadmap skill
+
 ### Auto-Review Additions
 
 | # | Check | Action on Failure |
 |---|-------|-------------------|
-| 1 | Are all epics from epics/ included? | Add missing ones |
-| 2 | Are dependencies acyclic? | Resolve |
-| 3 | Is MVP clearly defined? | Define it |
-| 4 | Is the timeline realistic (sum of appetites)? | Adjust |
-| 5 | Do milestones have testable criteria? | Make measurable |
-| 6 | Does the Mermaid Gantt render? | Fix |
+| 1 | Are all shipped epics from epics/ included? | Add missing ones |
+| 2 | Are planned epics in the roadmap table (not as files)? | Move to table |
+| 3 | Are dependencies acyclic? | Resolve |
+| 4 | Is MVP clearly defined? | Define it |
+| 5 | Is the timeline realistic (sum of appetites)? | Adjust |
+| 6 | Do milestones have testable criteria? | Make measurable |
+| 7 | Does the Mermaid Gantt render? | Fix |
 
 ## Error Handling
 

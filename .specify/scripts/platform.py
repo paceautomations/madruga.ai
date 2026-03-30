@@ -14,6 +14,11 @@ Usage:
     python3 .specify/scripts/platform.py export-adrs <name> # export decisions to markdown
     python3 .specify/scripts/platform.py import-memory      # import .claude/memory into DB
     python3 .specify/scripts/platform.py export-memory      # export memory entries to markdown
+    python3 .specify/scripts/platform.py status <name>      # pipeline status (human table)
+    python3 .specify/scripts/platform.py status --all       # all platforms (human table)
+    python3 .specify/scripts/platform.py status --all --json # all platforms (JSON for dashboards)
+    python3 .specify/scripts/platform.py use <name>         # set active platform
+    python3 .specify/scripts/platform.py current             # show active platform
 """
 
 from __future__ import annotations
@@ -107,21 +112,40 @@ def _inject_platform_loader(name: str) -> bool:
 
 
 def cmd_list() -> None:
-    """List all discovered platforms."""
+    """List all discovered platforms with repo info and tags."""
+    from db import get_active_platform, get_conn, get_platform, migrate
+
     platforms = _discover_platforms()
     if not platforms:
         print("No platforms found.")
         return
 
-    print(f"{'Name':<25} {'Lifecycle':<15} {'Version':<10} {'Copier'}")
-    print("-" * 65)
-    for name in platforms:
-        pdir = PLATFORMS_DIR / name
-        manifest = yaml.safe_load((pdir / "platform.yaml").read_text())
-        lifecycle = manifest.get("lifecycle", "?")
-        version = manifest.get("version", "?")
-        has_copier = "yes" if (pdir / ".copier-answers.yml").exists() else "no"
-        print(f"  {name:<23} {lifecycle:<15} {version:<10} {has_copier}")
+    with get_conn() as conn:
+        migrate(conn)
+        active = get_active_platform(conn)
+
+        print(f"  {'Name':<20} {'Lifecycle':<13} {'Repo':<30} {'Tags'}")
+        print(f"  {'-' * 80}")
+        for name in platforms:
+            pdir = PLATFORMS_DIR / name
+            manifest = yaml.safe_load((pdir / "platform.yaml").read_text())
+            lifecycle = manifest.get("lifecycle", "?")
+
+            # Try DB first for repo info, fallback to YAML
+            db_plat = get_platform(conn, name)
+            repo = manifest.get("repo", {})
+            repo_org = (db_plat or {}).get("repo_org") or repo.get("org", "")
+            repo_name = (db_plat or {}).get("repo_name") or repo.get("name", "")
+            repo_str = f"{repo_org}/{repo_name}" if repo_org and repo_name else "-"
+
+            tags = manifest.get("tags", [])
+            tags_str = ", ".join(tags) if tags else "-"
+
+            marker = " *" if name == active else "  "
+            print(f"{marker}{name:<20} {lifecycle:<13} {repo_str:<30} {tags_str}")
+
+        if active:
+            print(f"\n  * = active platform ({active})")
 
 
 def cmd_new(name: str) -> None:
@@ -456,6 +480,169 @@ def cmd_export_memory() -> None:
     print(f"Exported {count} memory entries to {candidates[0]}")
 
 
+def cmd_use(name: str) -> None:
+    """Set the active platform."""
+    from db import get_conn, migrate, set_local_config
+
+    platforms = _discover_platforms()
+    if name not in platforms:
+        _error(f"Platform '{name}' not found. Available: {', '.join(platforms)}")
+        sys.exit(1)
+    with get_conn() as conn:
+        migrate(conn)
+        set_local_config(conn, "active_platform", name)
+    _ok(f"Active platform set to: {name}")
+
+
+def cmd_current() -> None:
+    """Show the active platform."""
+    from db import get_active_platform, get_conn, migrate
+
+    with get_conn() as conn:
+        migrate(conn)
+        active = get_active_platform(conn)
+    if active:
+        print(f"Active platform: {active}")
+    else:
+        print("No active platform set. Use: platform.py use <name>")
+
+
+def cmd_status(name: str | None, show_all: bool, as_json: bool) -> None:
+    """Show pipeline status for one or all platforms."""
+    from datetime import datetime, timezone
+
+    from db import (
+        get_conn,
+        get_epic_nodes,
+        get_epic_status,
+        get_epics,
+        get_pipeline_nodes,
+        get_platform_status,
+        get_stale_nodes,
+        migrate,
+    )
+
+    with get_conn() as conn:
+        migrate(conn)
+        platforms = _discover_platforms()
+        if not platforms:
+            if as_json:
+                print(json.dumps({"generated_at": "", "platforms": []}, indent=2))
+            else:
+                print("No platforms found.")
+            return
+
+        if name and name not in platforms:
+            _error(f"Platform '{name}' not found. Available: {', '.join(platforms)}")
+            sys.exit(1)
+
+        targets = platforms if show_all else ([name] if name else platforms)
+
+        result = {
+            "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "platforms": [],
+        }
+
+        for pname in targets:
+            pdir = PLATFORMS_DIR / pname
+            manifest = yaml.safe_load((pdir / "platform.yaml").read_text())
+
+            # Build DAG edges and node metadata from platform.yaml
+            pipeline_cfg = manifest.get("pipeline", {})
+            yaml_nodes = {n["id"]: n for n in pipeline_cfg.get("nodes", [])}
+            dag_edges = {n["id"]: n.get("depends", []) for n in pipeline_cfg.get("nodes", [])}
+
+            # Query DB
+            db_nodes = {n["node_id"]: n for n in get_pipeline_nodes(conn, pname)}
+            status = get_platform_status(conn, pname)
+            stale_ids = {s["node_id"] for s in get_stale_nodes(conn, pname, dag_edges)}
+
+            # Merge DB + YAML into enriched nodes
+            merged_nodes = []
+            for node_cfg in pipeline_cfg.get("nodes", []):
+                nid = node_cfg["id"]
+                db_node = db_nodes.get(nid, {})
+                node_status = db_node.get("status", "pending")
+                if nid in stale_ids:
+                    node_status = "stale"
+                merged_nodes.append(
+                    {
+                        "id": nid,
+                        "status": node_status,
+                        "layer": node_cfg.get("layer", ""),
+                        "gate": node_cfg.get("gate", ""),
+                        "depends": node_cfg.get("depends", []),
+                        "optional": node_cfg.get("optional", False),
+                        "outputs": node_cfg.get("outputs", []),
+                        "completed_at": db_node.get("completed_at"),
+                    }
+                )
+
+            # L2 epics
+            epics_data = []
+            epic_cycle_nodes = pipeline_cfg.get("epic_cycle", {}).get("nodes", [])
+            for epic in get_epics(conn, pname):
+                epic_db_nodes = get_epic_nodes(conn, pname, epic["epic_id"])
+                epic_status = get_epic_status(conn, pname, epic["epic_id"])
+                enodes = []
+                for en in epic_db_nodes:
+                    enodes.append(
+                        {
+                            "id": en["node_id"],
+                            "status": en["status"],
+                            "completed_at": en.get("completed_at"),
+                        }
+                    )
+                epics_data.append(
+                    {
+                        "id": epic["epic_id"],
+                        "title": epic.get("title", ""),
+                        "status": epic.get("status", "proposed"),
+                        "total": epic_status.get("total_nodes", 0),
+                        "done": epic_status.get("done", 0),
+                        "pending": epic_status.get("pending", 0),
+                        "progress_pct": epic_status.get("progress_pct", 0),
+                        "nodes": enodes,
+                    }
+                )
+
+            platform_data = {
+                "id": pname,
+                "title": manifest.get("title", pname),
+                "lifecycle": manifest.get("lifecycle", "unknown"),
+                "l1": {
+                    "total": status.get("total_nodes", 0),
+                    "done": status.get("done", 0),
+                    "pending": status.get("pending", 0),
+                    "stale": len(stale_ids),
+                    "blocked": status.get("blocked", 0),
+                    "skipped": status.get("skipped", 0),
+                    "progress_pct": status.get("progress_pct", 0),
+                    "nodes": merged_nodes,
+                },
+                "l2": {"epics": epics_data},
+            }
+            result["platforms"].append(platform_data)
+
+        if as_json:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            for p in result["platforms"]:
+                print(f"\n{'=' * 60}")
+                print(f"  {p['title']}  ({p['lifecycle']})")
+                print(f"  L1 Progress: {p['l1']['done']}/{p['l1']['total']} ({p['l1']['progress_pct']}%)")
+                print(f"{'=' * 60}")
+                print(f"  {'Node':<25} {'Status':<10} {'Layer':<15} {'Gate'}")
+                print(f"  {'-' * 55}")
+                for n in p["l1"]["nodes"]:
+                    opt = " (opt)" if n["optional"] else ""
+                    print(f"  {n['id']:<25} {n['status']:<10} {n['layer']:<15} {n['gate']}{opt}")
+                if p["l2"]["epics"]:
+                    print("\n  L2 Epics:")
+                    for e in p["l2"]["epics"]:
+                        print(f"    {e['id']}: {e['title']} — {e['done']}/{e['total']} ({e['progress_pct']}%)")
+
+
 def main() -> None:
     if len(sys.argv) < 2:
         print(__doc__)
@@ -504,6 +691,22 @@ def main() -> None:
         cmd_import_memory()
     elif cmd == "export-memory":
         cmd_export_memory()
+    elif cmd == "status":
+        args = sys.argv[2:]
+        show_all = "--all" in args
+        as_json = "--json" in args
+        name_args = [a for a in args if not a.startswith("--")]
+        pname = name_args[0] if name_args else None
+        if not pname and not show_all:
+            show_all = True
+        cmd_status(pname, show_all, as_json)
+    elif cmd == "use":
+        if len(sys.argv) < 3:
+            _error("Usage: platform.py use <name>")
+            sys.exit(1)
+        cmd_use(sys.argv[2])
+    elif cmd == "current":
+        cmd_current()
     else:
         _error(f"Unknown command: {cmd}")
         print(__doc__)

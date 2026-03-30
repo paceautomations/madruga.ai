@@ -361,7 +361,8 @@ _migrations (controle de versao do schema)
 
 | Tabela | Proposito | Quem escreve |
 |--------|-----------|-------------|
-| `platforms` | Registro de cada plataforma (nome, lifecycle, metadata) | `post_save.py --reseed`, `platform.py new` |
+| `platforms` | Registro de cada plataforma (nome, lifecycle, metadata, repo binding, tags) | `post_save.py --reseed`, `platform.py new` |
+| `local_config` | Configuracao local da maquina (active_platform, repos_base_dir) — nao commitado | `platform.py use` |
 | `pipeline_nodes` | **DAG Level 1** — status de cada node do pipeline (pending/done/stale/blocked/skipped) + hash do output | `post_save.py` apos cada skill |
 | `epics` | Registro de epics (status, appetite, branch, priority) | `post_save.py --reseed`, `epic-context` |
 | `epic_nodes` | **DAG Level 2** — status de cada step do ciclo de epic | `post_save.py --epic` |
@@ -442,7 +443,7 @@ Migrações ficam em `.pipeline/migrations/` (nomeadas `001_*.sql`, `002_*.sql`)
 │   │   ├── db.py                 # Thin wrapper SQLite (stdlib only)
 │   │   ├── post_save.py          # CLI: registra artefato no DB
 │   │   ├── vision-build.py       # LikeC4 JSON → tabelas markdown
-│   │   ├── platform.py           # CLI: new, lint, sync, register, list, import/export-adrs/memory
+│   │   ├── platform.py           # CLI: new, lint, sync, register, list, use, current, status, import/export
 │   │   ├── sync_memory.py       # Sync bidirecional memory ↔ BD
 │   │   └── bash/
 │   │       ├── check-platform-prerequisites.sh  # Valida dependencias
@@ -517,12 +518,16 @@ Migrações ficam em `.pipeline/migrations/` (nomeadas `001_*.sql`, `002_*.sql`)
 ### Gestao de Plataformas (`platform.py`)
 
 ```bash
-python3 .specify/scripts/platform.py list              # listar todas as plataformas
+python3 .specify/scripts/platform.py list              # listar todas (repo, tags, plataforma ativa)
 python3 .specify/scripts/platform.py new <nome>        # scaffold via Copier (interativo)
+python3 .specify/scripts/platform.py use <nome>        # definir plataforma ativa
+python3 .specify/scripts/platform.py current            # mostrar plataforma ativa
 python3 .specify/scripts/platform.py lint <nome>        # validar estrutura
 python3 .specify/scripts/platform.py lint --all         # validar todas
 python3 .specify/scripts/platform.py sync [nome]        # copier update (uma ou todas)
 python3 .specify/scripts/platform.py register <nome>    # injetar loader LikeC4 no portal
+python3 .specify/scripts/platform.py status <nome>      # pipeline status (tabela humana)
+python3 .specify/scripts/platform.py status --all --json # todas plataformas (JSON para dashboard)
 python3 .specify/scripts/platform.py import-adrs <nome> # importar ADRs markdown para BD
 python3 .specify/scripts/platform.py export-adrs <nome> # exportar decisoes do BD para markdown
 python3 .specify/scripts/platform.py import-memory      # importar .claude/memory/ para BD

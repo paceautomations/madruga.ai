@@ -3,8 +3,11 @@
   "type": "module",
   "version": "0.0.1",
   "scripts": {
+    "prestatus": "cd .. && python3 .specify/scripts/platform.py status --all --json > portal/src/data/pipeline-status.json 2>/dev/null || echo '{\"generated_at\":\"\",\"platforms\":[]}' > portal/src/data/pipeline-status.json",
+    "predev": "npm run prestatus",
     "dev": "astro dev",
     "start": "astro dev",
+    "prebuild": "npm run prestatus",
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro"
@@ -12,8 +15,10 @@
   "dependencies": {
     "@astrojs/react": "^5.0.2",
     "@astrojs/starlight": "^0.38.2",
+    "@xyflow/react": "^12.10.2",
     "astro": "^6.0.1",
     "astro-mermaid": "^2.0.1",
+    "elkjs": "^0.11.1",
     "js-yaml": "^4.1.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",

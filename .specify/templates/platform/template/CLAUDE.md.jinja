@@ -1,0 +1,31 @@
+# {{ platform_title }}
+
+## Platform Identity
+
+- **Platform**: {{ platform_name }}
+- **Description**: {{ platform_description }}
+- **Lifecycle**: {{ lifecycle }}
+{%- if repo_name %}
+- **Repo**: {{ repo_org }}/{{ repo_name }}
+- **Branch base**: {{ repo_base_branch }}
+- **Epic branches**: epic/{{ platform_name }}/<NNN-slug>
+{%- else %}
+- **Repo**: paceautomations/madruga.ai (este repo)
+- **Branch base**: main
+- **Epic branches**: epic/{{ platform_name }}/<NNN-slug>
+{%- endif %}
+
+## Context for AI
+
+This is the documentation directory for the **{{ platform_name }}** platform within the madruga.ai architecture documentation system.
+{%- if repo_name %}
+Documentation lives here; code lives in the {{ repo_org }}/{{ repo_name }} repository.
+{%- else %}
+Code and documentation live in the same repository.
+{%- endif %}
+
+When working on this platform:
+1. Use `platform.py use {{ platform_name }}` to set as active
+2. L1 skills (vision, domain-model, etc.) operate on files in this directory
+3. L2 epic cycle creates branches with prefix `epic/{{ platform_name }}/`
+4. See root CLAUDE.md for pipeline documentation and commands

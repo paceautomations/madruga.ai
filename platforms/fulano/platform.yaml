@@ -3,6 +3,12 @@ title: "Fulano — Agentes WhatsApp"
 description: "Plataforma multi-tenant de agentes conversacionais WhatsApp"
 lifecycle: design
 version: "0.5.0"
+repo:
+  org: paceautomations
+  name: fulano-api
+  base_branch: main
+  epic_branch_prefix: "epic/fulano/"
+tags: [whatsapp, conversational-ai, multi-tenant]
 model: model/
 views:
   structural:

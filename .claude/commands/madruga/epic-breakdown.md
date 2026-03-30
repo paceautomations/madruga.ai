@@ -32,9 +32,13 @@ If the problem cannot be explained in 2 sentences, the epic is poorly defined. E
 - `/epic-breakdown fulano` — Break platform "fulano" into epics
 - `/epic-breakdown` — Prompt for name
 
-## Output Directory
+## Output Modes
 
-Save to `platforms/<name>/epics/NNN-slug/pitch.md`. Auto-number.
+**Mode 1 — Roadmap-only (default):** Add epic entries to `platforms/<name>/planning/roadmap.md` in the "Proximos Epics" table. **Do NOT create** `epics/NNN-slug/` directories or `pitch.md` files. This keeps the roadmap as the single source of planned work without file proliferation.
+
+**Mode 2 — Full pitch (on request):** When the user explicitly requests detailed epic files (e.g., "create pitch for epic 011"), create `epics/NNN-slug/pitch.md`. Only use this mode when the epic is about to enter the L2 cycle (implementation).
+
+Default is Mode 1. Auto-number epics sequentially from the highest existing epic number.
 
 ## Instructions
 
@@ -66,7 +70,15 @@ Wait for answers BEFORE generating epics.
 
 ### 2. Generate Epics
 
-For each epic, create a directory and pitch:
+**Mode 1 (Roadmap-only, default):** Add a row to the "Proximos Epics" table in `planning/roadmap.md` for each epic. Format:
+
+```markdown
+| NNN | Epic Title | Descricao resumida | Complexidade (Pequena/Media/Grande) | Prioridade sugerida |
+```
+
+Do NOT create directories or files. The epic will be detailed later when prioritized for implementation.
+
+**Mode 2 (Full pitch, only when explicitly requested):** Create a directory and pitch:
 
 `epics/NNN-slug/pitch.md`
 

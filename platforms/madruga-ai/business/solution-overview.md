@@ -1,6 +1,6 @@
 ---
 title: "Solution Overview"
-updated: 2026-03-27
+updated: 2026-03-30
 ---
 # Madruga AI — Solution Overview
 
@@ -43,42 +43,38 @@ O sistema resolve o problema central de times pequenos: manter arquitetura, spec
 
 ## Feature Map
 
-### Now (MVP) — Funcional hoje
+### Implementado — Funcional hoje
 
-| Feature | Descricao | Persona | Metrica |
-|---------|-----------|---------|---------|
-| **Platform CLI** | `platform.py` com comandos `new`, `lint`, `sync`, `register`, `list`. Scaffold de plataformas via Copier, validacao de estrutura, registro no portal. | Arquiteto-Operator | Tempo para criar nova plataforma: < 2min |
-| **LikeC4 Model Pipeline** | Arquivos `.likec4` como source of truth. `vision-build.py` exporta JSON e popula tabelas markdown via AUTO markers (containers, domains, relations, integrations). | Arquiteto-Operator | Tabelas sempre sincronizadas com modelo |
-| **Copier Template System** | Template em `.specify/templates/platform/` com Jinja2. `copier copy` scaffolda, `copier update` sincroniza. `_skip_if_exists` protege conteudo editavel. | Arquiteto-Operator | Plataformas com estrutura identica |
-| **Portal Starlight** | Astro + Starlight com auto-discovery de plataformas (`platforms.mjs`), sidebar dinamica, dynamic routes, e diagramas LikeC4 interativos (pan, zoom, drill-down). | Consumidor do Portal | Portal acessivel em localhost:4321 com todas as plataformas |
-| **Pipeline Unificado (L1 + L2)** | Fluxo continuo de 24 skills: L1 (13 nodes `madruga/*`: platform-new → roadmap) constroi fundacao arquitetural, L2 (11 nodes por epic: `madruga/*` + `speckit.*`) implementa cada feature ate codigo testado. | Arquiteto-Operator | Pipeline completo da concepcao ao codigo |
-| **ADRs (Nygard)** | Decisoes arquiteturais em `decisions/ADR-NNN-*.md`. Formato: Context, Decision, Alternatives, Consequences. | Arquiteto-Operator, Revisor | Decisoes rastreadas e versionadas |
-| **Epics (Shape Up)** | Folders autocontidos `epics/NNN-slug/` com pitch.md. Formato: Problem, Appetite, Solution, Rabbit Holes, Acceptance Criteria. | Arquiteto-Operator | Epics com contexto completo e autocontido |
+| Feature | Descricao | Persona | Epic |
+|---------|-----------|---------|------|
+| **Platform CLI** | `platform.py` com comandos `new`, `lint`, `sync`, `register`, `list`, `use`, `current`, `status`, `import-adrs`, `export-adrs`, `import-memory`, `export-memory`. Scaffold via Copier, validacao, pipeline status (tabela + JSON). | Arquiteto-Operator | 007 |
+| **LikeC4 Model Pipeline** | Arquivos `.likec4` como source of truth. `vision-build.py` exporta JSON e popula tabelas markdown via AUTO markers. | Arquiteto-Operator | — |
+| **Copier Template System** | Template em `.specify/templates/platform/` com Jinja2. `copier copy` scaffolda, `copier update` sincroniza. `_skip_if_exists` protege conteudo editavel. Inclui `CLAUDE.md.jinja` por plataforma. | Arquiteto-Operator | 007 |
+| **Portal Starlight + Dashboard** | Astro + Starlight com auto-discovery de plataformas, sidebar dinamica, dynamic routes, diagramas LikeC4 interativos, e **dashboard visual de pipeline** (L1 + L2, Mermaid DAG, filtros, detalhes por epic). | Consumidor do Portal | 010 |
+| **Pipeline Unificado (L1 + L2)** | Fluxo continuo de 24 skills: L1 (13 nodes) + L2 (11 nodes por epic). Cada skill segue contrato de 6 passos com knowledge files extraidos (pipeline-contract-base.md, pipeline-contract-planning.md). | Arquiteto-Operator | 008 |
+| **SQLite Pipeline State** | BD SQLite (WAL mode) como state store. Tabelas: platforms, pipeline_nodes, epics, epic_nodes, pipeline_runs, events, artifact_provenance. Migrations incrementais. Seed automatico do filesystem. | Arquiteto-Operator | 006 |
+| **Decision Log BD** | BD como source of truth para decisions e memory. Tabelas decisions, decision_links, memory_entries com FTS5 full-text search. CLI: import-adrs, export-adrs, import-memory, export-memory. Markdown e view layer exportada do BD. | Arquiteto-Operator | 009 |
+| **ADRs (Nygard)** | 14 ADRs em `decisions/ADR-NNN-*.md`. Formato: Context, Decision, Alternatives, Consequences. Sincronizados com BD via import/export. | Arquiteto-Operator, Revisor | 009 |
+| **Epics (Shape Up)** | Folders autocontidos `epics/NNN-slug/` com pitch.md e artefatos L2. 5 epics shipped (006-010). | Arquiteto-Operator | — |
+| **Skill Contracts (Knowledge Files)** | Boilerplate extraido de skills para knowledge files reutilizaveis: `pipeline-contract-base.md` (contrato de 6 passos), `pipeline-contract-planning.md` (revisao de planejamento). Skills ficaram enxutas. | Arquiteto-Operator | 008 |
+| **Verify + QA + Reconcile** | Skills de validacao pos-implementacao: verify (spec vs codigo), QA (static analysis + tests + browser), reconcile (drift detection 9 categorias, drift score, concrete diffs). | Arquiteto-Operator, Revisor | 008 |
 
-### Next (3-6 meses)
+### Next — Candidatos para proximos epics
 
-| Feature | Descricao | Persona | Metrica |
-|---------|-----------|---------|---------|
-| **Runtime Engine Migration** | Migrar 10K LOC Python de `general/services/madruga-ai/` para `madruga.ai/src/`. SpeckitBridge ja consome skills e templates dos mesmos paths. | Arquiteto-Operator, Daemon | 51 testes passando no novo repo |
-| **Daemon 24/7** | `MadrugaDaemon` asyncio: poll Obsidian kanban (60s), orchestrator com slots, pipeline autonomo completo. systemd service com PID file e graceful shutdown. | Daemon | Epics APPROVED processados automaticamente |
-| **Debate Engine** | Multi-persona convergence: personas (QA, Business, Security) validam specs em 2 rounds. Convergencia automatica quando consenso >= threshold. | Daemon | Specs validadas por 3+ perspectivas antes de plan |
-| **Decision System** | Classificador 1-way/2-way door. Gates automaticos: 1-way door parka epic e notifica humano. 2-way door auto-decide. | Daemon, Revisor | Zero decisoes irreversiveis tomadas autonomamente |
-| **Codebase Mapping (`speckit.map`)** | Agents paralelos mapeiam codebase existente: stack, patterns, convencoes. Plan recebe contexto do codigo real (brownfield). | Daemon | Plan alinhado com codebase existente |
-| **Verify post-impl (`speckit.verify`)** | Compara spec vs codigo implementado. Detecta phantom completions (task marcada done sem implementacao real). | Daemon, Revisor | 0 phantom completions em producao |
-| **Execute Waves (`speckit.execute-wave`)** | Execucao em waves com subagents frescos. Cada wave recebe contexto limpo para evitar context rot. | Daemon | Qualidade estavel independente do tamanho do epic |
-| **Namespace Unification** | Merge `speckit.*` em `madruga.*`. Skills passam a ser `madruga.specify`, `madruga.plan`, etc. | Arquiteto-Operator | Namespace unico e consistente |
+| Feature | Descricao | Persona | Complexidade |
+|---------|-----------|---------|-------------|
+| **Runtime Engine Migration** | Migrar daemon Python de `general/services/madruga-ai/` para `madruga.ai/src/`. SpeckitBridge ja consome skills e templates dos mesmos paths. | Daemon | Grande |
+| **Daemon 24/7** | `MadrugaDaemon` asyncio: poll kanban, orchestrator com slots, pipeline autonomo completo. systemd service. | Daemon | Grande |
+| **Multi-repo Implement** | `speckit.implement` opera em target repos (ex: `fulano-api`) via git worktree. | Daemon | Media |
+| **CI/CD Pipeline** | GitHub Actions: lint Python (ruff), portal build, template tests (pytest), platform lint all. | Arquiteto-Operator | Pequena |
+| **Namespace Unification** | Merge `speckit.*` em `madruga.*`. Skills passam a ser `madruga.specify`, `madruga.plan`, etc. | Arquiteto-Operator | Pequena |
 
-### Later (6-12 meses)
+### Later — Visao de longo prazo
 
-| Feature | Descricao | Persona | Metrica |
-|---------|-----------|---------|---------|
-| **RECONCILE Loop** | Apos implementacao: le diff do PR, compara vs arquitetura, calcula drift_score. Auto-update se < 0.3, escala humano se >= 0.3. | Daemon, Revisor | Architectural drift detectado e corrigido automaticamente |
-| **State Checkpoint (`speckit.checkpoint`)** | `STATE.md` persistido entre sessoes com decisoes tomadas, blockers, proximos passos. Contexto nunca perdido. | Daemon | Zero context loss entre sessoes |
-| **Epic Context Phase (`madruga:epic-context`)** | Captura preferencias de implementacao e decisoes em gray areas antes do spec. Reduz retrabalho. | Arquiteto-Operator | Preferencias capturadas antes de gastar tokens em spec |
-| **Research Paralelo** | Subagents paralelos pesquisam stack, patterns, pitfalls e libs simultaneamente durante plan. | Daemon | Tempo de research reduzido em 60% |
-| **Roadmap Auto-Sync** | Roadmap.md gerado automaticamente do frontmatter dos epics (status, phase, priority). Epic frontmatter e source of truth. | Consumidor do Portal | Roadmap sempre reflete estado real dos epics |
-| **Architecture Fitness Functions** | Validacao continua: `stress/arch_fitness.py` verifica spec compliance, cobertura de testes, conformidade com ADRs. | Daemon, Revisor | Score de fitness por plataforma visivel no portal |
-| **WhatsApp Notifications** | Notificacoes em gates criticos: 1-way door detected, epic blocked, drift alto. Via WhatsApp bridge. | Revisor | Tempo de resposta para gates criticos < 30min |
-| **Dashboard Web** | FastAPI dashboard com status em tempo real: epics em pipeline, slots do orchestrator, metricas do daemon. | Arquiteto-Operator | Visibilidade completa do pipeline autonomo |
-| **CI/CD Pipeline** | Lint Python (ruff), portal build, template tests (pytest), platform lint all. GitHub Actions. | Arquiteto-Operator | Zero regressoes em merges |
-| **Multi-repo Implement** | `speckit.implement` opera em target repos (ex: `fulano-api`) via git worktree, nao dentro do madruga.ai. | Daemon | Implementacao no repo correto, PR no repo correto |
+| Feature | Descricao | Persona |
+|---------|-----------|---------|
+| **Debate Engine** | Multi-persona convergence para validacao de specs. | Daemon |
+| **Decision System** | Classificador 1-way/2-way door com gates automaticos. | Daemon, Revisor |
+| **Architecture Fitness Functions** | Validacao continua de spec compliance e conformidade com ADRs. | Daemon, Revisor |
+| **WhatsApp Notifications** | Notificacoes em gates criticos via WhatsApp bridge. | Revisor |
+| **Roadmap Auto-Sync** | Roadmap gerado automaticamente do estado dos epics no BD. | Consumidor do Portal |

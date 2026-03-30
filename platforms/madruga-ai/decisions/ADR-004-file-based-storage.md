@@ -37,3 +37,13 @@ We will use git as the primary storage for all documentation artifacts, with SQL
 - [-] Sem queries complexas — nao da para fazer "todos os ADRs com status X across platforms" facilmente
 - [-] SQLite necessario como complemento para dados operacionais (kanban state, metrics)
 - [-] Conflitos de merge em markdown podem ocorrer com edits concorrentes
+
+## Amendamento (2026-03-30)
+
+O papel do SQLite expandiu alem de "lightweight operational data". Agora inclui:
+- **Platform registry** com repo binding (repo_org, repo_name, base_branch, tags)
+- **Pipeline state** (L1 nodes, L2 epic nodes, artifact provenance)
+- **Local config** (active_platform, repos_base_dir) — estado local da maquina
+- **Decisions + Memory** como source of truth (ADR-012, epic 009)
+
+O principio continua: **filesystem e source of truth para escrita** (platform.yaml, .md, .likec4). SQLite e **interface de leitura** populada via `reseed` a partir dos YAMLs. Veja ADR-012 para detalhes do SQLite WAL mode.

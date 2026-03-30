@@ -3,6 +3,13 @@ title: "{{ platform_title }}"
 description: "{{ platform_description }}"
 lifecycle: {{ lifecycle }}
 version: "0.1.0"
+{%- if repo_name %}
+repo:
+  org: {{ repo_org }}
+  name: {{ repo_name }}
+  base_branch: {{ repo_base_branch }}
+  epic_branch_prefix: "epic/{{ platform_name }}/"
+{%- endif %}
 model: model/
 views:
   structural:

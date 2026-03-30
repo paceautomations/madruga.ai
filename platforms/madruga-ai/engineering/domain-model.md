@@ -1,6 +1,6 @@
 ---
 title: "Domain Model"
-updated: 2026-03-27
+updated: 2026-03-30
 ---
 # Modelo de Dominio + Schema
 
@@ -23,8 +23,14 @@ classDiagram
         +string[] views
         +map commands
         +path root_dir
+        +string repo_org
+        +string repo_name
+        +string base_branch
+        +string epic_branch_prefix
+        +string[] tags
         +load_manifest()
         +validate_structure() bool
+        +resolve_repo_path() path
     }
 
     class PlatformManifest {
@@ -111,22 +117,41 @@ classDiagram
 
 ### Storage Model
 
-Nao ha banco de dados neste contexto. Toda persistencia e baseada em **filesystem**:
+Persistencia hibrida: **filesystem** (source of truth para escrita) + **SQLite** (state store, cache, leitura rapida).
 
 | Artefato | Formato | Caminho |
 |----------|---------|---------|
 | Manifesto da plataforma | YAML | `platforms/<slug>/platform.yaml` |
+| Pipeline state | SQLite | `.pipeline/madruga.db` |
+| Contexto da plataforma | Markdown | `platforms/<slug>/CLAUDE.md` |
 | Modelo de arquitetura | `.likec4` | `platforms/<slug>/model/*.likec4` |
 | Config LikeC4 | JSON | `platforms/<slug>/model/likec4.config.json` |
 | Documentos de engenharia | Markdown | `platforms/<slug>/engineering/*.md` |
 | Documentos de negocio | Markdown | `platforms/<slug>/business/*.md` |
 | ADRs | Markdown | `platforms/<slug>/decisions/*.md` |
-| Epics | Markdown | `platforms/<slug>/epics/NNN-slug/pitch.md` |
+| Epics | Markdown | `platforms/<slug>/epics/NNN-slug/` |
 | JSON exportado | JSON | `platforms/<slug>/model/output/likec4.json` |
+
+#### SQLite Tables (madruga.db)
+
+| Tabela | Propósito | Chave Primaria |
+|--------|-----------|----------------|
+| `platforms` | Registro de plataformas (name, lifecycle, repo binding) | `platform_id` |
+| `pipeline_nodes` | Estado L1 de cada node do pipeline | `(platform_id, node_id)` |
+| `epics` | Registro de epics (title, status, appetite, branch) | `(platform_id, epic_id)` |
+| `epic_nodes` | Estado L2 de cada node do ciclo de epic | `(platform_id, epic_id, node_id)` |
+| `pipeline_runs` | Historico de execucoes (tokens, custo, duracao) | `run_id` |
+| `events` | Event log (entity_type, action, payload) | `event_id` |
+| `artifact_provenance` | Hash e origem de cada artefato gerado | `(platform_id, file_path)` |
+| `decisions` | Decisions como source of truth (21 campos, FTS5) | `decision_id` |
+| `decision_links` | Links entre decisions (supersedes, relates, etc) | `(from_id, to_id, type)` |
+| `memory_entries` | Memory entries com FTS5 full-text search | `memory_id` |
+| `local_config` | Config local (active_platform, etc) | `key` |
+| `_migrations` | Controle de migrations aplicadas | `name` |
 
 ### Invariantes
 
-- Toda plataforma **deve** ter `platform.yaml` com campos `name`, `lifecycle` e `views`
+- Toda plataforma **deve** ter `platform.yaml` com campos `name`, `lifecycle` e `views`. Campos opcionais: `repo:` (org, name, base_branch, epic_branch_prefix) e `tags:[]`
 - O campo `name` no `likec4.config.json` **deve** coincidir com o slug da plataforma
 - AUTO markers **sempre** existem em pares: `<!-- AUTO:name -->` e `<!-- /AUTO:name -->`
 - Conteudo entre AUTO markers **nunca** deve ser editado manualmente
@@ -257,320 +282,176 @@ classDiagram
 
 ---
 
-## Execution (Supporting) — Daemon, Orchestrator, Kanban Poller, Pipeline Phases
+## Pipeline State (Supporting) — SQLite BD, Migrations, CLI Status
 
-Responsavel pela execucao autonoma do pipeline: daemon 24/7, orquestrador de fases, polling do kanban Obsidian, e execucao das 7 fases do pipeline.
+Responsavel pelo estado do pipeline: BD SQLite com WAL mode, migrations incrementais, seed do filesystem, e CLI de status. Implementado nos epics 006 (SQLite Foundation) e 010 (Pipeline Dashboard).
 
 ### Modelo de Dominio
 
 ```mermaid
 classDiagram
-    class Daemon {
-        +bool running
-        +asyncio.Loop event_loop
-        +Orchestrator orchestrator
-        +KanbanPoller poller
-        +start()
-        +stop()
-        +health_check() HealthStatus
+    class PipelineDB {
+        +path db_path
+        +get_conn() Connection
+        +migrate(conn) void
+        +seed_from_filesystem(conn) void
     }
 
-    class Orchestrator {
-        +Epic[] active_epics
-        +PipelinePhase[] phases
-        +execute_epic(epic: Epic)
-        +advance_phase(epic: Epic)
-        +handle_failure(epic: Epic, error: Error)
-    }
-
-    class KanbanPoller {
-        +path vault_path
-        +int poll_interval_sec
-        +timestamp last_poll
-        +poll() KanbanCard[]
-        +detect_changes(previous: KanbanCard[], current: KanbanCard[]) Change[]
-    }
-
-    class KanbanCard {
-        +string title
-        +string column
-        +string[] tags
-        +string body
-        +string epic_ref
+    class PipelineNode {
+        +string platform_id
+        +string node_id
+        +string status
+        +string output_hash
+        +string input_hashes
+        +string[] output_files
+        +string completed_at
+        +string completed_by
+        +int line_count
     }
 
     class Epic {
-        +string id
+        +string platform_id
+        +string epic_id
         +string title
         +string status
-        +PipelinePhase current_phase
-        +timestamp started_at
-        +timestamp updated_at
-        +map context
-        +advance()
-        +fail(reason: string)
-        +complete()
+        +string appetite
+        +int priority
+        +string branch_name
+        +string file_path
     }
 
-    class PipelinePhase {
-        <<enumeration>>
-        SPECIFY
-        PLAN
-        TASKS
-        IMPLEMENT
-        PERSONA_INTERVIEW
-        REVIEW
-        VISION
+    class EpicNode {
+        +string platform_id
+        +string epic_id
+        +string node_id
+        +string status
+        +string output_hash
+        +string completed_at
+        +string completed_by
     }
 
-    class PhaseExecutor {
-        +PipelinePhase phase
-        +execute(epic: Epic, context: map) PhaseResult
-        +validate_preconditions(epic: Epic) bool
+    class PipelineRun {
+        +string run_id
+        +string platform_id
+        +string epic_id
+        +string node_id
+        +string status
+        +string agent
+        +int tokens_in
+        +int tokens_out
+        +float cost_usd
+        +int duration_ms
     }
 
-    class PhaseResult {
-        +bool success
-        +string[] artifacts_produced
-        +string[] errors
-        +map output_context
+    class Event {
+        +int event_id
+        +string platform_id
+        +string entity_type
+        +string entity_id
+        +string action
+        +string actor
+        +string payload
     }
 
-    Daemon "1" --> "1" Orchestrator : manages
-    Daemon "1" --> "1" KanbanPoller : runs
-    Orchestrator "1" --> "*" Epic : executes
-    KanbanPoller --> KanbanCard : reads
-    Epic --> PipelinePhase : tracks current
-    Orchestrator --> PhaseExecutor : delegates to
-    PhaseExecutor --> PhaseResult : produces
-```
+    class ArtifactProvenance {
+        +string platform_id
+        +string file_path
+        +string generated_by
+        +string epic_id
+        +string output_hash
+    }
 
-### Schema SQL (SQLite — madruga.db)
-
-```sql
-CREATE TABLE IF NOT EXISTS epics (
-    id TEXT PRIMARY KEY,
-    title TEXT NOT NULL,
-    objective TEXT NOT NULL DEFAULT '',
-    priority TEXT DEFAULT 'P2',
-    target_repo TEXT DEFAULT 'general',
-    phase TEXT DEFAULT 'inbox',
-    status TEXT DEFAULT 'pending',
-    scope TEXT DEFAULT '',
-    acceptance_criteria TEXT DEFAULT '',
-    estimated_tasks INTEGER DEFAULT 0,
-    spec_path TEXT DEFAULT '',
-    plan_path TEXT DEFAULT '',
-    tasks_path TEXT DEFAULT '',
-    pr_number INTEGER,
-    milestone_id TEXT,
-    cost_usd REAL DEFAULT 0.0,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS usage_log (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    epic_id TEXT REFERENCES epics(id),
-    phase TEXT,
-    model TEXT NOT NULL,
-    call_type TEXT NOT NULL DEFAULT 'claude_p',
-    duration_ms INTEGER,
-    throttled BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+    PipelineDB --> PipelineNode : manages
+    PipelineDB --> Epic : manages
+    PipelineDB --> EpicNode : manages
+    PipelineDB --> PipelineRun : logs
+    PipelineDB --> Event : emits
+    PipelineDB --> ArtifactProvenance : tracks
+    Epic "1" --> "*" EpicNode : has L2 nodes
 ```
 
 ### Invariantes
 
-- O daemon **deve** rodar como processo asyncio unico (sem multiprocessing)
-- Polling do kanban ocorre a cada **60 segundos** (configuravel)
-- Um epic so avanca de fase se a fase atual completou com sucesso (`PhaseResult.success == true`)
-- Fases **devem** ser executadas na ordem definida pelo enum `PipelinePhase`
-- Se uma fase falha 3x consecutivas, o epic e marcado como `blocked`
-- O campo `context` do epic acumula output de cada fase (append-only dentro de uma execucao)
-- O daemon **deve** responder a health checks mesmo durante execucao de fases longas
+- BD usa **WAL mode** + `busy_timeout=5000ms` + `foreign_keys=ON`
+- Migrations sao incrementais em `.pipeline/migrations/` e controladas pela tabela `_migrations`
+- `seed_from_filesystem()` popula BD a partir de `platform.yaml` e arquivos existentes
+- Status de pipeline node e derivado de file existence + content hash
+- Epic status: `proposed` → `in_progress` → `shipped` (transicoes unidirecionais)
+- Epic nodes seguem o ciclo L2: epic-context → specify → clarify → plan → tasks → analyze → implement → verify → qa → reconcile
+- Toda mutacao gera um evento na tabela `events`
 
 ---
 
-## Intelligence (Supporting) — Debate Engine, Decision System, Clarify Engine
+## Decision & Memory (Supporting) — BD Source of Truth, FTS5, Import/Export
 
-Responsavel por mecanismos de inteligencia: debates multi-persona com convergencia, classificacao de decisoes (1-way/2-way door), gates de aprovacao, e motor de clarificacao.
+Responsavel por decisions (ADRs) e memory entries como source of truth no BD, com FTS5 full-text search e sincronizacao bidirecional com markdown. Implementado no epic 009 (Decision Log BD).
 
 ### Modelo de Dominio
 
 ```mermaid
 classDiagram
-    class Debate {
-        +string id
-        +string topic
-        +Persona[] participants
-        +DebateRound[] rounds
-        +string convergence_status
-        +string final_position
-        +start(topic: string, personas: Persona[])
-        +add_round(round: DebateRound)
-        +check_convergence() bool
-        +summarize() string
-    }
-
-    class Persona {
-        +string name
-        +string role
-        +string perspective
-        +float accuracy_score
-        +generate_argument(topic: string, context: string) Argument
-    }
-
-    class DebateRound {
-        +int round_number
-        +Argument[] arguments
-        +string moderator_summary
-        +bool converged
-    }
-
-    class Argument {
-        +string persona_name
-        +string position
-        +string[] supporting_evidence
-        +string[] counterpoints
-        +float confidence
-    }
-
     class Decision {
-        +string id
-        +string title
-        +string description
-        +DoorType door_type
-        +string[] alternatives
-        +string chosen_alternative
-        +string rationale
-        +GateResult gate_result
-        +classify() DoorType
-        +evaluate_alternatives() Alternative[]
-    }
-
-    class DoorType {
-        <<enumeration>>
-        ONE_WAY
-        TWO_WAY
-    }
-
-    class Gate {
         +string decision_id
-        +GateType gate_type
-        +bool requires_human
-        +string[] approvers
-        +evaluate(decision: Decision) GateResult
+        +string platform_id
+        +string epic_id
+        +string skill
+        +string slug
+        +string title
+        +int number
+        +string status
+        +string superseded_by
+        +string file_path
+        +string decisions_json
+        +string assumptions_json
+        +string open_questions_json
+        +string decision_type
+        +string context
+        +string consequences
+        +string tags_json
+        +string body
+        +string content_hash
     }
 
-    class GateType {
-        <<enumeration>>
-        AUTO_APPROVE
-        HUMAN_REVIEW
-        CRITICAL_STOP
+    class DecisionLink {
+        +string from_decision_id
+        +string to_decision_id
+        +string link_type
     }
 
-    class GateResult {
-        +bool approved
-        +string approver
-        +string reason
-        +timestamp decided_at
+    class MemoryEntry {
+        +string memory_id
+        +string platform_id
+        +string type
+        +string name
+        +string description
+        +string content
+        +string source
+        +string file_path
+        +string content_hash
     }
 
-    class ClarifyEngine {
-        +string spec_ref
-        +Question[] questions
-        +identify_gaps(spec: Spec) Question[]
-        +encode_answers(answers: Answer[])
+    class DecisionsFTS {
+        +search(query) Decision[]
     }
 
-    class Question {
-        +int priority
-        +string text
-        +string category
-        +string[] options
+    class MemoryFTS {
+        +search(query) MemoryEntry[]
     }
 
-    Debate "1" --> "*" DebateRound : has rounds
-    Debate "1" --> "*" Persona : involves
-    DebateRound "1" --> "*" Argument : contains
-    Argument --> Persona : authored by
-    Decision --> DoorType : classified as
-    Decision --> Gate : evaluated by
-    Gate --> GateResult : produces
-    ClarifyEngine --> Question : generates
-```
-
-### Schema SQL (SQLite — madruga.db)
-
-```sql
-CREATE TABLE IF NOT EXISTS debates (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    epic_id TEXT NOT NULL,
-    phase TEXT NOT NULL,
-    round INTEGER NOT NULL,
-    critic TEXT NOT NULL,
-    severity TEXT NOT NULL,
-    finding TEXT NOT NULL,
-    resolved BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS decisions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    epic_id TEXT NOT NULL,
-    phase TEXT NOT NULL,
-    title TEXT NOT NULL,
-    door_type TEXT NOT NULL,
-    description TEXT DEFAULT '',
-    alternatives TEXT DEFAULT '',
-    chosen TEXT DEFAULT '',
-    rationale TEXT DEFAULT '',
-    adr_path TEXT DEFAULT '',
-    status TEXT DEFAULT 'pending',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    resolved_at TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS patterns (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    category TEXT NOT NULL,
-    pattern TEXT NOT NULL,
-    frequency INTEGER DEFAULT 1,
-    last_seen TEXT NOT NULL,
-    metadata TEXT
-);
-
-CREATE TABLE IF NOT EXISTS learning (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    source TEXT NOT NULL,
-    lesson TEXT NOT NULL,
-    confidence REAL DEFAULT 0.5,
-    created_at TEXT NOT NULL,
-    applied_count INTEGER DEFAULT 0
-);
-
-CREATE TABLE IF NOT EXISTS persona_accuracy (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    persona TEXT NOT NULL,
-    topic TEXT NOT NULL,
-    predicted TEXT,
-    actual TEXT,
-    accurate INTEGER,
-    evaluated_at TEXT NOT NULL
-);
+    Decision "1" --> "*" DecisionLink : links to
+    Decision --> DecisionsFTS : indexed by
+    MemoryEntry --> MemoryFTS : indexed by
 ```
 
 ### Invariantes
 
-- Debates **devem** ter no minimo 2 personas participantes
-- Convergencia e declarada quando todas as personas alinham posicao ou apos **5 rounds** (o que vier primeiro)
-- Decisoes 1-way door **sempre** exigem gate `HUMAN_REVIEW` ou `CRITICAL_STOP`
-- Decisoes 2-way door **podem** ser auto-aprovadas (`AUTO_APPROVE`)
-- Gates do tipo `CRITICAL_STOP` **devem** notificar via WhatsApp
-- O ClarifyEngine gera no maximo **5 perguntas** por iteracao
-- Accuracy score de personas e atualizado apos cada review retrospectiva
+- BD e **source of truth** para decisions e memory — markdown e view layer exportada
+- Toda decision tem `content_hash` para detectar drift entre BD e arquivo
+- `import-adrs` parseia markdown Nygard e insere/atualiza no BD
+- `export-adrs` gera markdown Nygard a partir do BD
+- FTS5 indexa `title`, `context`, `consequences` (decisions) e `name`, `description`, `content` (memory)
+- Decision links suportam tipos: `supersedes`, `amends`, `relates-to`
+- Status de decision: `proposed` → `accepted` → `superseded` (ou `deprecated`)
 
 ---
 
@@ -670,81 +551,67 @@ Este contexto nao possui storage proprio. Todas as interacoes sao **passthrough*
 
 ---
 
-## Observability (Generic) — Dashboard, Health Checks, Metrics
+## Observability (Generic) — Portal Dashboard, CLI Status
 
-Responsavel por visibilidade operacional: dashboard web, health checks do daemon, e metricas de execucao do pipeline.
+Responsavel por visibilidade do pipeline: dashboard visual no portal Starlight e CLI `platform.py status`. Implementado no epic 010 (Pipeline Dashboard).
 
 ### Modelo de Dominio
 
 ```mermaid
 classDiagram
-    class Dashboard {
-        +FastAPI app
-        +int port
-        +serve()
-        +get_epic_status() EpicSummary[]
-        +get_phase_metrics() PhaseMetrics
-        +get_health() HealthStatus
+    class DashboardPage {
+        +Platform[] platforms
+        +render_pipeline_dag() Mermaid
+        +render_epic_table() HTML
+        +filter_by_platform() void
     }
 
-    class HealthStatus {
-        +bool daemon_running
-        +bool poller_active
-        +timestamp last_poll
-        +int active_epics
-        +string[] errors
-        +check() HealthStatus
+    class PipelineStatusExporter {
+        +get_platform_status(name) StatusTable
+        +get_all_status_json() JSON
+        +compute_l1_progress() Percentage
+        +compute_l2_progress(epic) Percentage
     }
 
-    class EpicSummary {
+    class StatusTable {
+        +string platform_id
+        +PipelineNodeStatus[] l1_nodes
+        +EpicStatus[] epics
+        +float l1_progress_pct
+    }
+
+    class PipelineNodeStatus {
+        +string node_id
+        +string status
+        +string layer
+        +string gate
+    }
+
+    class EpicStatus {
         +string epic_id
         +string title
         +string status
-        +string current_phase
-        +timestamp last_activity
-        +int phases_completed
-        +int total_phases
+        +EpicNodeStatus[] l2_nodes
+        +float l2_progress_pct
     }
 
-    class PhaseMetrics {
-        +map phase_durations_avg
-        +map phase_success_rates
-        +int total_runs
-        +int failed_runs
-        +timestamp window_start
-        +calculate(window_hours: int) PhaseMetrics
+    class EpicNodeStatus {
+        +string node_id
+        +string status
+        +string completed_at
     }
 
-    class EventBus {
-        +publish(event: DomainEvent)
-        +subscribe(event_type: string, handler: callable)
-    }
-
-    class DomainEvent {
-        +string event_type
-        +string source_context
-        +timestamp occurred_at
-        +map payload
-    }
-
-    Dashboard --> HealthStatus : displays
-    Dashboard --> EpicSummary : lists
-    Dashboard --> PhaseMetrics : shows
-    EventBus --> DomainEvent : routes
-    Dashboard --> EventBus : subscribes to
+    DashboardPage --> PipelineStatusExporter : reads data from
+    PipelineStatusExporter --> StatusTable : produces
+    StatusTable --> PipelineNodeStatus : contains L1
+    StatusTable --> EpicStatus : contains L2
+    EpicStatus --> EpicNodeStatus : contains nodes
 ```
-
-### Storage Model
-
-Observability consome dados do SQLite (`madruga.db`) em modo **read-only**. Nao possui tabelas proprias.
-
-O dashboard e servido via FastAPI com templates HTML embutidos — sem SPA, sem build frontend.
 
 ### Invariantes
 
-- Dashboard **deve** ser acessivel mesmo quando o daemon esta sob carga
-- Health check **deve** responder em menos de **500ms**
-- Metricas sao calculadas sob demanda (sem pre-agregacao)
-- EventBus opera como **pub-sub fire-and-forget** (sem garantia de entrega)
-- Dashboard **nao** expoe endpoints de mutacao (somente leitura)
-- Logs estruturados (JSON) para toda operacao do daemon
+- Dashboard consome `platform.py status --all --json` como data source
+- CLI `status` le diretamente do SQLite (read-only)
+- Dashboard mostra DAG visual (Mermaid) + tabela de epics + progresso L1/L2
+- Filtros por plataforma e status de epic
+- Zero backend adicional — dashboard e pagina Astro estatica com dados embutidos no build

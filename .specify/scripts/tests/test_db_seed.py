@@ -46,3 +46,36 @@ def test_seed_missing_platform_yaml(tmp_db, tmp_path):
     empty_dir.mkdir()
     result = seed_from_filesystem(tmp_db, "missing", empty_dir)
     assert result["status"] == "skipped"
+
+
+def test_seed_reads_repo_fields(tmp_db, sample_platform_dir):
+    """Seed populates repo fields from platform.yaml."""
+    from db import seed_from_filesystem, get_platform
+
+    seed_from_filesystem(tmp_db, "test-plat", sample_platform_dir)
+    p = get_platform(tmp_db, "test-plat")
+    assert p["repo_org"] == "testorg"
+    assert p["repo_name"] == "test-repo"
+    assert p["base_branch"] == "main"
+    assert p["epic_branch_prefix"] == "epic/test-plat/"
+    assert '"test"' in p["tags_json"]
+    assert '"sample"' in p["tags_json"]
+
+
+def test_seed_without_repo_fields(tmp_db, tmp_path):
+    """Seed works for platform.yaml without repo block (backward compat)."""
+    from db import seed_from_filesystem, get_platform
+
+    pdir = tmp_path / "legacy-plat"
+    pdir.mkdir(parents=True)
+    (pdir / "platform.yaml").write_text(
+        "name: legacy-plat\ntitle: Legacy\nlifecycle: design\n"
+        "pipeline:\n  nodes:\n    - id: platform-new\n"
+        "      outputs: ['platform.yaml']\n      depends: []\n"
+        "      gate: human\n"
+    )
+    seed_from_filesystem(tmp_db, "legacy-plat", pdir)
+    p = get_platform(tmp_db, "legacy-plat")
+    assert p is not None
+    assert p["repo_org"] is None
+    assert p["repo_name"] is None

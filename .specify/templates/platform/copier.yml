@@ -23,6 +23,7 @@ _skip_if_exists:
   - "planning/*"
   - "research/codebase-context.md"
   - "research/tech-alternatives.md"
+  - "CLAUDE.md"
 
 _exclude:
   - tests/
@@ -61,6 +62,21 @@ lifecycle:
     Development: development
     Production: production
   default: design
+
+repo_org:
+  type: str
+  help: "GitHub org (ex: paceautomations)"
+  default: "paceautomations"
+
+repo_name:
+  type: str
+  help: "Repo name (ex: fulano-api). Deixe vazio se o codigo vive neste repo."
+  default: ""
+
+repo_base_branch:
+  type: str
+  help: "Branch base para PRs (main, develop)"
+  default: "main"
 
 include_business_flow:
   type: bool

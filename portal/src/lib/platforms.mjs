@@ -99,6 +99,11 @@ export function buildSidebar(platforms) {
       collapsed: true,
       items: [
         {
+          label: 'Dashboard',
+          link: `/${p.name}/dashboard/`,
+          attrs: { style: 'font-weight: 600' },
+        },
+        {
           label: 'Business',
           items: [
             { slug: `${p.name}/business/vision` },
@@ -133,7 +138,7 @@ export function buildSidebar(platforms) {
         {
           label: 'Planning',
           items: [
-            { label: 'Roadmap', link: `/${p.name}/roadmap/` },
+            { slug: `${p.name}/planning/roadmap` },
             {
               label: 'Epics',
               collapsed: true,
