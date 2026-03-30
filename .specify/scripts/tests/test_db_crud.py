@@ -19,9 +19,7 @@ def test_upsert_platform_idempotent(tmp_db):
     upsert_platform(tmp_db, "test", name="Test Updated", repo_path="platforms/test")
     p = get_platform(tmp_db, "test")
     assert p["name"] == "Test Updated"
-    count = tmp_db.execute(
-        "SELECT COUNT(*) FROM platforms WHERE platform_id='test'"
-    ).fetchone()[0]
+    count = tmp_db.execute("SELECT COUNT(*) FROM platforms WHERE platform_id='test'").fetchone()[0]
     assert count == 1
 
 
@@ -61,9 +59,7 @@ def test_insert_decision_auto_id(tmp_db):
     from db import upsert_platform, insert_decision, get_decisions
 
     upsert_platform(tmp_db, "p1", name="P1", repo_path="platforms/p1")
-    did = insert_decision(
-        tmp_db, "p1", "vision", "Test Decision", decisions=["chose A over B"]
-    )
+    did = insert_decision(tmp_db, "p1", "vision", "Test Decision", decisions=["chose A over B"])
     assert len(did) == 16  # hex of 8 bytes
     decs = get_decisions(tmp_db, "p1")
     assert len(decs) == 1
@@ -74,9 +70,7 @@ def test_insert_provenance(tmp_db):
     from db import upsert_platform, insert_provenance, get_provenance
 
     upsert_platform(tmp_db, "p1", name="P1", repo_path="platforms/p1")
-    insert_provenance(
-        tmp_db, "p1", "business/vision.md", "vision", output_hash="sha256:abc"
-    )
+    insert_provenance(tmp_db, "p1", "business/vision.md", "vision", output_hash="sha256:abc")
     provs = get_provenance(tmp_db, "p1")
     assert len(provs) == 1
     assert provs[0]["generated_by"] == "vision"
@@ -90,9 +84,7 @@ def test_insert_complete_run(tmp_db):
     runs = get_runs(tmp_db, "p1")
     assert len(runs) == 1
     assert runs[0]["status"] == "running"
-    complete_run(
-        tmp_db, rid, "completed", tokens_in=1000, tokens_out=500, cost_usd=0.05
-    )
+    complete_run(tmp_db, rid, "completed", tokens_in=1000, tokens_out=500, cost_usd=0.05)
     runs = get_runs(tmp_db, "p1")
     assert runs[0]["status"] == "completed"
     assert runs[0]["tokens_in"] == 1000
@@ -114,16 +106,10 @@ def test_get_stale_nodes(tmp_db):
     from db import upsert_platform, upsert_pipeline_node, get_stale_nodes
 
     upsert_platform(tmp_db, "p1", name="P1", repo_path="platforms/p1")
-    upsert_pipeline_node(
-        tmp_db, "p1", "vision", "done", completed_at="2026-03-01T00:00:00Z"
-    )
-    upsert_pipeline_node(
-        tmp_db, "p1", "solution-overview", "done", completed_at="2026-03-02T00:00:00Z"
-    )
+    upsert_pipeline_node(tmp_db, "p1", "vision", "done", completed_at="2026-03-01T00:00:00Z")
+    upsert_pipeline_node(tmp_db, "p1", "solution-overview", "done", completed_at="2026-03-02T00:00:00Z")
     # vision was regenerated AFTER solution-overview
-    upsert_pipeline_node(
-        tmp_db, "p1", "vision", "done", completed_at="2026-03-10T00:00:00Z"
-    )
+    upsert_pipeline_node(tmp_db, "p1", "vision", "done", completed_at="2026-03-10T00:00:00Z")
     dag_edges = {"solution-overview": ["vision"]}
     stale = get_stale_nodes(tmp_db, "p1", dag_edges)
     assert len(stale) == 1

@@ -32,10 +32,7 @@ def test_get_conn_foreign_keys(tmp_path):
 
 def test_migrate_creates_tables(tmp_db):
     tables = [
-        r[0]
-        for r in tmp_db.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
-        ).fetchall()
+        r[0] for r in tmp_db.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").fetchall()
     ]
     expected = [
         "_migrations",
@@ -55,16 +52,9 @@ def test_migrate_creates_tables(tmp_db):
 def test_migrate_idempotent(tmp_db):
     from db import migrate
 
-    migrations_dir = (
-        Path(__file__).parent.parent.parent.parent / ".pipeline" / "migrations"
-    )
+    migrations_dir = Path(__file__).parent.parent.parent.parent / ".pipeline" / "migrations"
     migrate(tmp_db, migrations_dir)  # second run
-    tables = [
-        r[0]
-        for r in tmp_db.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'"
-        ).fetchall()
-    ]
+    tables = [r[0] for r in tmp_db.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]
     assert len(tables) >= 9
 
 

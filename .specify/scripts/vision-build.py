@@ -15,8 +15,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-PLATFORMS_DIR = REPO_ROOT / "platforms"
+sys.path.insert(0, str(Path(__file__).parent))
+
+from config import PLATFORMS_DIR, REPO_ROOT  # noqa: F401
 
 CONTAINER_KINDS = {"api", "worker", "frontend", "cache", "database", "proxy"}
 BC_KIND = "boundedContext"

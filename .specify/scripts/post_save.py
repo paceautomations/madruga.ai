@@ -31,9 +31,10 @@ import json
 import sys
 from pathlib import Path
 
-# Add scripts dir to path for db import
+# Add scripts dir to path for db/config import
 sys.path.insert(0, str(Path(__file__).parent))
 
+from config import REPO_ROOT  # noqa: F401
 from db import (
     compute_file_hash,
     get_conn,
@@ -47,17 +48,13 @@ from db import (
     upsert_pipeline_node,
 )
 
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-
 
 def _validate_artifact_path(platform: str, artifact: str) -> Path:
     """Validate artifact path is within the platform directory (prevent path traversal)."""
     platform_dir = (REPO_ROOT / "platforms" / platform).resolve()
     artifact_path = (platform_dir / artifact).resolve()
     if not str(artifact_path).startswith(str(platform_dir) + "/"):
-        raise ValueError(
-            f"Path traversal detected: '{artifact}' resolves outside platform dir"
-        )
+        raise ValueError(f"Path traversal detected: '{artifact}' resolves outside platform dir")
     return artifact_path
 
 
@@ -71,75 +68,71 @@ def record_save(
     """Record a skill's artifact save in the DB."""
     artifact_path = _validate_artifact_path(platform, artifact)
 
-    conn = get_conn()
-    migrate(conn)
+    with get_conn() as conn:
+        migrate(conn)
 
-    # Auto-create platform if missing
-    if not get_platform(conn, platform):
-        yaml_path = REPO_ROOT / "platforms" / platform / "platform.yaml"
-        if yaml_path.exists():
-            seed_from_filesystem(conn, platform, REPO_ROOT / "platforms" / platform)
+        # Auto-create platform if missing
+        if not get_platform(conn, platform):
+            yaml_path = REPO_ROOT / "platforms" / platform / "platform.yaml"
+            if yaml_path.exists():
+                seed_from_filesystem(conn, platform, REPO_ROOT / "platforms" / platform)
+            else:
+                upsert_platform(conn, platform, name=platform, repo_path=f"platforms/{platform}")
+
+        # Compute hash of the artifact
+        output_hash = None
+        if artifact_path.exists():
+            output_hash = compute_file_hash(artifact_path)
+
+        # Update pipeline node or epic node
+        if epic:
+            upsert_epic_node(
+                conn,
+                platform,
+                epic,
+                node,
+                "done",
+                output_hash=output_hash,
+                completed_by=skill,
+            )
+            insert_event(
+                conn,
+                platform,
+                "epic_node",
+                f"{epic}/{node}",
+                "completed",
+                actor="claude",
+                payload={"skill": skill, "artifact": artifact},
+            )
         else:
-            upsert_platform(
-                conn, platform, name=platform, repo_path=f"platforms/{platform}"
+            upsert_pipeline_node(
+                conn,
+                platform,
+                node,
+                "done",
+                output_hash=output_hash,
+                output_files=json.dumps([artifact]),
+                completed_by=skill,
+            )
+            insert_event(
+                conn,
+                platform,
+                "node",
+                node,
+                "completed",
+                actor="claude",
+                payload={"skill": skill, "artifact": artifact},
             )
 
-    # Compute hash of the artifact
-    output_hash = None
-    if artifact_path.exists():
-        output_hash = compute_file_hash(artifact_path)
-
-    # Update pipeline node or epic node
-    if epic:
-        upsert_epic_node(
+        # Record provenance
+        insert_provenance(
             conn,
             platform,
-            epic,
-            node,
-            "done",
+            artifact,
+            generated_by=skill,
+            epic_id=epic,
             output_hash=output_hash,
-            completed_by=skill,
         )
-        insert_event(
-            conn,
-            platform,
-            "epic_node",
-            f"{epic}/{node}",
-            "completed",
-            actor="claude",
-            payload={"skill": skill, "artifact": artifact},
-        )
-    else:
-        upsert_pipeline_node(
-            conn,
-            platform,
-            node,
-            "done",
-            output_hash=output_hash,
-            output_files=json.dumps([artifact]),
-            completed_by=skill,
-        )
-        insert_event(
-            conn,
-            platform,
-            "node",
-            node,
-            "completed",
-            actor="claude",
-            payload={"skill": skill, "artifact": artifact},
-        )
-
-    # Record provenance
-    insert_provenance(
-        conn,
-        platform,
-        artifact,
-        generated_by=skill,
-        epic_id=epic,
-        output_hash=output_hash,
-    )
-
-    conn.close()
 
     result = {
         "status": "ok",
@@ -155,48 +148,44 @@ def record_save(
 
 def reseed(platform: str) -> dict:
     """Re-seed a platform from filesystem."""
-    conn = get_conn()
-    migrate(conn)
     pdir = REPO_ROOT / "platforms" / platform
     if not pdir.exists():
-        conn.close()
         return {"status": "error", "reason": f"Platform dir not found: {pdir}"}
-    result = seed_from_filesystem(conn, platform, pdir)
-    conn.close()
+    with get_conn() as conn:
+        migrate(conn)
+        result = seed_from_filesystem(conn, platform, pdir)
     return result
 
 
 def reseed_all() -> list[dict]:
-    """Re-seed all platforms from filesystem."""
+    """Re-seed all platforms from filesystem.
+
+    Opens a single connection and migrates once, then seeds all platforms
+    (instead of N connections + N migration scans).
+    """
     platforms_dir = REPO_ROOT / "platforms"
     results = []
-    for pdir in sorted(platforms_dir.iterdir()):
-        yaml_path = pdir / "platform.yaml"
-        if pdir.is_dir() and yaml_path.exists():
-            r = reseed(pdir.name)
-            results.append({"platform": pdir.name, **r})
+    with get_conn() as conn:
+        migrate(conn)
+        for pdir in sorted(platforms_dir.iterdir()):
+            yaml_path = pdir / "platform.yaml"
+            if pdir.is_dir() and yaml_path.exists():
+                r = seed_from_filesystem(conn, pdir.name, pdir)
+                results.append({"platform": pdir.name, **r})
     return results
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Record pipeline state after artifact save"
-    )
+    parser = argparse.ArgumentParser(description="Record pipeline state after artifact save")
     parser.add_argument("--platform", help="Platform name (e.g., fulano)")
     parser.add_argument("--node", help="DAG node ID (e.g., vision, specify)")
-    parser.add_argument(
-        "--skill", help="Skill that generated the artifact (e.g., madruga:vision)"
-    )
+    parser.add_argument("--skill", help="Skill that generated the artifact (e.g., madruga:vision)")
     parser.add_argument(
         "--artifact",
         help="Relative path to artifact within platform dir (e.g., business/vision.md)",
     )
-    parser.add_argument(
-        "--epic", help="Epic ID for L2 nodes (e.g., 001-channel-pipeline)"
-    )
-    parser.add_argument(
-        "--reseed", action="store_true", help="Re-seed platform from filesystem"
-    )
+    parser.add_argument("--epic", help="Epic ID for L2 nodes (e.g., 001-channel-pipeline)")
+    parser.add_argument("--reseed", action="store_true", help="Re-seed platform from filesystem")
     parser.add_argument(
         "--reseed-all",
         action="store_true",

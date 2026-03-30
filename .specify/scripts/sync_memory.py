@@ -26,19 +26,19 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from db import (
+from config import REPO_ROOT  # noqa: F401
+from db import (  # noqa: F401
     compute_file_hash,
     export_memory_to_markdown,
     get_conn,
     get_memories,
     import_memory_from_markdown,
     migrate,
+    to_relative_path,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
-
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 def find_memory_dirs() -> list[Path]:
@@ -75,73 +75,76 @@ def sync(
     dry_run: bool = False,
 ) -> dict:
     """Bidirectional sync between .claude/memory/ and BD."""
-    conn = get_conn()
-    migrate(conn)
-
     memory_dirs = find_memory_dirs()
     if not memory_dirs:
         logger.warning("No .claude/projects/*/memory/ directories found")
-        conn.close()
         return {"imported": 0, "exported": 0, "skipped": 0}
 
-    stats = {"imported": 0, "exported": 0, "skipped": 0}
+    with get_conn() as conn:
+        migrate(conn)
 
-    # Phase 1: Import filesystem → BD (new/changed files)
-    if not export_only:
-        for memory_dir in memory_dirs:
-            for md_file in sorted(memory_dir.glob("*.md")):
-                if md_file.name == "MEMORY.md":
-                    continue
-                file_hash = compute_file_hash(md_file)
-                existing = conn.execute(
-                    "SELECT memory_id, content_hash FROM memory_entries WHERE file_path=?",
-                    (str(md_file),),
-                ).fetchone()
-                if existing and existing["content_hash"] == file_hash:
-                    stats["skipped"] += 1
-                    continue
+        stats = {"imported": 0, "exported": 0, "skipped": 0}
+
+        # Phase 1: Import filesystem → BD (new/changed files)
+        if not export_only:
+            for memory_dir in memory_dirs:
+                for md_file in sorted(memory_dir.glob("*.md")):
+                    if md_file.name == "MEMORY.md":
+                        continue
+                    file_hash = compute_file_hash(md_file)
+                    rel_path = to_relative_path(md_file)
+                    existing = conn.execute(
+                        "SELECT memory_id, content_hash FROM memory_entries WHERE file_path=? OR file_path=?",
+                        (rel_path, str(md_file)),
+                    ).fetchone()
+                    if existing and existing["content_hash"] == file_hash:
+                        stats["skipped"] += 1
+                        continue
+                    if dry_run:
+                        action = "update" if existing else "import"
+                        logger.info("[DRY RUN] Would %s: %s", action, md_file.name)
+                        stats["imported"] += 1
+                        continue
+                    result = import_memory_from_markdown(conn, md_file)
+                    if result:
+                        stats["imported"] += 1
+                        logger.info("Imported: %s", md_file.name)
+
+        # Phase 2: Export BD → filesystem (entries without matching file or with stale file)
+        if not import_only:
+            primary_dir = memory_dirs[0]
+            all_memories = get_memories(conn)
+            existing_files = set()
+            existing_files_rel = set()
+            for memory_dir in memory_dirs:
+                for md_file in memory_dir.glob("*.md"):
+                    if md_file.name != "MEMORY.md":
+                        existing_files.add(str(md_file))
+                        existing_files_rel.add(to_relative_path(md_file))
+
+            for mem in all_memories:
+                file_path = mem.get("file_path")
+                if file_path and (file_path in existing_files or file_path in existing_files_rel):
+                    # File exists — check if BD is newer
+                    if mem.get("content_hash"):
+                        try:
+                            # Resolve relative paths against REPO_ROOT
+                            abs_path = Path(file_path) if Path(file_path).is_absolute() else REPO_ROOT / file_path
+                            current_hash = compute_file_hash(abs_path)
+                            if current_hash == mem["content_hash"]:
+                                continue  # In sync
+                        except FileNotFoundError:
+                            pass  # File was deleted, re-export
+                    else:
+                        continue  # No hash to compare, skip
                 if dry_run:
-                    action = "update" if existing else "import"
-                    logger.info("[DRY RUN] Would %s: %s", action, md_file.name)
-                    stats["imported"] += 1
+                    logger.info("[DRY RUN] Would export: %s", mem["name"])
+                    stats["exported"] += 1
                     continue
-                result = import_memory_from_markdown(conn, md_file)
-                if result:
-                    stats["imported"] += 1
-                    logger.info("Imported: %s", md_file.name)
-
-    # Phase 2: Export BD → filesystem (entries without matching file or with stale file)
-    if not import_only:
-        primary_dir = memory_dirs[0]
-        all_memories = get_memories(conn)
-        existing_files = set()
-        for memory_dir in memory_dirs:
-            for md_file in memory_dir.glob("*.md"):
-                if md_file.name != "MEMORY.md":
-                    existing_files.add(str(md_file))
-
-        for mem in all_memories:
-            file_path = mem.get("file_path")
-            if file_path and file_path in existing_files:
-                # File exists — check if BD is newer
-                if mem.get("content_hash"):
-                    try:
-                        current_hash = compute_file_hash(file_path)
-                        if current_hash == mem["content_hash"]:
-                            continue  # In sync
-                    except FileNotFoundError:
-                        pass  # File was deleted, re-export
-                else:
-                    continue  # No hash to compare, skip
-            if dry_run:
-                logger.info("[DRY RUN] Would export: %s", mem["name"])
+                export_memory_to_markdown(conn, mem["memory_id"], primary_dir)
                 stats["exported"] += 1
-                continue
-            export_memory_to_markdown(conn, mem["memory_id"], primary_dir)
-            stats["exported"] += 1
-            logger.info("Exported: %s", mem["name"])
+                logger.info("Exported: %s", mem["name"])
 
-    conn.close()
     return stats
 
 

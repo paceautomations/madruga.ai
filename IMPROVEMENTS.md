@@ -11,7 +11,9 @@ madruga.ai is an **ambitious and well-structured** architecture documentation sy
 
 **Key strengths:** 24-skill pipeline with gates, SQLite state tracking, Copier-based multi-platform template, LikeC4 architecture-as-code, auto-populated markdown tables.
 
-**Critical gaps:** Portal is bare-bones, CI lacks portal build validation, several Fulano L1 docs haven't been generated yet, and there's no observability into pipeline health.
+**Critical gaps (original):** Portal is bare-bones, CI lacks portal build validation, several Fulano L1 docs haven't been generated yet, and there's no observability into pipeline health.
+
+**Update 2026-03-30:** Sprint 1 (critical fixes) and Sprint 2 (foundation fixes) are **DONE**. Remaining work focuses on data fidelity (Decision/Memory system), single source of truth, frontend experience, and automation.
 
 > **Review note:** This document was auto-reviewed by a Staff Engineer subagent. Corrections applied: B1 removed (false positive — `model/dist/` not tracked in git), B4 downgraded to WARNING, B2 reframed as tracking item, benchmark table made more honest, 2 missed issues added.
 
@@ -68,31 +70,33 @@ madruga.ai is an **ambitious and well-structured** architecture documentation sy
 
 ## Priority 1 — BLOCKERS (Must Fix)
 
-### B1. Migration 003 fails permanently on systems without FTS5
+> **Status:** All blockers resolved in Sprint 1 (2026-03-29). Kept for audit trail.
+
+### ~~B1. Migration 003 fails permanently on systems without FTS5~~ ✓ DONE
 **Where:** `.pipeline/migrations/003_decisions_memory.sql`
 **Impact:** The migration unconditionally creates FTS5 virtual tables. If FTS5 isn't compiled into the system's SQLite, `migrate()` rolls back — but `ALTER TABLE ... ADD COLUMN` statements that ran before the FTS5 lines may have already committed. On retry, the `ALTER TABLE` fails (duplicate column), creating an infinite failure loop. The `_check_fts5()` guard exists in Python but the SQL migration itself has no conditional logic.
 **Fix:** Split migration 003 into `003a_decisions_memory.sql` (columns + tables) and `003b_fts5.sql` (FTS5, conditionally skipped in `migrate()` when `_check_fts5()` returns False).
 **Effort:** 1-2 hours
 
-### B2. SQL injection in bash script — unsanitized variable interpolation
+### B2. SQL injection in bash script — unsanitized variable interpolation — STILL OPEN
 **Where:** `.specify/scripts/bash/check-platform-prerequisites.sh`, lines ~281-316
 **Impact:** `$PLATFORM`, `$PLATFORM_YAML`, `$EPIC`, `$SKILL` are interpolated directly into inline Python strings. A platform name containing a single-quote (e.g., `test'; import os; os.system('id')#`) allows arbitrary code execution. The status/skill blocks at lines 362+ correctly use `sys.argv` instead.
 **Fix:** Pass all variables as `sys.argv` parameters instead of string interpolation. Replace `'$PLATFORM'` with `sys.argv[1]`.
 **Effort:** 1 hour
 
-### B3. FTS LIKE fallback has wrong filter logic (data leaks across platforms)
+### ~~B3. FTS LIKE fallback has wrong filter logic (data leaks across platforms)~~ ✓ DONE
 **Where:** `db.py`, `search_decisions()` and `search_memories()` LIKE fallback
 **Impact:** `WHERE title LIKE ? OR context LIKE ? AND platform_id=?` — the `AND` binds tighter than `OR` in SQL, so title matches from **all platforms** leak through when filtering by platform_id.
 **Fix:** Add parentheses: `WHERE (title LIKE ? OR context LIKE ?) AND platform_id=?`
 **Effort:** 5 min
 
-### B4. SSR adapter with no SSR need — wasted complexity
+### ~~B4. SSR adapter with no SSR need — wasted complexity~~ ✓ DONE
 **Where:** `portal/astro.config.mjs` line 101 — `adapter: node({ mode: 'standalone' })`
 **Impact:** Forces SSR and requires a Node.js server at runtime. But every page uses `getStaticPaths()` — this is a fully static site. The node adapter adds ~5MB to output, prevents deployment to free static hosting (Netlify, Vercel static, GitHub Pages), and introduces an unnecessary runtime dependency.
 **Fix:** Remove `adapter: node({ mode: 'standalone' })` and the `@astrojs/node` dependency from `package.json`. Astro defaults to static output.
 **Effort:** 5 min
 
-### B5. Broken `useMemo` in LikeC4Diagram — diagrams re-mount on every render
+### ~~B5. Broken `useMemo` in LikeC4Diagram — diagrams re-mount on every render~~ ✓ DONE
 **Where:** `portal/src/components/viewers/LikeC4Diagram.tsx` line 91
 **Impact:** `viewPaths` is a plain object prop — new reference on every parent re-render. The `useMemo` dependency `[platform, viewId, viewPaths]` triggers every time, causing React to unmount and remount the entire LikeC4 diagram. This produces visible flicker and destroys internal diagram state (zoom, pan position).
 **Fix:** Stabilize `viewPaths` — either JSON-stringify for comparison, use `useRef`, or move to a static lookup outside the component:
@@ -102,13 +106,13 @@ const DiagramComponent = useMemo(() => { ... }, [platform, viewId, viewPathsKey]
 ```
 **Effort:** 15 min
 
-### B6. L2 node count mismatch — post-implementation `analyze` missing from platform.yaml
+### ~~B6. L2 node count mismatch — post-implementation `analyze` missing from platform.yaml~~ ✓ DONE
 **Where:** `platforms/fulano/platform.yaml` epic_cycle vs `pipeline-dag-knowledge.md`
 **Impact:** The knowledge file documents 11 L2 steps (including post-implementation `speckit.analyze` between implement and verify). But `platform.yaml` only defines 10 nodes — the second `analyze` is missing entirely. Any tool querying `platform.yaml` for epic cycle status won't track post-implementation analysis. The Copier template also lacks it, so all future platforms inherit this gap.
 **Fix:** Add a second analyze node (e.g., `id: analyze-post`, `depends: ["implement"]`) to `platform.yaml` epic_cycle. Update the Copier template to match.
 **Effort:** 30 min
 
-### B7. No portal build in CI
+### ~~B7. No portal build in CI~~ ✓ DONE
 **Where:** `.github/workflows/ci.yml`
 **Impact:** Portal build can silently break (broken imports, missing symlinks, Astro config errors) with no CI signal. Currently only lint + likec4 build + db tests + template tests are run.
 **Fix:** Add a `portal-build` job:
@@ -142,6 +146,8 @@ portal-build:
 
 ## Priority 2 — WARNINGS (Should Fix)
 
+> **Status:** Sprint 2 items marked ✓. Remaining items reorganized into Sprint 3+.
+
 ### W0. DB connections leak on exceptions — no context manager
 **Where:** `db.py` and all callers — `conn = get_conn()` / `conn.close()` without `try/finally`
 **Impact:** If any code between open and close raises, the connection leaks. Repeated leaks can exhaust SQLite's connection limit.
@@ -154,7 +160,7 @@ portal-build:
 **Fix:** Add optional transaction context manager pattern. Callers wrap related operations in `with transaction(conn):`.
 **Effort:** 2-3 hours
 
-### W0b. No `.gitignore` entry for `model/output/`
+### ~~W0b. No `.gitignore` entry for `model/output/`~~ ✓ DONE
 **Where:** `.gitignore` — missing `platforms/*/model/output/`
 **Impact:** `vision-build.py` generates `likec4.json` into `model/output/`. This directory is not in `.gitignore` and could be accidentally committed (large JSON files).
 **Fix:** Add `platforms/*/model/output/` to `.gitignore`
@@ -166,7 +172,7 @@ portal-build:
 **Fix:** For now, document the single-writer constraint. Long-term, consider a lock file or connection reuse pattern.
 **Effort:** 30 min (docs) or 4 hours (retry logic)
 
-### W1. REPO_ROOT defined 5 times across scripts
+### ~~W1. REPO_ROOT defined 5 times across scripts~~ ✓ DONE
 **Where:** `db.py:26`, `platform.py:29`, `post_save.py:50`, `sync_memory.py:41`, `vision-build.py:18`
 **Impact:** If repo structure changes, must update 5 files. Already caused a subtle issue: `platform.py:402` computes memory dir as `REPO_ROOT / ".claude" / "projects"` but the actual auto-memory lives in `~/.claude/projects/-home-...-madruga-ai/memory/`.
 **Fix:** Extract to a shared `config.py`:
@@ -209,7 +215,7 @@ python3 .specify/scripts/platform.py export-dag fulano --format=markdown > .clau
 **Fix:** Add a `platform.py lint --check-stale` command that calls `get_stale_nodes()` and reports. Wire it into CI.
 **Effort:** 2-3 hours
 
-### W6. `vision-build.py` silently fails on missing LikeC4 CLI
+### ~~W6. `vision-build.py` silently fails on missing LikeC4 CLI~~ ✓ DONE
 **Where:** `vision-build.py:44-45` — `subprocess.run(["likec4", "build", ...], check=True)` will throw `FileNotFoundError` with an unhelpful message if `likec4` isn't installed.
 **Fix:** Add a pre-check: `shutil.which("likec4") or sys.exit("Error: likec4 CLI not found. Install with: npm i -g likec4")`
 **Effort:** 5 min
@@ -238,7 +244,7 @@ python3 .specify/scripts/platform.py export-dag fulano --format=markdown > .clau
 ```
 **Effort:** 30 min
 
-### W9b. No `requirements-dev.txt` or `pyproject.toml` at root
+### ~~W9b. No `requirements-dev.txt` or `pyproject.toml` at root~~ ✓ DONE
 **Where:** CI installs ad-hoc packages per job (`pip install pyyaml copier ruff`, `pip install pyyaml pytest`)
 **Impact:** Drift between CI and local dev. Different jobs may install different versions.
 **Fix:** Create `requirements-dev.txt` at repo root: `pyyaml>=6.0`, `copier>=9.4.0,<10`, `ruff>=0.4.0`, `pytest>=8.0`
@@ -267,7 +273,7 @@ python3 .specify/scripts/platform.py export-dag fulano --format=markdown > .clau
 **Fix:** Remove the inline validation — pytest covers it.
 **Effort:** 10 min
 
-### W10. Branch guard docs omit `clarify` and `analyze` from guarded skills list
+### ~~W10. Branch guard docs omit `clarify` and `analyze` from guarded skills list~~ ✓ DONE
 **Where:** `.claude/knowledge/pipeline-contract-base.md` line 12
 **Impact:** Branch guard lists 8 skills but omits `clarify` and `analyze`. Both are L2 epic cycle skills that run on feature branches and should have branch guards.
 **Fix:** Update guard list to include all 10 L2 skills.
@@ -285,7 +291,7 @@ python3 .specify/scripts/platform.py export-dag fulano --format=markdown > .clau
 **Fix:** Evaluate if this is intentional. If QA should be pipeline-invokable, remove the flag.
 **Effort:** 5 min (decision) + 5 min (fix)
 
-### W10c. Constitution references non-existent "AskQuestionTool"
+### ~~W10c. Constitution references non-existent "AskQuestionTool"~~ ✓ DONE
 **Where:** `.specify/memory/constitution.md` line 85
 **Fix:** Replace with "ask the user directly" or remove the tool reference.
 **Effort:** 2 min
@@ -335,6 +341,60 @@ python3 .specify/scripts/platform.py export-dag fulano --format=markdown > .clau
 **Impact:** Round-tripping (import → export → import) loses data: `alternatives`, `rationale` from frontmatter, section ordering. The export uses hardcoded section names (`Contexto`, `Decisao`) that may not match the original.
 **Fix:** Store the original markdown body in a `body` column and use it for export when available, falling back to template generation.
 **Effort:** 3-4 hours
+
+---
+
+## Priority 2b — Decision/Memory System Gaps (NEW — 2026-03-30)
+
+> Identified during deep analysis of the Decision Log + Memory system. These are data fidelity issues that erode the value of the SQLite BD as source of truth.
+
+### DM1. Memory import ignores `platform_id` from frontmatter
+**Where:** `db.py:800-825` — `import_memory_from_markdown()`
+**Impact:** Even if a memory markdown has `platform: fulano` in frontmatter, the import **never reads it**. 100% of imported memories get `platform_id = NULL`. Defeats the purpose of the platform FK on `memory_entries`.
+**Fix:** In `_parse_memory_markdown()`, read `fm.get("platform")` and pass it to `insert_memory()`.
+**Effort:** 15 min
+
+### DM2. Memory export drops `platform_id` — round-trip loses platform association
+**Where:** `db.py:847-848` — `export_memory_to_markdown()` frontmatter generation
+**Impact:** If a memory has `platform_id = "fulano"` in the BD, the exported markdown omits it. Re-importing produces `platform_id = NULL`. Data silently degrades on every export→import cycle.
+**Fix:** Include `platform` in the `yaml.dump()` dict when `platform_id` is not None.
+**Effort:** 15 min
+
+### DM3. `search_memories()` has no `platform_id` filter
+**Where:** `db.py:882` — `search_memories(conn, query, type_=None)`
+**Impact:** Unlike `search_decisions()` which accepts `platform_id`, memory search returns results from **all platforms** mixed together. No way to scope a search to one platform.
+**Fix:** Add `platform_id: str | None = None` parameter, same pattern as `search_decisions()`.
+**Effort:** 5 min
+
+### DM4. `decisions.platform_id` is NOT NULL — no cross-platform decisions
+**Where:** `001_initial.sql:77` — `platform_id TEXT NOT NULL REFERENCES platforms`
+**Impact:** A decision that affects all platforms (e.g., "Use SQLite for everything", "ADR naming convention") must be artificially tied to one platform. There's no concept of a global or cross-platform decision.
+**Fix:** Option A: Create a virtual `madruga` platform for global decisions (0 code change). Option B: Make `platform_id` nullable in decisions (like `memory_entries` already is) + update `get_decisions()` and `search_decisions()` to handle NULL.
+**Effort:** 2h (option B) or 5 min (option A)
+
+### DM5. No link between Memory and Decision entities
+**Where:** Schema gap — no join table exists
+**Impact:** Memories often provide context for decisions (e.g., "Epic 009 Decision Log BD" documents why the SQLite decision was made). But there's no way to formally link a memory to the decision it references. The `decision_links` table only links decisions to other decisions.
+**Fix:** Add `memory_decision_links` table:
+```sql
+CREATE TABLE IF NOT EXISTS memory_decision_links (
+    memory_id    TEXT NOT NULL REFERENCES memory_entries(memory_id) ON DELETE CASCADE,
+    decision_id  TEXT NOT NULL REFERENCES decisions(decision_id) ON DELETE CASCADE,
+    link_type    TEXT NOT NULL CHECK (link_type IN ('context_for', 'resulted_in', 'references')),
+    PRIMARY KEY (memory_id, decision_id, link_type)
+);
+```
+**Effort:** 2-3h (only worth it if portal will render these links)
+
+### DM6. No decision change history — only latest version stored
+**Where:** `db.py:349-409` — `insert_decision()` uses `ON CONFLICT DO UPDATE`, overwriting previous data
+**Impact:** When an ADR is edited and re-imported, the old `content_hash` and content are overwritten. No audit trail of what changed. The `events` table exists and could track this but is never used for decision changes.
+**Fix:** In `import_adr_from_markdown()`, when hash differs (line 554), insert an event before updating:
+```python
+insert_event(conn, platform_id, "decision", decision_id, "updated",
+             payload=json.dumps({"old_hash": old_hash, "new_hash": new_hash}))
+```
+**Effort:** 30 min
 
 ---
 
@@ -496,95 +556,188 @@ GET /api/platforms/fulano/decisions → decision list
 
 ## Priority Matrix
 
-| # | Issue | Severity | Effort | Impact | Priority Score |
-|---|-------|----------|--------|--------|----------------|
-| B1 | Migration 003 FTS5 failure loop | BLOCKER | 1-2 hrs | Critical | **P0** |
-| B2 | SQL injection in bash script | BLOCKER | 1 hr | Critical (security) | **P0** |
-| B3 | FTS LIKE fallback data leak | BLOCKER | 5 min | High (security) | **P0** |
-| B4 | SSR adapter with no SSR need | BLOCKER | 5 min | High | **P0** |
-| B5 | Broken useMemo — diagrams re-mount | BLOCKER | 15 min | High | **P0** |
-| B6 | L2 analyze-post missing from platform.yaml | BLOCKER | 30 min | High | **P1** |
-| B7 | No portal build in CI | BLOCKER | 15 min | High | **P0** |
-| W0b | model/output not in gitignore | WARNING | 2 min | Medium | **P0** |
-| W6 | vision-build missing CLI check | WARNING | 5 min | Medium | **P0** |
-| W0 | DB connections leak on exceptions | WARNING | 1 hr | Medium | **P1** |
-| W12 | YAML frontmatter not escaped | WARNING | 1 hr | Medium | **P1** |
-| W0a | Per-function commits in db.py | WARNING | 2-3 hrs | Low (at current scale) | **P2** |
-| W0c | No concurrent DB protection | WARNING | 30 min | Medium | **P2** |
-| W1 | REPO_ROOT duplication | WARNING | 1 hr | Low | **P2** |
-| W5 | No staleness detection | WARNING | 2-3 hrs | Medium | **P2** |
-| W3 | No portal search | WARNING | 30 min | Medium | **P2** |
-| W2 | DAG triple-definition | WARNING | 4-6 hrs | High | **P2** |
-| W10 | reseed_all N connections | WARNING | 30 min | Low | **P2** |
-| W11 | Absolute file_paths in DB | WARNING | 2-3 hrs | Medium | **P2** |
-| W8 | Missing test coverage | WARNING | 4-6 hrs | Medium | **P3** |
-| W10 | Lossy decision export | WARNING | 3-4 hrs | Low | **P3** |
-| W4 | No pipeline dashboard | WARNING | 8-12 hrs | High | **P3** |
-| I10 | Unified CLI | IMPROVE | 1 day | Medium | **P3** |
-| I5 | Auto-checkpoint | IMPROVE | 2-4 hrs | Medium | **P3** |
-| I1 | Pipeline dashboard | IMPROVE | 2-3 days | High | **P4** |
-| I2 | Decision timeline | IMPROVE | 1-2 days | Medium | **P4** |
-| I3 | Cross-platform search | IMPROVE | 4-8 hrs | Medium | **P4** |
-| I6 | Pipeline orchestrator | IMPROVE | 1-2 days | High | **P4** |
-| I8 | Git hooks validation | IMPROVE | 2-3 hrs | Medium | **P4** |
-| I14 | Auto CLAUDE.md | IMPROVE | 4-6 hrs | Medium | **P4** |
-| I11 | Migration testing | IMPROVE | 3-4 hrs | Low | **P5** |
-| I13 | API routes | IMPROVE | 4-8 hrs | Medium | **P5** |
-| I4 | Interactive diagrams | IMPROVE | 2-3 days | Medium | **P5** |
-| I7 | Memory pruning | IMPROVE | 4-6 hrs | Low | **P5** |
-| I9 | Dark mode fixes | IMPROVE | 4-8 hrs | Low | **P5** |
-| I12 | Model-code drift | IMPROVE | 1-2 days | Medium | **P5** |
-| I15 | Error boundary UX | IMPROVE | 1 hr | Low | **P5** |
+### Completed (Sprint 1 + Sprint 2) ✓
+
+| # | Issue | Status |
+|---|-------|--------|
+| B1 | Migration 003 FTS5 split | ✓ DONE |
+| B3 | FTS LIKE fallback parentheses | ✓ DONE |
+| B4 | SSR adapter removed | ✓ DONE |
+| B5 | useMemo stabilized (useRef + JSON.stringify) | ✓ DONE |
+| B6 | analyze-post node added | ✓ DONE |
+| B7 | Portal build in CI | ✓ DONE |
+| W0b | model/output in .gitignore | ✓ DONE |
+| W1 | Shared config.py | ✓ DONE |
+| W6 | vision-build CLI pre-check | ✓ DONE |
+| W9b | requirements-dev.txt | ✓ DONE |
+| W10 | Branch guard complete skill list | ✓ DONE |
+| W10c | Constitution AskQuestionTool removed | ✓ DONE |
+| — | Auto-sync hook (PostToolUse → sync_memory.py) | ✓ DONE |
+
+### Remaining — Open Items
+
+| # | Issue | Severity | Effort | Impact | Sprint |
+|---|-------|----------|--------|--------|--------|
+| B2 | SQL injection in bash script | BLOCKER | 1 hr | Critical (security) | **3** |
+| DM1 | Memory import ignores platform_id | WARNING | 15 min | High (data fidelity) | **3** |
+| DM2 | Memory export drops platform_id | WARNING | 15 min | High (data fidelity) | **3** |
+| DM3 | search_memories no platform filter | WARNING | 5 min | High | **3** |
+| DM6 | No decision change history (events unused) | WARNING | 30 min | Medium | **3** |
+| W9 | CI lacks dependency caching | WARNING | 30 min | Medium (CI speed) | **3** |
+| W9c | No ruff format in CI | WARNING | 5 min | Low | **3** |
+| W9f | CI inline validation redundant | WARNING | 10 min | Low | **3** |
+| W10c | Fonts declared but never loaded | WARNING | 15 min | Low | **3** |
+| W10d | @types in dependencies | WARNING | 2 min | Low | **3** |
+| W0 | DB connections leak on exceptions | WARNING | 1 hr | Medium | **3** |
+| W11b | Absolute file_paths in DB | WARNING | 2-3 hrs | Medium | **3** |
+| W12 | YAML frontmatter not escaped | WARNING | 1 hr | Medium | **3** |
+| W13 | Lossy decision round-trip | WARNING | 3-4 hrs | Medium | **3** |
+| DM4 | No cross-platform decisions | WARNING | 2 hrs | Medium | **4** |
+| W2 | DAG triple-definition | WARNING | 4-6 hrs | High | **4** |
+| W5 | No staleness detection | WARNING | 2-3 hrs | Medium | **4** |
+| W8 | Missing test coverage (vision-build, sync_memory) | WARNING | 4-6 hrs | Medium | **4** |
+| W9d | Bash tests not in CI | WARNING | 30 min | Low | **4** |
+| W9e | Template tests skipped | WARNING | 2-3 hrs | Medium | **4** |
+| W10d | platformLoaders hardcoded | WARNING | 2-3 hrs | Medium | **4** |
+| W0a | Per-function commits in db.py | WARNING | 2-3 hrs | Low | **4** |
+| W0c | No concurrent DB protection | WARNING | 30 min | Low | **4** |
+| W11a | reseed_all N connections | WARNING | 30 min | Low | **4** |
+| W10a | clarify dependency misleading in DAG knowledge | WARNING | 5 min | Low | **4** |
+| W10b | QA disable-model-invocation flag | WARNING | 5 min | Low (intentional) | **4** |
+| W10b | Sidebar toggle fragile vanilla JS | WARNING | 4-6 hrs | Low | **5** |
+| W3 | No portal search | WARNING | 30 min | Medium | **5** |
+| W4 | No pipeline dashboard | WARNING | 8-12 hrs | High | **5** |
+| W7 | Portal setup.sh possibly redundant | WARNING | 30 min | Low | **5** |
+| DM5 | No memory↔decision links | IMPROVE | 2-3 hrs | Low (until portal renders) | **5** |
+| I1 | Pipeline status dashboard | IMPROVE | 2-3 days | High | **5** |
+| I2 | Decision timeline | IMPROVE | 1-2 days | Medium | **5** |
+| I3 | Cross-platform search | IMPROVE | 4-8 hrs | Medium | **5** |
+| I4 | Interactive diagrams | IMPROVE | 2-3 days | Medium | **6** |
+| I5 | Auto-checkpoint | IMPROVE | 2-4 hrs | Medium | **5** |
+| I6 | Pipeline orchestrator | IMPROVE | 1-2 days | High | **5** |
+| I7 | Memory pruning | IMPROVE | 4-6 hrs | Medium | **5** |
+| I8 | Git hooks validation | IMPROVE | 2-3 hrs | Medium | **5** |
+| I9 | Dark mode + responsive | IMPROVE | 4-8 hrs | Low | **6** |
+| I10 | Unified CLI | IMPROVE | 1 day | Medium | **5** |
+| I11 | DB backup before migration | IMPROVE | 30 min | Low | **5** |
+| I11b | Migration testing in CI | IMPROVE | 3-4 hrs | Low | **6** |
+| I12 | Model↔code drift detection | IMPROVE | 1-2 days | Medium | **6** |
+| I13 | API routes for portal | IMPROVE | 4-8 hrs | Medium | **5** |
+| I14 | Auto CLAUDE.md generation | IMPROVE | 4-6 hrs | Medium | **4** |
+| I15 | Hallucination guard (GSD) | IMPROVE | 1-2 hrs | Medium | **5** |
+| I16 | Pre-inline context injection (GSD) | IMPROVE | 4-6 hrs | Medium | **6** |
+| I16b | Error boundary UX | IMPROVE | 1 hr | Low | **6** |
+| I17 | Cost tracking per skill | IMPROVE | 2-4 hrs | Medium | **5** |
+| I18 | Adaptive replanning post-epic | IMPROVE | 4-6 hrs | Medium | **6** |
+| I19 | Structured escalation levels | IMPROVE | 4-6 hrs | Low | **6** |
+| I20 | Wave-based parallel tasks | IMPROVE | 1-2 days | Medium | **6** |
+| I21 | Atomic git commits per task | IMPROVE | 2-4 hrs | Medium | **5** |
+| I22 | Fast lane for small changes | IMPROVE | 4-6 hrs | High | **5** |
+| I23 | Developer onboarding script | IMPROVE | 2-3 hrs | Medium | **5** |
+| I4b | Astro View Transitions | IMPROVE | 4-8 hrs | Low | **6** |
+| I4c | Command palette (Cmd+K) | IMPROVE | 4-8 hrs | Medium | **6** |
 
 ---
 
-## Recommended Execution Order
+## Delivery Roadmap
 
-### Sprint 1 — Critical Fixes (1 day)
-1. **B2** — Fix SQL injection in bash script (pass vars as sys.argv)
-2. **B3** — Fix FTS LIKE fallback (add parentheses) — 5 min
-3. **B4** — Remove SSR adapter from portal (switch to static) — 5 min
-4. **B5** — Fix broken useMemo in LikeC4Diagram.tsx — 15 min
-5. **B1** — Split migration 003 to handle missing FTS5
-6. **B7** — Add portal build to CI
-7. **W0b** — Add `model/output/` to `.gitignore`
-8. **W6** — Add CLI pre-check to vision-build.py
-9. **W10c** — Fix font declarations (load or remove)
-10. **W10d** — Move @types to devDependencies
-11. **W13** — Use yaml.dump() for frontmatter exports
+### ~~Sprint 1 — Critical Fixes~~ ✓ DONE (2026-03-29)
 
-### Sprint 2 — Foundation Fixes (2-3 days)
-8. **B6** — Add post-implementation analyze node to platform.yaml + Copier template
-9. **W0** — Add connection context manager to db.py
-10. **W0a/W0c** — Transaction batching + concurrent access docs
-11. **W1** — Extract shared config.py
-12. **W5** — Add staleness detection to lint
-13. **W10-W10c** — Fix branch guard docs, clarify dependency, QA flag, constitution ref
-14. **W11** — Fix reseed_all to use single connection
-15. Continue Fulano L1 pipeline (run remaining skills)
+All 7 blockers + 4 quick warnings fixed. See "Completed" table above.
 
-### Sprint 3 — Single Source of Truth (1 week)
-10. **W2** — DAG defined once in platform.yaml, generated elsewhere
-11. **W8** — Add missing test coverage
-12. **W10** — Fix lossy decision round-tripping
-13. **I14** — Auto-generate CLAUDE.md sections
-14. **I10** — Unified CLI entrypoint
+### ~~Sprint 2 — Foundation Fixes~~ ✓ DONE (2026-03-30)
 
-### Sprint 4 — Dream Frontend (1-2 weeks)
-15. **W3** — Enable portal search
-16. **W4/I1** — Pipeline status dashboard
-17. **I2** — Decision timeline
-18. **I3** — Cross-platform search with facets
-19. **I13** — API routes for live data
-20. **I9** — Dark mode + responsive polish
+Shared config.py, branch guard docs, analyze-post node, constitution cleanup, auto-sync hook, requirements-dev.txt.
 
-### Sprint 5 — Automation & Intelligence (1 week)
-21. **I5** — Auto-checkpoint after skills
-22. **I6** — Pipeline orchestrator script
-23. **I8** — Git hooks for validation
-24. **I7** — Memory pruning
-25. **I11** — Migration upgrade testing
-26. **I12** — Model ↔ code drift detection
+### Sprint 3 — Data Fidelity + Quick Wins (~1 day)
+
+> **Theme:** Make the Decision/Memory BD actually trustworthy as source of truth. Fix remaining blocker. CI polish.
+
+| # | Item | Effort | Why |
+|---|------|--------|-----|
+| 1 | **B2** — SQL injection in bash (sys.argv) | 1h | Last remaining BLOCKER (security) |
+| 2 | **DM1** — Memory import reads `platform` from frontmatter | 15min | Without this, all memories are orphaned |
+| 3 | **DM2** — Memory export includes `platform_id` | 15min | Without this, round-trip degrades data |
+| 4 | **DM3** — `search_memories()` with `platform_id` filter | 5min | Symmetry with `search_decisions()` |
+| 5 | **DM6** — Insert event on decision change (audit trail) | 30min | Uses existing `events` table |
+| 6 | **W0** — `get_conn()` context manager | 1h | Foundation for all DB callers |
+| 7 | **W11b** — Store relative file_paths in DB | 2-3h | Absolute paths break on clone |
+| 8 | **W12** — YAML frontmatter escape in exports | 1h | Broken YAML on special chars |
+| 9 | **W13** — Lossy decision round-trip (store original body) | 3-4h | Data loss on export→import |
+| 10 | **W9** — CI dependency caching | 30min | CI speed |
+| 11 | **W9c** — `ruff format --check` in CI | 5min | Quick win |
+| 12 | **W9f** — Remove redundant CI inline validation | 10min | Quick win |
+| 13 | **W10c** — Load fonts or remove declarations | 15min | Quick win |
+| 14 | **W10d** — Move @types to devDependencies | 2min | Quick win |
+
+**Total: ~10-12h**
+
+### Sprint 4 — Single Source of Truth + Test Coverage (~1 week)
+
+> **Theme:** Eliminate drift between documentation sources. Improve test confidence.
+
+| # | Item | Effort | Why |
+|---|------|--------|-----|
+| 1 | **W2** — DAG single source of truth (platform.yaml → generate knowledge + CLAUDE.md) | 4-6h | Three sources drift constantly |
+| 2 | **I14** — Auto-generate CLAUDE.md sections from codebase | 4-6h | Reduces manual CLAUDE.md maintenance |
+| 3 | **W8** — Tests for vision-build.py + sync_memory.py | 4-6h | Zero coverage on critical scripts |
+| 4 | **W9e** — Enable skipped template tests | 2-3h | Copier contract untested |
+| 5 | **DM4** — Cross-platform decisions (nullable platform_id) | 2h | Global decisions need a home |
+| 6 | **W10d** — Generate platformLoaders at build time | 2-3h | Manual TSX edit per new platform |
+| 7 | **W5** — Staleness detection (`lint --check-stale` + CI) | 2-3h | Stale artifacts invisible today |
+| 8 | **W0a** — Transaction context manager for batch ops | 2-3h | 80 commits per reseed is wasteful |
+| 9 | **W9d** — Bash tests in CI | 30min | Quick win |
+| 10 | **W10a/W10b** — Clarify DAG docs + evaluate QA flag | 10min | Quick wins |
+| 11 | **W0c** — Document single-writer constraint | 30min | Prevents confused debugging |
+| 12 | **W11a** — reseed_all single connection | 30min | Quick win |
+
+**Total: ~25-30h**
+
+### Sprint 5 — Frontend Experience + Automation (~1-2 weeks)
+
+> **Theme:** Make the portal useful. Add pipeline automation and developer tooling.
+
+| # | Item | Effort | Why |
+|---|------|--------|-----|
+| 1 | **W3** — Enable portal search (Pagefind) | 30min | High ROI — Starlight has it built-in |
+| 2 | **W4/I1** — Pipeline status dashboard | 2-3 days | Most valuable missing view |
+| 3 | **I2** — Decision timeline | 1-2 days | Visual ADR relationships |
+| 4 | **I3** — Cross-platform search with facets | 4-8h | Builds on Pagefind |
+| 5 | **I13** — API routes for pipeline data | 4-8h | Feeds dashboard |
+| 6 | **I6** — Pipeline orchestrator (`pipeline.py run`) | 1-2 days | Stop running skills one-by-one |
+| 7 | **I10** — Unified `madruga` CLI | 1 day | Single entrypoint for all scripts |
+| 8 | **I5** — Auto-checkpoint after skills | 2-4h | No more lost session state |
+| 9 | **I7** — Memory pruning + health check | 4-6h | Memories grow forever |
+| 10 | **I8** — Git hooks for artifact validation | 2-3h | Catch AUTO marker edits pre-commit |
+| 11 | **I11** — DB backup before migration | 30min | Quick win — safety net |
+| 12 | **I15** — Hallucination guard (GSD pattern) | 1-2h | Cheap quality check |
+| 13 | **I17** — Cost tracking per skill (schema ready) | 2-4h | Budget visibility |
+| 14 | **I21** — Atomic git commits per task | 2-4h | Enables git bisect |
+| 15 | **I22** — Fast lane for small changes | 4-6h | 24-skill pipeline is heavy for bug fixes |
+| 16 | **I23** — Developer onboarding script | 2-3h | `make setup` for new devs |
+| 17 | **DM5** — Memory↔decision links table | 2-3h | Only if portal renders them |
+| 18 | **W7** — Evaluate setup.sh redundancy | 30min | Quick win |
+| 19 | **W10b** — Sidebar toggle → Astro component | 4-6h | Fragile vanilla JS |
+
+**Total: ~3-4 weeks**
+
+### Sprint 6 — Polish + Advanced Features (backlog)
+
+> **Theme:** Refinements and advanced capabilities. Pull from this when Sprint 5 is done.
+
+| # | Item | Effort |
+|---|------|--------|
+| 1 | **I4** — Interactive diagrams with detail panels | 2-3 days |
+| 2 | **I4b** — Astro View Transitions | 4-8h |
+| 3 | **I4c** — Command palette (Cmd+K) | 4-8h |
+| 4 | **I9** — Dark mode + responsive polish | 4-8h |
+| 5 | **I11b** — Migration testing in CI | 3-4h |
+| 6 | **I12** — Model↔code drift detection | 1-2 days |
+| 7 | **I16** — Pre-inline context injection (GSD) | 4-6h |
+| 8 | **I16b** — Error boundary UX | 1h |
+| 9 | **I18** — Adaptive replanning post-epic | 4-6h |
+| 10 | **I19** — Structured escalation levels | 4-6h |
+| 11 | **I20** — Wave-based parallel task execution | 1-2 days |
 
 ---
 
@@ -614,15 +767,15 @@ GET /api/platforms/fulano/decisions → decision list
 
 ## Test Coverage Summary
 
-| Component | Tests | CI Coverage | Verdict |
-|-----------|-------|-------------|---------|
-| DB layer (db.py) | 6 test files, ~40 tests | Yes (db-tests job) | Good |
-| Copier template | 2 test files, ~15 tests | Yes (templates job) | Good, 2 skipped |
-| platform.py | 1 test file, 5 tests | Yes (db-tests job) | Adequate |
-| post_save.py | 1 test file, 5 tests | Yes (db-tests job) | Adequate |
-| Bash scripts | 1 test file (manual) | **No** | Gap |
-| vision-build.py | 0 tests | **No** | Gap |
-| sync_memory.py | 0 tests | **No** | Gap |
-| Portal build | 0 tests | **No** | Gap |
-| LikeC4 models | build validation only | Yes (likec4 job) | Adequate |
-| Ruff formatting | 0 checks | **No** | Gap |
+| Component | Tests | CI Coverage | Verdict | Sprint to fix |
+|-----------|-------|-------------|---------|---------------|
+| DB layer (db.py) | 6 test files, ~40 tests | Yes (db-tests job) | Good | — |
+| Copier template | 2 test files, ~15 tests | Yes (templates job) | Good, 2 skipped | Sprint 4 (W9e) |
+| platform.py | 1 test file, 5 tests | Yes (db-tests job) | Adequate | — |
+| post_save.py | 1 test file, 5 tests | Yes (db-tests job) | Adequate | — |
+| Bash scripts | 1 test file (manual) | **No** | Gap | Sprint 4 (W9d) |
+| vision-build.py | 0 tests | **No** | Gap | Sprint 4 (W8) |
+| sync_memory.py | 0 tests | **No** | Gap | Sprint 4 (W8) |
+| Portal build | 0 tests | ✓ Yes (portal-build job) | **Fixed** | — |
+| LikeC4 models | build validation only | Yes (likec4 job) | Adequate | — |
+| Ruff formatting | 0 checks | **No** | Gap | Sprint 3 (W9c) |

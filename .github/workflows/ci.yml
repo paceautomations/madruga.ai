@@ -13,9 +13,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install pyyaml copier ruff
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
       - run: python3 .specify/scripts/platform.py lint --all
       - run: ruff check .specify/scripts/
+      - run: ruff format --check .specify/scripts/
 
   likec4:
     runs-on: ubuntu-latest
@@ -46,7 +49,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install pyyaml pytest
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
       - run: python3 -m pytest .specify/scripts/tests/ -v
 
   templates:
@@ -56,7 +61,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install copier pyyaml pytest
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
       - run: |
           copier copy .specify/templates/platform/ /tmp/ci-test-plat \
             --trust --defaults \
@@ -65,16 +72,14 @@ jobs:
             -d platform_description="Automated CI validation" \
             -d lifecycle=design \
             -d register_portal=false
-      - run: |
-          python3 -c "
-          import yaml
-          with open('/tmp/ci-test-plat/platform.yaml') as f:
-              m = yaml.safe_load(f)
-          assert 'pipeline' in m, 'Missing pipeline section'
-          assert len(m['pipeline']['nodes']) >= 13, f'Expected >=13 nodes, got {len(m[\"pipeline\"][\"nodes\"])}'
-          print('Template validation: PASS')
-          "
       - run: python3 -m pytest .specify/templates/platform/tests/ -v
+
+  bash-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run bash tests
+        run: bash .specify/scripts/bash/tests/test_base_dir.sh
 
   portal-build:
     runs-on: ubuntu-latest
@@ -83,6 +88,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
+          cache: npm
+          cache-dependency-path: portal/package-lock.json
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"

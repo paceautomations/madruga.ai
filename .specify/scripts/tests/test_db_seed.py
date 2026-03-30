@@ -35,9 +35,7 @@ def test_seed_idempotent(tmp_db, sample_platform_dir):
     nodes = get_pipeline_nodes(tmp_db, "test-plat")
     assert len(nodes) == 3  # still 3, not 6
 
-    count = tmp_db.execute(
-        "SELECT COUNT(*) FROM platforms WHERE platform_id='test-plat'"
-    ).fetchone()[0]
+    count = tmp_db.execute("SELECT COUNT(*) FROM platforms WHERE platform_id='test-plat'").fetchone()[0]
     assert count == 1
 
 

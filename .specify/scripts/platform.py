@@ -9,6 +9,7 @@ Usage:
     python3 .specify/scripts/platform.py sync [name]        # copier update (one or all)
     python3 .specify/scripts/platform.py register <name>    # inject LikeC4 loader + validate model
     python3 .specify/scripts/platform.py list               # list all platforms
+    python3 .specify/scripts/platform.py check-stale <name>  # detect stale pipeline nodes
     python3 .specify/scripts/platform.py import-adrs <name> # import ADRs into DB
     python3 .specify/scripts/platform.py export-adrs <name> # export decisions to markdown
     python3 .specify/scripts/platform.py import-memory      # import .claude/memory into DB
@@ -25,11 +26,8 @@ from pathlib import Path
 
 import yaml
 
+from config import PLATFORMS_DIR, PORTAL_DIR, REPO_ROOT, TEMPLATE_DIR  # noqa: F401
 
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-PLATFORMS_DIR = REPO_ROOT / "platforms"
-TEMPLATE_DIR = REPO_ROOT / ".specify" / "templates" / "platform"
-PORTAL_DIR = REPO_ROOT / "portal"
 CANONICAL_SPEC = TEMPLATE_DIR / "template" / "model" / "spec.likec4"
 LIKEC4_DIAGRAM_TSX = PORTAL_DIR / "src" / "components" / "viewers" / "LikeC4Diagram.tsx"
 
@@ -367,6 +365,37 @@ def cmd_register(name: str) -> None:
 # ══════════════════════════════════════
 
 
+def cmd_check_stale(name: str) -> None:
+    """Check for stale pipeline nodes (dependencies completed after them)."""
+    from db import get_conn, get_stale_nodes, migrate
+
+    pdir = PLATFORMS_DIR / name
+    yaml_path = pdir / "platform.yaml"
+    if not yaml_path.exists():
+        _error(f"platform.yaml not found: {yaml_path}")
+        sys.exit(1)
+
+    with open(yaml_path) as f:
+        manifest = yaml.safe_load(f)
+
+    # Build DAG edges from platform.yaml
+    dag_edges: dict[str, list[str]] = {}
+    for node in manifest.get("pipeline", {}).get("nodes", []):
+        dag_edges[node["id"]] = node.get("depends", [])
+
+    with get_conn() as conn:
+        migrate(conn)
+        stale = get_stale_nodes(conn, name, dag_edges)
+
+    if stale:
+        print(f"=== {name}: {len(stale)} stale node(s) ===")
+        for s in stale:
+            print(f"  [stale] {s['node_id']} — {s['stale_reason']}")
+        sys.exit(1)
+    else:
+        print(f"=== {name}: no stale nodes ===")
+
+
 def cmd_import_adrs(name: str) -> None:
     """Import all ADR-*.md from a platform's decisions/ dir into the DB."""
     from db import get_conn, migrate, import_all_adrs, upsert_platform
@@ -375,11 +404,10 @@ def cmd_import_adrs(name: str) -> None:
     if not decisions_dir.exists():
         _error(f"Decisions dir not found: {decisions_dir}")
         sys.exit(1)
-    conn = get_conn()
-    migrate(conn)
-    upsert_platform(conn, name, name=name, repo_path=f"platforms/{name}")
-    count = import_all_adrs(conn, name, decisions_dir)
-    conn.close()
+    with get_conn() as conn:
+        migrate(conn)
+        upsert_platform(conn, name, name=name, repo_path=f"platforms/{name}")
+        count = import_all_adrs(conn, name, decisions_dir)
     print(f"Imported {count} ADRs for platform '{name}'")
 
 
@@ -388,10 +416,9 @@ def cmd_export_adrs(name: str) -> None:
     from db import get_conn, migrate, sync_decisions_to_markdown
 
     decisions_dir = PLATFORMS_DIR / name / "decisions"
-    conn = get_conn()
-    migrate(conn)
-    count = sync_decisions_to_markdown(conn, name, decisions_dir)
-    conn.close()
+    with get_conn() as conn:
+        migrate(conn)
+        count = sync_decisions_to_markdown(conn, name, decisions_dir)
     print(f"Exported {count} decisions to {decisions_dir}")
 
 
@@ -405,13 +432,12 @@ def cmd_import_memory() -> None:
     if not candidates:
         _error("No .claude/projects/*/memory/ directory found")
         sys.exit(1)
-    conn = get_conn()
-    migrate(conn)
-    total = 0
-    for mem_dir in candidates:
-        if mem_dir.is_dir():
-            total += import_all_memories(conn, mem_dir)
-    conn.close()
+    with get_conn() as conn:
+        migrate(conn)
+        total = 0
+        for mem_dir in candidates:
+            if mem_dir.is_dir():
+                total += import_all_memories(conn, mem_dir)
     print(f"Imported {total} memory entries")
 
 
@@ -424,10 +450,9 @@ def cmd_export_memory() -> None:
     if not candidates:
         _error("No .claude/projects/*/memory/ directory found")
         sys.exit(1)
-    conn = get_conn()
-    migrate(conn)
-    count = sync_memories_to_markdown(conn, candidates[0])
-    conn.close()
+    with get_conn() as conn:
+        migrate(conn)
+        count = sync_memories_to_markdown(conn, candidates[0])
     print(f"Exported {count} memory entries to {candidates[0]}")
 
 
@@ -460,6 +485,11 @@ def main() -> None:
             _error("Usage: platform.py register <name>")
             sys.exit(1)
         cmd_register(sys.argv[2])
+    elif cmd == "check-stale":
+        if len(sys.argv) < 3:
+            _error("Usage: platform.py check-stale <name>")
+            sys.exit(1)
+        cmd_check_stale(sys.argv[2])
     elif cmd == "import-adrs":
         if len(sys.argv) < 3:
             _error("Usage: platform.py import-adrs <name>")

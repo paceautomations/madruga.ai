@@ -9,7 +9,7 @@ Skills reference this file and add artifact-specific steps 1 (context) and 2 (ge
 
 ### Branch Guard (epic cycle skills ONLY)
 
-For any epic cycle skill (epic-context, specify, plan, tasks, implement, verify, qa, reconcile):
+For any epic cycle skill (epic-context, specify, clarify, plan, tasks, analyze, implement, analyze-post, verify, qa, reconcile):
 
 ```bash
 current_branch=$(git branch --show-current)
