@@ -22,9 +22,9 @@ O madruga.ai é um sistema de documentação de arquitetura bem estruturado, com
 | Skill Contract Compliance | Persona missing in 13 L1 skills | 7/10 |
 | DB Schema & Migrations | OK (5 migrations) | 9/10 |
 | Security | FTS5 input unsanitized, symlink bypass | 7/10 |
-| Frontend UX | Good, needs polish | 7/10 |
+| Frontend UX | LikeC4 broken in dev, 404 links, mobile overflow | 5/10 |
 | Code Quality | Solid, minor DRY issues | 8/10 |
-| **Overall** | | **8/10** |
+| **Overall** | | **7/10** |
 
 ---
 
@@ -78,7 +78,22 @@ Isso viola a regra do pipeline: "qa runs before reconcile because its heal loop 
 **Problema**: O teste usa `except Exception` que captura tanto erros do copier quanto o próprio `AssertionError` na linha 100. Se o copier aceitar um nome inválido, o `assert` que deveria falhar é capturado pelo except e o teste passa silenciosamente.
 **Fix**: Usar `except (subprocess.CalledProcessError, FileNotFoundError)` em vez de `except Exception`.
 
-### 1.7 [B7] Missing `qa-template.md` knowledge file
+### 1.7 [B7] LikeC4 diagrams broken in dev mode — `jsxDEV is not a function`
+
+**Arquivo**: `portal/src/components/viewers/LikeC4Diagram.tsx`
+**Problema**: TODAS as páginas de diagrama LikeC4 (`/landscape/`, `/containers/`, `/context-map/`, `/bc/*`, `/business-flow/`) dão erro `TypeError: jsxDEV is not a function`. Causa: mismatch de JSX runtime entre os virtual modules `likec4:react/*` e a versão do React (19.2.4) configurada no portal. O LikeC4 Vite plugin emite JSX que espera o dev runtime (`jsxDEV`), mas o bundle usa o production runtime (`jsx`).
+**Impacto**: Páginas de diagrama ficam **completamente em branco** em dev mode. O error boundary não captura porque o erro ocorre durante a hydration inicial.
+**Fix**: Investigar compatibilidade entre `likec4` 1.51.0 e React 19. Possíveis soluções: pin React 18, ou configurar `react.jsxRuntime` no Vite config.
+
+### 1.8 [B8] Dashboard links para rotas inexistentes (404s)
+
+**Arquivo**: `portal/src/pages/[platform]/dashboard.astro:181-183` e `portal/src/components/dashboard/PipelineDAG.tsx:110-111`
+**Problema**: A lógica de URL do dashboard faz strip de `.md` e `.likec4` do `outputs[0]` para construir links, mas nem todos os outputs mapeiam para rotas do portal:
+- `Platform Setup` → `/{platform}/platform.yaml/` → **404** (YAML não é página)
+- `Containers` → `/{platform}/model/platform/` → **404** (deveria linkar para `/containers/`)
+**Fix**: Criar mapa output→URL no dashboard (e.g., `platform.yaml` → dashboard, `model/platform.likec4` → `/containers/`, `model/views.likec4` → `/landscape/`).
+
+### 1.9 [B9] Missing `qa-template.md` knowledge file
 
 **Arquivo**: `.claude/commands/madruga/qa.md:99` referencia `.claude/knowledge/qa-template.md`
 **Problema**: O arquivo não existe. A skill QA diz "if exists" então degrada gracefully, mas o setup flow perde valor sem o template.
@@ -207,7 +222,38 @@ def compute_file_hash(path: str | Path) -> str:
 **Arquivo**: `.specify/scripts/db.py:752`
 **Problema**: `import_adr_from_markdown` faz query `WHERE platform_id=? AND (file_path=? OR file_path=?)`. Index `idx_decisions_platform` cobre `platform_id` mas não `file_path`. Para muitos decisions, pode ser lento.
 
-### 2.20 [W20] `pipeline_runs` table está vazia e sem uso
+### 2.20 [W20] `PROCESSED.delete` é no-op em `mermaid-interactive.js`
+
+**Arquivo**: `portal/public/mermaid-interactive.js:154`
+**Problema**: `PROCESSED.delete;` é referência de propriedade, não chamada de método. `WeakSet.delete` requer argumento. Linha morta/misleading.
+**Fix**: Remover a linha (WeakSet auto-limpa via GC) ou usar `PROCESSED = new WeakSet()`.
+
+### 2.21 [W21] Bundles JS oversized — 7.2MB total
+
+**Problema**: Build gera chunks grandes:
+- `internal.*.js` (LikeC4): **1.9MB**
+- `elk.bundled.*.js` (ELK layout): **1.4MB**
+- `treemap-*.js` (Mermaid): **443KB**
+**Mitigação**: São lazy-loaded via `client:only`/`client:visible`. Considerar tree-shaking do LikeC4 ou dynamic import mais granular.
+
+### 2.22 [W22] Mobile layout — kanban e layer cards overflow
+
+**Arquivo**: `portal/src/pages/[platform]/dashboard.astro`
+**Problema**: Em viewport 375px, layer cards e kanban columns transbordam horizontalmente. O breakpoint 550px não aplica `flex-wrap: wrap` no `.layer-grid`.
+
+### 2.23 [W23] Epics com status "proposed" mas todos os nós done
+
+**Arquivo**: `portal/src/data/pipeline-status.json`
+**Problema**: Epics 006, 007, 008 têm `status: "proposed"` mas todos 11 nós estão done. `getEpicPhase()` compensa verificando nós, mas o dado base é inconsistente.
+**Fix**: `seed_from_filesystem` deveria atualizar status do epic quando todos os nós estão done.
+
+### 2.24 [W24] Google Fonts carregado de CDN externo (render-blocking)
+
+**Arquivo**: `portal/src/styles/custom.css:1`
+**Problema**: `@import url('https://fonts.googleapis.com/css2?family=Poppins...')` — dependência externa. Se CDN cai, font cai para system-ui. Adiciona request render-blocking.
+**Fix**: Self-host a font para portal interno.
+
+### 2.25 [W25] `pipeline_runs` table está vazia e sem uso
 
 **Arquivo**: `.pipeline/madruga.db`
 **Problema**: Tabela `pipeline_runs` existe no schema mas tem 0 rows e nenhum código a referencia.
@@ -352,8 +398,10 @@ def compute_file_hash(path: str | Path) -> str:
 | 3 | B4 — madruga-ai platform.yaml missing analyze-post + wrong reconcile dep | BLOCKER | Alto | 10 min | P0 |
 | 4 | B5 — FTS5 query sanitization | BLOCKER | Alto | 30 min | P0 |
 | 5 | B6 — Fix test_kebab_case_validation except catching assert | BLOCKER | Médio | 5 min | P0 |
-| 6 | B7 — Create qa-template.md | BLOCKER | Médio | 30 min | P0 |
-| 7 | W1 — Remover variáveis não usadas | WARNING | Baixo | 2 min | P1 |
+| 6 | B7 — LikeC4 jsxDEV runtime mismatch in dev mode | BLOCKER | Alto | 2h | P0 |
+| 7 | B8 — Dashboard 404 links (platform.yaml, model/*.likec4) | BLOCKER | Alto | 30 min | P0 |
+| 8 | B9 — Create qa-template.md | BLOCKER | Médio | 30 min | P1 |
+| 9 | W1 — Remover variáveis não usadas | WARNING | Baixo | 2 min | P1 |
 | 4 | W2/A1 — Automatizar pipeline-status.json | WARNING | Alto | 15 min | P1 |
 | 5 | W3 — Adicionar `site` no astro.config | WARNING | Baixo | 1 min | P1 |
 | 6 | W6 — Usar `transaction()` em batch ops | WARNING | Médio | 30 min | P2 |
