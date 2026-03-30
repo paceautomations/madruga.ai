@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write(.claude/**/memory/**)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .specify/scripts/sync_memory.py --import-only 2>/dev/null || true"
+          }
+        ]
+      }
+    ]
+  }
+}

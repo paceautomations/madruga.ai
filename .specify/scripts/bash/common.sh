@@ -127,9 +127,9 @@ check_feature_branch() {
         return 0
     fi
 
-    if [[ ! "$branch" =~ ^[0-9]{3}- ]] && [[ ! "$branch" =~ ^[0-9]{8}-[0-9]{6}- ]]; then
+    if [[ ! "$branch" =~ ^[0-9]{3}- ]] && [[ ! "$branch" =~ ^[0-9]{8}-[0-9]{6}- ]] && [[ ! "$branch" =~ ^epic/ ]]; then
         echo "ERROR: Not on a feature branch. Current branch: $branch" >&2
-        echo "Feature branches should be named like: 001-feature-name or 20260319-143022-feature-name" >&2
+        echo "Feature branches should be named like: 001-feature-name, 20260319-143022-feature-name, or epic/<platform>/<NNN-slug>" >&2
         return 1
     fi
 
@@ -146,6 +146,15 @@ find_feature_dir_by_prefix() {
     # If SPECIFY_BASE_DIR is set, use it directly (skip prefix matching)
     if [[ -n "${SPECIFY_BASE_DIR:-}" ]]; then
         echo "$SPECIFY_BASE_DIR"
+        return
+    fi
+
+    # Handle epic branches: epic/<platform>/<NNN-slug> → platforms/<platform>/epics/<NNN-slug>/
+    if [[ "$branch_name" =~ ^epic/([^/]+)/(.+)$ ]]; then
+        local platform="${BASH_REMATCH[1]}"
+        local epic_slug="${BASH_REMATCH[2]}"
+        local epic_dir="$repo_root/platforms/$platform/epics/$epic_slug"
+        echo "$epic_dir"
         return
     fi
 
