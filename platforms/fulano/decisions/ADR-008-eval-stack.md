@@ -1,9 +1,9 @@
 ---
-title: "ADR-008: DeepEval + Promptfoo como stack de avaliacao"
+title: 'ADR-008: DeepEval + Promptfoo como stack de avaliacao'
 status: Accepted
-decision: "DeepEval + Promptfoo"
-alternatives: "Ragas, custom pytest"
-rationale: "Complementares: metricas profundas + CI/CD gates"
+decision: DeepEval + Promptfoo
+alternatives: Apenas DeepEval, Apenas Promptfoo, Custom eval scripts
+rationale: Metricas profundas garantem qualidade de respostas em producao
 ---
 # ADR-008: DeepEval + Promptfoo como stack de avaliacao
 **Status:** Accepted | **Data:** 2026-03-23

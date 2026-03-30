@@ -693,16 +693,48 @@ def _parse_adr_markdown(file_path: Path) -> dict | None:
     if slug.startswith("ADR-"):
         slug = re.sub(r"^ADR-\d+-?", "", slug)
 
+    # Extract decision text: prefer frontmatter, fallback to first paragraph of ## Decisao
+    decision_text = fm.get("decision", "")
+    if not decision_text:
+        raw = sections.get("Decisao", sections.get("Decisão", ""))
+        # Take the first non-empty paragraph (skip status lines like **Status:** ...)
+        for para in raw.split("\n\n"):
+            stripped = para.strip()
+            if stripped and not stripped.startswith("**Status:"):
+                decision_text = stripped
+                break
+
+    # Extract alternatives summary: prefer frontmatter, fallback to body section
+    alternatives_text = fm.get("alternatives", "")
+    if not alternatives_text:
+        raw = sections.get("Alternativas consideradas", sections.get("Alternativas Consideradas", ""))
+        if raw:
+            # Collect ### sub-header names as a comma-separated list
+            alt_names = [line[4:].strip() for line in raw.split("\n") if line.startswith("### ")]
+            if alt_names:
+                alternatives_text = ", ".join(alt_names)
+
+    # Extract rationale: prefer frontmatter, fallback to first positive consequence
+    rationale_text = fm.get("rationale", "")
+    if not rationale_text:
+        raw = sections.get("Consequencias", sections.get("Consequências", ""))
+        if raw:
+            for line in raw.split("\n"):
+                line_s = line.strip()
+                if line_s.startswith("- [+]"):
+                    rationale_text = line_s[5:].strip()
+                    break
+
     return {
         "title": title,
         "status": fm.get("status", "Accepted"),
-        "decision": fm.get("decision", ""),
-        "alternatives": fm.get("alternatives", ""),
-        "rationale": fm.get("rationale", ""),
+        "decision": decision_text,
+        "alternatives": alternatives_text,
+        "rationale": rationale_text,
         "number": number,
         "slug": slug,
         "context": sections.get("Contexto", ""),
-        "consequences": sections.get("Consequencias", ""),
+        "consequences": sections.get("Consequencias", sections.get("Consequências", "")),
         "body": body,
         "file_path": to_relative_path(file_path),
     }
@@ -793,12 +825,53 @@ def export_decision_to_markdown(conn: sqlite3.Connection, decision_id: str, outp
     else:
         fname = f"decision-{decision_id[:8]}.md"
 
-    # Use stored body for lossless round-trip when available
+    # Extract alternatives and rationale from stored body
+    alternatives_text = ""
+    rationale_text = ""
     stored_body = d.get("body")
+    if stored_body:
+        # Parse sections from body
+        body_sections: dict[str, str] = {}
+        cur_hdr = ""
+        cur_lines: list[str] = []
+        for bline in stored_body.split("\n"):
+            if bline.startswith("## "):
+                if cur_hdr:
+                    body_sections[cur_hdr] = "\n".join(cur_lines).strip()
+                cur_hdr = bline[3:].strip()
+                cur_lines = []
+            else:
+                cur_lines.append(bline)
+        if cur_hdr:
+            body_sections[cur_hdr] = "\n".join(cur_lines).strip()
+
+        # Alternatives: collect ### sub-headers
+        alt_raw = body_sections.get("Alternativas consideradas", body_sections.get("Alternativas Consideradas", ""))
+        if alt_raw:
+            alt_names = [al[4:].strip() for al in alt_raw.split("\n") if al.startswith("### ")]
+            if alt_names:
+                alternatives_text = ", ".join(alt_names)
+
+        # Rationale: first positive consequence
+        cons_raw = body_sections.get("Consequencias", body_sections.get("Consequências", ""))
+        if cons_raw:
+            for cline in cons_raw.split("\n"):
+                cline_s = cline.strip()
+                if cline_s.startswith("- [+]"):
+                    rationale_text = cline_s[5:].strip()
+                    break
+
+    # Use stored body for lossless round-trip when available
     if stored_body:
         # Reconstruct original frontmatter + body
         frontmatter = yaml.dump(
-            {"title": title, "status": status, "decision": decision_text, "alternatives": "", "rationale": ""},
+            {
+                "title": title,
+                "status": status,
+                "decision": decision_text,
+                "alternatives": alternatives_text,
+                "rationale": rationale_text,
+            },
             default_flow_style=False,
             allow_unicode=True,
             sort_keys=False,
@@ -813,7 +886,13 @@ def export_decision_to_markdown(conn: sqlite3.Connection, decision_id: str, outp
         updated = (d.get("updated_at") or now_str)[:10]
 
         frontmatter = yaml.dump(
-            {"title": title, "status": status, "decision": decision_text, "alternatives": "", "rationale": ""},
+            {
+                "title": title,
+                "status": status,
+                "decision": decision_text,
+                "alternatives": alternatives_text,
+                "rationale": rationale_text,
+            },
             default_flow_style=False,
             allow_unicode=True,
             sort_keys=False,

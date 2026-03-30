@@ -1,9 +1,10 @@
 ---
-title: "ADR-018: Data Retention e LGPD Compliance"
+title: 'ADR-018: Data Retention e LGPD Compliance'
 status: Accepted
-decision: "Retention 90d + consent + SAR"
-alternatives: "Sem policy de retencao"
-rationale: "LGPD compliance, ANPD +EUR 12M multas Q1/2025"
+decision: Retention 90d + consent + SAR
+alternatives: Sem retention policy (guardar tudo indefinidamente), Retention fixa
+  (mesmo prazo para todos), Anonimizacao total (sem retention de dados identificaveis)
+rationale: Compliance com LGPD e GDPR desde o dia 1 — nao eh retrofit
 ---
 # ADR-018: Data Retention e LGPD Compliance
 **Status:** Accepted | **Data:** 2026-03-25

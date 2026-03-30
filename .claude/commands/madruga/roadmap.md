@@ -43,7 +43,7 @@ Save to `platforms/<name>/planning/roadmap.md`.
 **Required reading:**
 - `epics/*/pitch.md` — all epics with appetite and dependencies
 - `engineering/blueprint.md` — NFRs that constrain sequencing
-- `engineering/containers.md` — shared infrastructure
+- `engineering/blueprint.md` — NFRs, deploy topology, shared infrastructure
 - `business/vision.md` — business priorities
 
 **Structured Questions:**
@@ -159,9 +159,3 @@ When updating the roadmap:
 | No deadline | Use appetite as relative estimate |
 | Team size undefined | Note that parallelism depends on team size |
 
----
-handoff:
-  from: roadmap
-  to: epic-context
-  context: "Roadmap definido. Para cada epic, iniciar ciclo com /epic-context <platform> <NNN>."
-  blockers: []

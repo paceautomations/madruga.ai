@@ -19,7 +19,7 @@ Skills reference this file to understand node dependencies, gate types, personas
 | adr | madruga:adr | decisions/ADR-*.md (output_pattern) | tech-research | engineering | 1-way-door | no |
 | blueprint | madruga:blueprint | engineering/blueprint.md | adr | engineering | human | no |
 | domain-model | madruga:domain-model | engineering/domain-model.md, model/ddd-contexts.likec4 | blueprint, business-process | engineering | human | no |
-| containers | madruga:containers | engineering/containers.md, model/platform.likec4 | domain-model, blueprint | engineering | human | no |
+| containers | madruga:containers | model/platform.likec4, model/views.likec4 | domain-model, blueprint | engineering | human | no |
 | context-map | madruga:context-map | engineering/context-map.md | domain-model, containers | engineering | human | no |
 | epic-breakdown | madruga:epic-breakdown | epics/*/pitch.md (output_pattern) | domain-model, containers, context-map | planning | 1-way-door | no |
 | roadmap | madruga:roadmap | planning/roadmap.md | epic-breakdown | planning | human | no |

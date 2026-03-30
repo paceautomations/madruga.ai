@@ -129,6 +129,8 @@ export default defineConfig({
       },
       head: [
         { tag: 'script', attrs: { src: '/sidebar-toggle.js', defer: true } },
+        { tag: 'script', attrs: { src: '/svg-pan-zoom.min.js' } },
+        { tag: 'script', attrs: { src: '/mermaid-interactive.js', defer: true } },
       ],
       sidebar: buildSidebar(platforms),
     }),

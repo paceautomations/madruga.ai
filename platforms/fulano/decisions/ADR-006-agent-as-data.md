@@ -1,9 +1,10 @@
 ---
-title: "ADR-006: Agent-as-Data — multi-client, white-label e customizacao por tenant"
+title: 'ADR-006: Agent-as-Data — multi-client, white-label e customizacao por tenant'
 status: Accepted
-decision: "Agent-as-Data (JSONB)"
-alternatives: "Classes Python por agente"
-rationale: "Config no admin, nao codigo. Padrao Botpress/Voiceflow"
+decision: Agent-as-Data (JSONB)
+alternatives: Classes Python por agente, YAML/TOML config files, Plataforma low-code
+  (Botpress/Voiceflow), Full low-code builder para tenants (modelo Voiceflow)
+rationale: Time-to-market de novo agente/tenant cai de horas para minutos
 ---
 # ADR-006: Agent-as-Data — multi-client, white-label e customizacao por tenant
 **Status:** Accepted | **Data:** 2026-03-23 | **Atualizado:** 2026-03-25

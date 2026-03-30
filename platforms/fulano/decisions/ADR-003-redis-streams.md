@@ -1,9 +1,9 @@
 ---
-title: "ADR-003: Redis Streams + DLQ para mensageria"
+title: 'ADR-003: Redis Streams + DLQ para mensageria'
 status: Accepted
-decision: "Redis Streams + DLQ"
-alternatives: "RabbitMQ, BullMQ Python, ARQ puro"
-rationale: "Redis ja no stack, consumer groups nativos, DLQ com XCLAIM"
+decision: Redis Streams + DLQ
+alternatives: RabbitMQ, BullMQ
+rationale: Sem infra adicional — aproveita Redis existente
 ---
 # ADR-003: Redis Streams + DLQ para mensageria
 **Status:** Accepted | **Data:** 2026-03-23 | **Atualizado:** 2026-03-25

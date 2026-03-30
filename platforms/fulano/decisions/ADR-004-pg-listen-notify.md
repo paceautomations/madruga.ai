@@ -1,9 +1,9 @@
 ---
-title: "ADR-004: PG LISTEN/NOTIFY para eventos real-time"
+title: 'ADR-004: PG LISTEN/NOTIFY para eventos real-time'
 status: Accepted
-decision: "PG LISTEN/NOTIFY"
-alternatives: "Supabase Realtime, Polling"
-rationale: "Nativo PG, ~1ms, entrega confiavel dentro da transacao"
+decision: PG LISTEN/NOTIFY
+alternatives: Supabase Realtime, Polling com HTTP
+rationale: Garantia de entrega vinculada a transacao — sem eventos fantasma
 ---
 # ADR-004: PG LISTEN/NOTIFY para eventos real-time
 **Status:** Accepted | **Data:** 2026-03-23 | **Atualizado:** 2026-03-25

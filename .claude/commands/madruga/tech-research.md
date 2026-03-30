@@ -217,9 +217,3 @@ Incorporate feedback: fix blockers, note warnings in the scorecard.
 | Incomplete business layer | List gaps and ask the user before researching |
 | User rejects a decision at the gate | Ask for new constraints and re-research only that decision |
 
----
-handoff:
-  from: tech-research
-  to: adr
-  context: "Pesquisa tecnológica concluída. ADRs devem formalizar decisões. WARNING: 1-way-door."
-  blockers: []

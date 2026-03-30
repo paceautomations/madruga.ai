@@ -1,6 +1,11 @@
 ---
-status: accepted
-title: "ADR-005: SpeckitBridge Compositor"
+title: 'ADR-005: SpeckitBridge Compositor'
+status: Accepted
+decision: We will use SpeckitBridge as a Python compositor that reads `.claude/commands/`
+  and `.specify/templates/` at runtime, assembling contextual prompts for the Claude
+  API subprocess.
+alternatives: Hardcoded prompts (Python strings), Separate agents (multi-agent framework)
+rationale: Skills e templates vivem como arquivos editaveis — nao requerem deploy
 ---
 # ADR-005: SpeckitBridge como Compositor de Skills e Templates
 **Status:** Accepted | **Data:** 2026-03-27

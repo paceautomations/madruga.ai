@@ -99,9 +99,3 @@ Tempo total estimado: ~7h para pipeline completo + 2-4h por epic.
 
 Based on the pipeline status, recommend the single most impactful next action.
 
----
-handoff:
-  from: getting-started
-  to: null
-  context: "Onboarding concluido. Usuario sabe o proximo passo."
-  blockers: []

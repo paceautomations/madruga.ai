@@ -162,9 +162,3 @@ Incorporate feedback: fix blockers, note warnings in the scorecard.
 | Fewer than 3 real alternatives | Research more. If genuinely only 2 exist: document with explicit justification for why no 3rd is viable |
 | User rejects a decision at the gate | Return to step 1 with new constraints for that decision |
 
----
-handoff:
-  from: adr
-  to: blueprint
-  context: "ADRs aprovados. Blueprint deve consolidar concerns transversais."
-  blockers: []

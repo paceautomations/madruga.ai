@@ -1,6 +1,12 @@
 ---
-status: accepted
-title: "ADR-003: Astro + Starlight Portal"
+title: 'ADR-003: Astro + Starlight Portal'
+status: Accepted
+decision: We will use Astro + Starlight as the documentation portal framework, with
+  `platforms.mjs` for auto-discovery, symlinks for content, and `LikeC4VitePlugin`
+  for diagram embedding.
+alternatives: Docusaurus, MkDocs + Material, VitePress
+rationale: Starlight gera site estatico otimizado — deploy trivial (Vercel, Netlify,
+  S3)
 ---
 # ADR-003: Astro + Starlight para Portal de Documentacao
 **Status:** Accepted | **Data:** 2026-03-27

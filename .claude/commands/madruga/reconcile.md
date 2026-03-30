@@ -63,7 +63,7 @@ git diff main...HEAD --name-only
 | If diff touches... | Read these docs |
 |---------------------|----------------|
 | Business logic, features, scope | `business/solution-overview.md`, `business/process.md` |
-| Architecture, infra, deploy, new services | `engineering/blueprint.md`, `engineering/containers.md` |
+| Architecture, infra, deploy, new services | `engineering/blueprint.md`, `model/platform.likec4` |
 | Domain entities, aggregates, events | `engineering/domain-model.md` |
 | APIs, contracts, integrations | `engineering/context-map.md` |
 | LikeC4 model files or new containers | `model/*.likec4` |
@@ -238,9 +238,3 @@ Present the full reconcile report (drift score, health table, impact radius, pro
 | No `qa-report.md` for this epic | WARN: "QA deveria rodar antes de reconcile" |
 | No `README.md` for this platform | Skip README drift (D9), not all platforms have one |
 
----
-handoff:
-  from: reconcile
-  to: pipeline
-  context: "Reconciliacao concluida para epic <NNN>. Drift score: X%. Y docs atualizados. Ciclo do epic completo — pronto para PR."
-  blockers: []

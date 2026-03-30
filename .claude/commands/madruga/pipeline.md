@@ -200,9 +200,3 @@ Show L1 table + Mermaid + L2 tables + Mermaid + progress + next step. Do NOT exe
 | DB not available | Fallback to filesystem-only status |
 | Invalid platform name | Prompt for correct name |
 
----
-handoff:
-  from: pipeline
-  to: null
-  context: "Read-only skill. No handoff — user decides next action based on recommendation."
-  blockers: []

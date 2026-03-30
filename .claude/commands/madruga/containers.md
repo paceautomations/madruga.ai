@@ -35,9 +35,10 @@ One container = one reason to exist. If two containers do the same thing, merge 
 ## Output Directory
 
 Save to:
-- `platforms/<name>/engineering/containers.md`
 - `platforms/<name>/model/platform.likec4`
 - `platforms/<name>/model/views.likec4`
+
+> **Note:** This skill generates LikeC4 files only. Container NFRs and deploy topology live in `engineering/blueprint.md`. No separate `engineering/containers.md` is generated — the LikeC4 model is the source of truth for containers.
 
 ## Instructions
 
@@ -63,66 +64,14 @@ Wait for answers BEFORE generating.
 
 ### 2. Generate Artifacts
 
-**File 1: engineering/containers.md**
-
-```markdown
----
-title: "Container Architecture"
-updated: YYYY-MM-DD
----
-# <Name> — Container Architecture (C4 Level 2)
-
-> Containers, responsibilities, protocols, and NFRs. Last updated: YYYY-MM-DD.
-
----
-
-## Container Diagram
-
-```mermaid
-graph TD
-  ...
-```
-
----
-
-## Container Table
-
-| Container | Technology | Responsibility | Bounded Contexts | Protocol In | Protocol Out |
-|-----------|-----------|---------------|-----------------|-------------|--------------|
-| ... | ... | ... | ... | ... | ... |
-
----
-
-## Inter-Container Communication
-
-| From | To | Protocol | Data | Synchronous? |
-|------|-----|----------|------|-------------|
-| ... | ... | ... | ... | ... |
-
----
-
-## Per-Container NFRs
-
-| Container | Latency P95 | Throughput | Availability | Notes |
-|-----------|-------------|-----------|-------------|-------|
-| ... | ... | ... | ... | ... |
-
----
-
-## Data Ownership
-
-| Container | Store | Data | Pattern |
-|-----------|-------|------|---------|
-| ... | ... | ... | Database per service / Shared DB |
-```
-
-**File 2: model/platform.likec4**
+**File 1: model/platform.likec4**
 - Define LikeC4 elements for each container
 - Relationships between containers
+- Use existing element types from `model/spec.likec4` (NEVER redefine)
 
-**File 3: model/views.likec4**
+**File 2: model/views.likec4**
 - Views for the interactive portal
-- Main container view
+- Main container view + zoom views per bounded context
 
 ### Auto-Review Additions
 
@@ -133,9 +82,7 @@ graph TD
 | 3 | Are protocols defined for every communication? | Add them |
 | 4 | Are NFRs measurable per container? | Add targets |
 | 5 | Is LikeC4 syntax valid? | Fix |
-| 6 | Max 200 lines (.md)? | Condense |
-| 7 | Is data ownership clear? | Define it |
-| 8 | Is .md consistent with .likec4? | Align |
+| 6 | Are views defined for all bounded contexts? | Add zoom views |
 
 ### LikeC4 Validation
 
@@ -151,8 +98,3 @@ After saving `.likec4` files, validate by running `likec4 build` in the model di
 | Conflict with blueprint topology | Align with blueprint, propose update if needed |
 
 ---
-handoff:
-  from: containers
-  to: context-map
-  context: "Containers definidos. Context map deve mapear relações entre bounded contexts."
-  blockers: []

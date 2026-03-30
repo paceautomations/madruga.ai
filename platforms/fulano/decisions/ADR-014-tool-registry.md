@@ -1,9 +1,11 @@
 ---
-title: "ADR-014: Tool Registry declarativo para extensibilidade multi-tenant"
+title: 'ADR-014: Tool Registry declarativo para extensibilidade multi-tenant'
 status: Accepted
-decision: "Tool Registry declarativo"
-alternatives: "Tools hardcoded"
-rationale: "Catalogo central: admin, validacao, LLM context filtering"
+decision: Tool Registry declarativo
+alternatives: Tools avulsas sem registro (status quo), Tool marketplace (modelo Botpress/n8n),
+  Tools como microservices (modelo Salesforce)
+rationale: Admin panel tem fonte de verdade para tools disponiveis — sem hardcode
+  no frontend
 ---
 # ADR-014: Tool Registry declarativo para extensibilidade multi-tenant
 **Status:** Accepted | **Data:** 2026-03-25

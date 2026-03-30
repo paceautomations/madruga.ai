@@ -1,9 +1,11 @@
 ---
-title: "ADR-005: Evolution API Cloud mode como primeiro channel adapter (estrategia omnichannel)"
+title: 'ADR-005: Evolution API Cloud mode como primeiro channel adapter (estrategia
+  omnichannel)'
 status: Accepted
-decision: "Evolution API Cloud mode"
-alternatives: "Baileys mode"
-rationale: "Ban risk Baileys (issues #2228, #2298). Cloud API usa Meta oficial"
+decision: Evolution API Cloud mode
+alternatives: Baileys (via Evolution API modo Baileys), WhatsApp Business API direta
+  (sem Evolution)
+rationale: Zero risco de ban — API oficial com aprovacao do Meta
 ---
 # ADR-005: Evolution API Cloud mode como primeiro channel adapter (estrategia omnichannel)
 **Status:** Accepted | **Data:** 2026-03-23 | **Atualizado:** 2026-03-25

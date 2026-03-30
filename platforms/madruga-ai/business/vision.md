@@ -31,10 +31,18 @@ Times de engenharia de software (1-20 engenheiros) que precisam manter documenta
 - **Primario:** O proprio time Pace Automations — Gabriel Hamu como arquiteto/operator, usando Madruga AI para documentar e construir todas as plataformas da empresa.
 - **Secundario:** Desenvolvedores solo ou times pequenos que adotam Claude Code e querem um framework de documentacao arquitetural com pipeline spec-to-code.
 
+### Personas
+
+| Persona | O que faz | O que ganha | Jornada principal |
+|---------|-----------|-------------|-------------------|
+| **Arquiteto / Tech Lead** | Documenta visao, especifica features, delega execucao ao agente autonomo | Arquitetura sempre atualizada, specs com contexto macro, execucao sem overhead | Documenta → especifica → delega → revisa PR |
+| **Revisor** | Valida PRs gerados pelo agente, aprova decisoes irreversiveis | Contexto completo de cada mudanca, rastreabilidade spec→codigo | Recebe PR → ve contexto e diff → aprova ou ajusta |
+| **Membro do Time** | Consulta arquitetura, entende decisoes, navega diagramas | Portal unico, diagramas interativos, decisoes pesquisaveis | Abre portal → navega plataforma → entende |
+
 ### Segmentos prioritarios
 
 1. **Plataformas internas Pace:** Fulano (WhatsApp agents), proximas plataformas em pipeline.
-2. **Projetos greenfield:** Onde a estrutura pode ser adotada desde o inicio via Copier template.
+2. **Projetos greenfield:** Onde a estrutura pode ser adotada desde o inicio.
 3. **Projetos brownfield:** Onde a documentacao precisa ser retroativamente construida e mantida sincronizada.
 
 ### Onde NAO jogamos

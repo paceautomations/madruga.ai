@@ -172,9 +172,3 @@ graph LR
 | NFRs without baseline | Mark [TO DEFINE] and suggest defaults by app type |
 | No codebase-context | OK — treat as greenfield |
 
----
-handoff:
-  from: blueprint
-  to: domain-model
-  context: "Blueprint aprovado com concerns, NFRs, e folder structure. Domain model deve modelar bounded contexts."
-  blockers: []

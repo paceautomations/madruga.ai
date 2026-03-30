@@ -42,7 +42,7 @@ Save to `platforms/<name>/engineering/context-map.md`.
 
 **Required reading:**
 - `engineering/domain-model.md` — bounded contexts, aggregates
-- `engineering/containers.md` — how contexts map to containers
+- `model/platform.likec4` — how contexts map to containers
 - `model/ddd-contexts.likec4` — context naming for consistency
 
 **Structured Questions:**
@@ -140,9 +140,3 @@ graph TD
 | Isolated context (no relationships) | Question: is it truly independent? |
 | Conflict between domain-model and containers | Align — contexts should map to containers |
 
----
-handoff:
-  from: context-map
-  to: epic-breakdown
-  context: "Context map completo. Epic breakdown deve quebrar em epics Shape Up. WARNING: 1-way-door."
-  blockers: []

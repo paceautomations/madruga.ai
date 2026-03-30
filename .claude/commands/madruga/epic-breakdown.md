@@ -46,7 +46,7 @@ Default is Mode 1. Auto-number epics sequentially from the highest existing epic
 
 **Required reading (full context):**
 - `engineering/domain-model.md` — bounded contexts
-- `engineering/containers.md` — architecture
+- `engineering/blueprint.md` — architecture, NFRs, deploy topology
 - `engineering/context-map.md` — DDD relationships
 - `business/*` — vision, solution-overview, process
 - `engineering/blueprint.md` — NFRs and cross-cutting concerns
@@ -165,9 +165,3 @@ Incorporate feedback: fix blockers, note warnings in the scorecard.
 | Circular dependency between epics | Resolve via split or merge |
 | Context without an associated epic | Check whether the context is needed now |
 
----
-handoff:
-  from: epic-breakdown
-  to: roadmap
-  context: "Epics definidos com pitch, appetite, e acceptance criteria. Roadmap deve sequenciar entrega."
-  blockers: []

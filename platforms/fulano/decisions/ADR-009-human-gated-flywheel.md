@@ -1,9 +1,9 @@
 ---
-title: "ADR-009: Flywheel de dados com gate humano semanal"
+title: 'ADR-009: Flywheel de dados com gate humano semanal'
 status: Accepted
-decision: "Flywheel com gate humano"
-alternatives: "Auto-deploy sem flywheel"
-rationale: "Regressao silenciosa pior que prompt subotimo"
+decision: Flywheel com gate humano
+alternatives: Auto-deploy baseado em eval scores, Deploy manual ad-hoc
+rationale: Zero risco de regressao silenciosa por auto-deploy
 ---
 # ADR-009: Flywheel de dados com gate humano semanal
 **Status:** Accepted | **Data:** 2026-03-23

@@ -120,7 +120,17 @@ export function buildSidebar(platforms) {
         {
           label: 'Engineering',
           items: [
+            {
+              label: 'ADRs',
+              collapsed: true,
+              items: [
+                { label: 'Decision Overviews', link: `/${p.name}/decisions/` },
+                { label: 'ADRs', autogenerate: { directory: `${p.name}/decisions` } },
+              ],
+            },
+            { slug: `${p.name}/engineering/blueprint` },
             { label: 'System Landscape', link: `/${p.name}/landscape/` },
+            { slug: `${p.name}/engineering/domain-model` },
             { label: 'Containers', link: `/${p.name}/containers/` },
             {
               label: 'Context Map',
@@ -134,9 +144,7 @@ export function buildSidebar(platforms) {
                   })),
               ],
             },
-            { slug: `${p.name}/engineering/domain-model` },
             { slug: `${p.name}/engineering/integrations` },
-            { slug: `${p.name}/engineering/blueprint` },
           ],
         },
         {
@@ -150,14 +158,6 @@ export function buildSidebar(platforms) {
                 ? epicItems
                 : [{ label: 'Nenhum epic cadastrado', link: `/${p.name}/roadmap/` }],
             },
-          ],
-        },
-        {
-          label: 'ADRs',
-          collapsed: true,
-          items: [
-            { label: 'Decision Overviews', link: `/${p.name}/decisions/` },
-            { label: 'ADRs', autogenerate: { directory: `${p.name}/decisions` } },
           ],
         },
         {

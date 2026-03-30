@@ -1,9 +1,11 @@
 ---
-title: "ADR-019: Versionamento de Agent Config com Canary Rollout"
+title: 'ADR-019: Versionamento de Agent Config com Canary Rollout'
 status: Accepted
-decision: "Config versioning + canary traffic split"
-alternatives: "All-or-nothing deploy, Feature flags externo"
-rationale: "Mudanca de prompt e o deploy mais arriscado — precisa de canary com eval comparison"
+decision: Config versioning + canary traffic split
+alternatives: All-or-nothing (status quo), Feature flags externo (LaunchDarkly, Unleash),
+  Shadow mode (executa ambas, retorna so active)
+rationale: Mudancas de prompt com rede de seguranca — canary detecta regressao antes
+  de afetar 100%
 ---
 # ADR-019: Versionamento de Agent Config com Canary Rollout
 **Status:** Accepted | **Data:** 2026-03-27

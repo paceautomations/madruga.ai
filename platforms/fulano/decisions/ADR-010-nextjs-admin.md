@@ -1,9 +1,9 @@
 ---
-title: "ADR-010: Next.js 15 + shadcn/ui para admin panel"
+title: 'ADR-010: Next.js 15 + shadcn/ui para admin panel'
 status: Accepted
-decision: "Next.js 15 + shadcn/ui"
-alternatives: "HTMX, Streamlit, Chatwoot"
-rationale: "Real-time bidirecional para handoff inbox. shadcn/ui acelera dev"
+decision: Next.js 15 + shadcn/ui
+alternatives: Retool / Appsmith (low-code), React + Vite + Material UI
+rationale: Handoff inbox com real-time via Socket.io — operador ve mensagens instantaneamente
 ---
 # ADR-010: Next.js 15 + shadcn/ui para admin panel
 **Status:** Accepted | **Data:** 2026-03-23

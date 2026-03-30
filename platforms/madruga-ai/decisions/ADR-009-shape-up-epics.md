@@ -1,6 +1,12 @@
 ---
-status: accepted
-title: "ADR-009: Shape Up Epics"
+title: 'ADR-009: Shape Up Epics'
+status: Accepted
+decision: We will use Shape Up pitch format for all epics, stored as `platforms/<name>/epics/NNN-slug/pitch.md`
+  with YAML frontmatter linking to architecture model (contexts, containers, modules).
+alternatives: Scrum user stories, Kanban cards (titulo + descricao livre), Free-form
+  docs (RFC-style)
+rationale: Appetite explicito — forca decisao de budget antes de comecar (1-2 semanas
+  ou 4-6 semanas)
 ---
 # ADR-009: Shape Up Pitches para Gestao de Epics
 **Status:** Accepted | **Data:** 2026-03-27

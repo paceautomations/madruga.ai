@@ -15,7 +15,6 @@ def test_scaffold_structure(scaffold: Path):
         "business/vision.md",
         "business/solution-overview.md",
         "engineering/domain-model.md",
-        "engineering/containers.md",
         "engineering/context-map.md",
         "engineering/integrations.md",
         "model/spec.likec4",

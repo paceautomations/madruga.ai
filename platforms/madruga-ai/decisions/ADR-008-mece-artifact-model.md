@@ -1,6 +1,12 @@
 ---
-status: accepted
-title: "ADR-008: MECE Artifact Model"
+title: 'ADR-008: MECE Artifact Model'
+status: Accepted
+decision: We will enforce a MECE artifact model where each documentation artifact
+  has exactly one owner (the skill/phase that generates it) and one purpose (the question
+  it answers), with no content duplication across artifacts.
+alternatives: Ad-hoc docs (cada dev escreve onde quiser), Wiki (Notion, Confluence),
+  Shared docs (Google Docs)
+rationale: Cada artefato tem ownership claro — daemon sabe exatamente o que atualizar
 ---
 # ADR-008: MECE Artifact Model para Documentacao
 **Status:** Accepted | **Data:** 2026-03-27

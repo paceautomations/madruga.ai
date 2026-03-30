@@ -1,9 +1,9 @@
 ---
-title: "ADR-002: Bifrost (Go) como LLM proxy"
+title: 'ADR-002: Bifrost (Go) como LLM proxy'
 status: Accepted
-decision: "Bifrost (Go, MIT)"
-alternatives: "LiteLLM"
-rationale: "50x mais rapido, 68% menos memoria, OpenAI-compatible"
+decision: Bifrost (Go, MIT)
+alternatives: LiteLLM, Proxy custom (httpx + FastAPI)
+rationale: Latencia minima no proxy layer — usuarios nao percebem overhead
 ---
 # ADR-002: Bifrost (Go) como LLM proxy
 **Status:** Accepted | **Data:** 2026-03-23

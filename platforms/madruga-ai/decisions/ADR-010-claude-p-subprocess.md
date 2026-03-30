@@ -1,6 +1,10 @@
 ---
-status: accepted
-title: "ADR-010: Claude -p Subprocess vs SDK Direto"
+title: 'ADR-010: Claude -p Subprocess vs SDK Direto'
+status: Accepted
+decision: We will invoke Claude exclusively via `claude -p` subprocess, never using
+  the Anthropic Python SDK directly.
+alternatives: Anthropic Python SDK, LangChain / LiteLLM
+rationale: Reaproveita autenticacao e configuracao do Claude Code já instalado
 ---
 # ADR-010: Claude -p Subprocess vs SDK Direto
 **Status:** Accepted | **Data:** 2026-03-27

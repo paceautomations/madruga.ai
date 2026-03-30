@@ -1,9 +1,10 @@
 ---
-title: "ADR-017: Secrets Management — Vault, encryption e rotation"
+title: 'ADR-017: Secrets Management — Vault, encryption e rotation'
 status: Accepted
-decision: "Infisical (self-hosted)"
-alternatives: ".env, env vars compartilhadas"
-rationale: "Envelope encryption por tenant, rotation 30d"
+decision: Infisical (self-hosted)
+alternatives: .env files, Supabase sem encryption (plain text em tabela com RLS),
+  Secrets hardcoded no codigo, HashiCorp Vault
+rationale: Secrets nunca em plain text — encryption at rest e in transit
 ---
 # ADR-017: Secrets Management — Vault, encryption e rotation
 **Status:** Accepted | **Data:** 2026-03-25

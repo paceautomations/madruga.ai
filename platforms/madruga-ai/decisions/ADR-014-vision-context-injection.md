@@ -1,6 +1,11 @@
 ---
-status: accepted
-title: "ADR-014: Vision Context Injection por Fase"
+title: 'ADR-014: Vision Context Injection por Fase'
+status: Accepted
+decision: 'We will inject Vision context proportionally per phase: specify gets vision_brief
+  + context_map, plan gets context_map + domain_model + relevant ADRs, implement gets
+  ADRs + containers (NFRs), and reconcile gets full context for node-by-node diff.'
+alternatives: Contexto completo em toda fase, Zero contexto (cada fase isolada)
+rationale: Cada fase recebe exatamente o contexto que precisa (proporcional)
 ---
 # ADR-014: Vision Context Injection por Fase
 **Status:** Accepted | **Data:** 2026-03-27

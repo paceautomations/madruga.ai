@@ -1,9 +1,9 @@
 ---
-title: "ADR-012: Modelo de billing para tenants"
+title: 'ADR-012: Modelo de billing para tenants'
 status: Proposed
-decision: "Modelo de billing"
-alternatives: "(em avaliacao)"
-rationale: "4 modelos sendo avaliados"
+decision: Modelo de billing
+alternatives: ''
+rationale: ''
 ---
 # ADR-012: Modelo de billing para tenants
 **Status:** Proposed (decisao pendente) | **Data:** 2026-03-25

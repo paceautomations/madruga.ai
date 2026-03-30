@@ -1,9 +1,11 @@
 ---
-title: "ADR-011: Pool + RLS como modelo de isolamento multi-tenant"
+title: 'ADR-011: Pool + RLS como modelo de isolamento multi-tenant'
 status: Accepted
-decision: "Pool + RLS"
-alternatives: "Silo (DB separado), Schema separado"
-rationale: "Complexidade minima, RLS nativo Supabase, time de 5"
+decision: Pool + RLS
+alternatives: Silo (banco por tenant), Schema separado (1 banco, N schemas), Pool
+  sem RLS (apenas WHERE tenant_id = ?)
+rationale: 'Uma unica superficie de infra (Postgres faz tudo: relacional + vetorial
+  + eventos) — menos pecas = menos coisas pra quebrar'
 ---
 # ADR-011: Pool + RLS como modelo de isolamento multi-tenant
 **Status:** Accepted | **Data:** 2026-03-25

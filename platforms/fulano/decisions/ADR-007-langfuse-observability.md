@@ -1,9 +1,9 @@
 ---
-title: "ADR-007: LangFuse v3 self-hosted para observabilidade"
+title: 'ADR-007: LangFuse v3 self-hosted para observabilidade'
 status: Accepted
-decision: "LangFuse v3 (self-hosted)"
-alternatives: "Helicone, Portkey, LangSmith"
-rationale: "26M installs/mes, MIT, prompt management nativo"
+decision: LangFuse v3 (self-hosted)
+alternatives: LangSmith, Phoenix (Arize)
+rationale: Visibilidade completa de traces, custo e latencia por agente/modelo
 ---
 # ADR-007: LangFuse v3 self-hosted para observabilidade
 **Status:** Accepted | **Data:** 2026-03-23 | **Atualizado:** 2026-03-25

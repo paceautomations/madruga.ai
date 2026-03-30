@@ -189,7 +189,7 @@ L2 (per epic, repeats on dedicated branch):
 | 7 | `adr` | decisions/ADR-*.md | tech-research | engineering | 1-way-door |
 | 8 | `blueprint` | engineering/blueprint.md | adr | engineering | human |
 | 9 | `domain-model` | engineering/domain-model.md + model/ddd-contexts.likec4 | blueprint, business-process | engineering | human |
-| 10 | `containers` | engineering/containers.md + model/platform.likec4 | domain-model, blueprint | engineering | human |
+| 10 | `containers` | model/platform.likec4 + model/views.likec4 | domain-model, blueprint | engineering | human |
 | 11 | `context-map` | engineering/context-map.md | domain-model, containers | engineering | human |
 | 12 | `epic-breakdown` | epics/*/pitch.md | domain-model, containers, context-map | planning | 1-way-door |
 | 13 | `roadmap` | planning/roadmap.md | epic-breakdown | planning | human |

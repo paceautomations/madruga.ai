@@ -1,6 +1,12 @@
 ---
-status: accepted
-title: "ADR-007: Multi-Persona Debate Engine"
+title: 'ADR-007: Multi-Persona Debate Engine'
+status: Accepted
+decision: We will use a multi-persona debate engine where 3-5 synthetic reviewers
+  with distinct perspectives critique specs in structured rounds, producing a consolidated
+  list of issues (BLOCKER/WARNING/NIT).
+alternatives: Single-pass review (um prompt de review), Human review only
+rationale: Multiplas perspectivas encontram classes diferentes de problemas (security,
+  performance, UX, maintainability)
 ---
 # ADR-007: Multi-Persona Debate Engine para Qualidade de Specs
 **Status:** Accepted | **Data:** 2026-03-27

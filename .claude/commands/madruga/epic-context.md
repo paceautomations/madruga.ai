@@ -64,7 +64,7 @@ git checkout epic/<platform>/<NNN-slug>
 - `epics/<NNN>/pitch.md` — epic scope
 - `engineering/blueprint.md` — stack and concerns
 - `engineering/domain-model.md` — DDD
-- `engineering/containers.md` — architecture
+- `engineering/blueprint.md` — architecture, NFRs, deploy topology
 - `decisions/ADR-*.md` — relevant decisions
 
 ### 1. Collect Context + Ask Questions
@@ -141,9 +141,3 @@ Present captured decisions and resolved gray areas for validation.
 | Architecture docs incomplete | List gaps, suggest completing the pipeline |
 | Too many gray areas (>10) | Prioritize the 5 most critical |
 
----
-handoff:
-  from: epic-context
-  to: specify
-  context: "Contexto de implementação capturado. Spec deve endereçar decisões e constraints documentadas."
-  blockers: []

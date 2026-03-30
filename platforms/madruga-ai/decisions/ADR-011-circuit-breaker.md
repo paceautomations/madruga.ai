@@ -1,6 +1,11 @@
 ---
-status: accepted
-title: "ADR-011: Circuit Breaker para API Calls"
+title: 'ADR-011: Circuit Breaker para API Calls'
+status: Accepted
+decision: We will implement a Circuit Breaker pattern with separate breakers per call
+  category (epic pipeline vs standalone actions), failing fast when the breaker is
+  open.
+alternatives: Retry-only (sem circuit breaker), Rate limiter fixo (token bucket)
+rationale: Fail-fast quando API esta com problemas (0ms check local)
 ---
 # ADR-011: Circuit Breaker para API Calls
 **Status:** Accepted | **Data:** 2026-03-27

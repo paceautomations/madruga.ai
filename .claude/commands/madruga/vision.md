@@ -13,7 +13,7 @@ handoffs:
 
 # Vision One-Pager — Playing to Win
 
-Generate a 1-page business vision document (markdown, ~150 lines) using the Playing to Win framework (Lafley & Martin). The output is purely business-oriented — zero technical jargon.
+Generate a 1-page business vision document (markdown, ~150 lines) using the Playing to Win framework (Lafley & Martin). The output is purely business-oriented — zero technical jargon. This document includes **Personas** (who uses the product and their journeys) — personas live here, NOT in solution-overview.
 
 ## Cardinal Rule: ZERO Technical Content
 
@@ -121,15 +121,18 @@ updated: YYYY-MM-DD
 | **Alternativa atual** | ... |
 | **Job-to-be-Done** | ... |
 
+### Personas
+
+| Persona | O que faz | O que ganha | Jornada principal |
+|---------|-----------|-------------|-------------------|
+| **[Persona 1]** | ... | ... | ... |
+| **[Persona 2]** | ... | ... | ... |
+| **[Persona 3]** | ... | ... | ... |
+
 ### Segmentos prioritarios
 1. **[P1]** — ...
 2. **[P2]** — ...
 3. **[P3]** — ...
-
-### Onde NAO jogamos
-| NAO e... | Porque |
-|----------|--------|
-| ... | ... |
 
 ---
 
@@ -218,6 +221,7 @@ Beyond contract-base checks, verify:
 | 5 | Landscape has max 5 players | Remove the least relevant |
 | 6 | Moat is truly defensible (not easily copied feature) | Reframe or be honest |
 | 7 | Ubiquitous Language section present with min 5 terms | Add domain terms |
+| 8 | Personas table present in "Where to Play" with min 2 personas | Add personas with journeys |
 
 ## Error Handling
 
@@ -228,9 +232,3 @@ Beyond contract-base checks, verify:
 | Platform already has a vision | Read as baseline, ask whether to rewrite from scratch or iterate |
 | More than 5 relevant competitors | Force prioritization: "Which 4 define the competitive space?" |
 
----
-handoff:
-  from: vision
-  to: solution-overview
-  context: "Vision validada. Solution overview deve detalhar feature map e priorização."
-  blockers: []

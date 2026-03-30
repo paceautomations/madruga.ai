@@ -42,7 +42,6 @@ REQUIRED_FILES = [
     "business/vision.md",
     "business/solution-overview.md",
     "engineering/domain-model.md",
-    "engineering/containers.md",
     "engineering/context-map.md",
     "engineering/integrations.md",
     "engineering/blueprint.md",
@@ -50,7 +49,6 @@ REQUIRED_FILES = [
     "model/likec4.config.json",
 ]
 AUTO_MARKERS = {
-    "engineering/containers.md": ["containers"],
     "engineering/context-map.md": ["domains", "relations"],
     "engineering/integrations.md": ["integrations"],
 }

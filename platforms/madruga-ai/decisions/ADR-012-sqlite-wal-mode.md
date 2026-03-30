@@ -1,6 +1,11 @@
 ---
-status: accepted
-title: "ADR-012: SQLite WAL Mode"
+title: 'ADR-012: SQLite WAL Mode'
+status: Accepted
+decision: We will use SQLite WAL (Write-Ahead Logging) mode with busy_timeout=5000ms
+  and foreign_keys=ON for all database connections.
+alternatives: Default journal mode (DELETE), PostgreSQL
+rationale: Leituras concorrentes sem bloqueio (dashboard funciona durante pipeline
+  writes)
 ---
 # ADR-012: SQLite WAL Mode
 **Status:** Accepted | **Data:** 2026-03-27

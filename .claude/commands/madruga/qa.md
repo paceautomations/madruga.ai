@@ -740,9 +740,3 @@ Success rate: 95% (38 PASS + 4 HEALED + 2 WARN) | UNRESOLVED: 0
 Report saved: platforms/fulano/epics/001/qa-report.md
 ```
 
----
-handoff:
-  from: qa
-  to: reconcile
-  context: "QA concluido com N camadas executadas. Reconcile deve verificar drift causado pelo heal loop."
-  blockers: []

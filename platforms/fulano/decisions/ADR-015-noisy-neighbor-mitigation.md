@@ -1,9 +1,11 @@
 ---
-title: "ADR-015: Noisy Neighbor mitigation — rate limiting e circuit breaker per tenant"
+title: 'ADR-015: Noisy Neighbor mitigation — rate limiting e circuit breaker per tenant'
 status: Accepted
-decision: "Rate limiting + circuit breaker"
-alternatives: "Sem protecao"
-rationale: "1 tenant degrada todos. 4 camadas per-tenant"
+decision: Rate limiting + circuit breaker
+alternatives: Sem rate limiting (confiar no billing), Infra separada por tenant (silo
+  — como Bland.ai), Throttling apenas no LLM (Bifrost caps), WAF/API Gateway externo
+  (Cloudflare, Kong)
+rationale: 1 tenant nao derruba todos — protecao em 4 camadas (borda, LLM, fila, logica)
 ---
 # ADR-015: Noisy Neighbor mitigation — rate limiting e circuit breaker per tenant
 **Status:** Accepted | **Data:** 2026-03-25

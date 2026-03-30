@@ -1,6 +1,11 @@
 ---
-status: accepted
-title: "ADR-006: asyncio Daemon 24/7"
+title: 'ADR-006: asyncio Daemon 24/7'
+status: Accepted
+decision: We will use a Python asyncio daemon running 24/7 with a slot-based orchestrator,
+  polling the Obsidian kanban at regular intervals and executing pipeline phases as
+  async tasks.
+alternatives: Cron jobs, Serverless (Lambda / Cloud Functions), Celery + Redis
+rationale: Processo unico — sem overhead de coordenacao distribuida
 ---
 # ADR-006: asyncio Daemon 24/7 para Execucao Autonoma
 **Status:** Accepted | **Data:** 2026-03-27

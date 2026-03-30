@@ -32,9 +32,9 @@ API keys gerenciadas pelo Claude Code CLI (nao pelo Madruga AI). Nenhum secret a
 
 | Ferramenta | Papel | Integracao |
 |------------|-------|------------|
-| structlog (JSON) | Logs estruturados de toda operacao | Daemon, Pipeline, Debate |
-| FastAPI Dashboard | Status em tempo real, metricas, health | :8080, le SQLite read-only |
-| WhatsApp alerts | Notificacoes criticas (1-way doors, falhas) | Evolution API |
+| Portal Dashboard | Pipeline status visual (L1 + L2), Mermaid DAG, filtros por plataforma | Portal Astro, le SQLite |
+| CLI `status` | Pipeline status em tabela + JSON | `platform.py status`, le SQLite |
+| Python logging | Logs de operacoes CLI e scripts | platform.py, db.py, post_save.py |
 
 ### 1.5 Multi-Tenancy
 
@@ -58,13 +58,13 @@ N/A — sistema single-operator. Cada plataforma (`platforms/<name>/`) e um "ten
 
 | # | Cenario | Metrica | Target | Mecanismo | Prioridade |
 |---|---------|---------|--------|-----------|------------|
-| Q1 | Daemon uptime | Disponibilidade | 24/7 (exceto restarts) | systemd auto-restart, PID file | Alta |
-| Q2 | Polling latencia | Tempo ate deteccao de epic | < 60s | Polling interval configuravel | Alta |
-| Q3 | Pipeline resiliencia | Retries por fase | 3x com backoff | Circuit breaker + retry | Alta |
-| Q4 | Portal build time | Tempo de SSG build | < 30s | Astro static build | Media |
-| Q5 | Health check | Tempo de resposta | < 500ms | FastAPI endpoint dedicado | Media |
-| Q6 | Storage ops | Overhead operacional | Zero (sem servidor) | SQLite file-based | Alta |
-| Q7 | Extensibilidade | Plataformas suportadas | N ilimitado | Copier template + auto-discovery | Media |
+| Q1 | Portal build time | Tempo de SSG build | < 30s | Astro static build | Alta |
+| Q2 | Storage ops | Overhead operacional | Zero (sem servidor) | SQLite WAL mode, file-based | Alta |
+| Q3 | Extensibilidade | Plataformas suportadas | N ilimitado | Copier template + auto-discovery | Alta |
+| Q4 | Idempotencia | Skills re-executaveis | Sem side effects em re-run | Check de pre-condicoes + overwrite | Media |
+| Q5 | Versionamento | Tudo em Git | 100% artefatos versionados | Filesystem-first, zero lock-in | Alta |
+| Q6 | Concorrencia SQLite | Writers paralelos | Sem SQLITE_BUSY | WAL mode + busy_timeout=5000ms | Media |
+| Q7 | HMR dev experience | Editar .md/.likec4 e ver resultado | < 2s hot reload | Vite watch + symlinks + LikeC4 plugin | Media |
 
 ---
 
@@ -74,10 +74,11 @@ N/A — sistema single-operator. Cada plataforma (`platforms/<name>/`) e um "ten
 
 | Componente | Runtime | Porta/Protocolo | Scaling |
 |------------|---------|-----------------|---------|
-| Portal (Astro) | Node.js 20+ | :4321 (dev) / SSG | Single instance |
-| Daemon | Python 3.11+ asyncio | Background process | Single instance (max_slots=1) |
-| Dashboard | FastAPI (dentro do Daemon) | :8080 | Single instance |
+| Portal (Astro + Starlight) | Node.js 20+ | :4321 (dev) / SSG | Single instance |
+| Platform CLI | Python 3.11+ | CLI | N/A |
+| SQLite BD | SQLite 3 WAL mode | File (.pipeline/madruga.db) | Single writer, N readers |
 | LikeC4 serve | Node.js (likec4 CLI) | :5173 (dev) | Single instance |
+| Claude Code | CLI | Terminal | Single instance |
 
 ### 3.2 Ambientes
 

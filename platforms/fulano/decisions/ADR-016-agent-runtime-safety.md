@@ -1,9 +1,10 @@
 ---
-title: "ADR-016: Agent Runtime Safety — hard limits, guardrails e loop prevention"
+title: 'ADR-016: Agent Runtime Safety — hard limits, guardrails e loop prevention'
 status: Accepted
-decision: "Hard limits + guardrails"
-alternatives: "Sem limites runtime"
-rationale: "OWASP Agentic Top 10. Incidente $47K em 11d com agents em loop"
+decision: Hard limits + guardrails
+alternatives: NeMo Guardrails (NVIDIA), Sem guardrails (confiar no LLM), Guardrails
+  apenas no output
+rationale: Hard limits previnem cenarios catastroficos (loops, custo descontrolado)
 ---
 # ADR-016: Agent Runtime Safety — hard limits, guardrails e loop prevention
 **Status:** Accepted | **Data:** 2026-03-25

@@ -1,6 +1,11 @@
 ---
-status: accepted
-title: "ADR-004: Git File-Based Storage"
+title: 'ADR-004: Git File-Based Storage'
+status: Accepted
+decision: We will use git as the primary storage for all documentation artifacts,
+  with SQLite only for lightweight operational data (epic tracking, pattern learning,
+  metrics).
+alternatives: PostgreSQL, MongoDB, Cloud DB (Firestore, DynamoDB)
+rationale: Zero overhead operacional — git ja e usado, nenhum servidor adicional
 ---
 # ADR-004: Git File-Based Storage como Persistencia Primaria
 **Status:** Accepted | **Data:** 2026-03-27

@@ -113,9 +113,3 @@ updated: YYYY-MM-DD
 | No tasks.md | Suggest `/speckit.tasks` |
 | No code implemented | Score 0%, list everything as pending |
 
----
-handoff:
-  from: verify
-  to: qa
-  context: "Verificação de aderência concluída. QA deve executar testes abrangentes (análise estática, testes, code review, browser se disponível)."
-  blockers: []

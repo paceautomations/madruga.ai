@@ -288,9 +288,3 @@ After saving `.likec4` files, validate by running `likec4 build` in the model di
 | SQL schema conflicts with database ADR | Adjust SQL for the chosen database (e.g., Postgres vs SQLite vs Supabase) |
 | Business flows do not map to contexts | Revisit process.md — may indicate a gap in the mapping or an implicit context |
 
----
-handoff:
-  from: domain-model
-  to: containers
-  context: "Modelo de domínio com bounded contexts e invariantes. Containers deve mapear unidades deployáveis."
-  blockers: []

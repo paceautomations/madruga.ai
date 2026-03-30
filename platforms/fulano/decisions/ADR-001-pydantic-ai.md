@@ -1,9 +1,9 @@
 ---
-title: "ADR-001: pydantic-ai v1.70 como framework de agentes"
+title: 'ADR-001: pydantic-ai v1.70 como framework de agentes'
 status: Accepted
-decision: "pydantic-ai v1.70"
-alternatives: "LangGraph, Claude Agent SDK"
-rationale: "Type-safe, MCP+A2A nativo, menos deps. LangGraph puxa 30+ pacotes"
+decision: pydantic-ai v1.70
+alternatives: LangGraph, Claude Agent SDK
+rationale: Type safety end-to-end com Pydantic models como input/output de cada agent
 ---
 # ADR-001: pydantic-ai v1.70 como framework de agentes
 **Status:** Accepted | **Data:** 2026-03-23 | **Atualizado:** 2026-03-25

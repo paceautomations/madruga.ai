@@ -1,9 +1,11 @@
 ---
-title: "ADR-013: pgvector namespaced como knowledge store per tenant"
+title: 'ADR-013: pgvector namespaced como knowledge store per tenant'
 status: Accepted
-decision: "pgvector namespaced"
-alternatives: "Pinecone, Weaviate"
-rationale: "Mesma instancia Supabase, sem servico separado"
+decision: pgvector namespaced
+alternatives: Pinecone (servico dedicado), Weaviate (self-hosted), Vector DB separado
+  por tenant (modelo Botpress), Fine-tuning por tenant
+rationale: Zero infra adicional — pgvector roda no mesmo Postgres (principio "menos
+  pecas")
 ---
 # ADR-013: pgvector namespaced como knowledge store per tenant
 **Status:** Accepted | **Data:** 2026-03-25

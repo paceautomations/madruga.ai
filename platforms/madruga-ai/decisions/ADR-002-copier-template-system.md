@@ -1,6 +1,11 @@
 ---
-status: accepted
-title: "ADR-002: Copier para Scaffolding"
+title: 'ADR-002: Copier para Scaffolding'
+status: Accepted
+decision: We will use Copier >= 9.4.0 as the template engine for scaffolding new platforms,
+  with `_skip_if_exists` protecting platform-specific content during `copier update`.
+alternatives: Cookiecutter, Yeoman, Scripts manuais (bash/python)
+rationale: '`copier update` sincroniza mudancas estruturais sem sobrescrever conteudo
+  customizado (via `_skip_if_exists`)'
 ---
 # ADR-002: Copier para Scaffolding de Plataformas
 **Status:** Accepted | **Data:** 2026-03-27
