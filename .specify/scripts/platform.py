@@ -9,6 +9,10 @@ Usage:
     python3 .specify/scripts/platform.py sync [name]        # copier update (one or all)
     python3 .specify/scripts/platform.py register <name>    # inject LikeC4 loader + validate model
     python3 .specify/scripts/platform.py list               # list all platforms
+    python3 .specify/scripts/platform.py import-adrs <name> # import ADRs into DB
+    python3 .specify/scripts/platform.py export-adrs <name> # export decisions to markdown
+    python3 .specify/scripts/platform.py import-memory      # import .claude/memory into DB
+    python3 .specify/scripts/platform.py export-memory      # export memory entries to markdown
 """
 
 from __future__ import annotations
@@ -358,6 +362,75 @@ def cmd_register(name: str) -> None:
 # -- Main --
 
 
+# ══════════════════════════════════════
+# Decision/Memory Import/Export Commands
+# ══════════════════════════════════════
+
+
+def cmd_import_adrs(name: str) -> None:
+    """Import all ADR-*.md from a platform's decisions/ dir into the DB."""
+    from db import get_conn, migrate, import_all_adrs, upsert_platform
+
+    decisions_dir = PLATFORMS_DIR / name / "decisions"
+    if not decisions_dir.exists():
+        _error(f"Decisions dir not found: {decisions_dir}")
+        sys.exit(1)
+    conn = get_conn()
+    migrate(conn)
+    upsert_platform(conn, name, name=name, repo_path=f"platforms/{name}")
+    count = import_all_adrs(conn, name, decisions_dir)
+    conn.close()
+    print(f"Imported {count} ADRs for platform '{name}'")
+
+
+def cmd_export_adrs(name: str) -> None:
+    """Export all decisions for a platform from DB to markdown."""
+    from db import get_conn, migrate, sync_decisions_to_markdown
+
+    decisions_dir = PLATFORMS_DIR / name / "decisions"
+    conn = get_conn()
+    migrate(conn)
+    count = sync_decisions_to_markdown(conn, name, decisions_dir)
+    conn.close()
+    print(f"Exported {count} decisions to {decisions_dir}")
+
+
+def cmd_import_memory() -> None:
+    """Import all .claude/memory/*.md files into the DB."""
+    from db import get_conn, migrate, import_all_memories
+
+    memory_dir = REPO_ROOT / ".claude" / "projects"
+    # Find the memory dir for this repo
+    candidates = list(memory_dir.rglob("memory"))
+    if not candidates:
+        _error("No .claude/projects/*/memory/ directory found")
+        sys.exit(1)
+    conn = get_conn()
+    migrate(conn)
+    total = 0
+    for mem_dir in candidates:
+        if mem_dir.is_dir():
+            total += import_all_memories(conn, mem_dir)
+    conn.close()
+    print(f"Imported {total} memory entries")
+
+
+def cmd_export_memory() -> None:
+    """Export all memory entries from DB to markdown."""
+    from db import get_conn, migrate, sync_memories_to_markdown
+
+    memory_dir = REPO_ROOT / ".claude" / "projects"
+    candidates = list(memory_dir.rglob("memory"))
+    if not candidates:
+        _error("No .claude/projects/*/memory/ directory found")
+        sys.exit(1)
+    conn = get_conn()
+    migrate(conn)
+    count = sync_memories_to_markdown(conn, candidates[0])
+    conn.close()
+    print(f"Exported {count} memory entries to {candidates[0]}")
+
+
 def main() -> None:
     if len(sys.argv) < 2:
         print(__doc__)
@@ -387,6 +460,20 @@ def main() -> None:
             _error("Usage: platform.py register <name>")
             sys.exit(1)
         cmd_register(sys.argv[2])
+    elif cmd == "import-adrs":
+        if len(sys.argv) < 3:
+            _error("Usage: platform.py import-adrs <name>")
+            sys.exit(1)
+        cmd_import_adrs(sys.argv[2])
+    elif cmd == "export-adrs":
+        if len(sys.argv) < 3:
+            _error("Usage: platform.py export-adrs <name>")
+            sys.exit(1)
+        cmd_export_adrs(sys.argv[2])
+    elif cmd == "import-memory":
+        cmd_import_memory()
+    elif cmd == "export-memory":
+        cmd_export_memory()
     else:
         _error(f"Unknown command: {cmd}")
         print(__doc__)

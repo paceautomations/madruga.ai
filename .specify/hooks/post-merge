@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# post-merge hook: reseed BD after merge if migrations changed
+#
+# Checks if any .pipeline/migrations/*.sql files were part of the merge.
+# If so, runs migrate + reseed-all to keep the BD in sync.
+#
+# Install: git config core.hooksPath .specify/hooks
+# Or:      cp .specify/hooks/post-merge .git/hooks/post-merge && chmod +x .git/hooks/post-merge
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+CHANGED_MIGRATIONS=$(git diff-tree -r --name-only --no-commit-id ORIG_HEAD HEAD -- '.pipeline/migrations/*.sql' 2>/dev/null)
+
+if [[ -n "$CHANGED_MIGRATIONS" ]]; then
+    echo "[post-merge] Migration changes detected:"
+    echo "$CHANGED_MIGRATIONS"
+    echo "[post-merge] Running reseed-all..."
+    python3 "$REPO_ROOT/.specify/scripts/post_save.py" --reseed-all 2>&1 || {
+        echo "[post-merge] WARNING: reseed-all failed. Run manually:"
+        echo "  python3 .specify/scripts/post_save.py --reseed-all"
+    }
+    echo "[post-merge] BD reseed complete."
+fi

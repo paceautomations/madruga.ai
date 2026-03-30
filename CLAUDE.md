@@ -41,7 +41,7 @@ Language: documentation and comments are in **Brazilian Portuguese**. Code is in
 │   ├── src/lib/platforms.mjs  # Platform discovery + dynamic sidebar builder
 │   └── src/pages/[platform]/  # Dynamic routes for all platforms
 ├── .claude/
-│   ├── commands/madruga/      # 19 skills: 13 DAG nodes + 5 utilities + qa
+│   ├── commands/madruga/      # 20 skills: 13 L1 nodes + 3 L2 nodes + 4 utilities
 │   ├── knowledge/             # Knowledge files loaded on-demand by skills
 │   └── settings.local.json    # Permissions and MCP server config
 └── docs/                      # Legacy docs
@@ -57,6 +57,10 @@ python3 .specify/scripts/platform.py lint <name>             # validate structur
 python3 .specify/scripts/platform.py lint --all              # validate all platforms
 python3 .specify/scripts/platform.py sync                    # copier update all platforms
 python3 .specify/scripts/platform.py register <name>         # inject LikeC4 loader + validate model
+python3 .specify/scripts/platform.py import-adrs <name>      # import ADR markdown files into DB
+python3 .specify/scripts/platform.py export-adrs <name>      # export decisions from DB to markdown
+python3 .specify/scripts/platform.py import-memory           # import .claude/memory/*.md into DB
+python3 .specify/scripts/platform.py export-memory           # export memory entries to markdown
 
 # ── Portal ──
 cd portal
@@ -81,10 +85,10 @@ python3 .specify/scripts/post_save.py --reseed-all                 # re-seed all
 
 ## Command Namespaces
 
-- **`madruga:*`** (e.g., `/vision`, `/adr`, `/pipeline`, `/getting-started`) — Platform documentation pipeline (13 DAG skills + 7 utilities). Operates at platform level.
-- **`speckit.*`** (e.g., `/speckit.specify`, `/speckit.plan`, `/speckit.tasks`) — SpecKit implementation cycle. Operates within an epic directory.
+- **`madruga:*`** (e.g., `/vision`, `/adr`, `/pipeline`, `/getting-started`) — Full pipeline: L1 platform documentation (13 nodes) + L2 epic cycle (epic-context, verify, qa, reconcile) + utilities (pipeline, checkpoint, getting-started).
+- **`speckit.*`** (e.g., `/speckit.specify`, `/speckit.plan`, `/speckit.tasks`) — Part of L2 epic cycle: specify → clarify → plan → tasks → analyze → implement.
 
-Both are invoked via `/command-name` in Claude Code. Start with `/getting-started` for guided onboarding.
+Both namespaces form a single continuous pipeline invoked via `/command-name` in Claude Code. Start with `/getting-started` for guided onboarding.
 
 ## Prerequisites
 
@@ -132,16 +136,21 @@ All ADRs in `platforms/<name>/decisions/` follow the Nygard template: Context, D
 
 All epics in `platforms/<name>/epics/NNN-slug/pitch.md` follow Shape Up format: Problem, Appetite, Solution, Rabbit Holes, Acceptance Criteria.
 
-## Platform Documentation Pipeline (DAG)
+## Pipeline — Full Flow (L1 + L2)
 
-Each platform is documented incrementally via **atomic skills** orchestrated by a **DAG** (defined in `.claude/knowledge/pipeline-dag-knowledge.md`). Each skill is self-contained (fresh context), produces one artifact, and gets validated before proceeding.
+The pipeline is a **single continuous flow of 24 skills** that takes a platform from conception to implemented, tested code. Orchestrated by a **two-level DAG** (defined in `.claude/knowledge/pipeline-dag-knowledge.md`). Each skill is self-contained (fresh context), produces one artifact, and gets validated before proceeding.
 
 ### Pipeline Flow
 
 ```
-platform-new → vision → solution-overview → business-process
-→ tech-research → adr → blueprint → domain-model → containers → context-map
-→ epic-breakdown → roadmap → [per-epic: epic-context → SpecKit → verify → qa? → reconcile]
+L1 (platform, runs once):
+  platform-new → vision → solution-overview → business-process
+  → tech-research → adr → blueprint → domain-model → containers → context-map
+  → epic-breakdown → roadmap
+
+L2 (per epic, repeats on dedicated branch):
+  → epic-context → specify → clarify → plan → tasks → analyze
+  → implement → analyze → verify → qa? → reconcile → PR/merge → next epic
 ```
 
 ### Gate Types
@@ -156,14 +165,14 @@ platform-new → vision → solution-overview → business-process
 ### Key Commands
 
 ```bash
-# Pipeline status and navigation
+# Pipeline status and navigation (shows L1 + L2 unified)
 /pipeline <platform>           # Table + Mermaid DAG + progress + next step
 
 # Prerequisite check
 .specify/scripts/bash/check-platform-prerequisites.sh --json --status --platform <name>
 ```
 
-### DAG Nodes (13 skills)
+### L1 — Platform Foundation (13 nodes, runs once)
 
 | # | Skill | Output | Depends on | Layer | Gate |
 |---|-------|--------|------------|-------|------|
@@ -181,58 +190,55 @@ platform-new → vision → solution-overview → business-process
 | 12 | `epic-breakdown` | epics/*/pitch.md | domain-model, containers, context-map | planning | 1-way-door |
 | 13 | `roadmap` | planning/roadmap.md | epic-breakdown | planning | human |
 
-### Per-Epic Implementation Cycle
+### L2 — Epic Implementation Cycle (11 nodes per epic)
 
-After the pipeline completes (roadmap done), each epic follows:
+Each epic from the roadmap continues the pipeline on a dedicated branch `epic/<platform>/<NNN-slug>`. This is where code is actually written, tested, and validated.
 
-```
-epic-context → specify → clarify → plan → tasks → analyze → implement → analyze → verify → qa? → reconcile
-```
+**MANDATORY: Every epic runs on a dedicated branch.** `epic-context` creates it. All L2 skills verify they are NOT on main (branch guard in pipeline-contract-base.md Step 0). Merge to main via PR after reconcile.
 
-**MANDATORY: Every epic runs on a dedicated branch `epic/<platform>/<NNN-slug>`.** `epic-context` creates the branch. All subsequent skills verify they are NOT on main (branch guard in pipeline-contract-base.md Step 0). Merge to main via PR after reconcile.
+| # | Skill | Gate | Purpose |
+|---|-------|------|---------|
+| 14 | `epic-context` | human | **Create branch** + capture implementation context |
+| 15 | `speckit.specify` | human | Feature specification |
+| 16 | `speckit.clarify` | human | Reduce ambiguity in spec before planning |
+| 17 | `speckit.plan` | human | Design artifacts |
+| 18 | `speckit.tasks` | human | Task breakdown |
+| 19 | `speckit.analyze` | auto | Pre-implementation consistency check (spec/plan/tasks) |
+| 20 | `speckit.implement` | auto | **Execute tasks — writes actual code** |
+| 21 | `speckit.analyze` | auto | Post-implementation consistency check |
+| 22 | `verify` | auto-escalate | Check implementation vs spec/tasks/architecture |
+| 23 | `qa` | human | Comprehensive testing — static analysis, tests, code review, browser QA |
+| 24 | `reconcile` | human | Detect and fix drift between implementation and docs |
 
-| Step | Skill | Gate | Purpose |
-|------|-------|------|---------|
-| 1 | `epic-context` | human | **Create branch** + capture implementation context |
-| 2 | `speckit.specify` | human | Feature specification |
-| 3 | `speckit.clarify` | human | Reduce ambiguity in spec before planning |
-| 4 | `speckit.plan` | human | Design artifacts |
-| 5 | `speckit.tasks` | human | Task breakdown |
-| 6 | `speckit.analyze` | auto | Pre-implementation consistency check (spec/plan/tasks) |
-| 7 | `speckit.implement` | auto | Execute tasks |
-| 8 | `speckit.analyze` | auto | Post-implementation consistency check |
-| 9 | `verify` | auto-escalate | Check implementation vs spec/tasks/architecture |
-| 10 | `qa` | human (optional) | QA test running app via Playwright |
-| 11 | `reconcile` | human | Detect and fix drift between implementation and docs |
+After reconcile: **PR → merge to main → next epic**.
 
-**qa is optional** — skip when epic has no web-facing features, app isn't running, or Playwright MCP is unavailable. Runs before reconcile because its heal loop may modify code, creating new drift.
+**qa is mandatory** — always runs with auto-adaptive layers (static analysis, tests, code review, build, API, browser). Runs before reconcile because its heal loop may modify code, creating new drift.
 
 ### Utility Skills
 
 | Skill | Purpose |
 |-------|---------|
-| `pipeline` | Table + Mermaid DAG + progress + next step for a platform |
+| `pipeline` | Table + Mermaid DAG (L1 + L2) + progress + next step |
 | `checkpoint` | Save STATE.md with session progress |
+| `getting-started` | Interactive onboarding |
+| `speckit.checklist` | Custom checklist for a feature |
+| `speckit.constitution` | Create/update project constitution |
+| `speckit.taskstoissues` | Convert tasks to GitHub Issues |
 
 ### Skill Contract
 
-Every pipeline skill follows a uniform 6-step contract (see `.claude/knowledge/pipeline-dag-knowledge.md`):
-0. Prerequisites check + constitution validation
+Every pipeline skill (L1 and L2) follows a uniform 6-step contract (see `.claude/knowledge/pipeline-dag-knowledge.md`):
+0. Prerequisites check + constitution validation (+ branch guard for L2)
 1. Context collection + structured questions (Premissas, Trade-offs, Gaps, Provocação)
-2. Artifact generation
-3. Auto-review
+2. Artifact generation (or code for `speckit.implement`)
+3. Auto-review (Tier 1/2/3 based on gate type)
 4. Gate approval
-5. Save + report + handoff
-
-## SpecKit Workflow
-
-The `.claude/commands/speckit.*.md` skills form a feature specification pipeline:
-`specify → clarify → plan → tasks → implement`, with `analyze` for consistency checks and `taskstoissues` for GitHub integration.
+5. Save + SQLite recording (post_save.py) + report + handoff
 
 ## Key Conventions
 
 - **AUTO markers**: Never manually edit content between `<!-- AUTO:name -->` and `<!-- /AUTO:name -->` markers in engineering docs — these are regenerated by `vision-build.py`
-- **platform.yaml**: Declarative manifest defining available views, lifecycle stage, and build commands for each platform. Pipeline DAG (13 nodes) is defined in `.claude/knowledge/pipeline-dag-knowledge.md`
+- **platform.yaml**: Declarative manifest defining available views, lifecycle stage, and build commands for each platform. Full pipeline (L1: 13 nodes + L2: 11 nodes per epic) is defined in `.claude/knowledge/pipeline-dag-knowledge.md`
 - Python code in this repo uses **ruff** for formatting and linting
 
 ## Principles
@@ -275,4 +281,5 @@ After completing any implementation task (new code or refactor touching 3+ files
 - SQLite WAL mode (`.pipeline/madruga.db`) — schema já inclui `epic_nodes` table (001_initial.sql) (003-directory-unification)
 
 ## Recent Changes
+- 009-decision-log-bd: BD as source of truth for decisions + memory. New tables: decision_links, memory_entries, decisions_fts, memory_fts. 5 new columns on decisions. 20+ new functions in db.py. 4 new CLI subcommands in platform.py. FTS5 full-text search.
 - 002-sqlite-foundation: Added Python 3.11+ (stdlib only: sqlite3, hashlib, json, pathlib, uuid) + Zero — apenas stdlib Python
