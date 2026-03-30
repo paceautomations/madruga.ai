@@ -4,18 +4,6 @@ updated: 2026-03-30
 ---
 # Madruga AI — Delivery Roadmap
 
-> Sequencia de epics, milestones, e proximos passos.
-
----
-
-## MVP — Concluido
-
-**MVP Epics:** 006, 007, 008, 009, 010
-**MVP Criterion:** Pipeline L1 + L2 funcional, BD como state store, dashboard visual, docs sincronizados
-**Total MVP Appetite:** ~10 semanas (5 epics shipped)
-
----
-
 ## Epics Shipped
 
 ```mermaid
@@ -23,44 +11,24 @@ gantt
     title Madruga AI — Epics Implementados
     dateFormat YYYY-MM-DD
     section MVP
-    006 SQLite Foundation       :done, e006, 2026-03-27, 3d
-    007 Directory Unification   :done, e007, after e006, 3d
-    008 Quality & DX            :done, e008, after e007, 3d
-    009 Decision Log BD         :done, e009, after e008, 2d
-    010 Pipeline Dashboard      :done, e010, after e009, 2d
+    006 SQLite Foundation       :done, e006, 2026-03-29, 1d
+    007 Directory Unification   :done, e007, 2026-03-29, 1d
+    008 Quality & DX            :done, e008, 2026-03-29, 1d
+    009 Decision Log BD         :done, e009, 2026-03-29, 1d
+    010 Pipeline Dashboard      :done, e010, 2026-03-30, 1d
 ```
 
 ---
 
 ## Epic Table
 
-| # | Epic | Status | Appetite | Descricao |
-|---|------|--------|----------|-----------|
-| 006 | SQLite Foundation | **shipped** | 2w | BD SQLite (WAL mode) como state store para pipeline. Tabelas: platforms, pipeline_nodes, epics, epic_nodes, pipeline_runs, events, artifact_provenance. db.py com stdlib Python. Migrations incrementais. |
-| 007 | Directory Unification | **shipped** | 2w | SpecKit opera em epics/ (unificado). DAG dois niveis (L1 + L2). platform.yaml como manifesto declarativo. Copier template atualizado. |
-| 008 | Quality & DX | **shipped** | 2w | Boilerplate extraido para knowledge files. Skills enxutas. Auto-review por tier. Verify + QA + Reconcile skills implementadas. |
-| 009 | Decision Log BD | **shipped** | 1w | BD como source of truth para decisions e memory. FTS5 full-text search. CLI import/export. 5 novas migrations. 20+ funcoes em db.py. |
-| 010 | Pipeline Dashboard | **shipped** | 1w | Dashboard visual no portal Starlight. CLI `status` com tabela + JSON. Mermaid DAG. Filtros por plataforma. |
-
----
-
-## Dependencies
-
-```mermaid
-graph LR
-  E006[006 SQLite] --> E007[007 Directory]
-  E007 --> E008[008 Quality]
-  E008 --> E009[009 Decisions]
-  E009 --> E010[010 Dashboard]
-```
-
----
-
-## Milestones
-
-| Milestone | Epics | Success Criterion | Status |
-|-----------|-------|-------------------|--------|
-| MVP | 006-010 | Pipeline L1+L2 funcional, BD operacional, dashboard no portal | **Atingido** |
+| # | Epic | Descricao | Status | Concluido |
+|---|------|-----------|--------|-----------|
+| 006 | SQLite Foundation | BD SQLite (WAL mode) como state store para pipeline. Tabelas: platforms, pipeline_nodes, epics, epic_nodes, pipeline_runs, events, artifact_provenance. db.py com stdlib Python. Migrations incrementais. | **shipped** | 2026-03-29 |
+| 007 | Directory Unification | SpecKit opera em epics/ (unificado). DAG dois niveis (L1 + L2). platform.yaml como manifesto declarativo. Copier template atualizado. | **shipped** | 2026-03-29 |
+| 008 | Quality & DX | Boilerplate extraido para knowledge files. Skills enxutas. Auto-review por tier. Verify + QA + Reconcile skills implementadas. | **shipped** | 2026-03-29 |
+| 009 | Decision Log BD | BD como source of truth para decisions e memory. FTS5 full-text search. CLI import/export. 5 novas migrations. 20+ funcoes em db.py. | **shipped** | 2026-03-29 |
+| 010 | Pipeline Dashboard | Dashboard visual no portal Starlight. CLI `status` com tabela + JSON. Mermaid DAG. Filtros por plataforma. | **shipped** | 2026-03-30 |
 
 ---
 
@@ -76,13 +44,3 @@ Epics abaixo sao **candidatos identificados** para proximas iteracoes. Serao det
 | 014 | Runtime Engine Migration | Migrar daemon Python de `general/` para `madruga.ai/src/`. SpeckitBridge integrado. | Grande | Baixa |
 | 015 | Daemon 24/7 | MadrugaDaemon asyncio: poll kanban, orchestrator, pipeline autonomo. systemd service. | Grande | Baixa |
 
----
-
-## Roadmap Risks
-
-| Risk | Impact | Probability | Mitigation |
-|------|--------|-------------|-----------|
-| Context rot em epics grandes | Qualidade de implementacao degrada | Media | Manter epics com appetite <= 2w |
-| Drift entre docs e codigo | Documentacao vira ficcao | Alta | Reconcile obrigatorio pos-epic (ja implementado) |
-| Dependencia de Claude Code API | Breaking changes em skills | Baixa | Skills sao markdown — facil adaptar |
-| SQLite concorrencia | SQLITE_BUSY em writers paralelos | Baixa | WAL mode + busy_timeout ja mitigam |

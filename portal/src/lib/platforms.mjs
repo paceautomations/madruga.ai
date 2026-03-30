@@ -125,7 +125,7 @@ export function buildSidebar(platforms) {
               collapsed: true,
               items: [
                 { label: 'Decision Overviews', link: `/${p.name}/decisions/` },
-                { label: 'ADRs', autogenerate: { directory: `${p.name}/decisions` } },
+                { label: 'ADRs', collapsed: true, autogenerate: { directory: `${p.name}/decisions` } },
               ],
             },
             { slug: `${p.name}/engineering/blueprint` },

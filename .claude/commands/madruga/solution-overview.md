@@ -88,10 +88,6 @@ updated: YYYY-MM-DD
 ---
 # <Name> — Solution Overview
 
-> O que vamos construir, em que ordem, e o que nao fazemos.
-
----
-
 ## Visao de Solucao
 
 [Product narrative from the user's perspective. What they see, do, and gain.

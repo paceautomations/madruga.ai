@@ -1,10 +1,10 @@
 ---
 id: 008
 title: "Epic 008 — Quality & DX"
-status: proposed
+status: shipped
 phase: pitch
-appetite: "2 weeks"
-priority: 1
+appetite: 2w
+priority: 3
 ---
 # Epic 008 — Quality & Developer Experience
 

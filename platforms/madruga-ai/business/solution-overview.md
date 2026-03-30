@@ -4,10 +4,6 @@ updated: 2026-03-30
 ---
 # Madruga AI — Solution Overview
 
-> O que vamos construir, em que ordem, e o que nao fazemos.
-
----
-
 ## Visao de Solucao
 
 O arquiteto abre o sistema, escolhe uma plataforma e comeca a documentar: visao de negocio, funcionalidades, decisoes, arquitetura. Cada documento segue uma estrutura padronizada — nao precisa inventar formato nem lembrar o que ja foi feito. O sistema guia o proximo passo.

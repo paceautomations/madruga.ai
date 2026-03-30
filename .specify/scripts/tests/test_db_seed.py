@@ -79,3 +79,67 @@ def test_seed_without_repo_fields(tmp_db, tmp_path):
     assert p is not None
     assert p["repo_org"] is None
     assert p["repo_name"] is None
+
+
+def test_seed_sets_completed_at_for_done_nodes(tmp_db, sample_platform_dir):
+    """Done pipeline nodes get completed_at from file mtime."""
+    from db import seed_from_filesystem, get_pipeline_nodes
+
+    seed_from_filesystem(tmp_db, "test-plat", sample_platform_dir)
+    nodes = get_pipeline_nodes(tmp_db, "test-plat")
+    for n in nodes:
+        if n["status"] == "done":
+            assert n["completed_at"] is not None, f"done node {n['node_id']} missing completed_at"
+        else:
+            assert n["completed_at"] is None, f"pending node {n['node_id']} should not have completed_at"
+
+
+def test_seed_reads_epic_frontmatter(tmp_db, sample_platform_dir):
+    """Seed reads status, appetite, priority from pitch.md YAML frontmatter."""
+    from db import seed_from_filesystem, get_epics
+
+    seed_from_filesystem(tmp_db, "test-plat", sample_platform_dir)
+    epics = get_epics(tmp_db, "test-plat")
+    assert len(epics) == 1
+    assert epics[0]["status"] == "in_progress"
+    assert epics[0]["appetite"] == "1w"
+    assert epics[0]["priority"] == 1
+
+
+def test_seed_epic_status_defaults_to_proposed(tmp_db, tmp_path):
+    """Epic without status in frontmatter defaults to proposed."""
+    from db import seed_from_filesystem, get_epics
+
+    pdir = tmp_path / "plat-no-status"
+    pdir.mkdir(parents=True)
+    (pdir / "platform.yaml").write_text(
+        "name: plat-no-status\ntitle: Test\nlifecycle: design\npipeline:\n  nodes: []\n"
+    )
+    epic_dir = pdir / "epics" / "001-test"
+    epic_dir.mkdir(parents=True)
+    (epic_dir / "pitch.md").write_text('---\ntitle: "No Status Epic"\n---\n# No Status Epic\n')
+
+    seed_from_filesystem(tmp_db, "plat-no-status", pdir)
+    epics = get_epics(tmp_db, "plat-no-status")
+    assert len(epics) == 1
+    assert epics[0]["status"] == "proposed"
+
+
+def test_seed_epic_shipped_status(tmp_db, tmp_path):
+    """Epic with status: Shipped maps to 'shipped' in DB."""
+    from db import seed_from_filesystem, get_epics
+
+    pdir = tmp_path / "plat-shipped"
+    pdir.mkdir(parents=True)
+    (pdir / "platform.yaml").write_text("name: plat-shipped\ntitle: Test\nlifecycle: design\npipeline:\n  nodes: []\n")
+    epic_dir = pdir / "epics" / "006-sqlite"
+    epic_dir.mkdir(parents=True)
+    (epic_dir / "pitch.md").write_text(
+        '---\ntitle: "SQLite Foundation"\nstatus: Shipped\nappetite: "2w"\n---\n# SQLite Foundation\n'
+    )
+
+    seed_from_filesystem(tmp_db, "plat-shipped", pdir)
+    epics = get_epics(tmp_db, "plat-shipped")
+    assert len(epics) == 1
+    assert epics[0]["status"] == "shipped"
+    assert epics[0]["appetite"] == "2w"

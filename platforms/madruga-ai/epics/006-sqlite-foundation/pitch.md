@@ -1,10 +1,10 @@
 ---
 id: 006
 title: "SQLite Foundation — BD para Estado do Pipeline"
-status: proposed
+status: shipped
 phase: pitch
-appetite: small-batch
-priority: now
+appetite: 2w
+priority: 1
 ---
 # SQLite Foundation — BD para Estado do Pipeline
 

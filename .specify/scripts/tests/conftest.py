@@ -70,6 +70,8 @@ pipeline:
     # Create epics
     epic_dir = pdir / "epics" / "001-test-epic"
     epic_dir.mkdir(parents=True)
-    (epic_dir / "pitch.md").write_text('---\ntitle: "Test Epic"\n---\n# Test Epic\n')
+    (epic_dir / "pitch.md").write_text(
+        '---\ntitle: "Test Epic"\nstatus: in_progress\nappetite: "1w"\npriority: 1\n---\n# Test Epic\n'
+    )
 
     return pdir

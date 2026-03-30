@@ -61,6 +61,26 @@ def _now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _file_mtime_iso(path: Path) -> str:
+    """Return ISO 8601 UTC timestamp of a file's last modification time."""
+    mtime = path.stat().st_mtime
+    return datetime.fromtimestamp(mtime, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+# Mapping from freeform pitch.md status values to DB CHECK constraint values
+_EPIC_STATUS_MAP = {
+    "proposed": "proposed",
+    "planned": "proposed",
+    "in_progress": "in_progress",
+    "in progress": "in_progress",
+    "shipped": "shipped",
+    "done": "shipped",
+    "blocked": "blocked",
+    "cancelled": "cancelled",
+    "canceled": "cancelled",
+}
+
+
 class _ClosingConnection:
     """sqlite3.Connection wrapper that auto-closes on context exit.
 
@@ -1488,6 +1508,12 @@ def seed_from_filesystem(conn: sqlite3.Connection, platform_id: str, platform_di
                 if first_output.exists():
                     output_hash = compute_file_hash(first_output)
 
+            completed_at = None
+            if status == "done" and output_files:
+                first_file = pdir / output_files[0]
+                if first_file.exists():
+                    completed_at = _file_mtime_iso(first_file)
+
             upsert_pipeline_node(
                 txn,
                 platform_id,
@@ -1496,6 +1522,7 @@ def seed_from_filesystem(conn: sqlite3.Connection, platform_id: str, platform_di
                 output_hash=output_hash,
                 output_files=json.dumps(output_files),
                 completed_by=node.get("skill"),
+                completed_at=completed_at,
             )
             # Populate artifact_provenance for done nodes
             if status == "done":
@@ -1527,22 +1554,45 @@ def seed_from_filesystem(conn: sqlite3.Connection, platform_id: str, platform_di
                 pitch = epic_dir / "pitch.md"
                 if epic_dir.is_dir() and pitch.exists():
                     epic_id = epic_dir.name
-                    with open(pitch) as f:
-                        first_lines = f.read(500)
-                    title_line = ""
-                    for line in first_lines.split("\n"):
-                        if line.startswith("title:"):
-                            title_line = line.split(":", 1)[1].strip().strip('"').strip("'")
-                            break
-                        if line.startswith("# "):
-                            title_line = line[2:].strip()
-                            break
+                    content = pitch.read_text(encoding="utf-8")
+
+                    # Parse YAML frontmatter
+                    frontmatter: dict = {}
+                    if content.startswith("---"):
+                        parts = content.split("---", 2)
+                        if len(parts) >= 3:
+                            try:
+                                frontmatter = yaml.safe_load(parts[1]) or {}
+                            except yaml.YAMLError:
+                                pass
+
+                    # Title: prefer frontmatter, fall back to first heading
+                    title_line = str(frontmatter.get("title", "")).strip()
+                    if not title_line:
+                        for line in content.split("\n"):
+                            if line.startswith("# "):
+                                title_line = line[2:].strip()
+                                break
+
+                    # Status: map frontmatter value to DB constraint
+                    raw_status = str(frontmatter.get("status", "")).lower().strip()
+                    epic_status = _EPIC_STATUS_MAP.get(raw_status)
+
+                    # Appetite and priority from frontmatter
+                    appetite = frontmatter.get("appetite")
+                    if appetite is not None:
+                        appetite = str(appetite).strip('"').strip("'")
+                    priority = frontmatter.get("priority")
+
                     upsert_epic(
                         txn,
                         platform_id,
                         epic_id,
                         title=title_line or epic_id,
                         file_path=f"epics/{epic_id}/pitch.md",
+                        status=epic_status or "proposed",
+                        appetite=appetite,
+                        priority=priority,
                     )
                     epics_seeded += 1
 

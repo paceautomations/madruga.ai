@@ -1,10 +1,10 @@
 ---
 id: 007
 title: "Directory Unification — SpecKit Opera em epics/, DAG Dois Níveis"
-status: proposed
+status: shipped
 phase: pitch
-appetite: small-batch
-priority: now
+appetite: 2w
+priority: 2
 ---
 # Directory Unification — SpecKit Opera em epics/, DAG Dois Níveis
 

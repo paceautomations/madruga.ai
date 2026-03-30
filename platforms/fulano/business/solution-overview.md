@@ -4,10 +4,6 @@ updated: 2026-03-27
 ---
 # Fulano — Solution Overview
 
-> O que vamos construir, para quem, e em que ordem. Ultima atualizacao: 2026-03-27.
-
----
-
 ## Visao de Solucao
 
 O dono de uma PME conecta seu numero WhatsApp, importa seu catalogo ou FAQ, escolhe o tom de voz do agente e esta no ar em menos de 15 minutos. A partir desse momento, o agente responde mensagens de clientes 24/7 — tira duvidas, faz agendamentos, acompanha pedidos. Quando nao sabe responder, transfere para um atendente humano com todo o contexto da conversa. Em grupos WhatsApp, o agente participa quando mencionado — publica ranking, responde perguntas, organiza eventos.

@@ -29,20 +29,25 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 # Add scripts dir to path for db/config import
 sys.path.insert(0, str(Path(__file__).parent))
 
+
 from config import REPO_ROOT  # noqa: F401
 from db import (
     compute_file_hash,
     get_conn,
+    get_epic_nodes,
+    get_epics,
     get_platform,
     insert_event,
     insert_provenance,
     migrate,
     seed_from_filesystem,
+    upsert_epic,
     upsert_epic_node,
     upsert_platform,
     upsert_pipeline_node,
@@ -85,6 +90,7 @@ def record_save(
             output_hash = compute_file_hash(artifact_path)
 
         # Update pipeline node or epic node
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         if epic:
             upsert_epic_node(
                 conn,
@@ -94,6 +100,7 @@ def record_save(
                 "done",
                 output_hash=output_hash,
                 completed_by=skill,
+                completed_at=now,
             )
             insert_event(
                 conn,
@@ -104,6 +111,29 @@ def record_save(
                 actor="claude",
                 payload={"skill": skill, "artifact": artifact},
             )
+
+            # Auto-transition epic status based on node completion
+            # Skip if epic is blocked or cancelled (manual override only)
+            nodes = get_epic_nodes(conn, platform, epic)
+            if nodes:
+                done_count = sum(1 for n in nodes if n["status"] == "done")
+                existing = [e for e in get_epics(conn, platform) if e["epic_id"] == epic]
+                if existing:
+                    current = existing[0]
+                    if current["status"] not in ("blocked", "cancelled"):
+                        new_status = current["status"]
+                        if done_count == len(nodes):
+                            new_status = "shipped"
+                        elif done_count > 0 and current["status"] == "proposed":
+                            new_status = "in_progress"
+                        if new_status != current["status"]:
+                            upsert_epic(
+                                conn,
+                                platform,
+                                epic,
+                                title=current["title"],
+                                status=new_status,
+                            )
         else:
             upsert_pipeline_node(
                 conn,
@@ -113,6 +143,7 @@ def record_save(
                 output_hash=output_hash,
                 output_files=json.dumps([artifact]),
                 completed_by=skill,
+                completed_at=now,
             )
             insert_event(
                 conn,

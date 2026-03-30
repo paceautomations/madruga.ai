@@ -92,11 +92,11 @@ updated: YYYY-MM-DD
 flowchart TB
     subgraph F1["Flow 1: [Name] ([frequency])"]
         direction LR
-        F1A[Step 1] --> F1B[Step 2] --> F1C[Step N]
+        F1A["Step 1\n(/skill-1)"] --> F1B["Step 2\n(/skill-2)"] --> F1C["Step N\n(/skill-n)"]
     end
     subgraph F2["Flow 2: [Name] ([frequency])"]
         direction LR
-        F2A[Step 1] --> F2B[Step 2] --> F2C[Step N]
+        F2A["Step 1\n(/skill-a)"] --> F2B["Step 2\n(/skill-b)"] --> F2C["Step N\n(/skill-c)"]
     end
     F1C -->|"[transition]"| F2A
     F2C -->|"[loop back]"| F2A
@@ -111,6 +111,18 @@ flowchart TB
 |---|------|--------|-----------|--------|
 | 1 | **[Flow Name]** | [who participates] | [estimate] | [why it matters] |
 | 2 | ... | ... | ... | ... |
+
+---
+
+### Skill Map — Flow N: [Name]
+
+> Para cada flow com skills de pipeline, incluir tabela. Flows sem skills recebem nota de uma linha.
+
+| # | Passo | Ator | Skill / Comando | Artefato | Gate |
+|---|-------|------|-----------------|----------|------|
+| 1 | [Nome do passo] | [Ator] | `/skill-name` | [caminho do artefato] | [human / auto / 1-way-door / auto-escalate] |
+
+> Usar formato `/command` (ex: `/vision`) — nao o ID interno (ex: `madruga:vision`). Dados vem de `.claude/knowledge/pipeline-dag-knowledge.md`.
 
 ---
 
@@ -179,6 +191,8 @@ sequenceDiagram
 6. **Frequency/Impact:** quantify when possible. Mark `[VALIDATE]` if estimated.
 7. **Feedback loops:** the E2E diagram MUST show feedback arrows (dotted lines) where outputs of later flows retroaliment earlier docs (e.g., reconcile → business docs).
 8. **3-5 flows:** prioritized by business impact. Most critical flow first.
+9. **Skill annotations no flowchart E2E:** Todo no no `## Visao End-to-End` que corresponde a uma skill do pipeline DEVE incluir `\n(/command)` dentro do label (ex: `F1A["Criar Plataforma\n(/platform-new)"]`). Nos sem skill recebem nota descritiva (ex: `(sem skill)` ou `(manual)`). Usar o nome `/command` que o PM-Arquiteto digita — nao o ID interno.
+10. **Skill Map table por flow:** Entre `## Flow Overview` e o primeiro `## Deep Dive`, incluir `### Skill Map — Flow N: [Name]` para cada flow. Colunas: #, Passo, Ator, Skill / Comando, Artefato, Gate. Dados de `.claude/knowledge/pipeline-dag-knowledge.md`. Flows sem skills recebem `> Sem skills de pipeline` em vez de tabela.
 
 ### Auto-Review Additions
 
@@ -194,6 +208,8 @@ sequenceDiagram
 | 8 | Flow Overview table present with frequency and impact? | Complete it |
 | 9 | Actor Glossary present? | Add it |
 | 10 | Deep dives use phase grouping (rect blocks with notes)? | Add phases |
+| 11 | Flowchart E2E tem inline annotations (`\n(/command)`) em todo no? | Adicionar a partir de pipeline-dag-knowledge.md |
+| 12 | Todo flow com skills tem Skill Map table entre Flow Overview e Deep Dives? | Adicionar tabela |
 
 ## Error Handling
 

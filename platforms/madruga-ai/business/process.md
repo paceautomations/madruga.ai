@@ -16,32 +16,32 @@ updated: 2026-03-30
 flowchart TB
     subgraph F1["Flow 1: Documentar Plataforma (1x)"]
         direction LR
-        F1A[Criar Plataforma] --> F1B[Visao de Negocio]
-        F1B --> F1C[Solution Overview]
-        F1C --> F1D[Processos de Negocio]
-        F1D --> F1E[Pesquisa Tecnologica]
-        F1E --> F1F[Decisoes Arquiteturais]
-        F1F --> F1G[Blueprint + DDD + Containers]
-        F1G --> F1H[Decompor em Epics]
-        F1H --> F1I[Roadmap]
+        F1A["Criar Plataforma\n(/platform-new)"] --> F1B["Visao de Negocio\n(/vision)"]
+        F1B --> F1C["Solution Overview\n(/solution-overview)"]
+        F1C --> F1D["Processos de Negocio\n(/business-process)"]
+        F1D --> F1E["Pesquisa Tecnologica\n(/tech-research)"]
+        F1E --> F1F["Decisoes Arquiteturais\n(/adr)"]
+        F1F --> F1G["Blueprint + DDD + Containers\n(/blueprint → /context-map)"]
+        F1G --> F1H["Decompor em Epics\n(/epic-breakdown)"]
+        F1H --> F1I["Roadmap\n(/roadmap)"]
     end
 
     subgraph F2["Flow 2: Epic Cycle (repete N vezes)"]
         direction LR
-        F2A[Contexto do Epic] --> F2B[Especificar]
-        F2B --> F2C[Planejar + Tasks]
-        F2C --> F2D[Implementar]
-        F2D --> F2E[Verificar + QA]
-        F2E --> F2F[Reconciliar]
-        F2F --> F2G[PR + Merge]
+        F2A["Contexto do Epic\n(/epic-context)"] --> F2B["Especificar\n(/speckit.specify)"]
+        F2B --> F2C["Planejar + Tasks\n(/speckit.plan + .tasks)"]
+        F2C --> F2D["Implementar\n(/speckit.implement)"]
+        F2D --> F2E["Verificar + QA\n(/verify + /qa)"]
+        F2E --> F2F["Reconciliar\n(/reconcile)"]
+        F2F --> F2G["PR + Merge\n(manual)"]
     end
 
     subgraph F3["Flow 3: Consultar (continuo)"]
-        F3A[Portal: Diagramas + Dashboard + Roadmap]
+        F3A["Portal: Diagramas + Dashboard + Roadmap\n(sem skill — consumo passivo)"]
     end
 
     subgraph F4["Flow 4: Daemon (futuro)"]
-        F4A[Execucao Autonoma do Epic Cycle]
+        F4A["Execucao Autonoma do Epic Cycle\n(mesmas skills do Flow 2)"]
     end
 
     F1I -->|"Para cada epic"| F2A
@@ -66,6 +66,48 @@ flowchart TB
 | 2 | **Especificar e Entregar Epic** | PM-Arquiteto, Revisor | N vezes por plataforma | Core loop — onde valor e entregue |
 | 3 | **Consultar Arquitetura** | Consumidor do Portal, Revisor | Continua | Alinhamento — time consulta decisions e estado |
 | 4 | **Revisao e Aprovacao de Entrega** | Revisor, PM-Arquiteto | 1x por epic | Qualidade — gate antes de merge `[FUTURO]` |
+
+### Skill Map — Flow 1: Documentar Nova Plataforma (L1)
+
+| # | Passo | Ator | Skill / Comando | Artefato | Gate |
+|---|-------|------|-----------------|----------|------|
+| 1 | Criar Plataforma | PM-Arquiteto | `/platform-new` | platform.yaml | human |
+| 2 | Visao de Negocio | PM-Arquiteto | `/vision` | business/vision.md | human |
+| 3 | Solution Overview | PM-Arquiteto | `/solution-overview` | business/solution-overview.md | human |
+| 4 | Processos de Negocio | PM-Arquiteto | `/business-process` | business/process.md | human |
+| 5 | Pesquisa Tecnologica | PM-Arquiteto | `/tech-research` | research/tech-alternatives.md | 1-way-door |
+| 6 | Decisoes Arquiteturais | PM-Arquiteto | `/adr` | decisions/ADR-*.md | 1-way-door |
+| 7 | Blueprint | PM-Arquiteto | `/blueprint` | engineering/blueprint.md | human |
+| 8 | Modelo de Dominio | PM-Arquiteto | `/domain-model` | engineering/domain-model.md + model/ddd-contexts.likec4 | human |
+| 9 | Containers | PM-Arquiteto | `/containers` | model/platform.likec4 + model/views.likec4 | human |
+| 10 | Context Map | PM-Arquiteto | `/context-map` | engineering/context-map.md | human |
+| 11 | Decompor em Epics | PM-Arquiteto | `/epic-breakdown` | epics/*/pitch.md | 1-way-door |
+| 12 | Roadmap | PM-Arquiteto | `/roadmap` | planning/roadmap.md | human |
+
+### Skill Map — Flow 2: Especificar e Entregar Epic (L2)
+
+| # | Passo | Ator | Skill / Comando | Artefato | Gate |
+|---|-------|------|-----------------|----------|------|
+| 1 | Iniciar epic | PM-Arquiteto | `/epic-context` | branch + contexto | human |
+| 2 | Especificar | PM-Arquiteto | `/speckit.specify` | spec.md | human |
+| 3 | Clarificar (opcional) | PM-Arquiteto | `/speckit.clarify` | spec atualizada | human |
+| 4 | Planejar | PM-Arquiteto | `/speckit.plan` | plan.md | human |
+| 5 | Quebrar em tarefas | PM-Arquiteto | `/speckit.tasks` | tasks.md | human |
+| 6 | Verificacao consistencia | Madruga AI | `/speckit.analyze` | relatorio | auto |
+| 7 | Implementar | Madruga AI | `/speckit.implement` | codigo | auto |
+| 8 | Verificacao pos | Madruga AI | `/speckit.analyze` | relatorio | auto |
+| 9 | Verificar aderencia | Madruga AI | `/verify` | relatorio | auto-escalate |
+| 10 | QA | PM-Arquiteto | `/qa` | relatorio | human |
+| 11 | Reconciliar | PM-Arquiteto | `/reconcile` | docs atualizados | human |
+| 12 | PR + Merge | PM-Arquiteto | manual (git/gh) | PR | human |
+
+### Skill Map — Flow 3: Consultar Arquitetura
+
+> Sem skills de pipeline — consumo passivo via portal.
+
+### Skill Map — Flow 4: Daemon (futuro)
+
+> Mesmas skills do Flow 2, executadas autonomamente pelo agente. Ver tabela do Flow 2.
 
 ---
 

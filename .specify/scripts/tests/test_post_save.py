@@ -82,6 +82,7 @@ def test_record_save_l1(setup_platform):
         assert len(vision) == 1
         assert vision[0]["status"] == "done"
         assert vision[0]["output_hash"] is not None
+        assert vision[0]["completed_at"] is not None
 
         # Verify provenance
         prov = conn.execute(
@@ -138,6 +139,7 @@ def test_record_save_l2_epic(setup_platform):
         specify = [n for n in enodes if n["node_id"] == "specify"]
         assert len(specify) == 1
         assert specify[0]["status"] == "done"
+        assert specify[0]["completed_at"] is not None
         conn.close()
     finally:
         post_save.REPO_ROOT = original_repo
