@@ -44,9 +44,7 @@ const adrs = Object.entries(allAdrFiles)
           <td>
             <a href={`/${platform}/decisions/${adr.slug.toLowerCase()}/`}>ADR-{adr.num}</a>
           </td>
-          <td>
-            <strong>{adr.decision ?? '—'}</strong>
-          </td>
+          <td>{adr.decision ?? '—'}</td>
           <td>{adr.alternatives ?? '—'}</td>
           <td>{adr.rationale ?? '—'}</td>
           <td>{adr.status ?? '—'}</td>
