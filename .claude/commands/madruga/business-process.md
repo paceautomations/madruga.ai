@@ -71,7 +71,7 @@ Wait for answers BEFORE generating.
 
 ### 2. Generate process.md
 
-Write the document with **3-5 business flows**, each as a Mermaid sequenceDiagram with a happy path and an exception path. Max 120 lines total.
+Write the document with **3-5 business flows**. Structure: **End-to-End vision first**, then deep dives into each flow.
 
 ```markdown
 ---
@@ -80,7 +80,28 @@ updated: YYYY-MM-DD
 ---
 # <Name> — Business Flows
 
-> Mapping of the main business flows. Each flow shows the happy path and exceptions. Last updated: YYYY-MM-DD.
+> Mapeamento dos fluxos de negocio ponta a ponta. Comeca pela visao end-to-end e depois detalha cada etapa. Ultima atualizacao: YYYY-MM-DD.
+
+---
+
+## Visao End-to-End
+
+> [1-2 sentences: how all flows connect in the complete lifecycle]
+
+```mermaid
+flowchart TB
+    subgraph F1["Flow 1: [Name] ([frequency])"]
+        direction LR
+        F1A[Step 1] --> F1B[Step 2] --> F1C[Step N]
+    end
+    subgraph F2["Flow 2: [Name] ([frequency])"]
+        direction LR
+        F2A[Step 1] --> F2B[Step 2] --> F2C[Step N]
+    end
+    F1C -->|"[transition]"| F2A
+    F2C -->|"[loop back]"| F2A
+    F2B -.->|"[feedback loop]"| F1A
+```
 
 ---
 
@@ -93,7 +114,7 @@ updated: YYYY-MM-DD
 
 ---
 
-## Flow 1: [Name]
+## Deep Dive — Flow 1: [Name]
 
 > [1 sentence: what this flow resolves and why it is critical]
 
@@ -101,18 +122,20 @@ updated: YYYY-MM-DD
 
 ```mermaid
 sequenceDiagram
-    participant [Actor 1]
-    participant [Actor 2]
+    actor [Actor 1]
     participant [Platform]
+    rect rgb(230, 245, 255)
+    note over [Actor 1], [Platform]: [Phase Name]
     [Actor 1]->>+[Platform]: [business action]
     [Platform]->>-[Actor 1]: [result]
+    end
 ```
 
 ### Exceptions
 
 ```mermaid
 sequenceDiagram
-    participant [Actor 1]
+    actor [Actor 1]
     participant [Platform]
     [Actor 1]->>+[Platform]: [action]
     alt [exception condition]
@@ -126,8 +149,8 @@ sequenceDiagram
 
 ---
 
-## Flow 2: [Name]
-[same pattern]
+## Deep Dive — Flow 2: [Name]
+[same pattern: Happy Path + Exceptions + Assumptions]
 
 ---
 
@@ -148,25 +171,29 @@ sequenceDiagram
 
 ### Generation Rules:
 
-1. **Participants:** only business actors (people, roles, "Platform" as a black box). NEVER technical components.
-2. **Actions:** business language. "Sends message", not "POST /api/messages". "Verifies payment", not "Queries payment_status table".
-3. **Exceptions:** every exception must have clear handling from the user's perspective. "What happens when X fails?"
-4. **Frequency/Impact:** quantify when possible. Mark `[VALIDATE]` if estimated.
-5. **Max 120 lines:** if more is needed, the flows are too detailed. Abstract.
-6. **3-5 flows:** prioritized by business impact. Most critical flow first.
+1. **Structure: E2E first, deep dives second.** The document ALWAYS starts with a `## Visao End-to-End` flowchart showing how all flows connect, feedback loops, and lifecycle. Only after the E2E overview come the `## Deep Dive — Flow N` sections.
+2. **Participants:** only business actors (people, roles, "Platform" as a black box). NEVER technical components.
+3. **Actions:** business language. "Sends message", not "POST /api/messages". "Verifies payment", not "Queries payment_status table".
+4. **Deep dives use phases:** group steps into `rect` blocks with `note over` labels (e.g., "Fase 1 — Negocio"). Each phase should be visually distinct.
+5. **Exceptions:** every exception must have clear handling from the user's perspective. "What happens when X fails?"
+6. **Frequency/Impact:** quantify when possible. Mark `[VALIDATE]` if estimated.
+7. **Feedback loops:** the E2E diagram MUST show feedback arrows (dotted lines) where outputs of later flows retroaliment earlier docs (e.g., reconcile → business docs).
+8. **3-5 flows:** prioritized by business impact. Most critical flow first.
 
 ### Auto-Review Additions
 
 | # | Check | Action on Failure |
 |---|-------|-------------------|
-| 1 | Zero technical terms (grep: API, SDK, framework, database, backend, frontend, deploy, server, endpoint, middleware, cache, queue, Python, Redis, Docker, Supabase, pgvector, webhook, microservice, CI/CD, ADR, pipeline, module, POST, GET, SQL, JSON) | Rewrite in business language |
-| 2 | Does every flow have a happy path AND an exception path? | Add the missing one |
-| 3 | Are participants business actors, not technical components? | Rename to business role |
-| 4 | Total < 120 lines? | Condense — abstract overly detailed steps |
-| 5 | 3-5 flows (no more, no fewer without justification)? | Group or expand |
-| 6 | Every assumption marked [VALIDATE] or confirmed? | Mark it |
-| 7 | Flow Overview table present with frequency and impact? | Complete it |
-| 8 | Actor Glossary present? | Add it |
+| 1 | Does the document START with `## Visao End-to-End` flowchart? | Move E2E to top, deep dives below |
+| 2 | Does the E2E diagram show feedback loops (dotted lines) between flows? | Add retroalimentacao arrows |
+| 3 | Zero technical terms (grep: API, SDK, framework, database, backend, frontend, deploy, server, endpoint, middleware, cache, queue, Python, Redis, Docker, Supabase, pgvector, webhook, microservice, CI/CD, ADR, pipeline, module, POST, GET, SQL, JSON) | Rewrite in business language |
+| 4 | Does every deep dive have a happy path AND an exception path? | Add the missing one |
+| 5 | Are participants business actors, not technical components? | Rename to business role |
+| 6 | 3-5 flows (no more, no fewer without justification)? | Group or expand |
+| 7 | Every assumption marked [VALIDATE] or confirmed? | Mark it |
+| 8 | Flow Overview table present with frequency and impact? | Complete it |
+| 9 | Actor Glossary present? | Add it |
+| 10 | Deep dives use phase grouping (rect blocks with notes)? | Add phases |
 
 ## Error Handling
 

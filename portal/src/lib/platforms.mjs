@@ -83,6 +83,10 @@ export function discoverEpics(platformName, platformsDir) {
     .sort((a, b) => String(a.id).localeCompare(String(b.id)));
 }
 
+function platformFileExists(platformName, relPath) {
+  return fs.existsSync(path.join(PLATFORMS_DIR, platformName, relPath));
+}
+
 export function buildSidebar(platforms) {
   return platforms.map((p) => {
     const epics = discoverEpics(p.name);
@@ -107,10 +111,10 @@ export function buildSidebar(platforms) {
           label: 'Business',
           items: [
             { slug: `${p.name}/business/vision` },
-            ...(p.views.flows?.length
-              ? [{ label: 'Business Process', link: `/${p.name}/business-flow/` }]
-              : []),
             { slug: `${p.name}/business/solution-overview` },
+            ...(platformFileExists(p.name, 'business/process.md')
+              ? [{ slug: `${p.name}/business/process` }]
+              : []),
           ],
         },
         {

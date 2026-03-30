@@ -100,6 +100,18 @@ function platformSymlinksPlugin() {
 export default defineConfig({
   vite: {
     resolve: { preserveSymlinks: true },
+    server: {
+      watch: {
+        // Follow symlinks into platforms/ so markdown edits trigger HMR
+        followSymlinks: true,
+        // Explicitly watch platforms dir (symlink targets live outside portal/)
+        ignored: ['!**/platforms/**'],
+      },
+      fs: {
+        // Allow Vite to serve files from platforms/ (outside portal root)
+        allow: ['..'],
+      },
+    },
     plugins: [
       platformSymlinksPlugin(),
       LikeC4VitePlugin({

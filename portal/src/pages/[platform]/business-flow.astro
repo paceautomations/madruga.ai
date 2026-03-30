@@ -16,7 +16,7 @@ const { manifest } = Astro.props;
 const viewPaths = buildViewPaths(manifest);
 ---
 
-<StarlightPage frontmatter={{ title: 'Business Process — Pipeline Completo', tableOfContents: false }}>
+<StarlightPage frontmatter={{ title: 'Pipeline Diagram — Spec-to-Code (LikeC4)', tableOfContents: false }}>
   <div class="diagram-fullscreen">
     <LikeC4Diagram viewId="businessFlow" platform={manifest.name} viewPaths={viewPaths} client:only="react" />
   </div>
