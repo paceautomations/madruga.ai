@@ -253,6 +253,11 @@ def update_markdown(md_path: Path, marker: str, content: str) -> bool:
 
 def build(platform: str, validate_only: bool = False, do_export_png: bool = False) -> None:
     """Main build pipeline: validate, export JSON, populate markdown tables."""
+    import shutil
+
+    if not shutil.which("likec4"):
+        sys.exit("Error: likec4 CLI not found. Install with: npm i -g likec4")
+
     model_dir = PLATFORMS_DIR / platform / "model"
     if not model_dir.exists():
         print(f"[error] Model directory not found: {model_dir}")

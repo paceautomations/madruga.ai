@@ -8,3 +8,4 @@ __pycache__/
 .pipeline/madruga.db
 .pipeline/madruga.db-wal
 .pipeline/madruga.db-shm
+platforms/*/model/output/

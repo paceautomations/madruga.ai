@@ -3,22 +3,27 @@ import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
 import { discoverPlatforms } from '../lib/platforms.mjs';
 
 const platforms = discoverPlatforms();
-
-// If only one platform, redirect directly to it
-if (platforms.length === 1) {
-  return Astro.redirect(`/${platforms[0].name}/business/vision/`);
-}
+const singlePlatform = platforms.length === 1 ? platforms[0] : null;
 ---
 
-<StarlightPage frontmatter={{ title: 'Plataformas', tableOfContents: false }}>
-  <p>Selecione uma plataforma para visualizar sua documentação arquitetural.</p>
-  <div class="platform-cards">
-    {platforms.map((p) => (
-      <a href={`/${p.name}/business/vision/`} class="platform-card">
-        <h2>{p.title}</h2>
-        <p>{p.description}</p>
-        <span class="badge">{p.lifecycle}</span>
-      </a>
-    ))}
-  </div>
-</StarlightPage>
+{singlePlatform ? (
+  <html>
+    <head>
+      <meta http-equiv="refresh" content={`0;url=/${singlePlatform.name}/business/vision/`} />
+    </head>
+    <body />
+  </html>
+) : (
+  <StarlightPage frontmatter={{ title: 'Plataformas', tableOfContents: false }}>
+    <p>Selecione uma plataforma para visualizar sua documentação arquitetural.</p>
+    <div class="platform-cards">
+      {platforms.map((p) => (
+        <a href={`/${p.name}/business/vision/`} class="platform-card">
+          <h2>{p.title}</h2>
+          <p>{p.description}</p>
+          <span class="badge">{p.lifecycle}</span>
+        </a>
+      ))}
+    </div>
+  </StarlightPage>
+)}

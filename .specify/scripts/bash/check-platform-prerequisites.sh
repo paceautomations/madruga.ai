@@ -280,23 +280,23 @@ if [ "$USE_DB" = true ]; then
         # Query DB via Python for full status with hashes and staleness
         DB_RESULT=$(python3 -c "
 import sys, json
-sys.path.insert(0, '$REPO_ROOT/.specify/scripts')
+sys.path.insert(0, sys.argv[1] + '/.specify/scripts')
 from db import get_conn, get_pipeline_nodes, get_stale_nodes, get_platform_status, get_epics
 import yaml
 
 conn = get_conn()
-status = get_platform_status(conn, '$PLATFORM')
-nodes = get_pipeline_nodes(conn, '$PLATFORM')
-epics = get_epics(conn, '$PLATFORM')
+status = get_platform_status(conn, sys.argv[2])
+nodes = get_pipeline_nodes(conn, sys.argv[2])
+epics = get_epics(conn, sys.argv[2])
 
 # Parse DAG edges for staleness
-with open('$PLATFORM_YAML') as f:
+with open(sys.argv[3]) as f:
     manifest = yaml.safe_load(f)
 dag_edges = {}
 for n in manifest.get('pipeline', {}).get('nodes', []):
     dag_edges[n['id']] = n.get('depends', [])
 
-stale = get_stale_nodes(conn, '$PLATFORM', dag_edges)
+stale = get_stale_nodes(conn, sys.argv[2], dag_edges)
 stale_ids = {s['node_id'] for s in stale}
 
 # Enhance nodes with stale flag
@@ -304,7 +304,7 @@ for node in nodes:
     node['stale'] = node['node_id'] in stale_ids
 
 result = {
-    'platform': '$PLATFORM',
+    'platform': sys.argv[2],
     'source': 'db',
     'status': status,
     'nodes': nodes,
@@ -313,7 +313,7 @@ result = {
 }
 print(json.dumps(result, indent=2))
 conn.close()
-" 2>&1)
+" "$REPO_ROOT" "$PLATFORM" "$PLATFORM_YAML" 2>&1)
         echo "$DB_RESULT"
         exit 0
     fi

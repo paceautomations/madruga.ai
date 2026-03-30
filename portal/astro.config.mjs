@@ -5,7 +5,6 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import react from '@astrojs/react';
-import node from '@astrojs/node';
 import mermaid from 'astro-mermaid';
 import { LikeC4VitePlugin } from 'likec4/vite-plugin';
 import { discoverPlatforms, buildSidebar } from './src/lib/platforms.mjs';
@@ -99,7 +98,6 @@ function platformSymlinksPlugin() {
 }
 
 export default defineConfig({
-  adapter: node({ mode: 'standalone' }),
   vite: {
     resolve: { preserveSymlinks: true },
     plugins: [

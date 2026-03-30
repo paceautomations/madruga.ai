@@ -4,8 +4,8 @@
 
 /* ── 1. Theme Variables ── */
 :root {
-  --sl-font: 'Inter', system-ui, sans-serif;
-  --sl-font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  --sl-font: system-ui, sans-serif;
+  --sl-font-mono: ui-monospace, 'Fira Code', monospace;
   --sl-color-accent-low: #e0f2fe;
   --sl-color-accent: #0284c7;
   --sl-color-accent-high: #0c4a6e;

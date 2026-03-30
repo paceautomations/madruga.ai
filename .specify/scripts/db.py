@@ -18,6 +18,8 @@ import json
 import logging
 import os
 import sqlite3
+
+import yaml
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -103,8 +105,27 @@ def migrate(conn: sqlite3.Connection | None = None, migrations_dir: Path | None 
     conn.execute("CREATE TABLE IF NOT EXISTS _migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL)")
     conn.commit()
     applied = {r[0] for r in conn.execute("SELECT name FROM _migrations").fetchall()}
+    # Handle split of 003_decisions_memory.sql → 003a + 003b
+    if "003_decisions_memory.sql" in applied:
+        for split_name in ("003a_decisions_memory.sql", "003b_fts5.sql"):
+            if split_name not in applied:
+                conn.execute(
+                    "INSERT INTO _migrations (name, applied_at) VALUES (?, ?)",
+                    (split_name, _now()),
+                )
+        conn.commit()
+        applied = {r[0] for r in conn.execute("SELECT name FROM _migrations").fetchall()}
     for sql_file in sorted(mdir.glob("*.sql")):
         if sql_file.name not in applied:
+            # Skip FTS5 migrations when FTS5 is not available
+            if "fts5" in sql_file.name.lower() and not _check_fts5():
+                logger.warning("Skipping %s — FTS5 not available", sql_file.name)
+                conn.execute(
+                    "INSERT INTO _migrations (name, applied_at) VALUES (?, ?)",
+                    (sql_file.name, _now()),
+                )
+                conn.commit()
+                continue
             logger.info("Applying migration: %s", sql_file.name)
             try:
                 # Strip SQL comments, then split on ';' and execute each
@@ -460,7 +481,6 @@ def get_decision_links(
 def _parse_adr_markdown(file_path: Path) -> dict | None:
     """Parse an ADR markdown file into a dict. Returns None on parse failure."""
     import re
-    import yaml
 
     text = file_path.read_text(encoding="utf-8")
     # Split frontmatter
@@ -596,10 +616,15 @@ def export_decision_to_markdown(conn: sqlite3.Connection, decision_id: str, outp
     created = (d.get("created_at") or now_str)[:10]
     updated = (d.get("updated_at") or now_str)[:10]
 
+    frontmatter = yaml.dump(
+        {"title": title, "status": status, "decision": decision_text, "alternatives": "", "rationale": ""},
+        default_flow_style=False,
+        allow_unicode=True,
+        sort_keys=False,
+    ).strip()
+
     content = (
-        f'---\ntitle: "{title}"\nstatus: {status}\n'
-        f'decision: "{decision_text}"\nalternatives: ""\n'
-        f'rationale: ""\n---\n'
+        f"---\n{frontmatter}\n---\n"
         f"# {title}\n"
         f"**Status:** {status} | **Data:** {created} | **Atualizado:** {updated}\n\n"
         f"## Contexto\n{context}\n\n"
@@ -645,7 +670,7 @@ def search_decisions(conn: sqlite3.Connection, query: str, platform_id: str | No
     """Full-text search across decisions using FTS5."""
     if not _check_fts5():
         logger.warning("FTS5 not available — falling back to LIKE search")
-        sql = "SELECT * FROM decisions WHERE title LIKE ? OR context LIKE ?"
+        sql = "SELECT * FROM decisions WHERE (title LIKE ? OR context LIKE ?)"
         params: list = [f"%{query}%", f"%{query}%"]
         if platform_id:
             sql += " AND platform_id=?"
@@ -752,7 +777,6 @@ def delete_memory(conn: sqlite3.Connection, memory_id: str) -> None:
 
 def _parse_memory_markdown(file_path: Path) -> dict | None:
     """Parse a memory markdown file into a dict."""
-    import yaml
 
     text = file_path.read_text(encoding="utf-8")
     parts = text.split("---", 2)
@@ -822,9 +846,13 @@ def export_memory_to_markdown(conn: sqlite3.Connection, memory_id: str, output_d
     d = dict(row)
     slug = d["name"].replace(" ", "_").lower()
     fname = f"{d['type']}_{slug}.md"
-    content = (
-        f"---\nname: {d['name']}\ndescription: {d.get('description') or ''}\ntype: {d['type']}\n---\n\n{d['content']}\n"
-    )
+    frontmatter = yaml.dump(
+        {"name": d["name"], "description": d.get("description") or "", "type": d["type"]},
+        default_flow_style=False,
+        allow_unicode=True,
+        sort_keys=False,
+    ).strip()
+    content = f"---\n{frontmatter}\n---\n\n{d['content']}\n"
     output_dir.mkdir(parents=True, exist_ok=True)
     out_path = output_dir / fname
     out_path.write_text(content, encoding="utf-8")
@@ -856,7 +884,7 @@ def sync_memories_to_markdown(conn: sqlite3.Connection, output_dir: Path) -> int
 def search_memories(conn: sqlite3.Connection, query: str, type_: str | None = None) -> list[dict]:
     """Full-text search across memory entries using FTS5."""
     if not _check_fts5():
-        sql = "SELECT * FROM memory_entries WHERE name LIKE ? OR content LIKE ?"
+        sql = "SELECT * FROM memory_entries WHERE (name LIKE ? OR content LIKE ?)"
         params: list = [f"%{query}%", f"%{query}%"]
         if type_:
             sql += " AND type=?"
@@ -1090,7 +1118,6 @@ def get_epic_status(conn: sqlite3.Connection, platform_id: str, epic_id: str) ->
 
 def seed_from_filesystem(conn: sqlite3.Connection, platform_id: str, platform_dir: str | Path) -> dict:
     """Import existing state from filesystem into DB. Idempotent."""
-    import yaml
 
     pdir = Path(platform_dir)
     yaml_path = pdir / "platform.yaml"

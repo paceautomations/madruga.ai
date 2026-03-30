@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, Component } from 'react';
+import { lazy, Suspense, useMemo, useRef, Component } from 'react';
 import type { ReactNode } from 'react';
 
 // Static import map — Vite requires static analysis for virtual modules.
@@ -57,6 +57,10 @@ function LoadingSpinner() {
 }
 
 export default function LikeC4Diagram({ viewId, platform, viewPaths }: Props) {
+  const viewPathsRef = useRef(viewPaths);
+  viewPathsRef.current = viewPaths;
+  const viewPathsKey = JSON.stringify(viewPaths);
+
   const DiagramComponent = useMemo(() => {
     const loader = platformLoaders[platform];
     if (!loader) {
@@ -78,7 +82,7 @@ export default function LikeC4Diagram({ viewId, platform, viewPaths }: Props) {
               enableRelationshipDetails
               enableNotations
               onNavigateTo={(nextViewId: string) => {
-                const path = viewPaths[nextViewId];
+                const path = viewPathsRef.current[nextViewId];
                 if (path) {
                   window.location.href = path;
                 }
@@ -88,7 +92,7 @@ export default function LikeC4Diagram({ viewId, platform, viewPaths }: Props) {
         ),
       };
     });
-  }, [platform, viewId, viewPaths]);
+  }, [platform, viewId, viewPathsKey]);
 
   return (
     <DiagramErrorBoundary>
