@@ -8,7 +8,7 @@
 
 ## Resumo Executivo
 
-O madruga.ai é um sistema de documentação de arquitetura bem estruturado, com pipeline automatizado de 24 skills, portal Astro/Starlight, e SQLite como state store. O portal **compila com sucesso** (77 páginas, 34s build). O Python tem **2 ruff warnings** (variáveis não utilizadas). **1 teste falha** (containers.md removido do template). Existem **inconsistências de integridade no DAG** do pipeline.
+O madruga.ai é um sistema de documentação de arquitetura bem estruturado, com pipeline automatizado de 24 skills, portal Astro/Starlight, e SQLite como state store. O portal **compila com sucesso** (77 páginas, 34s build). O Python tem **2 ruff warnings** (variáveis não utilizadas). **1 teste falha** (containers.md removido do template) + **1 teste que nunca pode falhar** (assert capturado por except). Existem **inconsistências de integridade no DAG** e **FTS5 sem sanitização de input**.
 
 ### Scorecard
 
@@ -16,12 +16,12 @@ O madruga.ai é um sistema de documentação de arquitetura bem estruturado, com
 |------|--------|-------|
 | Portal Build | OK (77 pages) | 9/10 |
 | Python Lint (ruff) | 2 warnings | 8/10 |
-| Template Tests | 1 FAIL (16 pass) | 7/10 |
+| Template Tests | 1 FAIL + 1 broken test (16 pass) | 6/10 |
 | Platform Lint | 1 warn (fulano context-map) | 8/10 |
 | Pipeline DAG Integrity | 2 DB violations + 1 YAML mismatch | 5/10 |
 | Skill Contract Compliance | Persona missing in 13 L1 skills | 7/10 |
 | DB Schema & Migrations | OK (5 migrations) | 9/10 |
-| Security | OK (path traversal protected) | 9/10 |
+| Security | FTS5 input unsanitized, symlink bypass | 7/10 |
 | Frontend UX | Good, needs polish | 7/10 |
 | Code Quality | Solid, minor DRY issues | 8/10 |
 | **Overall** | | **8/10** |
@@ -65,7 +65,20 @@ Isso viola a regra do pipeline: "qa runs before reconcile because its heal loop 
 **Impacto**: Para a plataforma madruga-ai, o post-implementation consistency check é pulado, e reconcile pode rodar antes do QA.
 **Fix**: Adicionar `analyze-post` node e corrigir `reconcile.depends` para `["qa"]`.
 
-### 1.5 [B5] Missing `qa-template.md` knowledge file
+### 1.5 [B5] FTS5 SQL injection via user-supplied query
+
+**Arquivo**: `.specify/scripts/db.py:944-961` (função `search_decisions`) e `:1205` (`search_memories`)
+**Problema**: O parâmetro `query` é passado diretamente como FTS5 `MATCH` value. FTS5 suporta operadores booleanos (`AND`, `OR`, `NOT`, `NEAR`), filtros de coluna (`title:foo`). Uma query malformada (e.g., aspas desbalanceadas) causa `sqlite3.OperationalError` sem try/except. O fallback LIKE não escapa `%` e `_`.
+**Impacto**: Crash em buscas com caracteres especiais. Não é exploitable para data exfiltration (FTS5 é read-only), mas é UX quebrada.
+**Fix**: Wrap FTS5 MATCH em try/except, sanitizar/escapar caracteres especiais na query.
+
+### 1.6 [B6] Test `test_kebab_case_validation` nunca pode falhar
+
+**Arquivo**: `.specify/templates/platform/tests/test_template.py:75-103`
+**Problema**: O teste usa `except Exception` que captura tanto erros do copier quanto o próprio `AssertionError` na linha 100. Se o copier aceitar um nome inválido, o `assert` que deveria falhar é capturado pelo except e o teste passa silenciosamente.
+**Fix**: Usar `except (subprocess.CalledProcessError, FileNotFoundError)` em vez de `except Exception`.
+
+### 1.7 [B7] Missing `qa-template.md` knowledge file
 
 **Arquivo**: `.claude/commands/madruga/qa.md:99` referencia `.claude/knowledge/qa-template.md`
 **Problema**: O arquivo não existe. A skill QA diz "if exists" então degrada gracefully, mas o setup flow perde valor sem o template.
@@ -162,7 +175,39 @@ def compute_file_hash(path: str | Path) -> str:
 **Arquivo**: `.claude/commands/madruga/solution-overview.md:56`
 **Problema**: Diz "If `platforms/fulano/business/solution-overview.md` exists, read it as tone reference". Hardcoded para fulano.
 
-### 2.14 [W14] `pipeline_runs` table está vazia e sem uso
+### 2.14 [W14] `_check_fts5` leaks connection no path de erro
+
+**Arquivo**: `.specify/scripts/db.py:44-57`
+**Problema**: Se `CREATE VIRTUAL TABLE` falha, a conexão in-memory `c` não é fechada no `except` block.
+**Fix**: Usar `try/finally` para fechar `c`.
+
+### 2.15 [W15] `_validate_artifact_path` pode ser bypassed com symlinks
+
+**Arquivo**: `.specify/scripts/post_save.py:53-58`
+**Problema**: Usa `.resolve()` que segue symlinks. Se um symlink dentro do platform dir aponta para fora, o path resolvido passaria a validação. Risco baixo (CLI-only, chamado por Claude).
+
+### 2.16 [W16] `_desc_text` retorna "None" string para description ausente
+
+**Arquivo**: `.specify/scripts/vision-build.py:33-36`
+**Problema**: Se `description` é `None`, `str(None)` retorna `"None"` que apareceria em tabelas markdown.
+**Fix**: `return str(d) if d else ""`
+
+### 2.17 [W17] `get_decision_links` falha com direction inválido
+
+**Arquivo**: `.specify/scripts/db.py:616-641`
+**Problema**: Se `direction` não é "from", "to", ou "both", `parts` fica vazio e `conn.execute("")` causa `OperationalError`.
+
+### 2.18 [W18] `.pipeline/madruga.db` está commitado no git
+
+**Problema**: O DB é staged (`A .pipeline/madruga.db`) e será commitado. É um state store local que deveria estar no `.gitignore`.
+**Fix**: Verificar se o `.gitignore` exclui o DB. Se não, adicionar `*.db` ao `.pipeline/.gitignore`.
+
+### 2.19 [W19] Missing index em `decisions.file_path`
+
+**Arquivo**: `.specify/scripts/db.py:752`
+**Problema**: `import_adr_from_markdown` faz query `WHERE platform_id=? AND (file_path=? OR file_path=?)`. Index `idx_decisions_platform` cobre `platform_id` mas não `file_path`. Para muitos decisions, pode ser lento.
+
+### 2.20 [W20] `pipeline_runs` table está vazia e sem uso
 
 **Arquivo**: `.pipeline/madruga.db`
 **Problema**: Tabela `pipeline_runs` existe no schema mas tem 0 rows e nenhum código a referencia.
@@ -294,8 +339,10 @@ def compute_file_hash(path: str | Path) -> str:
 | 1 | B1 — Fix teste containers.md | BLOCKER | Alto | 5 min | P0 |
 | 2 | B2 — DAG integrity validation | BLOCKER | Alto | 1h | P0 |
 | 3 | B4 — madruga-ai platform.yaml missing analyze-post + wrong reconcile dep | BLOCKER | Alto | 10 min | P0 |
-| 4 | B5 — Create qa-template.md | BLOCKER | Médio | 30 min | P0 |
-| 5 | W1 — Remover variáveis não usadas | WARNING | Baixo | 2 min | P1 |
+| 4 | B5 — FTS5 query sanitization | BLOCKER | Alto | 30 min | P0 |
+| 5 | B6 — Fix test_kebab_case_validation except catching assert | BLOCKER | Médio | 5 min | P0 |
+| 6 | B7 — Create qa-template.md | BLOCKER | Médio | 30 min | P0 |
+| 7 | W1 — Remover variáveis não usadas | WARNING | Baixo | 2 min | P1 |
 | 4 | W2/A1 — Automatizar pipeline-status.json | WARNING | Alto | 15 min | P1 |
 | 5 | W3 — Adicionar `site` no astro.config | WARNING | Baixo | 1 min | P1 |
 | 6 | W6 — Usar `transaction()` em batch ops | WARNING | Médio | 30 min | P2 |
