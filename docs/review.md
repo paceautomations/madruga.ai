@@ -249,7 +249,18 @@ def compute_file_hash(path: str | Path) -> str:
 **Arquivo**: `.specify/templates/platform/template/`
 **Problema**: O template scaffolda `business/vision.md` e `business/solution-overview.md`, mas não `business/process.md`. O `business-process` skill gera este arquivo, mas o scaffold poderia incluir um placeholder.
 
-### 3.7 [N7] CLAUDE.md diz "3 L2 nodes" mas são 4
+### 3.7 [N7] `model/.gitignore` não está em `_skip_if_exists` — `copier update` sobrescreve
+
+**Arquivo**: `.specify/templates/platform/copier.yml`
+**Problema**: O template `model/.gitignore` tem `dist/`, `output/`, `node_modules/`. Fulano adicionou `.ruff_cache/` e `likec4.json`. Como `model/.gitignore` não está em `_skip_if_exists`, um `copier update` sobrescreveria as adições do fulano.
+**Fix**: Adicionar `model/.gitignore` ao `_skip_if_exists` ou incluir as entradas extras no template.
+
+### 3.8 [N8] `_skip_if_exists` contém `engineering/folder-structure.md` que não existe
+
+**Arquivo**: `.specify/templates/platform/copier.yml`
+**Problema**: Referência morta no `_skip_if_exists`. Inofensivo mas confuso.
+
+### 3.9 [N9] CLAUDE.md diz "3 L2 nodes" mas são 4
 
 **Arquivo**: `CLAUDE.md`
 **Problema**: "20 skills: 13 L1 nodes + 3 L2 nodes + 4 utilities" — na verdade são 4 L2 (epic-context, verify, qa, reconcile) + 3 utilities.
