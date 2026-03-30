@@ -80,10 +80,6 @@ updated: YYYY-MM-DD
 ---
 # <Name> — Business Flows
 
-> Mapeamento dos fluxos de negocio ponta a ponta. Comeca pela visao end-to-end e depois detalha cada etapa. Ultima atualizacao: YYYY-MM-DD.
-
----
-
 ## Visao End-to-End
 
 > [1-2 sentences: how all flows connect in the complete lifecycle]

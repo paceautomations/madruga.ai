@@ -4,10 +4,6 @@ updated: 2026-03-30
 ---
 # Madruga AI — Business Flows
 
-> Mapeamento dos fluxos de negocio ponta a ponta. Comeca pela visao end-to-end e depois detalha cada etapa. Ultima atualizacao: 2026-03-30.
-
----
-
 ## Visao End-to-End
 
 > O ciclo de vida completo de uma plataforma: documentar (1x), entregar epics (Nx), consultar (continuo), e no futuro, autonomia via daemon. O reconcile fecha o loop retroalimentando a documentacao.

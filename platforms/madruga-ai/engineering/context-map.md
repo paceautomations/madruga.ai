@@ -1,6 +1,6 @@
 ---
 title: "Context Map"
-updated: 2026-03-27
+updated: 2026-03-30
 ---
 # Context Map (DDD Estrategico)
 
@@ -16,13 +16,13 @@ graph TB
     end
 
     subgraph supporting["Supporting Domains"]
-        exec["Execution<br/><i>Daemon, Orchestrator,<br/>Kanban Poller, Pipeline</i>"]
+        exec["Execution<br/><i>Daemon, DAG Executor,<br/>Orchestrator, Pipeline</i>"]
         intel["Intelligence<br/><i>Debate Engine,<br/>Decision System, Clarify</i>"]
     end
 
     subgraph generic["Generic Domains"]
-        integ["Integration<br/><i>Obsidian, WhatsApp,<br/>GitHub, Claude API, LikeC4</i>"]
-        obs["Observability<br/><i>Dashboard, Health,<br/>Metrics</i>"]
+        integ["Integration<br/><i>WhatsApp, GitHub,<br/>Claude API, LikeC4, Sentry</i>"]
+        obs["Observability<br/><i>Dashboard, Health,<br/>Metrics, Sentry SDK</i>"]
     end
 
     doc <-->|"Customer-Supplier"| spec
@@ -34,7 +34,7 @@ graph TB
     obs -.->|"Pub-Sub"| exec
     obs -.->|"Pub-Sub"| intel
     obs -.->|"Pub-Sub"| integ
-    integ -->|"Conformist"| ext["APIs Externas<br/><i>Claude, GitHub,<br/>WhatsApp</i>"]
+    integ -->|"Conformist"| ext["APIs Externas<br/><i>Claude, GitHub,<br/>WhatsApp, Sentry</i>"]
 
     style core fill:#E3F2FD
     style supporting fill:#FFF8E1
@@ -47,10 +47,10 @@ graph TB
 |---|---------|------|---------|------------------|
 | 1 | **Documentation** | Core | Portal, Platform CLI, Vision Build, LikeC4 Models | Gerencia plataformas documentadas, portal SSG, modelos de arquitetura e populacao automatica de tabelas via AUTO markers |
 | 2 | **Specification** | Core | SpecKit Skills, SpeckitBridge, Copier Templates | Pipeline de especificacao (specify -> plan -> tasks -> implement), composicao de prompts, scaffolding de plataformas |
-| 3 | **Execution** | Supporting | Daemon, Orchestrator, Kanban Poller, Pipeline Phases | Execucao autonoma 24/7: daemon asyncio, orquestracao de epics, polling do kanban, execucao das 7 fases |
+| 3 | **Execution** | Supporting | Daemon, DAG Executor, Orchestrator, Pipeline Phases | Execucao autonoma: daemon asyncio, DAG executor le pipeline de platform.yaml, orquestracao de epics, execucao das 7 fases |
 | 4 | **Intelligence** | Supporting | Debate Engine, Decision System, Clarify Engine | Debates multi-persona com convergencia, classificacao 1-way/2-way door, gates de aprovacao, stress testing |
-| 5 | **Integration** | Generic | Obsidian Bridge, WhatsApp Bridge, GitHub Client, Claude API Client, LikeC4 CLI | ACL para sistemas externos — isola contratos externos do dominio interno |
-| 6 | **Observability** | Generic | Dashboard, Health Checks, Metrics | Visibilidade operacional: dashboard FastAPI, health checks, metricas de pipeline |
+| 5 | **Integration** | Generic | WhatsApp Bridge (wpp-bridge), GitHub Client, Claude API Client, LikeC4 CLI, Sentry SDK | ACL para sistemas externos — isola contratos externos do dominio interno |
+| 6 | **Observability** | Generic | Dashboard, Health Checks, SQLite Metrics, Sentry SDK | Visibilidade operacional: dashboard FastAPI, health checks, metricas em SQLite, error tracking via Sentry |
 <!-- /AUTO:domains -->
 
 ## Relacoes entre dominios
@@ -63,7 +63,7 @@ graph TB
 | 3 | **Execution** | **Integration** | ACL (Anti-Corruption Layer) | Execution acessa sistemas externos via ACL — contratos externos nao vazam para o dominio |
 | 4 | **Intelligence** | **Execution** | Customer-Supplier | Debate Engine e Decision System servem Execution com analises e decisoes durante fases do pipeline |
 | 5 | **Observability** | **Todos** | Pub-Sub (fire-and-forget) | Observability subscreve eventos de todos os contextos sem acoplamento — falha silenciosa |
-| 6 | **Integration** | **APIs Externas** | Conformist | Integration conforma-se aos contratos de Claude API, GitHub API, WhatsApp API e LikeC4 CLI |
+| 6 | **Integration** | **APIs Externas** | Conformist | Integration conforma-se aos contratos de Claude API, GitHub API, WhatsApp API (wpp-bridge), LikeC4 CLI e Sentry |
 <!-- /AUTO:relations -->
 
 ## Integracoes externas (ACL)
@@ -71,11 +71,11 @@ graph TB
 | Sistema | Protocolo | Direcao | Responsavel |
 |---------|-----------|---------|-------------|
 | **Claude API** | `claude -p` subprocess | Madruga -> Claude | Integration.ClaudeAPIClient |
-| **Obsidian Vault** | Filesystem read/write | Bidirecional | Integration.ObsidianBridge |
 | **GitHub** | `gh` CLI / REST API | Madruga -> GitHub | Integration.GitHubClient |
-| **WhatsApp** | HTTP API | Madruga -> WhatsApp | Integration.WhatsAppBridge |
+| **WhatsApp** | HTTP API via wpp-bridge (:8030) | Madruga -> WhatsApp | Integration.WhatsAppBridge |
 | **LikeC4 CLI** | Subprocess (`likec4`) | Madruga -> LikeC4 | Integration.LikeC4CLI |
 | **Copier CLI** | Subprocess (`copier`) | Madruga -> Copier | Specification.CopierTemplate |
+| **Sentry** | HTTPS (SDK → cloud) | Madruga -> Sentry | Integration.SentrySDK |
 
 ## Decisoes Estrategicas
 
@@ -85,8 +85,8 @@ Estes dois dominios capturam a **proposta de valor unica** do Madruga AI: docume
 
 ### Por que ACL entre Execution e Integration?
 
-Sistemas externos mudam seus contratos sem aviso. A Anti-Corruption Layer garante que mudancas no Claude API, GitHub API ou formato do kanban Obsidian **nao propagam** para a logica de orquestracao. Cada bridge traduz formatos externos para modelos internos.
+Sistemas externos mudam seus contratos sem aviso. A Anti-Corruption Layer garante que mudancas no Claude API, GitHub API ou protocolo do WhatsApp **nao propagam** para a logica de orquestracao. Cada bridge traduz formatos externos para modelos internos.
 
 ### Por que Observability e fire-and-forget?
 
-O dashboard e metricas **nunca** devem bloquear a execucao do pipeline. Se o dashboard cair, o daemon continua operando normalmente. A relacao pub-sub garante desacoplamento total.
+O dashboard e metricas **nunca** devem bloquear a execucao do pipeline. Se o dashboard cair, o daemon continua operando normalmente. A relacao pub-sub garante desacoplamento total. Sentry opera como fire-and-forget — falha de envio nao afeta o daemon.
