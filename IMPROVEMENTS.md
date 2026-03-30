@@ -15,6 +15,8 @@ madruga.ai is an **ambitious and well-structured** architecture documentation sy
 
 **Update 2026-03-30:** Sprint 1 (critical fixes) and Sprint 2 (foundation fixes) are **DONE**. Remaining work focuses on data fidelity (Decision/Memory system), single source of truth, frontend experience, and automation.
 
+**Update 2026-03-30 (Sprint 2-5):** 20/20 tasks completed across Foundation + Hardening. DB context managers, transaction batching, CI caching, 78 tests. Sprint 6 focuses on remaining data fidelity (DM1-DM6).
+
 > **Review note:** This document was auto-reviewed by a Staff Engineer subagent. Corrections applied: B1 removed (false positive — `model/dist/` not tracked in git), B4 downgraded to WARNING, B2 reframed as tracking item, benchmark table made more honest, 2 missed issues added.
 
 ---
@@ -78,7 +80,7 @@ madruga.ai is an **ambitious and well-structured** architecture documentation sy
 **Fix:** Split migration 003 into `003a_decisions_memory.sql` (columns + tables) and `003b_fts5.sql` (FTS5, conditionally skipped in `migrate()` when `_check_fts5()` returns False).
 **Effort:** 1-2 hours
 
-### B2. SQL injection in bash script — unsanitized variable interpolation — STILL OPEN
+### ~~B2. SQL injection in bash script — unsanitized variable interpolation~~ ✓ DONE
 **Where:** `.specify/scripts/bash/check-platform-prerequisites.sh`, lines ~281-316
 **Impact:** `$PLATFORM`, `$PLATFORM_YAML`, `$EPIC`, `$SKILL` are interpolated directly into inline Python strings. A platform name containing a single-quote (e.g., `test'; import os; os.system('id')#`) allows arbitrary code execution. The status/skill blocks at lines 362+ correctly use `sys.argv` instead.
 **Fix:** Pass all variables as `sys.argv` parameters instead of string interpolation. Replace `'$PLATFORM'` with `sys.argv[1]`.
@@ -146,7 +148,7 @@ portal-build:
 
 ## Priority 2 — WARNINGS (Should Fix)
 
-> **Status:** Sprint 2 items marked ✓. Remaining items reorganized into Sprint 3+.
+> **Status:** Sprint 2-5 items marked ✓. Remaining items reorganized into Sprint 6+.
 
 ### W0. DB connections leak on exceptions — no context manager
 **Where:** `db.py` and all callers — `conn = get_conn()` / `conn.close()` without `try/finally`
@@ -556,86 +558,87 @@ GET /api/platforms/fulano/decisions → decision list
 
 ## Priority Matrix
 
-### Completed (Sprint 1 + Sprint 2) ✓
+### Completed (Sprint 1-5) ✓
 
 | # | Issue | Status |
 |---|-------|--------|
 | B1 | Migration 003 FTS5 split | ✓ DONE |
+| B2 | SQL injection fixed — all python3 -c blocks use sys.argv | ✓ DONE |
 | B3 | FTS LIKE fallback parentheses | ✓ DONE |
 | B4 | SSR adapter removed | ✓ DONE |
 | B5 | useMemo stabilized (useRef + JSON.stringify) | ✓ DONE |
 | B6 | analyze-post node added | ✓ DONE |
 | B7 | Portal build in CI | ✓ DONE |
+| W0 | get_conn() context manager (_ClosingConnection) | ✓ DONE |
+| W0a | transaction() context manager for batch ops | ✓ DONE |
 | W0b | model/output in .gitignore | ✓ DONE |
+| W0c | Single-writer constraint documented in db.py | ✓ DONE |
 | W1 | Shared config.py | ✓ DONE |
+| W5 | check-stale subcommand wired into platform.py | ✓ DONE |
 | W6 | vision-build CLI pre-check | ✓ DONE |
+| W7 | postinstall hook removed, setup.sh deleted | ✓ DONE |
+| W9 | CI dependency caching (pip/npm) | ✓ DONE |
 | W9b | requirements-dev.txt | ✓ DONE |
+| W9c | ruff format --check in CI | ✓ DONE |
+| W9d | Bash tests in CI | ✓ DONE |
+| W9e | Skipped tests replaced with config-validation tests (78 total, 0 skipped) | ✓ DONE |
+| W9f | Redundant inline CI validation removed | ✓ DONE |
 | W10 | Branch guard complete skill list | ✓ DONE |
+| W10a | Clarify-is-optional documented in DAG knowledge | ✓ DONE |
+| W10b | QA disable-model-invocation documented as intentional | ✓ DONE |
 | W10c | Constitution AskQuestionTool removed | ✓ DONE |
+| W10c | Fonts changed to system-ui/ui-monospace | ✓ DONE |
+| W10d | @types moved to devDependencies | ✓ DONE |
+| W11 | reseed_all() uses single connection + single migrate | ✓ DONE |
+| W11b | Paths stored as relative to REPO_ROOT | ✓ DONE |
+| W12 | body column added to decisions; lossless round-trip | ✓ DONE |
+| W13 | Lossy decision round-trip fixed (uses stored body) | ✓ DONE |
 | — | Auto-sync hook (PostToolUse → sync_memory.py) | ✓ DONE |
 
 ### Remaining — Open Items
 
 | # | Issue | Severity | Effort | Impact | Sprint |
 |---|-------|----------|--------|--------|--------|
-| B2 | SQL injection in bash script | BLOCKER | 1 hr | Critical (security) | **3** |
-| DM1 | Memory import ignores platform_id | WARNING | 15 min | High (data fidelity) | **3** |
-| DM2 | Memory export drops platform_id | WARNING | 15 min | High (data fidelity) | **3** |
-| DM3 | search_memories no platform filter | WARNING | 5 min | High | **3** |
-| DM6 | No decision change history (events unused) | WARNING | 30 min | Medium | **3** |
-| W9 | CI lacks dependency caching | WARNING | 30 min | Medium (CI speed) | **3** |
-| W9c | No ruff format in CI | WARNING | 5 min | Low | **3** |
-| W9f | CI inline validation redundant | WARNING | 10 min | Low | **3** |
-| W10c | Fonts declared but never loaded | WARNING | 15 min | Low | **3** |
-| W10d | @types in dependencies | WARNING | 2 min | Low | **3** |
-| W0 | DB connections leak on exceptions | WARNING | 1 hr | Medium | **3** |
-| W11b | Absolute file_paths in DB | WARNING | 2-3 hrs | Medium | **3** |
-| W12 | YAML frontmatter not escaped | WARNING | 1 hr | Medium | **3** |
-| W13 | Lossy decision round-trip | WARNING | 3-4 hrs | Medium | **3** |
-| DM4 | No cross-platform decisions | WARNING | 2 hrs | Medium | **4** |
-| W2 | DAG triple-definition | WARNING | 4-6 hrs | High | **4** |
-| W5 | No staleness detection | WARNING | 2-3 hrs | Medium | **4** |
-| W8 | Missing test coverage (vision-build, sync_memory) | WARNING | 4-6 hrs | Medium | **4** |
-| W9d | Bash tests not in CI | WARNING | 30 min | Low | **4** |
-| W9e | Template tests skipped | WARNING | 2-3 hrs | Medium | **4** |
-| W10d | platformLoaders hardcoded | WARNING | 2-3 hrs | Medium | **4** |
-| W0a | Per-function commits in db.py | WARNING | 2-3 hrs | Low | **4** |
-| W0c | No concurrent DB protection | WARNING | 30 min | Low | **4** |
-| W11a | reseed_all N connections | WARNING | 30 min | Low | **4** |
-| W10a | clarify dependency misleading in DAG knowledge | WARNING | 5 min | Low | **4** |
-| W10b | QA disable-model-invocation flag | WARNING | 5 min | Low (intentional) | **4** |
-| W10b | Sidebar toggle fragile vanilla JS | WARNING | 4-6 hrs | Low | **5** |
-| W3 | No portal search | WARNING | 30 min | Medium | **5** |
-| W4 | No pipeline dashboard | WARNING | 8-12 hrs | High | **5** |
-| W7 | Portal setup.sh possibly redundant | WARNING | 30 min | Low | **5** |
-| DM5 | No memory↔decision links | IMPROVE | 2-3 hrs | Low (until portal renders) | **5** |
-| I1 | Pipeline status dashboard | IMPROVE | 2-3 days | High | **5** |
-| I2 | Decision timeline | IMPROVE | 1-2 days | Medium | **5** |
-| I3 | Cross-platform search | IMPROVE | 4-8 hrs | Medium | **5** |
-| I4 | Interactive diagrams | IMPROVE | 2-3 days | Medium | **6** |
-| I5 | Auto-checkpoint | IMPROVE | 2-4 hrs | Medium | **5** |
-| I6 | Pipeline orchestrator | IMPROVE | 1-2 days | High | **5** |
-| I7 | Memory pruning | IMPROVE | 4-6 hrs | Medium | **5** |
-| I8 | Git hooks validation | IMPROVE | 2-3 hrs | Medium | **5** |
-| I9 | Dark mode + responsive | IMPROVE | 4-8 hrs | Low | **6** |
-| I10 | Unified CLI | IMPROVE | 1 day | Medium | **5** |
-| I11 | DB backup before migration | IMPROVE | 30 min | Low | **5** |
-| I11b | Migration testing in CI | IMPROVE | 3-4 hrs | Low | **6** |
-| I12 | Model↔code drift detection | IMPROVE | 1-2 days | Medium | **6** |
-| I13 | API routes for portal | IMPROVE | 4-8 hrs | Medium | **5** |
-| I14 | Auto CLAUDE.md generation | IMPROVE | 4-6 hrs | Medium | **4** |
-| I15 | Hallucination guard (GSD) | IMPROVE | 1-2 hrs | Medium | **5** |
-| I16 | Pre-inline context injection (GSD) | IMPROVE | 4-6 hrs | Medium | **6** |
-| I16b | Error boundary UX | IMPROVE | 1 hr | Low | **6** |
-| I17 | Cost tracking per skill | IMPROVE | 2-4 hrs | Medium | **5** |
-| I18 | Adaptive replanning post-epic | IMPROVE | 4-6 hrs | Medium | **6** |
-| I19 | Structured escalation levels | IMPROVE | 4-6 hrs | Low | **6** |
-| I20 | Wave-based parallel tasks | IMPROVE | 1-2 days | Medium | **6** |
-| I21 | Atomic git commits per task | IMPROVE | 2-4 hrs | Medium | **5** |
-| I22 | Fast lane for small changes | IMPROVE | 4-6 hrs | High | **5** |
-| I23 | Developer onboarding script | IMPROVE | 2-3 hrs | Medium | **5** |
-| I4b | Astro View Transitions | IMPROVE | 4-8 hrs | Low | **6** |
-| I4c | Command palette (Cmd+K) | IMPROVE | 4-8 hrs | Medium | **6** |
+| DM1 | Memory import ignores platform_id | WARNING | 15 min | High (data fidelity) | **6** |
+| DM2 | Memory export drops platform_id | WARNING | 15 min | High (data fidelity) | **6** |
+| DM3 | search_memories no platform filter | WARNING | 5 min | High | **6** |
+| DM6 | No decision change history (events unused) | WARNING | 30 min | Medium | **6** |
+| DM4 | No cross-platform decisions | WARNING | 2 hrs | Medium | **7** |
+| W2 | DAG triple-definition | WARNING | 4-6 hrs | High | **7** |
+| W8 | Missing test coverage (vision-build, sync_memory) | WARNING | 4-6 hrs | Medium | **7** |
+| W9e | Template tests skipped | WARNING | 2-3 hrs | Medium | **7** |
+| W10d | platformLoaders hardcoded | WARNING | 2-3 hrs | Medium | **7** |
+| W10b | Sidebar toggle fragile vanilla JS | WARNING | 4-6 hrs | Low | **8** |
+| W3 | No portal search | WARNING | 30 min | Medium | **8** |
+| W4 | No pipeline dashboard | WARNING | 8-12 hrs | High | **8** |
+| DM5 | No memory↔decision links | IMPROVE | 2-3 hrs | Low (until portal renders) | **8** |
+| I1 | Pipeline status dashboard | IMPROVE | 2-3 days | High | **8** |
+| I2 | Decision timeline | IMPROVE | 1-2 days | Medium | **8** |
+| I3 | Cross-platform search | IMPROVE | 4-8 hrs | Medium | **8** |
+| I4 | Interactive diagrams | IMPROVE | 2-3 days | Medium | **9** |
+| I5 | Auto-checkpoint | IMPROVE | 2-4 hrs | Medium | **8** |
+| I6 | Pipeline orchestrator | IMPROVE | 1-2 days | High | **8** |
+| I7 | Memory pruning | IMPROVE | 4-6 hrs | Medium | **8** |
+| I8 | Git hooks validation | IMPROVE | 2-3 hrs | Medium | **8** |
+| I9 | Dark mode + responsive | IMPROVE | 4-8 hrs | Low | **9** |
+| I10 | Unified CLI | IMPROVE | 1 day | Medium | **8** |
+| I11 | DB backup before migration | IMPROVE | 30 min | Low | **8** |
+| I11b | Migration testing in CI | IMPROVE | 3-4 hrs | Low | **9** |
+| I12 | Model↔code drift detection | IMPROVE | 1-2 days | Medium | **9** |
+| I13 | API routes for portal | IMPROVE | 4-8 hrs | Medium | **8** |
+| I14 | Auto CLAUDE.md generation | IMPROVE | 4-6 hrs | Medium | **7** |
+| I15 | Hallucination guard (GSD) | IMPROVE | 1-2 hrs | Medium | **8** |
+| I16 | Pre-inline context injection (GSD) | IMPROVE | 4-6 hrs | Medium | **9** |
+| I16b | Error boundary UX | IMPROVE | 1 hr | Low | **9** |
+| I17 | Cost tracking per skill | IMPROVE | 2-4 hrs | Medium | **8** |
+| I18 | Adaptive replanning post-epic | IMPROVE | 4-6 hrs | Medium | **9** |
+| I19 | Structured escalation levels | IMPROVE | 4-6 hrs | Low | **9** |
+| I20 | Wave-based parallel tasks | IMPROVE | 1-2 days | Medium | **9** |
+| I21 | Atomic git commits per task | IMPROVE | 2-4 hrs | Medium | **8** |
+| I22 | Fast lane for small changes | IMPROVE | 4-6 hrs | High | **8** |
+| I23 | Developer onboarding script | IMPROVE | 2-3 hrs | Medium | **8** |
+| I4b | Astro View Transitions | IMPROVE | 4-8 hrs | Low | **9** |
+| I4c | Command palette (Cmd+K) | IMPROVE | 4-8 hrs | Medium | **9** |
 
 ---
 
@@ -649,30 +652,54 @@ All 7 blockers + 4 quick warnings fixed. See "Completed" table above.
 
 Shared config.py, branch guard docs, analyze-post node, constitution cleanup, auto-sync hook, requirements-dev.txt.
 
-### Sprint 3 — Data Fidelity + Quick Wins (~1 day)
+### Sprint 2-5 — Foundation + Hardening ✓ DONE (2026-03-30)
 
-> **Theme:** Make the Decision/Memory BD actually trustworthy as source of truth. Fix remaining blocker. CI polish.
+> **20/20 tasks completed** across 4 phases. Covered items originally planned for Sprints 3-4.
+
+**Phase 1 — Blocker + Quick Wins (9 tasks):**
+B6 analyze-post node, W10 branch guard 11 skills, W10a clarify optional, W10b QA flag documented, W10c AskQuestionTool removed, W9f inline CI removed, W7 setup.sh deleted, W9b requirements-dev.txt, W1 shared config.py.
+
+**Phase 2 — DB Hardening (4 tasks):**
+W0 get_conn() context manager, W0a transaction() batching, W11 reseed_all single conn, W0c single-writer docs.
+
+**Phase 3 — CI Hardening (4 tasks):**
+W9 pip/npm caching, W9c ruff format, W9d bash tests, W5 check-stale subcommand.
+
+**Phase 4 — Data Integrity (3 tasks):**
+W11b relative paths in DB, W12 body column + lossless round-trip, W9e 78 tests / 0 skipped.
+
+#### Learnings
+
+1. **Context managers are foundational** — `get_conn()` as context manager eliminated an entire class of resource leak bugs. Pattern: build primitives first, then everything else is safer.
+2. **Relative paths prevent coupling** — Storing absolute paths created machine-specific state. `to_relative_path()` makes the DB portable across clones.
+3. **Body column enables lossless round-trips** — Storing the original markdown body alongside structured fields means export→import cycles preserve data. Never discard the source.
+4. **Transaction batching matters even at small scale** — `seed_from_filesystem()` went from ~80 commits to 1. Not a perf issue today, but clean practice that prevents future scaling surprises.
+5. **Test coverage enables fearless refactoring** — 78 tests (0 skipped) gave confidence to refactor db.py internals without regression. The skipped tests from W9e were replaced with real assertions.
+6. **Quick wins compound** — 9 quick fixes in Phase 1 cleared cognitive debt, making the harder DB/CI work in Phases 2-3 easier to focus on.
+
+#### Platform Quality Assessment
+
+| Dimension | Grade | Evidence | Gap to close |
+|-----------|-------|----------|--------------|
+| **Fluidity** | B+ | 24-skill DAG with gates, fresh context per skill, auto-handoffs | No pipeline orchestrator yet (manual skill-by-skill) |
+| **Performance** | A- | CI caching, WAL mode, transaction batching, single-conn reseed | No cost tracking per skill, no parallel task execution |
+| **Consistency** | B | Shared config.py, uniform contract, lossless round-trips | DAG still triple-defined (platform.yaml + knowledge + CLAUDE.md) |
+| **Robustness** | A- | 78 tests, context managers, FK constraints, relative paths, branch guards | No crash recovery, no DB backup before migration |
+| **AI-driven** | B+ | 24 pipeline skills, auto-review, fresh subagent contexts, SQLite state | No hallucination guard, no pre-inlined context, no cost tracking |
+
+### Sprint 6 — Data Fidelity (~2-3 hours)
+
+> **Theme:** Make the Memory/Decision round-trip actually lossless. Complete the data fidelity story started in Sprint 2-5.
 
 | # | Item | Effort | Why |
 |---|------|--------|-----|
-| 1 | **B2** — SQL injection in bash (sys.argv) | 1h | Last remaining BLOCKER (security) |
-| 2 | **DM1** — Memory import reads `platform` from frontmatter | 15min | Without this, all memories are orphaned |
-| 3 | **DM2** — Memory export includes `platform_id` | 15min | Without this, round-trip degrades data |
-| 4 | **DM3** — `search_memories()` with `platform_id` filter | 5min | Symmetry with `search_decisions()` |
-| 5 | **DM6** — Insert event on decision change (audit trail) | 30min | Uses existing `events` table |
-| 6 | **W0** — `get_conn()` context manager | 1h | Foundation for all DB callers |
-| 7 | **W11b** — Store relative file_paths in DB | 2-3h | Absolute paths break on clone |
-| 8 | **W12** — YAML frontmatter escape in exports | 1h | Broken YAML on special chars |
-| 9 | **W13** — Lossy decision round-trip (store original body) | 3-4h | Data loss on export→import |
-| 10 | **W9** — CI dependency caching | 30min | CI speed |
-| 11 | **W9c** — `ruff format --check` in CI | 5min | Quick win |
-| 12 | **W9f** — Remove redundant CI inline validation | 10min | Quick win |
-| 13 | **W10c** — Load fonts or remove declarations | 15min | Quick win |
-| 14 | **W10d** — Move @types to devDependencies | 2min | Quick win |
+| 1 | **DM1** — Memory import reads `platform` from frontmatter | 15min | All memories orphaned (platform_id=NULL) |
+| 2 | **DM2** — Memory export includes `platform_id` | 15min | Round-trip degrades data |
+| 3 | **DM3** — `search_memories()` with `platform_id` filter | 5min | Can't scope search to one platform |
+| 4 | **DM6** — Insert event on decision change (audit trail) | 30min | Silent overwrites, no history |
+| 5 | Fix `export_memory_to_markdown` storing absolute path | 5min | Inconsistent with import (relative) |
 
-**Total: ~10-12h**
-
-### Sprint 4 — Single Source of Truth + Test Coverage (~1 week)
+### Sprint 7 — Single Source of Truth + Test Coverage (~1 week)
 
 > **Theme:** Eliminate drift between documentation sources. Improve test confidence.
 
@@ -684,16 +711,10 @@ Shared config.py, branch guard docs, analyze-post node, constitution cleanup, au
 | 4 | **W9e** — Enable skipped template tests | 2-3h | Copier contract untested |
 | 5 | **DM4** — Cross-platform decisions (nullable platform_id) | 2h | Global decisions need a home |
 | 6 | **W10d** — Generate platformLoaders at build time | 2-3h | Manual TSX edit per new platform |
-| 7 | **W5** — Staleness detection (`lint --check-stale` + CI) | 2-3h | Stale artifacts invisible today |
-| 8 | **W0a** — Transaction context manager for batch ops | 2-3h | 80 commits per reseed is wasteful |
-| 9 | **W9d** — Bash tests in CI | 30min | Quick win |
-| 10 | **W10a/W10b** — Clarify DAG docs + evaluate QA flag | 10min | Quick wins |
-| 11 | **W0c** — Document single-writer constraint | 30min | Prevents confused debugging |
-| 12 | **W11a** — reseed_all single connection | 30min | Quick win |
 
-**Total: ~25-30h**
+**Total: ~20-25h**
 
-### Sprint 5 — Frontend Experience + Automation (~1-2 weeks)
+### Sprint 8 — Frontend Experience + Automation (~1-2 weeks)
 
 > **Theme:** Make the portal useful. Add pipeline automation and developer tooling.
 
@@ -716,14 +737,13 @@ Shared config.py, branch guard docs, analyze-post node, constitution cleanup, au
 | 15 | **I22** — Fast lane for small changes | 4-6h | 24-skill pipeline is heavy for bug fixes |
 | 16 | **I23** — Developer onboarding script | 2-3h | `make setup` for new devs |
 | 17 | **DM5** — Memory↔decision links table | 2-3h | Only if portal renders them |
-| 18 | **W7** — Evaluate setup.sh redundancy | 30min | Quick win |
-| 19 | **W10b** — Sidebar toggle → Astro component | 4-6h | Fragile vanilla JS |
+| 18 | **W10b** — Sidebar toggle → Astro component | 4-6h | Fragile vanilla JS |
 
 **Total: ~3-4 weeks**
 
-### Sprint 6 — Polish + Advanced Features (backlog)
+### Sprint 9 — Polish + Advanced Features (backlog)
 
-> **Theme:** Refinements and advanced capabilities. Pull from this when Sprint 5 is done.
+> **Theme:** Refinements and advanced capabilities. Pull from this when Sprint 8 is done.
 
 | # | Item | Effort |
 |---|------|--------|
@@ -769,13 +789,13 @@ Shared config.py, branch guard docs, analyze-post node, constitution cleanup, au
 
 | Component | Tests | CI Coverage | Verdict | Sprint to fix |
 |-----------|-------|-------------|---------|---------------|
-| DB layer (db.py) | 6 test files, ~40 tests | Yes (db-tests job) | Good | — |
-| Copier template | 2 test files, ~15 tests | Yes (templates job) | Good, 2 skipped | Sprint 4 (W9e) |
+| DB layer (db.py) | 6 test files, ~60 tests | Yes (db-tests job) | Good | — |
+| Copier template | 2 test files, ~15 tests | Yes (templates job) | Good, 2 skipped | Sprint 7 (W9e) |
 | platform.py | 1 test file, 5 tests | Yes (db-tests job) | Adequate | — |
 | post_save.py | 1 test file, 5 tests | Yes (db-tests job) | Adequate | — |
-| Bash scripts | 1 test file (manual) | **No** | Gap | Sprint 4 (W9d) |
-| vision-build.py | 0 tests | **No** | Gap | Sprint 4 (W8) |
-| sync_memory.py | 0 tests | **No** | Gap | Sprint 4 (W8) |
+| Bash scripts | 1 test file | ✓ Yes (bash-tests job) | **Fixed** | — |
+| vision-build.py | 0 tests | **No** | Gap | Sprint 7 (W8) |
+| sync_memory.py | 0 tests | **No** | Gap | Sprint 7 (W8) |
 | Portal build | 0 tests | ✓ Yes (portal-build job) | **Fixed** | — |
 | LikeC4 models | build validation only | Yes (likec4 job) | Adequate | — |
-| Ruff formatting | 0 checks | **No** | Gap | Sprint 3 (W9c) |
+| Ruff formatting | format check | ✓ Yes (lint job) | **Fixed** | — |

@@ -467,3 +467,188 @@ def test_decision_link_type_filter(tmp_db):
     supersedes = get_decision_links(tmp_db, a, link_type="supersedes")
     assert len(supersedes) == 1
     assert supersedes[0]["link_type"] == "supersedes"
+
+
+# ══════════════════════════════════════
+# Sprint 6 — Data Fidelity Tests
+# ══════════════════════════════════════
+
+
+def _make_memory_file_with_platform(
+    path: Path, name: str = "test", type_: str = "feedback", platform: str | None = None
+):
+    lines = [f"name: {name}", "description: A test memory", f"type: {type_}"]
+    if platform:
+        lines.append(f"platform: {platform}")
+    frontmatter = "\n".join(lines)
+    path.write_text(f"---\n{frontmatter}\n---\n\nContent of {name} memory.\n")
+
+
+def test_dm1_memory_import_reads_platform(tmp_db, tmp_path):
+    """DM1: Memory import reads platform from frontmatter."""
+    from db import import_memory_from_markdown, get_memories, upsert_platform
+
+    upsert_platform(tmp_db, "test-plat", name="Test Platform", repo_path="platforms/test-plat")
+    mem_path = tmp_path / "test.md"
+    _make_memory_file_with_platform(mem_path, "rule1", "feedback", platform="test-plat")
+    mid = import_memory_from_markdown(tmp_db, mem_path)
+    assert mid is not None
+    memories = get_memories(tmp_db)
+    assert len(memories) == 1
+    assert memories[0]["platform_id"] == "test-plat"
+
+
+def test_dm1_memory_import_no_platform(tmp_db, tmp_path):
+    """DM1: Memory without platform in frontmatter gets platform_id=NULL."""
+    from db import import_memory_from_markdown, get_memories
+
+    mem_path = tmp_path / "test.md"
+    _make_memory_file(mem_path, "no-plat", "feedback")
+    mid = import_memory_from_markdown(tmp_db, mem_path)
+    assert mid is not None
+    memories = get_memories(tmp_db)
+    assert len(memories) == 1
+    assert memories[0]["platform_id"] is None
+
+
+def test_dm1_memory_import_invalid_platform(tmp_db, tmp_path):
+    """DM1: Memory with invalid platform falls back to NULL gracefully."""
+    from db import import_memory_from_markdown, get_memories
+
+    mem_path = tmp_path / "test.md"
+    _make_memory_file_with_platform(mem_path, "bad-plat", "feedback", platform="nonexistent")
+    mid = import_memory_from_markdown(tmp_db, mem_path)
+    assert mid is not None
+    memories = get_memories(tmp_db)
+    assert len(memories) == 1
+    assert memories[0]["platform_id"] is None
+
+
+def test_dm2_memory_export_includes_platform(tmp_db, tmp_path):
+    """DM2: Memory export includes platform in frontmatter when set."""
+    from db import insert_memory, export_memory_to_markdown, upsert_platform
+    import yaml
+
+    upsert_platform(tmp_db, "test-plat", name="Test Platform", repo_path="platforms/test-plat")
+    mid = insert_memory(tmp_db, "feedback", "my-rule", "Rule content", platform_id="test-plat")
+    out_dir = tmp_path / "out"
+    out_path = export_memory_to_markdown(tmp_db, mid, out_dir)
+    content = out_path.read_text()
+    parts = content.split("---", 2)
+    fm = yaml.safe_load(parts[1])
+    assert fm["platform"] == "test-plat"
+
+
+def test_dm2_memory_export_no_platform(tmp_db, tmp_path):
+    """DM2: Memory export omits platform when not set."""
+    from db import insert_memory, export_memory_to_markdown
+    import yaml
+
+    mid = insert_memory(tmp_db, "feedback", "no-plat", "Content")
+    out_dir = tmp_path / "out"
+    out_path = export_memory_to_markdown(tmp_db, mid, out_dir)
+    content = out_path.read_text()
+    parts = content.split("---", 2)
+    fm = yaml.safe_load(parts[1])
+    assert "platform" not in fm
+
+
+def test_dm2_memory_roundtrip_preserves_platform(tmp_db, tmp_path):
+    """DM2+DM1: Round-trip (insert → export → re-import) preserves platform_id."""
+    from db import insert_memory, export_memory_to_markdown, import_memory_from_markdown, upsert_platform
+
+    upsert_platform(tmp_db, "test-plat", name="Test Platform", repo_path="platforms/test-plat")
+    mid = insert_memory(tmp_db, "feedback", "roundtrip", "Content", platform_id="test-plat")
+    out_dir = tmp_path / "out"
+    out_path = export_memory_to_markdown(tmp_db, mid, out_dir)
+
+    # Delete the original and re-import
+    tmp_db.execute("DELETE FROM memory_entries WHERE memory_id=?", (mid,))
+    tmp_db.commit()
+    new_mid = import_memory_from_markdown(tmp_db, out_path)
+    assert new_mid is not None
+    row = tmp_db.execute("SELECT platform_id FROM memory_entries WHERE memory_id=?", (new_mid,)).fetchone()
+    assert row["platform_id"] == "test-plat"
+
+
+def test_dm3_search_memories_with_platform_filter(tmp_db):
+    """DM3: search_memories scopes results by platform_id."""
+    from db import insert_memory, search_memories, upsert_platform
+
+    upsert_platform(tmp_db, "plat-a", name="A", repo_path="platforms/a")
+    upsert_platform(tmp_db, "plat-b", name="B", repo_path="platforms/b")
+    insert_memory(tmp_db, "feedback", "alpha-rule", "unique_token alpha content", platform_id="plat-a")
+    insert_memory(tmp_db, "feedback", "beta-rule", "unique_token beta content", platform_id="plat-b")
+
+    # No filter returns both
+    all_results = search_memories(tmp_db, "unique_token")
+    assert len(all_results) == 2
+
+    # Filter by platform A
+    a_results = search_memories(tmp_db, "unique_token", platform_id="plat-a")
+    assert len(a_results) == 1
+    assert a_results[0]["platform_id"] == "plat-a"
+
+    # Filter by platform B
+    b_results = search_memories(tmp_db, "unique_token", platform_id="plat-b")
+    assert len(b_results) == 1
+    assert b_results[0]["platform_id"] == "plat-b"
+
+
+def test_dm6_decision_change_creates_event(tmp_db, tmp_path):
+    """DM6: Re-importing a changed ADR creates an 'updated' event."""
+    from db import import_adr_from_markdown, upsert_platform
+    import json
+
+    upsert_platform(tmp_db, "p", name="P", repo_path="platforms/p")
+    adr_path = tmp_path / "ADR-001-test.md"
+    _make_adr_file(adr_path, 1, "Framework")
+    did = import_adr_from_markdown(tmp_db, adr_path, "p")
+    assert did is not None
+
+    # No events yet (first import)
+    events = tmp_db.execute("SELECT * FROM events WHERE entity_id=?", (did,)).fetchall()
+    assert len(events) == 0
+
+    # Modify the file and re-import
+    adr_path.write_text(adr_path.read_text() + "\n\n## Updated\nNew content added.\n")
+    did2 = import_adr_from_markdown(tmp_db, adr_path, "p")
+    assert did2 == did  # Same decision
+
+    # Now there should be an 'updated' event
+    events = tmp_db.execute("SELECT * FROM events WHERE entity_id=? AND action='updated'", (did,)).fetchall()
+    assert len(events) == 1
+    payload = json.loads(events[0]["payload"])
+    assert "old_hash" in payload
+    assert "new_hash" in payload
+    assert payload["old_hash"] != payload["new_hash"]
+
+
+def test_dm6_unchanged_adr_no_duplicate_event(tmp_db, tmp_path):
+    """DM6: Re-importing an unchanged ADR does NOT create an event."""
+    from db import import_adr_from_markdown, upsert_platform
+
+    upsert_platform(tmp_db, "p", name="P", repo_path="platforms/p")
+    adr_path = tmp_path / "ADR-002-stable.md"
+    _make_adr_file(adr_path, 2, "Stable")
+    import_adr_from_markdown(tmp_db, adr_path, "p")
+    import_adr_from_markdown(tmp_db, adr_path, "p")  # Same content
+
+    events = tmp_db.execute("SELECT * FROM events WHERE action='updated'").fetchall()
+    assert len(events) == 0
+
+
+def test_export_memory_calls_to_relative_path(tmp_db, tmp_path, monkeypatch):
+    """Task 6: export_memory_to_markdown uses to_relative_path for DB storage."""
+    from db import insert_memory, export_memory_to_markdown
+    import config as _cfg
+
+    # Patch REPO_ROOT so tmp_path is "inside" the repo
+    monkeypatch.setattr(_cfg, "REPO_ROOT", tmp_path)
+    mid = insert_memory(tmp_db, "feedback", "path-test", "Content")
+    out_dir = tmp_path / "out"
+    export_memory_to_markdown(tmp_db, mid, out_dir)
+    row = tmp_db.execute("SELECT file_path FROM memory_entries WHERE memory_id=?", (mid,)).fetchone()
+    # With REPO_ROOT patched to tmp_path, the stored path should be relative
+    assert not row["file_path"].startswith("/"), f"Expected relative path, got: {row['file_path']}"
+    assert row["file_path"].startswith("out/"), f"Expected path starting with out/, got: {row['file_path']}"
