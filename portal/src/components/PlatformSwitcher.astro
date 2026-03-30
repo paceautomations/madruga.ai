@@ -26,7 +26,7 @@ const currentPlatform = match ? match[1] : '';
 )}
 
 <script>
-  const select = document.getElementById('platform-select') as HTMLSelectElement | null;
+  const select = /** @type {HTMLSelectElement | null} */ (document.getElementById('platform-select'));
   if (select) {
     select.addEventListener('change', () => {
       const newPlatform = select.value;
