@@ -18,7 +18,8 @@ O madruga.ai é um sistema de documentação de arquitetura bem estruturado, com
 | Python Lint (ruff) | 2 warnings | 8/10 |
 | Template Tests | 1 FAIL (16 pass) | 7/10 |
 | Platform Lint | 1 warn (fulano context-map) | 8/10 |
-| Pipeline DAG Integrity | 2 violations | 6/10 |
+| Pipeline DAG Integrity | 2 DB violations + 1 YAML mismatch | 5/10 |
+| Skill Contract Compliance | Persona missing in 13 L1 skills | 7/10 |
 | DB Schema & Migrations | OK (5 migrations) | 9/10 |
 | Security | OK (path traversal protected) | 9/10 |
 | Frontend UX | Good, needs polish | 7/10 |
@@ -52,6 +53,23 @@ Isso significa que o estado do DB não reflete a realidade. O `reseed_from_files
 
 **Problema**: `platforms/fulano/engineering/context-map.md` e `platforms/fulano/business/process.md` não existem, mas o lint os espera (e o DAG tem `context-map=pending` enquanto `containers=done`, que depende de `domain-model` mas não de `context-map`).
 **Impacto**: O lint reporta `[warn]`, não bloqueia. Mas a ausência de `context-map.md` é inconsistente com `containers=done` se o portal sidebar referencia este arquivo.
+
+### 1.4 [B4] madruga-ai `platform.yaml` missing `analyze-post` node + wrong `reconcile` dependency
+
+**Arquivo**: `platforms/madruga-ai/platform.yaml` (epic_cycle section)
+**Problema**: Comparando com fulano (correto, 11 nós), madruga-ai tem apenas **10 nós** no epic_cycle:
+- Falta o nó `analyze-post` entre `implement` e `verify`
+- `reconcile.depends` aponta para `["verify"]` em vez de `["qa"]`
+
+Isso viola a regra do pipeline: "qa runs before reconcile because its heal loop may modify code".
+**Impacto**: Para a plataforma madruga-ai, o post-implementation consistency check é pulado, e reconcile pode rodar antes do QA.
+**Fix**: Adicionar `analyze-post` node e corrigir `reconcile.depends` para `["qa"]`.
+
+### 1.5 [B5] Missing `qa-template.md` knowledge file
+
+**Arquivo**: `.claude/commands/madruga/qa.md:99` referencia `.claude/knowledge/qa-template.md`
+**Problema**: O arquivo não existe. A skill QA diz "if exists" então degrada gracefully, mas o setup flow perde valor sem o template.
+**Fix**: Criar o arquivo ou remover a referência.
 
 ---
 
@@ -123,7 +141,28 @@ def compute_file_hash(path: str | Path) -> str:
 **Problema**: Cada nova plataforma precisa de uma entrada manual no map `platformLoaders`. O `platform.py register` tenta injetar automaticamente, mas usa regex frágil.
 **Fix**: A limitação é do Vite (imports estáticos). Documentar claramente no onboarding e no CLAUDE.md (já está documentado, mas reforçar no `register` output).
 
-### 2.10 [W10] `pipeline_runs` table está vazia e sem uso
+### 2.10 [W10] `epic-breakdown` default output doesn't match DAG declaration
+
+**Arquivo**: `.claude/commands/madruga/epic-breakdown.md:37-41`
+**Problema**: DAG declara output `epics/*/pitch.md` mas Mode 1 (default) só adiciona entradas em `planning/roadmap.md` sem criar diretórios `epics/`. O skill `roadmap.md:44` tenta ler `epics/*/pitch.md` que podem não existir.
+**Fix**: Atualizar roadmap skill para também ler da tabela em `planning/roadmap.md`, não só dos pitch files.
+
+### 2.11 [W11] 13 L1 skills omitem seção `Persona` exigida pelo contrato
+
+**Problema**: O contrato uniforme exige `## Persona` em cada skill, mas todos os 13 L1 skills omitem. Funciona na prática porque os contract files de layer (`pipeline-contract-business.md`, etc.) definem a persona.
+**Fix**: Ou adicionar Persona nos skills ou atualizar o contrato para dizer "Persona inherited from layer contract."
+
+### 2.12 [W12] `getting-started.md` omite `speckit.clarify` e `speckit.analyze`
+
+**Arquivo**: `.claude/commands/madruga/getting-started.md:82-88`
+**Problema**: A lista de comandos disponíveis não menciona `speckit.clarify` nem `speckit.analyze`.
+
+### 2.13 [W13] `solution-overview.md` tem referência hardcoded ao fulano
+
+**Arquivo**: `.claude/commands/madruga/solution-overview.md:56`
+**Problema**: Diz "If `platforms/fulano/business/solution-overview.md` exists, read it as tone reference". Hardcoded para fulano.
+
+### 2.14 [W14] `pipeline_runs` table está vazia e sem uso
 
 **Arquivo**: `.pipeline/madruga.db`
 **Problema**: Tabela `pipeline_runs` existe no schema mas tem 0 rows e nenhum código a referencia.
@@ -165,7 +204,12 @@ def compute_file_hash(path: str | Path) -> str:
 **Arquivo**: `.specify/templates/platform/template/`
 **Problema**: O template scaffolda `business/vision.md` e `business/solution-overview.md`, mas não `business/process.md`. O `business-process` skill gera este arquivo, mas o scaffold poderia incluir um placeholder.
 
-### 3.7 [N7] `decision_links` tabela vazia
+### 3.7 [N7] CLAUDE.md diz "3 L2 nodes" mas são 4
+
+**Arquivo**: `CLAUDE.md`
+**Problema**: "20 skills: 13 L1 nodes + 3 L2 nodes + 4 utilities" — na verdade são 4 L2 (epic-context, verify, qa, reconcile) + 3 utilities.
+
+### 3.8 [N8] `decision_links` tabela vazia
 
 **Arquivo**: `.pipeline/madruga.db`
 **Problema**: 0 rows. A funcionalidade de linking decisions existe no código mas nunca é chamada por nenhum skill.
@@ -249,7 +293,9 @@ def compute_file_hash(path: str | Path) -> str:
 |---|------|------|---------|---------|-----------|
 | 1 | B1 — Fix teste containers.md | BLOCKER | Alto | 5 min | P0 |
 | 2 | B2 — DAG integrity validation | BLOCKER | Alto | 1h | P0 |
-| 3 | W1 — Remover variáveis não usadas | WARNING | Baixo | 2 min | P1 |
+| 3 | B4 — madruga-ai platform.yaml missing analyze-post + wrong reconcile dep | BLOCKER | Alto | 10 min | P0 |
+| 4 | B5 — Create qa-template.md | BLOCKER | Médio | 30 min | P0 |
+| 5 | W1 — Remover variáveis não usadas | WARNING | Baixo | 2 min | P1 |
 | 4 | W2/A1 — Automatizar pipeline-status.json | WARNING | Alto | 15 min | P1 |
 | 5 | W3 — Adicionar `site` no astro.config | WARNING | Baixo | 1 min | P1 |
 | 6 | W6 — Usar `transaction()` em batch ops | WARNING | Médio | 30 min | P2 |
