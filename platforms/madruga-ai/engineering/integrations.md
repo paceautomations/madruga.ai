@@ -1,6 +1,6 @@
 ---
 title: "Integrations"
-updated: 2026-03-27
+updated: 2026-03-31
 ---
 # Integracoes
 
@@ -12,8 +12,8 @@ Mapa completo de integracoes do Madruga AI com sistemas externos e entre contain
 graph LR
     subgraph madruga["Madruga AI"]
         daemon["Daemon"]
+        dag["DAG Executor"]
         orchestrator["Orchestrator"]
-        poller["Kanban Poller"]
         pipeline["Pipeline Phases"]
         debate["Debate Engine"]
         decisions["Decision System"]
@@ -26,20 +26,20 @@ graph LR
 
     subgraph acl["ACL Layer"]
         claude_acl["Claude API Client"]
-        obsidian_acl["Obsidian Bridge"]
         github_acl["GitHub Client"]
         whatsapp_acl["WhatsApp Bridge"]
         likec4_acl["LikeC4 CLI Wrapper"]
         copier_acl["Copier CLI Wrapper"]
+        sentry_acl["Sentry Adapter"]
     end
 
     subgraph external["Sistemas Externos"]
         claude["Claude API<br/>(Anthropic)"]
-        obsidian["Obsidian Vault"]
         github["GitHub"]
-        whatsapp["WhatsApp"]
+        whatsapp["WhatsApp<br/>(wpp-bridge :8030)"]
         likec4["LikeC4 CLI"]
         copier["Copier CLI"]
+        sentry["Sentry Cloud"]
     end
 
     subgraph storage["Storage"]
@@ -51,15 +51,14 @@ graph LR
     pipeline --> claude_acl
     debate --> claude_acl
     bridge --> claude_acl
+    dag --> claude_acl
     claude_acl --> claude
-
-    poller --> obsidian_acl
-    obsidian_acl --> obsidian
 
     orchestrator --> github_acl
     pipeline --> github_acl
     github_acl --> github
 
+    dag --> whatsapp_acl
     decisions --> whatsapp_acl
     whatsapp_acl --> whatsapp
 
@@ -70,10 +69,14 @@ graph LR
     pcli --> copier_acl
     copier_acl --> copier
 
+    daemon --> sentry_acl
+    sentry_acl --> sentry
+
     orchestrator --> sqlite
     pipeline --> sqlite
     dashboard --> sqlite
     debate --> sqlite
+    dag --> sqlite
 
     portal --> fs
     vision --> fs
@@ -89,13 +92,13 @@ graph LR
 <!-- AUTO:integrations -->
 | # | Sistema | Protocolo | Direcao | Frequencia | Dados | Fallback |
 |---|---------|-----------|---------|-----------|-------|----------|
-| 1 | **Claude API** | `claude -p` subprocess | Pipeline/Debate/Bridge -> Claude | per-phase / per-round | Prompts compostos (skill + template + context), respostas texto | Retry 3x com backoff; se falhar, fase marcada `failed` |
-| 2 | **Obsidian Vault** | Filesystem read/write | Kanban Poller -> Obsidian | Polling 60s | Kanban cards (titulo, coluna, tags, body) | Se arquivo inacessivel, skip do ciclo de polling |
-| 3 | **GitHub** | `gh` CLI / REST API | Orchestrator/Pipeline -> GitHub | per-epic / per-task | Issues, PRs, labels, comments, branch creation | Retry 3x; rate limit 429 com backoff exponencial |
-| 4 | **WhatsApp** | HTTP API | Decision System -> WhatsApp | per-critical-decision | Alertas de decisoes 1-way door que exigem aprovacao humana | Fire-and-forget; log warning se falhar |
-| 5 | **LikeC4 CLI** | Subprocess (`likec4`) | Vision Build / Portal -> LikeC4 | per-build | JSON export, PNG export, compilacao de modelos | Falha de compilacao aborta o build com erro descritivo |
-| 6 | **Copier CLI** | Subprocess (`copier`) | Platform CLI -> Copier | per-command | Scaffolding (copy), sync (update), answers YAML | Falha aborta operacao; rollback manual |
-| 7 | **SQLite** | sqlite3 (Python stdlib) | Orchestrator/Pipeline/Dashboard/Debate -> madruga.db | per-operation | Epics, phase_runs, patterns, learning, persona_accuracy | WAL mode para leituras concorrentes; write lock serializado |
+| 1 | **Claude API** | `claude -p` subprocess | Pipeline/Debate/Bridge/DAG Executor -> Claude | per-phase / per-round | Prompts compostos (skill + template + context), respostas texto | Retry 3x com backoff; circuit breaker apos 5 falhas; se falhar, fase marcada `failed` |
+| 2 | **GitHub** | `gh` CLI / REST API | Orchestrator/Pipeline -> GitHub | per-epic / per-task | Issues, PRs, labels, comments, branch creation | Retry 3x; rate limit 429 com backoff exponencial |
+| 3 | **WhatsApp** | HTTP via wpp-bridge (:8030) | DAG Executor/Decision System -> WhatsApp | per-human-gate / per-critical-decision | Notificacoes de status, decisoes (ask_choice), alertas criticos | Health check cada 60s; se offline: modo log-only; fallback ntfy.sh (opcional) |
+| 4 | **LikeC4 CLI** | Subprocess (`likec4`) | Vision Build / Portal -> LikeC4 | per-build | JSON export, PNG export, compilacao de modelos | Falha de compilacao aborta o build com erro descritivo |
+| 5 | **Copier CLI** | Subprocess (`copier`) | Platform CLI -> Copier | per-command | Scaffolding (copy), sync (update), answers YAML | Falha aborta operacao; rollback manual |
+| 6 | **Sentry** | HTTPS (sentry-sdk) | Daemon -> Sentry Cloud | per-error / per-request | Error events, stack traces, breadcrumbs, performance traces | Fire-and-forget; falha de envio nao afeta daemon |
+| 7 | **SQLite** | sqlite3 (Python stdlib) | Orchestrator/Pipeline/Dashboard/DAG Executor -> madruga.db | per-operation | Pipeline state, epics, decisions, memory, metrics | WAL mode para leituras concorrentes; write lock serializado |
 | 8 | **Filesystem** | OS read/write | Portal/Vision Build/Platform CLI/Bridge | per-operation | .likec4 files, markdown docs, YAML configs, JSON exports | Operacoes atomicas via write-to-temp + rename |
 | 9 | **Git** | Subprocess (`git`) | Pipeline -> repositorio | per-phase-completion | Commits de artefatos gerados, branch management | Se commit falha, artefatos ficam unstaged para retry manual |
 <!-- /AUTO:integrations -->
@@ -104,14 +107,14 @@ graph LR
 
 ### Claude API — Invocacao via subprocess
 
-O Madruga AI **nao** usa o SDK Python da Anthropic diretamente. Toda interacao com Claude e feita via `claude -p` (Claude Code CLI em modo pipe):
+O Madruga AI **nao** usa o SDK Python da Anthropic diretamente (ADR-010). Toda interacao com Claude e feita via `claude -p` (Claude Code CLI em modo headless):
 
 ```bash
 # Exemplo de invocacao
-echo "<prompt composto>" | claude -p --model claude-sonnet-4-20250514
+claude -p --model opus --output-format json --allowedTools Read,Write,Edit,Bash -- "<prompt>"
 ```
 
-**Justificativa**: Reaproveita autenticacao e configuracao do Claude Code ja instalado na maquina. Evita gerenciar API keys separadamente.
+**Justificativa**: Usa subscription existente ($0 extra), acesso a MCP servers, tools do Claude Code. Agent SDK bloqueado por billing.
 
 **Composicao do prompt** (SpeckitBridge):
 1. Carrega o skill (`.claude/commands/`)
@@ -120,27 +123,25 @@ echo "<prompt composto>" | claude -p --model claude-sonnet-4-20250514
 4. Injeta contexto do epic (acumulado de fases anteriores)
 5. Concatena tudo em um prompt unico
 
-### Obsidian Vault — Kanban Polling
+**Mitigacoes**: `--output-format json` (evita hang bug), semaforo max 3, watchdog SIGKILL, `--allowedTools` explicito.
 
-| Operacao | Metodo | Caminho | Formato |
-|----------|--------|---------|---------|
-| Ler kanban | `open()` + parse | `vault/kanban-board.md` | Markdown com formato kanban plugin |
-| Ler card | Parse de blocos | Dentro do kanban | `- [ ] titulo #tag` |
-| Mover card | Rewrite completo | `vault/kanban-board.md` | Move bloco entre secoes |
+### WhatsApp — Notificacoes via wpp-bridge
 
-**Formato do kanban Obsidian**:
-```markdown
-## Backlog
-- [ ] Epic: nome do epic #tag
+Gateway HTTP local (wpp-bridge, porta 8030) que ponte para WhatsApp Web. Tres operacoes:
 
-## In Progress
-- [ ] Epic: outro epic #doing
+| Operacao | Endpoint | Quando |
+|----------|----------|--------|
+| `send` | POST /send | Status updates, alertas |
+| `ask_choice` | POST /send + GET /messages (poll) | Human gates, decisoes 1-way-door |
+| `alert` | POST /send (com emoji level) | Erros criticos, timeouts |
 
-## Done
-- [x] Epic: epic completo #done
-```
+**Plano de degradacao** (ADR-015):
+1. Health check cada 60s (GET /status)
+2. 3 falhas consecutivas → modo log-only (human gates pausam)
+3. Fallback ntfy.sh (HTTP POST, zero deps, opcional)
+4. Operador reconecta wpp-bridge manualmente
 
-**Deteccao de mudancas**: Compara estado anterior (em memoria) com parse atual. Mudanca de coluna dispara evento para o Orchestrator.
+**Volume esperado**: < 20 notificacoes por dia.
 
 ### GitHub — Operacoes via `gh` CLI
 
@@ -151,16 +152,16 @@ echo "<prompt composto>" | claude -p --model claude-sonnet-4-20250514
 | Listar issues | `gh issue list --label` | Fase `specify` (verificar duplicatas) |
 | Adicionar comment | `gh issue comment` | Atualizacao de status por fase |
 
-### WhatsApp — Notificacoes Criticas
+### Sentry — Error Tracking
 
-Usado **exclusivamente** para decisoes classificadas como 1-way door que exigem gate `CRITICAL_STOP`. O sistema envia uma mensagem formatada com:
+`sentry-sdk[fastapi]` auto-instrumenta FastAPI (ADR-016). Configuracao:
 
-- Titulo da decisao
-- Alternativas consideradas
-- Recomendacao do sistema
-- Link para aprovar/rejeitar (via Obsidian note)
+```python
+import sentry_sdk
+sentry_sdk.init(dsn=settings.sentry_dsn, traces_sample_rate=0.5)
+```
 
-**Volume esperado**: < 5 notificacoes por semana (somente decisoes irreversiveis).
+Free tier: 5K erros/mes, 10M transactions/mes. Fire-and-forget — falha nao afeta daemon.
 
 ### SQLite — Configuracao
 

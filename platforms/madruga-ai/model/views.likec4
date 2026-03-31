@@ -10,7 +10,7 @@ views {
 
     include architect, daemon
     include madrugaAi
-    include claudeApi, obsidianVault, whatsappNotif, githubApi, likec4Cli
+    include claudeApi, whatsappNotif, githubApi, likec4Cli, sentryCloud
     include sqliteDb, gitFs
   }
 
@@ -20,7 +20,7 @@ views {
 
     include *
     include architect, daemon
-    include claudeApi, obsidianVault, whatsappNotif, githubApi, likec4Cli
+    include claudeApi, whatsappNotif, githubApi, likec4Cli, sentryCloud
     include sqliteDb, gitFs
   }
 
@@ -35,7 +35,7 @@ views {
     include integration, integration.*
     include observability, observability.*
     include architect, daemon
-    include claudeApi, obsidianVault, whatsappNotif, githubApi, likec4Cli
+    include claudeApi, whatsappNotif, githubApi, likec4Cli, sentryCloud
     include sqliteDb, gitFs
   }
 
@@ -59,12 +59,12 @@ views {
 
   view executionDetail of execution {
     title 'Execution — Supporting Domain'
-    description 'Bounded context Execution: daemon, orchestrator, kanban poller, pipeline runner'
+    description 'Bounded context Execution: daemon, DAG executor, orchestrator, pipeline runner'
 
     include *
-    include integration.obsidianCrud, integration.claudeClient
+    include integration.claudeClient, integration.whatsappBridge
     include sqliteDb
-    include obsidianVault
+    include claudeApi
   }
 
   view intelligenceDetail of intelligence {
@@ -81,29 +81,21 @@ views {
 
   dynamic view businessFlow {
     title 'Spec-to-Code Pipeline — Fluxo Completo'
-    description 'Pipeline autonomo: epic no kanban → specify → clarify → debate → plan → tasks → implement → reconcile. 7 fases, 2 loops de feedback, 1 reconciliation final.'
+    description 'Pipeline autonomo: DAG executor le platform.yaml → resolve deps → despacha nodes via claude -p → human gates pausam → WhatsApp notifica → resume. 7 fases, 2 loops de feedback, 1 reconciliation final.'
 
     autoLayout TopBottom
 
     // ════════════════════════════════════
-    //  FASE 1: TRIGGER (Kanban → Daemon)
+    //  FASE 1: TRIGGER (DAG Executor → Pipeline)
     // ════════════════════════════════════
 
-    obsidianVault -> execution.kanbanPoller 'Epic movido para "Ready"' {
+    execution.dagExecutor -> execution.orchestratorSlots 'Node pronto (deps satisfeitas)' {
       notes '''
-        **Trigger do pipeline**
-        - Daemon monitora Obsidian vault via filesystem polling
-        - Detecta epic movido para coluna "Ready"
-        - Le pitch.md (frontmatter YAML + corpo Shape Up)
-      '''
-    }
-
-    execution.kanbanPoller -> execution.orchestratorSlots 'EpicRequest (pitch parsed)' {
-      notes '''
-        **Slot allocation**
-        - Orchestrator verifica slots disponiveis
-        - Se slot livre: aloca e inicia pipeline
-        - Se cheio: enfileira com prioridade (now > next > later)
+        **DAG Executor trigger**
+        - Le pipeline nodes de platform.yaml
+        - Resolve dependencias via topological sort
+        - Verifica status no SQLite (skip nodes ja concluidos)
+        - Despacha proximo node pronto para o orchestrator
       '''
     }
 
@@ -235,19 +227,20 @@ views {
     }
 
     // ════════════════════════════════════
-    //  NOTIFICACAO (fim do pipeline)
+    //  HUMAN GATE (decisoes 1-way-door)
     // ════════════════════════════════════
 
-    execution.pipelineRunner -> integration.whatsappBridge 'Pipeline concluido' {
+    execution.dagExecutor -> integration.whatsappBridge 'Human gate: solicita aprovacao' {
       notes '''
-        **Notificacao critica**
-        - WhatsApp: pipeline concluido com sucesso/falha
-        - Inclui: epic name, PR link, metricas (duracao, tokens)
-        - Apenas notificacoes criticas (nao spam)
+        **Human Gate**
+        - DAG Executor pausa em nodes com gate=human ou 1-way-door
+        - Grava estado pending_approval no SQLite
+        - Notifica via WhatsApp (ask_choice com opcoes)
+        - Resume quando operador aprova (via WhatsApp ou CLI)
       '''
     }
 
-    integration.whatsappBridge -> whatsappNotif 'Envia mensagem via Evolution API'
+    integration.whatsappBridge -> whatsappNotif 'Envia mensagem via wpp-bridge'
 
     // ════════════════════════════════════
     //  OBSERVABILIDADE (passiva)
@@ -255,6 +248,7 @@ views {
 
     parallel {
       execution.pipelineRunner -> observability.metricsCollector 'Trace pipeline execution'
+      execution.dagExecutor -> observability.metricsCollector 'Trace DAG execution'
       intelligence.debateModule -> observability.metricsCollector 'Trace debate rounds'
       specDomain.specifyPhase -> observability.metricsCollector 'Trace spec generation'
     }
@@ -263,9 +257,9 @@ views {
       notes '''
         **Dashboard de Observabilidade**
         - Duracao de pipelines por fase
-        - Tokens consumidos por epic
-        - Taxa de sucesso (specs aprovadas no debate)
-        - Patterns detectados e aprendidos
+        - Kanban de epics
+        - Error rates e health status
+        - Sentry captura stack traces e performance traces
       '''
     }
   }

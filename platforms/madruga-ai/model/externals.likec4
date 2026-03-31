@@ -2,17 +2,12 @@ model {
 
   claudeApi = externalService 'Claude API' {
     technology 'Anthropic API (claude -p subprocess)'
-    description 'LLM backend para geracao de specs, debate, decisoes, e implementacao. Invocado via claude -p subprocess pelo SpeckitBridge e daemon'
-  }
-
-  obsidianVault = externalService 'Obsidian Vault' {
-    technology 'Obsidian (filesystem + kanban plugin)'
-    description 'Kanban board para gestao visual de epics. Daemon monitora mudancas via filesystem polling'
+    description 'LLM backend para geracao de specs, debate, decisoes, e implementacao. Invocado via claude -p subprocess pelo SpeckitBridge e DAG Executor'
   }
 
   whatsappNotif = externalService 'WhatsApp' {
-    technology 'Evolution API'
-    description 'Canal de notificacoes criticas: pipeline concluido, erros, decisoes que requerem atencao humana'
+    technology 'wpp-bridge (HTTP gateway :8030)'
+    description 'Canal de notificacoes criticas via wpp-bridge: pipeline concluido, erros, decisoes que requerem atencao humana. Bidirecional (send + ask_choice)'
   }
 
   githubApi = externalService 'GitHub' {
@@ -23,5 +18,10 @@ model {
   likec4Cli = externalService 'LikeC4 CLI' {
     technology 'likec4 (npm)'
     description 'CLI para servir, buildar, e exportar modelos de arquitetura. Usado por vision-build.py e portal'
+  }
+
+  sentryCloud = externalService 'Sentry' {
+    technology 'Sentry Cloud (free tier)'
+    description 'Error tracking com stack traces, breadcrumbs, e performance traces. Auto-instrumenta FastAPI via sentry-sdk'
   }
 }

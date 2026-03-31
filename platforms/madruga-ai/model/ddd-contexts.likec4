@@ -56,18 +56,18 @@ model {
 
   execution = boundedContext 'Execution' {
     #supporting
-    description 'Dominio supporting: daemon asyncio, orchestrator slot-based, kanban poller, pipeline runner. Executa specs autonomamente.'
+    description 'Dominio supporting: daemon asyncio, DAG executor, orchestrator slot-based, pipeline runner. Executa specs autonomamente.'
 
     daemonProcess = module 'Daemon Process' {
-      description 'Processo asyncio 24/7 que gerencia lifecycle do sistema: startup, shutdown graceful, health checks'
+      description 'Processo asyncio 24/7 que gerencia lifecycle do sistema: startup, shutdown graceful, health checks, serve dashboard'
+    }
+
+    dagExecutor = module 'DAG Executor' {
+      description 'Le pipeline DAG de platform.yaml, resolve dependencias via topological sort, despacha nodes via claude -p, gerencia human gates (pause/resume via SQLite + WhatsApp notify)'
     }
 
     orchestratorSlots = module 'Orchestrator Slots' {
       description 'Scheduler slot-based que controla paralelismo (max N pipelines simultaneos) e gerencia filas de prioridade'
-    }
-
-    kanbanPoller = module 'Kanban Poller' {
-      description 'Monitora Obsidian vault via filesystem polling, detecta epics movidos para coluna "Ready", dispara pipeline'
     }
 
     pipelineRunner = module 'Pipeline Runner' {
@@ -98,14 +98,10 @@ model {
 
   integration = boundedContext 'Integration' {
     #generic
-    description 'Dominio generico: adapters para sistemas externos (Obsidian, WhatsApp, GitHub, Claude API). ACLs isolam o core.'
-
-    obsidianCrud = module 'Obsidian CRUD' {
-      description 'Leitura e escrita de cards no kanban Obsidian via filesystem: mover colunas, atualizar frontmatter, ler estado'
-    }
+    description 'Dominio generico: adapters para sistemas externos (WhatsApp, GitHub, Claude API, Sentry). ACLs isolam o core.'
 
     whatsappBridge = module 'WhatsApp Bridge' {
-      description 'Envio de notificacoes criticas via WhatsApp (Evolution API): pipeline concluido, erros, decisoes pendentes'
+      description 'Envio de notificacoes e decisoes via wpp-bridge (HTTP gateway localhost:8030): send, ask_choice, alert'
     }
 
     githubOps = module 'GitHub Ops' {
@@ -113,24 +109,28 @@ model {
     }
 
     claudeClient = module 'Claude Client' {
-      description 'Wrapper para claude -p subprocess: monta prompt, executa, parseia output, gerencia retries e timeouts'
+      description 'Wrapper para claude -p subprocess: monta prompt, executa, parseia output, gerencia retries, timeouts, e circuit breaker'
+    }
+
+    sentryAdapter = module 'Sentry Adapter' {
+      description 'Adapter para Sentry SDK: inicializa DSN, configura FastAPI auto-instrumentation, envia error events e performance traces'
     }
   }
 
   observability = boundedContext 'Observability' {
     #generic
-    description 'Dominio generico: dashboard, health checks, metricas. Visibilidade sobre estado e performance do sistema.'
+    description 'Dominio generico: dashboard, health checks, metricas SQLite, Sentry. Visibilidade sobre estado e performance do sistema.'
 
     healthCheck = module 'Health Check' {
-      description 'Verifica saude do sistema: daemon alive, SQLite acessivel, git status limpo, Obsidian vault montado'
+      description 'Verifica saude do sistema: daemon alive, SQLite acessivel, wpp-bridge online, git status limpo'
     }
 
     dashboardWeb = module 'Dashboard Web' {
-      description 'Interface web (FastAPI + HTMX) para visualizar metricas, status de epics, e historico de execucoes'
+      description 'Interface web (FastAPI + HTML) para visualizar pipeline status, metricas, kanban de epics, e historico de execucoes'
     }
 
     metricsCollector = module 'Metrics Collector' {
-      description 'Coleta metricas de execucao: duracao de pipelines, tokens consumidos, taxa de sucesso, patterns detectados'
+      description 'Coleta metricas em SQLite: duracao de pipelines, request latency, error rates. Sentry captura stack traces e performance traces'
     }
   }
 }

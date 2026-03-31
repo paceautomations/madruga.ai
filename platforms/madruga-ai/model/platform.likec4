@@ -9,58 +9,63 @@ model {
     }
 
     platformCli = api 'Platform CLI' {
-      technology 'Python 3.11+ (platform.py)'
-      description 'CLI para gestao de plataformas: new, lint, sync, register, list. Encapsula Copier e validacao estrutural'
+      technology 'Python 3.12+ (platform.py)'
+      description 'CLI para gestao de plataformas: new, lint, sync, register, status, import/export. Encapsula Copier e validacao estrutural'
     }
 
     visionBuild = worker 'Vision Build Pipeline' {
-      technology 'Python 3.11+ (vision-build.py)'
+      technology 'Python 3.12+ (vision-build.py)'
       description 'Exporta LikeC4 JSON e popula tabelas markdown via AUTO markers em engineering docs'
     }
 
     speckitBridge = worker 'SpeckitBridge' {
-      technology 'Python 3.11+'
+      technology 'Python 3.12+'
       description 'Compositor que le .claude/commands/ e .specify/templates/, monta prompts contextuais com constitution + memory, e executa via claude -p'
     }
 
     runtimeDaemon = worker 'Runtime Daemon' {
-      technology 'Python 3.11+ asyncio'
-      description 'Daemon 24/7 com slot-based orchestrator: monitora kanban, executa pipelines, gerencia waves de subagents'
+      technology 'Python 3.12+ asyncio + FastAPI :8040'
+      description 'Daemon 24/7: executa DAG do pipeline, gerencia human gates, health endpoints, serve dashboard'
+    }
+
+    dagExecutor = worker 'DAG Executor' {
+      technology 'Python 3.12+ (dag_runner.py)'
+      description 'Le pipeline DAG de platform.yaml, resolve dependencias via topological sort, despacha nodes via claude -p, gerencia human gates (pause/resume via SQLite)'
     }
 
     orchestrator = worker 'Orchestrator' {
-      technology 'Python 3.11+'
+      technology 'Python 3.12+'
       description 'Slot-based scheduler que controla paralelismo de pipelines, gerencia filas e prioridades'
     }
 
     pipelinePhases = worker 'Pipeline Phases' {
-      technology 'Python 3.11+ (7 modulos)'
+      technology 'Python 3.12+ (7 modulos)'
       description 'Fases do pipeline spec-to-code: specify, clarify, plan, tasks, implement, reconcile, analyze'
     }
 
     debateEngine = worker 'Debate Engine' {
-      technology 'Python 3.11+'
+      technology 'Python 3.12+'
       description 'Multi-persona debate com 3-5 reviewers sinteticos que criticam specs em rounds estruturados (BLOCKER/WARNING/NIT)'
     }
 
     decisionSystem = worker 'Decision System' {
-      technology 'Python 3.11+'
+      technology 'Python 3.12+'
       description 'Classificador 1-way/2-way door para decisoes arquiteturais, com registro automatico de ADRs'
     }
 
-    memoryStore = database 'Memory Store' {
-      technology 'SQLite (madruga.db)'
-      description 'Persistencia leve para epics, patterns aprendidos, metricas de execucao, e estado do kanban'
+    memoryStore = database 'State Store' {
+      technology 'SQLite WAL (madruga.db)'
+      description 'Persistencia: pipeline state, epics, decisions, memory, provenance, metricas de observabilidade'
     }
 
     dashboard = frontend 'Dashboard' {
-      technology 'FastAPI + HTMX'
-      description 'Dashboard de observabilidade: health check, metricas de pipeline, status de epics, historico de execucoes'
+      technology 'FastAPI + HTML :8040'
+      description 'Dashboard de observabilidade e kanban de epics: pipeline status, metricas, health check, gestao visual de epics'
     }
 
     speckitSkills = worker 'SpecKit Skills' {
-      technology '13 .claude/commands/ (Markdown)'
-      description 'Skills do pipeline spec-to-code: specify, clarify, plan, tasks, implement, analyze, taskstoissues, constitution, checklist, e mais'
+      technology '20 .claude/commands/ (Markdown)'
+      description 'Skills do pipeline: 13 L1 (vision, adr, blueprint...) + 7 L2 (specify, plan, tasks, implement, verify, qa, reconcile) + utilities'
     }
 
     copierTemplates = worker 'Copier Templates' {

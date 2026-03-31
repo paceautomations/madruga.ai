@@ -455,7 +455,7 @@ classDiagram
 
 ---
 
-## Integration (Generic) — Obsidian CRUD, WhatsApp Bridge, GitHub Ops, Claude API
+## Integration (Generic) — WhatsApp Bridge, GitHub Ops, Claude API, Sentry
 
 Responsavel pela comunicacao com sistemas externos. Cada integracao tem uma Anti-Corruption Layer (ACL) que isola contratos externos do dominio interno.
 
@@ -470,30 +470,11 @@ classDiagram
         +execute_skill(skill_name: string, context: map) string
     }
 
-    class ObsidianBridge {
-        +path vault_path
-        +read_file(relative_path: string) string
-        +write_file(relative_path: string, content: string)
-        +read_kanban(board_path: string) KanbanBoard
-        +update_kanban(board_path: string, changes: Change[])
-    }
-
-    class KanbanBoard {
-        +string title
-        +KanbanColumn[] columns
-        +KanbanCard[] cards
-    }
-
-    class KanbanColumn {
-        +string name
-        +int position
-        +KanbanCard[] cards
-    }
-
     class WhatsAppBridge {
-        +string api_url
-        +send_notification(phone: string, message: string)
-        +send_critical_alert(phone: string, decision: Decision)
+        +string bridge_url
+        +send(phone: string, message: string)
+        +ask_choice(phone: string, question: string, options: string[]) string
+        +alert(phone: string, level: string, message: string)
     }
 
     class GitHubClient {
@@ -512,20 +493,24 @@ classDiagram
         +serve(project: string, port: int)
     }
 
+    class SentryAdapter {
+        +string dsn
+        +init_sdk(fastapi_app)
+        +capture_exception(error)
+        +set_context(key: string, value: map)
+    }
+
     class ACLAdapter {
         <<interface>>
         +translate_inbound(external_data) internal_model
         +translate_outbound(internal_model) external_format
     }
 
-    ObsidianBridge --> KanbanBoard : reads/writes
-    KanbanBoard "1" --> "*" KanbanColumn : has
-    KanbanColumn "1" --> "*" KanbanCard : contains
     ClaudeAPIClient ..|> ACLAdapter : implements
-    ObsidianBridge ..|> ACLAdapter : implements
     WhatsAppBridge ..|> ACLAdapter : implements
     GitHubClient ..|> ACLAdapter : implements
     LikeC4CLI ..|> ACLAdapter : implements
+    SentryAdapter ..|> ACLAdapter : implements
 ```
 
 ### Storage Model
@@ -535,18 +520,19 @@ Este contexto nao possui storage proprio. Todas as interacoes sao **passthrough*
 | Sistema | Protocolo | Dados Trafegados |
 |---------|-----------|------------------|
 | Claude API | `claude -p` (subprocess) | Prompts compostos, respostas de texto |
-| Obsidian Vault | Filesystem (read/write) | Markdown files, kanban boards |
-| WhatsApp | HTTP/API | Notificacoes de texto, alertas criticos |
+| WhatsApp | HTTP via wpp-bridge (:8030) | Notificacoes, decisoes (ask_choice), alertas |
 | GitHub | `gh` CLI / REST API | Issues, PRs, labels, comments |
 | LikeC4 CLI | Subprocess | JSON export, PNG export, compilation |
+| Sentry | HTTPS (sentry-sdk) | Error events, performance traces, breadcrumbs |
 
 ### Invariantes
 
 - Toda chamada a sistema externo **deve** passar pela ACL correspondente
 - Falhas em sistemas externos **nao** devem propagar excecoes para o dominio (fail gracefully)
-- Claude API e invocado via `claude -p` como subprocess (nao via SDK direto)
-- Obsidian bridge opera somente dentro do `vault_path` configurado (sem path traversal)
+- Claude API e invocado via `claude -p` como subprocess (nao via SDK direto — ADR-010)
+- wpp-bridge opera somente em localhost:8030 (sem exposicao externa — ADR-015)
 - WhatsApp notifications sao **fire-and-forget** (sem confirmacao de leitura)
+- Sentry opera como fire-and-forget — falha de envio nao afeta o daemon (ADR-016)
 - GitHub operations **devem** respeitar rate limits (backoff exponencial em 429)
 
 ---
