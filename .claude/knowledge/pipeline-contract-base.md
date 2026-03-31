@@ -161,7 +161,7 @@ python3 .specify/scripts/post_save.py --platform <name> --epic <epic-id> --node 
 
 Example:
 ```bash
-# After /vision saves business/vision.md:
+# After /madruga:vision saves business/vision.md:
 python3 .specify/scripts/post_save.py --platform fulano --node vision --skill madruga:vision --artifact business/vision.md
 
 # After /speckit.specify saves spec.md in an epic:
@@ -182,7 +182,7 @@ If the script fails or the DB does not exist, proceed normally — the DB is add
 [Tier results — PASS/FAIL per check]
 
 ### Next step
-`/<next-skill> <name>` — <brief context from HANDOFF>
+`/madruga:<next-skill> <name>` (or `/speckit.<next-skill> <name>` for SpecKit nodes) — <brief context from HANDOFF>
 ```
 
 ### HANDOFF Block

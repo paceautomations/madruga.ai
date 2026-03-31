@@ -91,8 +91,8 @@ handoffs:
 
 ## Usage
 
-- `/<skill-name> <platform>` — Direct mode
-- `/<skill-name>` — Interactive mode (prompt for platform)
+- `/madruga:<skill-name> <platform>` (or `/speckit.<skill-name>` for SpecKit nodes) — Direct mode
+- `/madruga:<skill-name>` (or `/speckit.<skill-name>`) — Interactive mode (prompt for platform)
 
 ## Output Directory
 

@@ -24,9 +24,9 @@ Run `python3 .specify/scripts/platform.py list` to detect existing platforms.
 Nenhuma plataforma encontrada.
 
 Para comecar, crie sua primeira plataforma:
-  /platform-new <nome-em-kebab-case>
+  /madruga:platform-new <nome-em-kebab-case>
 
-Exemplo: /platform-new meu-saas
+Exemplo: /madruga:platform-new meu-saas
 ```
 
 ### 3. If Platforms Exist
@@ -43,8 +43,8 @@ Present a summary table:
 
 | Plataforma | Lifecycle | Pipeline | Proximo Passo |
 |-----------|-----------|----------|--------------|
-| fulano | design | 7/13 (54%) | /business-process fulano |
-| madruga-ai | development | 11/13 (85%) | /business-process madruga-ai |
+| fulano | design | 7/13 (54%) | /madruga:business-process fulano |
+| madruga-ai | development | 11/13 (85%) | /madruga:business-process madruga-ai |
 ```
 
 ### 4. Explain the Pipeline
@@ -83,20 +83,20 @@ Tempo total estimado: ~7h para pipeline completo + 2-4h por epic.
 ## Comandos Disponiveis
 
 **Pipeline (madruga:)** — documentacao da plataforma:
-  /pipeline, /vision, /solution-overview, /business-process,
-  /tech-research, /adr, /blueprint, /domain-model,
-  /containers, /context-map, /epic-breakdown, /roadmap
+  /madruga:pipeline, /madruga:vision, /madruga:solution-overview, /madruga:business-process,
+  /madruga:tech-research, /madruga:adr, /madruga:blueprint, /madruga:domain-model,
+  /madruga:containers, /madruga:context-map, /madruga:epic-breakdown, /madruga:roadmap
 
 **Epic Cycle (speckit.)** — implementacao por epic:
   /speckit.specify, /speckit.plan, /speckit.tasks,
   /speckit.implement, /speckit.analyze
 
 **Utilitarios:**
-  /pipeline <nome> — ver status a qualquer momento
-  /checkpoint — salvar progresso da sessao
-  /verify — verificar aderencia
-  /qa — testar via Playwright
-  /reconcile — detectar drift
+  /madruga:pipeline <nome> — ver status a qualquer momento
+  /madruga:checkpoint — salvar progresso da sessao
+  /madruga:verify — verificar aderencia
+  /madruga:qa — testar via Playwright
+  /madruga:reconcile — detectar drift
 ```
 
 ### 6. Recommend Next Step

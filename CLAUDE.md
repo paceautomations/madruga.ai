@@ -94,10 +94,10 @@ python3 .specify/scripts/skill-lint.py --json           # JSON output
 
 ## Command Namespaces
 
-- **`madruga:*`** (e.g., `/vision`, `/adr`, `/pipeline`, `/getting-started`) — Full pipeline: L1 platform documentation (13 nodes) + L2 epic cycle (epic-context, verify, qa, reconcile) + utilities (pipeline, checkpoint, getting-started, skills-mgmt).
+- **`madruga:*`** (e.g., `/madruga:vision`, `/madruga:adr`, `/madruga:pipeline`, `/madruga:getting-started`) — Full pipeline: L1 platform documentation (13 nodes) + L2 epic cycle (epic-context, verify, qa, reconcile) + utilities (pipeline, checkpoint, getting-started, skills-mgmt).
 - **`speckit.*`** (e.g., `/speckit.specify`, `/speckit.plan`, `/speckit.tasks`) — Part of L2 epic cycle: specify → clarify → plan → tasks → analyze → implement.
 
-Both namespaces form a single continuous pipeline invoked via `/command-name` in Claude Code. Start with `/getting-started` for guided onboarding.
+Both namespaces form a single continuous pipeline invoked via `/madruga:<skill>` or `/speckit.<skill>` in Claude Code. Start with `/madruga:getting-started` for guided onboarding.
 
 ## Prerequisites
 
@@ -296,7 +296,7 @@ After completing any implementation task (new code or refactor touching 3+ files
 ## Epic Workflow
 - **Planned epics** live only in `planning/roadmap.md` as table entries — no files created
 - **Active epics** (entering L2) get full `epics/NNN-slug/` directory with pitch.md, spec, plan, tasks
-- Use `/epic-breakdown` to add candidates to roadmap; `/epic-context` to start implementation
+- Use `/madruga:epic-breakdown` to add candidates to roadmap; `/madruga:epic-context` to start implementation
 
 ## Shipped Epics (madruga-ai)
 | # | Epic | Summary |

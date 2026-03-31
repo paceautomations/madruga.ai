@@ -53,8 +53,8 @@ handoffs:
 <Who the AI simulates. Specific expertise.>
 
 ## Usage
-- `/<skill-name> <platform>` — Direct mode
-- `/<skill-name>` — Interactive mode
+- `/madruga:<skill-name> <platform>` (or `/speckit.<skill-name>` for SpecKit nodes) — Direct mode
+- `/madruga:<skill-name>` (or `/speckit.<skill-name>`) — Interactive mode
 
 ## Output Directory
 Save to `platforms/<name>/<path>`.
@@ -103,7 +103,7 @@ Wait for approval before saving.
 File: platforms/<name>/<path>
 Lines: <N>
 Checks: [x] ...
-Next step: /<next-skill> <name>
+Next step: /madruga:<next-skill> <name> (or /speckit.<next-skill> <name> for SpecKit nodes)
 
 #### SQLite Integration
 After saving, run:
@@ -244,7 +244,7 @@ After L1 completes (roadmap done), the pipeline continues into L2. Each epic fro
 
 | Step | Skill | Gate | Purpose |
 |------|-------|------|---------|
-| 1 | epic-context | human | **Create branch** + capture implementation context |
+| 1 | madruga:epic-context | human | **Create branch** + capture implementation context |
 | 2 | speckit.specify | human | Feature specification |
 | 3 | speckit.clarify | human | Reduce ambiguity in spec before planning |
 | 4 | speckit.plan | human | Design artifacts |
@@ -252,9 +252,9 @@ After L1 completes (roadmap done), the pipeline continues into L2. Each epic fro
 | 6 | speckit.analyze | auto | Pre-implementation consistency check (spec/plan/tasks) |
 | 7 | speckit.implement | auto | Execute tasks |
 | 8 | speckit.analyze | auto | Post-implementation consistency check |
-| 9 | verify | auto-escalate | Check spec adherence |
-| 10 | qa | human | Comprehensive testing — static analysis, tests, code review, browser QA |
-| 11 | reconcile | human | Detect and fix documentation drift |
+| 9 | madruga:verify | auto-escalate | Check spec adherence |
+| 10 | madruga:qa | human | Comprehensive testing — static analysis, tests, code review, browser QA |
+| 11 | madruga:reconcile | human | Detect and fix documentation drift |
 
 **Note:** `clarify` is optional — `plan` depends on `specify`, not `clarify`. Skip clarify when spec has 0 `[NEEDS CLARIFICATION]` markers.
 

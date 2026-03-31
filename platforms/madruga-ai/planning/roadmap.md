@@ -111,9 +111,9 @@ graph LR
 
 ---
 
-## Proximos Epics (candidatos — sem arquivos criados)
+## Proximos Epics (candidatos)
 
-Epics abaixo sao **candidatos identificados** para o MVP de autonomia. Serao detalhados (pitch.md, spec, plan, tasks) apenas quando priorizados para implementacao via `/epic-context`.
+Epics abaixo sao **candidatos identificados** para o MVP de autonomia. Cada um tem pitch.md com problema e appetite definidos. Spec, plan e tasks serao criados quando o epic entrar em L2 via `/epic-context`.
 
 | # | Epic (candidato) | Problema | Descricao | Appetite | Prioridade | Depende de |
 |---|------------------|----------|-----------|----------|------------|------------|
@@ -154,3 +154,12 @@ Epics abaixo sao **candidatos identificados** para o MVP de autonomia. Serao det
 - Epic 013 antigo (Namespace Unification) removido — cosmetico, zero valor de negocio
 - Gate state machine centralizada em 013 — epics 014/015/016 consomem, nao estendem
 - Estimativa total realista: ~14w (vs 8w otimista anterior). North Star 80% autonomia requer todos os 5 epics
+
+---
+handoff:
+  from: roadmap
+  to: epic-context
+  context: "L1 completo. Roadmap define sequencia 012→013→014/015→016. Proximo passo: iniciar L2 com epic-context para epic 012 (Multi-repo Implement)."
+  blockers: []
+  confidence: Alta
+  kill_criteria: "Mudanca fundamental nos epics planejados ou reordenacao de prioridades"
