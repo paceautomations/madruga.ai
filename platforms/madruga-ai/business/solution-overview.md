@@ -25,6 +25,7 @@ Tudo vive em um unico lugar, versionado, consultavel por qualquer membro do time
 | **Fluxo guiado da documentacao ao codigo** | Fluxo continuo de 24 etapas: da visao de negocio ate o codigo. Cada etapa gera um artefato e valida antes de seguir | Nada e pulado, nada e esquecido. O sistema garante a sequencia |
 | **Rastreabilidade de progresso e decisoes** | Cada etapa e decisao fica registrada com data e contexto. Dashboard mostra o que falta, o que esta desatualizado, e decisoes sao pesquisaveis por texto livre | Visibilidade total — sabe onde cada plataforma esta e por que cada decisao foi tomada |
 | **Mapeamento de processos de negocio** | Fluxos de negocio documentados com diagramas visuais navegaveis | Entende como o negocio funciona antes de decidir o que construir |
+| **Implementacao em repositorios externos** | Ciclos de implementacao operam diretamente no repositorio de codigo da plataforma-alvo, criando PRs automaticamente | Documentacao e codigo vivem conectados mesmo quando estao em lugares diferentes |
 
 ---
 
@@ -32,7 +33,6 @@ Tudo vive em um unico lugar, versionado, consultavel por qualquer membro do time
 
 | Feature | Descricao | Por que é importante |
 |---------|-----------|---------------------|
-| **Implementacao em repositorios externos** | Ciclos de implementacao operam diretamente no repositorio de codigo da plataforma-alvo, criando PRs automaticamente | Documentacao e codigo vivem conectados mesmo quando estao em lugares diferentes |
 | **Execucao autonoma centralizada** | O sistema processa ciclos de especificacao e implementacao sozinho, pausando apenas em decisoes que precisam de aprovacao humana | O arquiteto foca em decisoes estrategicas, nao em execucao repetitiva |
 | **Notificacoes em tempo real** | Alertas via mensageria quando uma decisao precisa de aprovacao ou quando algo falha | Revisor nunca perde uma decisao critica — mesmo fora do horario |
 | **Revisao multi-perspectiva** | Especificacoes revisadas automaticamente por multiplas perspectivas (arquitetura, bugs, simplicidade) antes de implementar | Pega problemas que uma unica perspectiva nao ve |

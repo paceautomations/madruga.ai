@@ -77,7 +77,9 @@ export function discoverEpics(platformName, platformsDir) {
         title: fm.title ?? d.name,
         status: fm.status ?? 'planned',
         phase: fm.phase ?? 'later',
-        delivered_at: fm.delivered_at ?? null,
+        delivered_at: fm.delivered_at instanceof Date
+          ? fm.delivered_at.toISOString().slice(0, 10)
+          : (fm.delivered_at ?? null),
       };
     })
     .filter(Boolean)

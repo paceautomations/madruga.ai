@@ -287,7 +287,7 @@ After completing any implementation task (new code or refactor touching 3+ files
 - **Storage**: Filesystem (source of truth) + SQLite (state store, cache)
 
 ## Active Technologies
-- Python 3.11+ (stdlib only: sqlite3, hashlib, json, pathlib, uuid, logging) + pyyaml
+- Python 3.11+ (stdlib only: sqlite3, hashlib, json, pathlib, uuid, logging, fcntl, subprocess) + pyyaml
 - SQLite 3 WAL mode (`.pipeline/madruga.db`) — 13 tables, 5 migrations, FTS5
 - Bash 5.x
 - Astro + Starlight (portal)
@@ -307,3 +307,4 @@ After completing any implementation task (new code or refactor touching 3+ files
 | 009 | Decision Log BD | BD source of truth para decisions + memory. FTS5. Import/export CLI. |
 | 010 | Pipeline Dashboard | Dashboard visual no portal. CLI status. Mermaid DAG. |
 | 011 | CI/CD Pipeline | GitHub Actions: lint, LikeC4 build, db-tests, templates, bash-tests, portal-build. |
+| 012 | Multi-repo Implement | ensure_repo (SSH/HTTPS), worktree, implement_remote (claude -p --cwd), PR via gh. 3 scripts, 28 testes. |
