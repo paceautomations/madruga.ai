@@ -150,16 +150,21 @@ graph LR
 3. Most downstream dependents first (unblocks more work)
 4. Layer as tiebreaker: business > research > engineering > planning
 
+**Namespace rule for command references:**
+- L1 skills + L2 madruga skills (epic-context, verify, qa, reconcile) → `/madruga:<skill>`
+- L2 speckit skills → `/speckit.<skill>`
+- Use the **Skill** column from the DAG tables (e.g., `madruga:epic-context`, `speckit.specify`)
+
 **If 1 ready:**
 ```
 ## Próximo Passo Recomendado
 
-**`/<skill> <platform>`**
+**`/madruga:<skill> <platform>`** (or `/speckit.<skill> <platform>` for SpecKit nodes)
 - O que faz: [1-line description]
 - Dependências: [já satisfeitas]
 - Gate: [human/auto/1-way-door]
 
-Para executar: `/<skill> <platform>`
+Para executar: `/madruga:<skill> <platform>` (or `/speckit.<skill> <platform>`)
 ```
 
 **If multiple ready:**

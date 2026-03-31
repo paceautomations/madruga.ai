@@ -94,10 +94,10 @@ python3 .specify/scripts/skill-lint.py --json           # JSON output
 
 ## Command Namespaces
 
-- **`madruga:*`** (e.g., `/vision`, `/adr`, `/pipeline`, `/getting-started`) — Full pipeline: L1 platform documentation (13 nodes) + L2 epic cycle (epic-context, verify, qa, reconcile) + utilities (pipeline, checkpoint, getting-started, skills-mgmt).
+- **`madruga:*`** (e.g., `/madruga:vision`, `/madruga:adr`, `/madruga:pipeline`, `/madruga:getting-started`) — Full pipeline: L1 platform documentation (13 nodes) + L2 epic cycle (epic-context, verify, qa, reconcile) + utilities (pipeline, checkpoint, getting-started, skills-mgmt).
 - **`speckit.*`** (e.g., `/speckit.specify`, `/speckit.plan`, `/speckit.tasks`) — Part of L2 epic cycle: specify → clarify → plan → tasks → analyze → implement.
 
-Both namespaces form a single continuous pipeline invoked via `/command-name` in Claude Code. Start with `/getting-started` for guided onboarding.
+Both namespaces form a single continuous pipeline invoked via `/madruga:<skill>` or `/speckit.<skill>` in Claude Code. Start with `/madruga:getting-started` for guided onboarding.
 
 ## Prerequisites
 
@@ -287,7 +287,7 @@ After completing any implementation task (new code or refactor touching 3+ files
 - **Storage**: Filesystem (source of truth) + SQLite (state store, cache)
 
 ## Active Technologies
-- Python 3.11+ (stdlib only: sqlite3, hashlib, json, pathlib, uuid, logging) + pyyaml
+- Python 3.11+ (stdlib only: sqlite3, hashlib, json, pathlib, uuid, logging, fcntl, subprocess) + pyyaml
 - SQLite 3 WAL mode (`.pipeline/madruga.db`) — 13 tables, 5 migrations, FTS5
 - Bash 5.x
 - Astro + Starlight (portal)
@@ -296,7 +296,7 @@ After completing any implementation task (new code or refactor touching 3+ files
 ## Epic Workflow
 - **Planned epics** live only in `planning/roadmap.md` as table entries — no files created
 - **Active epics** (entering L2) get full `epics/NNN-slug/` directory with pitch.md, spec, plan, tasks
-- Use `/epic-breakdown` to add candidates to roadmap; `/epic-context` to start implementation
+- Use `/madruga:epic-breakdown` to add candidates to roadmap; `/madruga:epic-context` to start implementation
 
 ## Shipped Epics (madruga-ai)
 | # | Epic | Summary |
@@ -307,3 +307,4 @@ After completing any implementation task (new code or refactor touching 3+ files
 | 009 | Decision Log BD | BD source of truth para decisions + memory. FTS5. Import/export CLI. |
 | 010 | Pipeline Dashboard | Dashboard visual no portal. CLI status. Mermaid DAG. |
 | 011 | CI/CD Pipeline | GitHub Actions: lint, LikeC4 build, db-tests, templates, bash-tests, portal-build. |
+| 012 | Multi-repo Implement | ensure_repo (SSH/HTTPS), worktree, implement_remote (claude -p --cwd), PR via gh. 3 scripts, 28 testes. |

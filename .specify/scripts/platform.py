@@ -706,6 +706,20 @@ def _build_parser():  # -> argparse.ArgumentParser
     # current
     sub.add_parser("current", help="Show the active platform")
 
+    # ensure-repo
+    p = sub.add_parser("ensure-repo", help="Clone or fetch a platform's code repo")
+    p.add_argument("name", help="Platform name")
+
+    # worktree
+    p = sub.add_parser("worktree", help="Create a git worktree for an epic")
+    p.add_argument("name", help="Platform name")
+    p.add_argument("epic_slug", help="Epic slug (e.g., 001-channel-pipeline)")
+
+    # worktree-cleanup
+    p = sub.add_parser("worktree-cleanup", help="Remove a git worktree and its branch")
+    p.add_argument("name", help="Platform name")
+    p.add_argument("epic_slug", help="Epic slug")
+
     return parser
 
 
@@ -749,6 +763,38 @@ def main() -> None:
         cmd_use(args.name)
     elif args.command == "current":
         cmd_current()
+    elif args.command == "ensure-repo":
+        cmd_ensure_repo(args.name)
+    elif args.command == "worktree":
+        cmd_worktree(args.name, args.epic_slug)
+    elif args.command == "worktree-cleanup":
+        cmd_worktree_cleanup(args.name, args.epic_slug)
+
+
+def cmd_ensure_repo(name: str) -> None:
+    """Clone or fetch a platform's code repository."""
+    from ensure_repo import ensure_repo
+
+    path = ensure_repo(name)
+    _ok(f"Repo ready: {path}")
+    print(path)
+
+
+def cmd_worktree(name: str, epic_slug: str) -> None:
+    """Create a git worktree for an epic."""
+    from worktree import create_worktree
+
+    path = create_worktree(name, epic_slug)
+    _ok(f"Worktree ready: {path}")
+    print(path)
+
+
+def cmd_worktree_cleanup(name: str, epic_slug: str) -> None:
+    """Remove a git worktree and its local branch."""
+    from worktree import cleanup_worktree
+
+    cleanup_worktree(name, epic_slug)
+    _ok(f"Worktree cleaned up: {name}/{epic_slug}")
 
 
 if __name__ == "__main__":

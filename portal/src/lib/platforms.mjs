@@ -77,7 +77,9 @@ export function discoverEpics(platformName, platformsDir) {
         title: fm.title ?? d.name,
         status: fm.status ?? 'planned',
         phase: fm.phase ?? 'later',
-        delivered_at: fm.delivered_at ?? null,
+        delivered_at: fm.delivered_at instanceof Date
+          ? fm.delivered_at.toISOString().slice(0, 10)
+          : (fm.delivered_at ?? null),
       };
     })
     .filter(Boolean)
@@ -85,7 +87,7 @@ export function discoverEpics(platformName, platformsDir) {
       const aShipped = a.status === 'shipped';
       const bShipped = b.status === 'shipped';
       if (aShipped && bShipped) {
-        const dc = (b.delivered_at ?? '').localeCompare(a.delivered_at ?? '');
+        const dc = String(b.delivered_at ?? '').localeCompare(String(a.delivered_at ?? ''));
         return dc !== 0 ? dc : String(b.id).localeCompare(String(a.id));
       }
       if (aShipped !== bShipped) return aShipped ? -1 : 1;

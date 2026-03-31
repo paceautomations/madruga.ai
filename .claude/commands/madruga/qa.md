@@ -720,7 +720,7 @@ Report saved: platforms/fulano/epics/007/qa-report.md
 ## Example — Full Pipeline (web feature)
 
 ```
-> /qa http://localhost:3000
+> /madruga:qa http://localhost:3000
 
 🔍 Environment Detection
 | Layer | Status | Details |

@@ -41,6 +41,7 @@ gantt
     009 Decision Log BD         :done, e009, 2026-03-29, 1d
     010 Pipeline Dashboard      :done, e010, 2026-03-30, 1d
     011 CI/CD Pipeline          :done, e011, 2026-03-30, 1d
+    012 Multi-repo Implement   :done, e012, 2026-03-31, 1d
 ```
 
 | # | Epic | Descricao | Status | Concluido |
@@ -51,6 +52,7 @@ gantt
 | 009 | Decision Log BD | BD como source of truth para decisions e memory. FTS5 full-text search. CLI import/export. 5 novas migrations. 20+ funcoes em db.py. | **shipped** | 2026-03-29 |
 | 010 | Pipeline Dashboard | Dashboard visual no portal Starlight. CLI `status` com tabela + JSON. Mermaid DAG. Filtros por plataforma. | **shipped** | 2026-03-30 |
 | 011 | CI/CD Pipeline | GitHub Actions: lint (ruff + platform lint), LikeC4 build, db-tests, template tests, bash-tests, portal-build. 6 jobs. | **shipped** | 2026-03-30 |
+| 012 | Multi-repo Implement | git worktree para repos externos. ensure_repo (SSH/HTTPS), worktree isolado, implement_remote (claude -p --cwd), PR via gh. 3 scripts, 28 testes. | **shipped** | 2026-03-31 |
 
 ---
 
@@ -61,7 +63,7 @@ gantt
     title Madruga AI — Roadmap de Entrega
     dateFormat YYYY-MM-DD
     section MVP
-    012 Multi-repo Implement     :e012, 2026-04-01, 2w
+    012 Multi-repo Implement     :done, e012, 2026-03-31, 1d
     013 DAG Executor + Bridge    :e013, after e012, 6w
     014 Telegram Notifications   :e014, after e013, 2w
     015 Subagent Judge           :e015, after e013, 2w
@@ -72,7 +74,7 @@ gantt
 
 | Ordem | Epic | Appetite | Risco | Justificativa da Posicao |
 |-------|------|----------|-------|--------------------------|
-| 1 | 012 Multi-repo Implement | 2w | Medio | Value-first: desbloqueia Fulano imediatamente. Menor e mais rapido. Repo binding validado end-to-end antes do runtime. |
+| 1 | 012 Multi-repo Implement | 2w (real: 1d) | Medio | Value-first: desbloqueia Fulano imediatamente. Escopo bem definido + reutilizacao de db.py reduziu appetite de 2w para 1d. |
 | 2 | 013 DAG Executor + SpeckitBridge | 6w | Alto | Core do runtime. Maior incerteza tecnica (DAG executor, gate state machine, claude -p dispatch). Absorver risco cedo. |
 | 3 | 014 Telegram Notifications | 2w | Baixo | Depende da gate state machine de 013. aiogram e framework maduro — baixo risco tecnico. |
 | 3 | 015 Subagent Judge + Decision Classifier | 2w | Medio | Paralelo com 014. Agent tool ja provado no pipeline. Risco em calibracao de personas/judge. |
@@ -105,15 +107,15 @@ graph LR
 
 | Milestone | Epics | Criterio de Sucesso | Estimativa |
 |-----------|-------|---------------------|------------|
-| **Fulano Operacional** | 012 | `speckit.implement` executa em repo Fulano via worktree, PR criado com `gh` | Semana 2 |
+| **Fulano Operacional** | 012 | `speckit.implement` executa em repo Fulano via worktree, PR criado com `gh` | Semana 2 | Tooling pronto (ensure_repo, worktree, implement_remote). Falta teste end-to-end com Fulano real. |
 | **Runtime Funcional** | 012, 013 | DAG executor processa 1 pipeline L1 completo via CLI, human gates pausam/resumem corretamente | Semana 8 |
 | **Autonomia MVP** | 012-016 | 1 epic completo (pitch-to-PR) processado pelo daemon em repo Fulano, com Telegram notifications e Subagent Judge review | Semana 14 |
 
 ---
 
-## Proximos Epics (candidatos — sem arquivos criados)
+## Proximos Epics (candidatos)
 
-Epics abaixo sao **candidatos identificados** para o MVP de autonomia. Serao detalhados (pitch.md, spec, plan, tasks) apenas quando priorizados para implementacao via `/epic-context`.
+Epics abaixo sao **candidatos identificados** para o MVP de autonomia. Cada um tem pitch.md com problema e appetite definidos. Spec, plan e tasks serao criados quando o epic entrar em L2 via `/epic-context`.
 
 | # | Epic (candidato) | Problema | Descricao | Appetite | Prioridade | Depende de |
 |---|------------------|----------|-----------|----------|------------|------------|
@@ -154,3 +156,12 @@ Epics abaixo sao **candidatos identificados** para o MVP de autonomia. Serao det
 - Epic 013 antigo (Namespace Unification) removido — cosmetico, zero valor de negocio
 - Gate state machine centralizada em 013 — epics 014/015/016 consomem, nao estendem
 - Estimativa total realista: ~14w (vs 8w otimista anterior). North Star 80% autonomia requer todos os 5 epics
+
+---
+handoff:
+  from: roadmap
+  to: epic-context
+  context: "L1 completo. Roadmap define sequencia 012→013→014/015→016. Proximo passo: iniciar L2 com epic-context para epic 012 (Multi-repo Implement)."
+  blockers: []
+  confidence: Alta
+  kill_criteria: "Mudanca fundamental nos epics planejados ou reordenacao de prioridades"
