@@ -270,9 +270,10 @@ def build(platform: str, validate_only: bool = False, do_export_png: bool = Fals
 
     # export_json already validates the model (check=True fails on invalid input)
     data = export_json(model_dir)
-    print(
-        f"[ok] {len(data.get('elements', {}))} elements, {len(data.get('relations', {}))} relations, {len(data.get('views', {}))} views"
-    )
+    n_elem = len(data.get("elements", {}))
+    n_rel = len(data.get("relations", {}))
+    n_view = len(data.get("views", {}))
+    print(f"[ok] {n_elem} elements, {n_rel} relations, {n_view} views")
 
     eng_dir = PLATFORMS_DIR / platform / "engineering"
 
