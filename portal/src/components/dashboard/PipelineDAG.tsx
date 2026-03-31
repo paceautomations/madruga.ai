@@ -14,6 +14,7 @@ import {
   type NodeProps,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+import { NODE_ROUTE_OVERRIDES } from '../../lib/constants';
 
 // ── Types ──
 
@@ -107,12 +108,6 @@ const PipelineNode = memo(({ data }: NodeProps<Node<PipelineNodeData>>) => {
 
   const handleClick = () => {
     if (data.outputs?.length) {
-      const NODE_ROUTE_OVERRIDES: Record<string, string> = {
-        'platform-new': '/dashboard/',
-        'containers': '/containers/',
-        'context-map': '/context-map/',
-        'epic-breakdown': '/planning/roadmap/',
-      };
       const override = NODE_ROUTE_OVERRIDES[data.id];
       if (override) {
         window.location.href = `/${data.platform}${override}`;
@@ -302,7 +297,24 @@ export default function PipelineDAG({ platforms }: PipelineDAGProps) {
           </label>
           {loading && <span style={{ color: 'var(--sl-color-gray-4, #666)', fontSize: '0.7rem' }}>Layout...</span>}
         </div>
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, position: 'relative' }}>
+          {loading && nodes.length === 0 && (
+            <div style={{
+              position: 'absolute', inset: 0, display: 'flex',
+              alignItems: 'center', justifyContent: 'center', zIndex: 10,
+              background: 'var(--sl-color-gray-7, #0d0d0d)',
+            }}>
+              <div style={{ textAlign: 'center', color: 'var(--sl-color-gray-4, #666)' }}>
+                <div style={{
+                  width: 28, height: 28, margin: '0 auto 0.5rem',
+                  border: '3px solid var(--sl-color-gray-5, #333)',
+                  borderTopColor: 'var(--sl-color-accent, #0284c7)',
+                  borderRadius: '50%', animation: 'spin 0.8s linear infinite',
+                }} />
+                <span style={{ fontSize: '0.75rem' }}>Calculando layout...</span>
+              </div>
+            </div>
+          )}
           <ReactFlow
             nodes={nodes} edges={edges}
             onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}

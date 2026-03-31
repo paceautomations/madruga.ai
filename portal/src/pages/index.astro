@@ -10,8 +10,14 @@ const singlePlatform = platforms.length === 1 ? platforms[0] : null;
   <html>
     <head>
       <meta http-equiv="refresh" content={`0;url=/${singlePlatform.name}/dashboard/`} />
+      <link rel="canonical" href={`/${singlePlatform.name}/dashboard/`} />
     </head>
-    <body />
+    <body>
+      <p>Redirecionando para <a href={`/${singlePlatform.name}/dashboard/`}>{singlePlatform.title}</a>...</p>
+      <script define:vars={{ url: `/${singlePlatform.name}/dashboard/` }}>
+        window.location.replace(url);
+      </script>
+    </body>
   </html>
 ) : (
   <StarlightPage frontmatter={{ title: 'Plataformas', tableOfContents: false }}>

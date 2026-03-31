@@ -1,0 +1,26 @@
+---
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+import { discoverPlatforms } from '../lib/platforms.mjs';
+
+const platforms = discoverPlatforms();
+---
+
+<StarlightPage frontmatter={{ title: 'Pagina nao encontrada', tableOfContents: false }}>
+  <p>A pagina que voce esta procurando nao existe.</p>
+
+  {platforms.length > 0 && (
+    <>
+      <h2>Plataformas disponiveis</h2>
+      <ul>
+        {platforms.map((p) => (
+          <li>
+            <a href={`/${p.name}/dashboard/`}>{p.title || p.name}</a>
+            {p.lifecycle && <span> — {p.lifecycle}</span>}
+          </li>
+        ))}
+      </ul>
+    </>
+  )}
+
+  <p><a href="/">Voltar para a pagina inicial</a></p>
+</StarlightPage>

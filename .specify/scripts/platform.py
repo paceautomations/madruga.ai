@@ -505,7 +505,7 @@ def cmd_current() -> None:
         print("No active platform set. Use: platform.py use <name>")
 
 
-def cmd_status(name: str | None, show_all: bool, as_json: bool) -> None:
+def cmd_status(name: str | None, show_all: bool, as_json: bool, output_file: str | None = None) -> None:
     """Show pipeline status for one or all platforms."""
     from datetime import datetime, timezone
 
@@ -621,7 +621,14 @@ def cmd_status(name: str | None, show_all: bool, as_json: bool) -> None:
             result["platforms"].append(platform_data)
 
         if as_json:
-            print(json.dumps(result, ensure_ascii=False, indent=2))
+            json_str = json.dumps(result, ensure_ascii=False, indent=2)
+            if output_file:
+                from pathlib import Path
+
+                Path(output_file).parent.mkdir(parents=True, exist_ok=True)
+                Path(output_file).write_text(json_str, encoding="utf-8")
+            else:
+                print(json_str)
         else:
             for p in result["platforms"]:
                 print(f"\n{'=' * 60}")
@@ -639,74 +646,110 @@ def cmd_status(name: str | None, show_all: bool, as_json: bool) -> None:
                         print(f"    {e['id']}: {e['title']} — {e['done']}/{e['total']} ({e['progress_pct']}%)")
 
 
+def _build_parser():  # -> argparse.ArgumentParser
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        prog="platform.py",
+        description="Unified CLI for managing madruga.ai platforms.",
+    )
+    sub = parser.add_subparsers(dest="command", help="Available commands")
+
+    # list
+    sub.add_parser("list", help="List all discovered platforms")
+
+    # new
+    p = sub.add_parser("new", help="Scaffold a new platform via copier")
+    p.add_argument("name", help="Platform name (kebab-case)")
+
+    # lint
+    p = sub.add_parser("lint", help="Validate platform structure")
+    p.add_argument("name", nargs="?", help="Platform name")
+    p.add_argument("--all", action="store_true", dest="lint_all", help="Lint all platforms")
+
+    # sync
+    p = sub.add_parser("sync", help="Run copier update on platforms")
+    p.add_argument("name", nargs="?", help="Platform name (omit for all)")
+
+    # register
+    p = sub.add_parser("register", help="Inject LikeC4 loader and validate model")
+    p.add_argument("name", help="Platform name")
+
+    # check-stale
+    p = sub.add_parser("check-stale", help="Detect stale pipeline nodes")
+    p.add_argument("name", help="Platform name")
+
+    # import-adrs
+    p = sub.add_parser("import-adrs", help="Import ADR markdown files into DB")
+    p.add_argument("name", help="Platform name")
+
+    # export-adrs
+    p = sub.add_parser("export-adrs", help="Export decisions from DB to markdown")
+    p.add_argument("name", help="Platform name")
+
+    # import-memory
+    sub.add_parser("import-memory", help="Import .claude/memory into DB")
+
+    # export-memory
+    sub.add_parser("export-memory", help="Export memory entries to markdown")
+
+    # status
+    p = sub.add_parser("status", help="Show pipeline status")
+    p.add_argument("name", nargs="?", help="Platform name")
+    p.add_argument("--all", action="store_true", dest="show_all", help="Show all platforms")
+    p.add_argument("--json", action="store_true", dest="as_json", help="Output as JSON")
+    p.add_argument("--output", dest="output_file", help="Write JSON to file instead of stdout")
+
+    # use
+    p = sub.add_parser("use", help="Set the active platform")
+    p.add_argument("name", help="Platform name")
+
+    # current
+    sub.add_parser("current", help="Show the active platform")
+
+    return parser
+
+
 def main() -> None:
-    if len(sys.argv) < 2:
-        print(__doc__)
+    parser = _build_parser()
+    args = parser.parse_args()
+
+    if not args.command:
+        parser.print_help()
         sys.exit(1)
 
-    cmd = sys.argv[1]
-
-    if cmd == "list":
+    if args.command == "list":
         cmd_list()
-    elif cmd == "new":
-        if len(sys.argv) < 3:
-            _error("Usage: platform.py new <name>")
+    elif args.command == "new":
+        cmd_new(args.name)
+    elif args.command == "lint":
+        if not args.name and not args.lint_all:
+            _error("Provide a platform name or --all")
             sys.exit(1)
-        cmd_new(sys.argv[2])
-    elif cmd == "lint":
-        if "--all" in sys.argv:
-            cmd_lint(None, lint_all=True)
-        elif len(sys.argv) >= 3:
-            cmd_lint(sys.argv[2])
-        else:
-            _error("Usage: platform.py lint <name> | --all")
-            sys.exit(1)
-    elif cmd == "sync":
-        cmd_sync(sys.argv[2] if len(sys.argv) >= 3 else None)
-    elif cmd == "register":
-        if len(sys.argv) < 3:
-            _error("Usage: platform.py register <name>")
-            sys.exit(1)
-        cmd_register(sys.argv[2])
-    elif cmd == "check-stale":
-        if len(sys.argv) < 3:
-            _error("Usage: platform.py check-stale <name>")
-            sys.exit(1)
-        cmd_check_stale(sys.argv[2])
-    elif cmd == "import-adrs":
-        if len(sys.argv) < 3:
-            _error("Usage: platform.py import-adrs <name>")
-            sys.exit(1)
-        cmd_import_adrs(sys.argv[2])
-    elif cmd == "export-adrs":
-        if len(sys.argv) < 3:
-            _error("Usage: platform.py export-adrs <name>")
-            sys.exit(1)
-        cmd_export_adrs(sys.argv[2])
-    elif cmd == "import-memory":
+        cmd_lint(args.name, lint_all=args.lint_all)
+    elif args.command == "sync":
+        cmd_sync(args.name)
+    elif args.command == "register":
+        cmd_register(args.name)
+    elif args.command == "check-stale":
+        cmd_check_stale(args.name)
+    elif args.command == "import-adrs":
+        cmd_import_adrs(args.name)
+    elif args.command == "export-adrs":
+        cmd_export_adrs(args.name)
+    elif args.command == "import-memory":
         cmd_import_memory()
-    elif cmd == "export-memory":
+    elif args.command == "export-memory":
         cmd_export_memory()
-    elif cmd == "status":
-        args = sys.argv[2:]
-        show_all = "--all" in args
-        as_json = "--json" in args
-        name_args = [a for a in args if not a.startswith("--")]
-        pname = name_args[0] if name_args else None
-        if not pname and not show_all:
+    elif args.command == "status":
+        show_all = args.show_all
+        if not args.name and not show_all:
             show_all = True
-        cmd_status(pname, show_all, as_json)
-    elif cmd == "use":
-        if len(sys.argv) < 3:
-            _error("Usage: platform.py use <name>")
-            sys.exit(1)
-        cmd_use(sys.argv[2])
-    elif cmd == "current":
+        cmd_status(args.name, show_all, args.as_json, output_file=args.output_file)
+    elif args.command == "use":
+        cmd_use(args.name)
+    elif args.command == "current":
         cmd_current()
-    else:
-        _error(f"Unknown command: {cmd}")
-        print(__doc__)
-        sys.exit(1)
 
 
 if __name__ == "__main__":

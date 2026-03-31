@@ -68,6 +68,58 @@ def _escape_like(query: str) -> str:
     return query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
+def _fts5_search(
+    conn: sqlite3.Connection,
+    query: str,
+    *,
+    table: str,
+    fts_table: str,
+    like_columns: list[str],
+    filters: dict[str, str | None],
+) -> list[dict]:
+    """Shared FTS5 search with automatic LIKE fallback.
+
+    Args:
+        table: Main table name (e.g., 'decisions').
+        fts_table: FTS5 virtual table name (e.g., 'decisions_fts').
+        like_columns: Columns to search with LIKE when FTS5 is unavailable.
+        filters: Column→value filters. None values are skipped.
+    """
+    active_filters = {k: v for k, v in filters.items() if v is not None}
+
+    def _like_fallback() -> list[dict]:
+        escaped = _escape_like(query)
+        like_clauses = " OR ".join(f"{col} LIKE ? ESCAPE '\\'" for col in like_columns)
+        sql = f"SELECT * FROM {table} WHERE ({like_clauses})"
+        params: list = [f"%{escaped}%" for _ in like_columns]
+        for col, val in active_filters.items():
+            sql += f" AND {col}=?"
+            params.append(val)
+        return [dict(r) for r in conn.execute(sql, params).fetchall()]
+
+    if not _check_fts5():
+        logger.warning("FTS5 not available — falling back to LIKE search")
+        return _like_fallback()
+
+    alias = table[0]
+    sanitized = _sanitize_fts5_query(query)
+    sql = (
+        f"SELECT {alias}.* FROM {table} {alias} "
+        f"JOIN {fts_table} f ON {alias}.rowid = f.rowid "
+        f"WHERE {fts_table} MATCH ? "
+    )
+    params: list = [sanitized]
+    for col, val in active_filters.items():
+        sql += f"AND {alias}.{col}=? "
+        params.append(val)
+    sql += "ORDER BY rank"
+    try:
+        return [dict(r) for r in conn.execute(sql, params).fetchall()]
+    except sqlite3.OperationalError:
+        logger.warning("FTS5 query failed, falling back to LIKE: %s", query)
+        return _like_fallback()
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -78,7 +130,10 @@ def _file_mtime_iso(path: Path) -> str:
     return datetime.fromtimestamp(mtime, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-# Mapping from freeform pitch.md status values to DB CHECK constraint values
+# Mapping from freeform pitch.md status values to DB CHECK constraint values.
+# "planned" maps to "proposed" intentionally — the DB uses a smaller set of
+# canonical statuses (proposed/in_progress/shipped/blocked/cancelled) while
+# roadmap docs may use friendlier terms like "planned" or "done".
 _EPIC_STATUS_MAP = {
     "proposed": "proposed",
     "planned": "proposed",
@@ -974,34 +1029,14 @@ def sync_decisions_to_markdown(conn: sqlite3.Connection, platform_id: str, outpu
 
 def search_decisions(conn: sqlite3.Connection, query: str, platform_id: str | None = None) -> list[dict]:
     """Full-text search across decisions using FTS5."""
-    if not _check_fts5():
-        logger.warning("FTS5 not available — falling back to LIKE search")
-        escaped = _escape_like(query)
-        sql = "SELECT * FROM decisions WHERE (title LIKE ? ESCAPE '\\' OR context LIKE ? ESCAPE '\\')"
-        params: list = [f"%{escaped}%", f"%{escaped}%"]
-        if platform_id:
-            sql += " AND platform_id=?"
-            params.append(platform_id)
-        return [dict(r) for r in conn.execute(sql, params).fetchall()]
-
-    sanitized = _sanitize_fts5_query(query)
-    sql = "SELECT d.* FROM decisions d JOIN decisions_fts f ON d.rowid = f.rowid WHERE decisions_fts MATCH ? "
-    params = [sanitized]
-    if platform_id:
-        sql += "AND d.platform_id=? "
-        params.append(platform_id)
-    sql += "ORDER BY rank"
-    try:
-        return [dict(r) for r in conn.execute(sql, params).fetchall()]
-    except sqlite3.OperationalError:
-        logger.warning("FTS5 query failed, falling back to LIKE: %s", query)
-        escaped = _escape_like(query)
-        sql = "SELECT * FROM decisions WHERE (title LIKE ? ESCAPE '\\' OR context LIKE ? ESCAPE '\\')"
-        params = [f"%{escaped}%", f"%{escaped}%"]
-        if platform_id:
-            sql += " AND platform_id=?"
-            params.append(platform_id)
-        return [dict(r) for r in conn.execute(sql, params).fetchall()]
+    return _fts5_search(
+        conn,
+        query,
+        table="decisions",
+        fts_table="decisions_fts",
+        like_columns=["title", "context"],
+        filters={"platform_id": platform_id},
+    )
 
 
 # ══════════════════════════════════════
@@ -1234,42 +1269,14 @@ def search_memories(
         type_: Optional memory type filter.
         platform_id: Optional platform filter. None means search all platforms.
     """
-    if not _check_fts5():
-        escaped = _escape_like(query)
-        sql = "SELECT * FROM memory_entries WHERE (name LIKE ? ESCAPE '\\' OR content LIKE ? ESCAPE '\\')"
-        params: list = [f"%{escaped}%", f"%{escaped}%"]
-        if type_:
-            sql += " AND type=?"
-            params.append(type_)
-        if platform_id is not None:
-            sql += " AND platform_id=?"
-            params.append(platform_id)
-        return [dict(r) for r in conn.execute(sql, params).fetchall()]
-
-    sanitized = _sanitize_fts5_query(query)
-    sql = "SELECT m.* FROM memory_entries m JOIN memory_fts f ON m.rowid = f.rowid WHERE memory_fts MATCH ? "
-    params = [sanitized]
-    if type_:
-        sql += "AND m.type=? "
-        params.append(type_)
-    if platform_id is not None:
-        sql += "AND m.platform_id=? "
-        params.append(platform_id)
-    sql += "ORDER BY rank"
-    try:
-        return [dict(r) for r in conn.execute(sql, params).fetchall()]
-    except sqlite3.OperationalError:
-        logger.warning("FTS5 query failed, falling back to LIKE: %s", query)
-        escaped = _escape_like(query)
-        sql = "SELECT * FROM memory_entries WHERE (name LIKE ? ESCAPE '\\' OR content LIKE ? ESCAPE '\\')"
-        params = [f"%{escaped}%", f"%{escaped}%"]
-        if type_:
-            sql += " AND type=?"
-            params.append(type_)
-        if platform_id is not None:
-            sql += " AND platform_id=?"
-            params.append(platform_id)
-        return [dict(r) for r in conn.execute(sql, params).fetchall()]
+    return _fts5_search(
+        conn,
+        query,
+        table="memory_entries",
+        fts_table="memory_fts",
+        like_columns=["name", "content"],
+        filters={"type": type_, "platform_id": platform_id},
+    )
 
 
 # ══════════════════════════════════════
