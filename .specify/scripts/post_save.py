@@ -47,6 +47,7 @@ from db import (
     insert_provenance,
     migrate,
     seed_from_filesystem,
+    transaction,
     upsert_epic,
     upsert_epic_node,
     upsert_platform,
@@ -89,81 +90,82 @@ def record_save(
         if artifact_path.exists():
             output_hash = compute_file_hash(artifact_path)
 
-        # Update pipeline node or epic node
+        # Batch all writes into a single transaction for atomicity
         now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        if epic:
-            upsert_epic_node(
-                conn,
-                platform,
-                epic,
-                node,
-                "done",
-                output_hash=output_hash,
-                completed_by=skill,
-                completed_at=now,
-            )
-            insert_event(
-                conn,
-                platform,
-                "epic_node",
-                f"{epic}/{node}",
-                "completed",
-                actor="claude",
-                payload={"skill": skill, "artifact": artifact},
-            )
+        with transaction(conn) as txn:
+            if epic:
+                upsert_epic_node(
+                    txn,
+                    platform,
+                    epic,
+                    node,
+                    "done",
+                    output_hash=output_hash,
+                    completed_by=skill,
+                    completed_at=now,
+                )
+                insert_event(
+                    txn,
+                    platform,
+                    "epic_node",
+                    f"{epic}/{node}",
+                    "completed",
+                    actor="claude",
+                    payload={"skill": skill, "artifact": artifact},
+                )
 
-            # Auto-transition epic status based on node completion
-            # Skip if epic is blocked or cancelled (manual override only)
-            nodes = get_epic_nodes(conn, platform, epic)
-            if nodes:
-                done_count = sum(1 for n in nodes if n["status"] == "done")
-                existing = [e for e in get_epics(conn, platform) if e["epic_id"] == epic]
-                if existing:
-                    current = existing[0]
-                    if current["status"] not in ("blocked", "cancelled"):
-                        new_status = current["status"]
-                        if done_count == len(nodes):
-                            new_status = "shipped"
-                        elif done_count > 0 and current["status"] == "proposed":
-                            new_status = "in_progress"
-                        if new_status != current["status"]:
-                            upsert_epic(
-                                conn,
-                                platform,
-                                epic,
-                                title=current["title"],
-                                status=new_status,
-                            )
-        else:
-            upsert_pipeline_node(
-                conn,
-                platform,
-                node,
-                "done",
-                output_hash=output_hash,
-                output_files=json.dumps([artifact]),
-                completed_by=skill,
-                completed_at=now,
-            )
-            insert_event(
-                conn,
-                platform,
-                "node",
-                node,
-                "completed",
-                actor="claude",
-                payload={"skill": skill, "artifact": artifact},
-            )
+                # Auto-transition epic status based on node completion
+                # Skip if epic is blocked or cancelled (manual override only)
+                nodes = get_epic_nodes(txn, platform, epic)
+                if nodes:
+                    done_count = sum(1 for n in nodes if n["status"] == "done")
+                    existing = [e for e in get_epics(txn, platform) if e["epic_id"] == epic]
+                    if existing:
+                        current = existing[0]
+                        if current["status"] not in ("blocked", "cancelled"):
+                            new_status = current["status"]
+                            if done_count == len(nodes):
+                                new_status = "shipped"
+                            elif done_count > 0 and current["status"] == "proposed":
+                                new_status = "in_progress"
+                            if new_status != current["status"]:
+                                upsert_epic(
+                                    txn,
+                                    platform,
+                                    epic,
+                                    title=current["title"],
+                                    status=new_status,
+                                )
+            else:
+                upsert_pipeline_node(
+                    txn,
+                    platform,
+                    node,
+                    "done",
+                    output_hash=output_hash,
+                    output_files=json.dumps([artifact]),
+                    completed_by=skill,
+                    completed_at=now,
+                )
+                insert_event(
+                    txn,
+                    platform,
+                    "node",
+                    node,
+                    "completed",
+                    actor="claude",
+                    payload={"skill": skill, "artifact": artifact},
+                )
 
-        # Record provenance
-        insert_provenance(
-            conn,
-            platform,
-            artifact,
-            generated_by=skill,
-            epic_id=epic,
-            output_hash=output_hash,
-        )
+            # Record provenance
+            insert_provenance(
+                txn,
+                platform,
+                artifact,
+                generated_by=skill,
+                epic_id=epic,
+                output_hash=output_hash,
+            )
 
     result = {
         "status": "ok",

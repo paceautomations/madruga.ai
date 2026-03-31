@@ -107,8 +107,19 @@ const PipelineNode = memo(({ data }: NodeProps<Node<PipelineNodeData>>) => {
 
   const handleClick = () => {
     if (data.outputs?.length) {
-      const path = data.outputs[0].replace(/\.md$/, '').replace(/\.likec4$/, '');
-      window.location.href = `/${data.platform}/${path}/`;
+      const NODE_ROUTE_OVERRIDES: Record<string, string> = {
+        'platform-new': '/dashboard/',
+        'containers': '/containers/',
+        'context-map': '/context-map/',
+        'epic-breakdown': '/planning/roadmap/',
+      };
+      const override = NODE_ROUTE_OVERRIDES[data.id];
+      if (override) {
+        window.location.href = `/${data.platform}${override}`;
+      } else {
+        const path = data.outputs[0].replace(/\.md$/, '').replace(/\.likec4$/, '');
+        window.location.href = `/${data.platform}/${path}/`;
+      }
     }
   };
 

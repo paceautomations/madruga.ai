@@ -103,8 +103,14 @@ function platformSymlinksPlugin() {
 }
 
 export default defineConfig({
+  site: 'https://madruga.ai',
   vite: {
     resolve: { preserveSymlinks: true },
+    esbuild: {
+      // Ensure consistent JSX runtime for likec4:react/* virtual modules
+      jsx: 'automatic',
+      jsxImportSource: 'react',
+    },
     server: {
       watch: {
         // Follow symlinks into platforms/ so markdown edits trigger HMR

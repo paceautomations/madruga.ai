@@ -176,10 +176,16 @@ pipeline:
         depends: ["analyze"]
         gate: auto
 
+      - id: analyze-post
+        skill: "speckit.analyze"
+        outputs: ["{epic}/analyze-post-report.md"]
+        depends: ["implement"]
+        gate: auto
+
       - id: verify
         skill: "madruga:verify"
         outputs: ["{epic}/verify-report.md"]
-        depends: ["implement"]
+        depends: ["analyze-post"]
         gate: auto-escalate
 
       - id: qa
@@ -193,7 +199,7 @@ pipeline:
       - id: reconcile
         skill: "madruga:reconcile"
         outputs: ["{epic}/reconcile-report.md"]
-        depends: ["verify"]
+        depends: ["qa"]
         gate: human
         optional: true
         skip_condition: "verify score >= 95% and zero drift"

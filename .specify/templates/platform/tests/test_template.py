@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
+import copier.errors
 import yaml
 
 
@@ -94,8 +96,8 @@ def test_kebab_case_validation(tmp_path: Path, template_root: Path):
             # or contains files (validation was bypassed)
             if (dst / "platform.yaml").exists():
                 raise AssertionError(f"Copier accepted invalid name: {name}")
-        except Exception:
-            pass  # Expected: validation error
+        except (subprocess.CalledProcessError, OSError, copier.errors.CopierError, ValueError):
+            pass  # Expected: copier validation rejects invalid names
 
 
 def test_skip_if_exists_config(template_root: Path):

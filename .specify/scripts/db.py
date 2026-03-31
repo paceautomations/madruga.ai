@@ -45,16 +45,27 @@ def _check_fts5() -> bool:
     """Check if FTS5 is available in this Python's sqlite3."""
     global _FTS5_AVAILABLE
     if _FTS5_AVAILABLE is None:
+        c = sqlite3.connect(":memory:")
         try:
-            c = sqlite3.connect(":memory:")
             c.execute("CREATE VIRTUAL TABLE _fts5_test USING fts5(content)")
             c.execute("DROP TABLE _fts5_test")
-            c.close()
             _FTS5_AVAILABLE = True
         except Exception:
             _FTS5_AVAILABLE = False
             logger.warning("FTS5 not available — full-text search features will be disabled")
+        finally:
+            c.close()
     return _FTS5_AVAILABLE
+
+
+def _sanitize_fts5_query(query: str) -> str:
+    """Sanitize a user query for FTS5 MATCH by escaping double quotes."""
+    return '"' + query.replace('"', '""') + '"'
+
+
+def _escape_like(query: str) -> str:
+    """Escape LIKE wildcards in user input."""
+    return query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 def _now() -> str:
@@ -965,20 +976,32 @@ def search_decisions(conn: sqlite3.Connection, query: str, platform_id: str | No
     """Full-text search across decisions using FTS5."""
     if not _check_fts5():
         logger.warning("FTS5 not available — falling back to LIKE search")
-        sql = "SELECT * FROM decisions WHERE (title LIKE ? OR context LIKE ?)"
-        params: list = [f"%{query}%", f"%{query}%"]
+        escaped = _escape_like(query)
+        sql = "SELECT * FROM decisions WHERE (title LIKE ? ESCAPE '\\' OR context LIKE ? ESCAPE '\\')"
+        params: list = [f"%{escaped}%", f"%{escaped}%"]
         if platform_id:
             sql += " AND platform_id=?"
             params.append(platform_id)
         return [dict(r) for r in conn.execute(sql, params).fetchall()]
 
+    sanitized = _sanitize_fts5_query(query)
     sql = "SELECT d.* FROM decisions d JOIN decisions_fts f ON d.rowid = f.rowid WHERE decisions_fts MATCH ? "
-    params = [query]
+    params = [sanitized]
     if platform_id:
         sql += "AND d.platform_id=? "
         params.append(platform_id)
     sql += "ORDER BY rank"
-    return [dict(r) for r in conn.execute(sql, params).fetchall()]
+    try:
+        return [dict(r) for r in conn.execute(sql, params).fetchall()]
+    except sqlite3.OperationalError:
+        logger.warning("FTS5 query failed, falling back to LIKE: %s", query)
+        escaped = _escape_like(query)
+        sql = "SELECT * FROM decisions WHERE (title LIKE ? ESCAPE '\\' OR context LIKE ? ESCAPE '\\')"
+        params = [f"%{escaped}%", f"%{escaped}%"]
+        if platform_id:
+            sql += " AND platform_id=?"
+            params.append(platform_id)
+        return [dict(r) for r in conn.execute(sql, params).fetchall()]
 
 
 # ══════════════════════════════════════
@@ -1212,8 +1235,9 @@ def search_memories(
         platform_id: Optional platform filter. None means search all platforms.
     """
     if not _check_fts5():
-        sql = "SELECT * FROM memory_entries WHERE (name LIKE ? OR content LIKE ?)"
-        params: list = [f"%{query}%", f"%{query}%"]
+        escaped = _escape_like(query)
+        sql = "SELECT * FROM memory_entries WHERE (name LIKE ? ESCAPE '\\' OR content LIKE ? ESCAPE '\\')"
+        params: list = [f"%{escaped}%", f"%{escaped}%"]
         if type_:
             sql += " AND type=?"
             params.append(type_)
@@ -1222,8 +1246,9 @@ def search_memories(
             params.append(platform_id)
         return [dict(r) for r in conn.execute(sql, params).fetchall()]
 
+    sanitized = _sanitize_fts5_query(query)
     sql = "SELECT m.* FROM memory_entries m JOIN memory_fts f ON m.rowid = f.rowid WHERE memory_fts MATCH ? "
-    params = [query]
+    params = [sanitized]
     if type_:
         sql += "AND m.type=? "
         params.append(type_)
@@ -1231,7 +1256,20 @@ def search_memories(
         sql += "AND m.platform_id=? "
         params.append(platform_id)
     sql += "ORDER BY rank"
-    return [dict(r) for r in conn.execute(sql, params).fetchall()]
+    try:
+        return [dict(r) for r in conn.execute(sql, params).fetchall()]
+    except sqlite3.OperationalError:
+        logger.warning("FTS5 query failed, falling back to LIKE: %s", query)
+        escaped = _escape_like(query)
+        sql = "SELECT * FROM memory_entries WHERE (name LIKE ? ESCAPE '\\' OR content LIKE ? ESCAPE '\\')"
+        params = [f"%{escaped}%", f"%{escaped}%"]
+        if type_:
+            sql += " AND type=?"
+            params.append(type_)
+        if platform_id is not None:
+            sql += " AND platform_id=?"
+            params.append(platform_id)
+        return [dict(r) for r in conn.execute(sql, params).fetchall()]
 
 
 # ══════════════════════════════════════
@@ -1546,6 +1584,28 @@ def seed_from_filesystem(conn: sqlite3.Connection, platform_id: str, platform_di
                 payload={"status": status},
             )
             nodes_seeded += 1
+
+        # DAG integrity: if a node is done, backfill its dependencies as done too.
+        # This handles pre-existing artifacts created before the DAG was introduced.
+        node_statuses = {
+            n["id"]: "done"
+            if all((pdir / o).exists() for o in n.get("outputs", []))
+            or (n.get("output_pattern") and len(__import__("glob").glob(str(pdir / n["output_pattern"]))) > 0)
+            else "pending"
+            for n in pipeline.get("nodes", [])
+        }
+        changed = True
+        while changed:
+            changed = False
+            for node in pipeline.get("nodes", []):
+                nid = node["id"]
+                if node_statuses.get(nid) != "done":
+                    continue
+                for dep_id in node.get("depends", []):
+                    if node_statuses.get(dep_id) == "pending":
+                        node_statuses[dep_id] = "done"
+                        upsert_pipeline_node(txn, platform_id, dep_id, "done", completed_by="seed-backfill")
+                        changed = True
 
         epics_seeded = 0
         epics_dir = pdir / "epics"

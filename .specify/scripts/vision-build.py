@@ -32,7 +32,9 @@ def _esc(text: str) -> str:
 
 def _desc_text(el: dict) -> str:
     """Extract plain-text description from a LikeC4 element."""
-    d = el.get("description", {})
+    d = el.get("description")
+    if d is None:
+        return ""
     return d.get("txt", "") if isinstance(d, dict) else str(d)
 
 

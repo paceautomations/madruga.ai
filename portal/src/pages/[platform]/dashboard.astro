@@ -50,6 +50,24 @@ function groupByLayer(nodes: any[]) {
   }));
 }
 
+// ── Node output → portal URL mapping ──
+const NODE_ROUTE_OVERRIDES: Record<string, string> = {
+  'platform-new': '/dashboard/',
+  'containers': '/containers/',
+  'context-map': '/context-map/',
+  'epic-breakdown': '/planning/roadmap/',
+};
+
+function resolveNodeHref(platform: string, nodeId: string, output: string): string {
+  const override = NODE_ROUTE_OVERRIDES[nodeId];
+  if (override) return `/${platform}${override}`;
+  if (output.startsWith('decisions/')) return `/${platform}/decisions/`;
+  if (output.match(/^epics\/.*\/pitch\.md$/)) {
+    return `/${platform}/${output.replace(/\.md$/, '')}/`;
+  }
+  return `/${platform}/${output.replace(/\.md$/, '').replace(/\.likec4$/, '')}/`;
+}
+
 // ── Next step ──
 function findNextStep(nodes: any[]) {
   const doneIds = new Set(nodes.filter((n: any) => n.status === 'done').map((n: any) => n.id));
@@ -179,7 +197,7 @@ const activeEpics = hasData ? totalEpics - (kanban['backlog']?.length || 0) - sh
               <div class="layer-nodes">
                 {layer.nodes.map((n: any) => {
                   const href = n.status === 'done' && n.outputs?.length
-                    ? `/${platformName}/${n.outputs[0].replace(/\.md$/, '').replace(/\.likec4$/, '')}/`
+                    ? resolveNodeHref(platformName, n.id, n.outputs[0])
                     : undefined;
                   return (
                     <a href={href} class={`node-row status-${n.status}`} title={`${n.id}: ${n.status} (${n.gate})`}>

@@ -151,7 +151,6 @@
 
   // Re-enhance after Astro view transitions
   document.addEventListener('astro:after-swap', function () {
-    PROCESSED.delete; // WeakSet auto-cleans, just re-run
     enhanceAll();
   });
 })();
