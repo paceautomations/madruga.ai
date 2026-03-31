@@ -101,7 +101,7 @@ def _fts5_search(
         logger.warning("FTS5 not available — falling back to LIKE search")
         return _like_fallback()
 
-    alias = table[0]
+    alias = f"t_{table}"
     sanitized = _sanitize_fts5_query(query)
     sql = (
         f"SELECT {alias}.* FROM {table} {alias} "

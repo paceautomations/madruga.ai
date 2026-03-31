@@ -623,10 +623,9 @@ def cmd_status(name: str | None, show_all: bool, as_json: bool, output_file: str
         if as_json:
             json_str = json.dumps(result, ensure_ascii=False, indent=2)
             if output_file:
-                from pathlib import Path
-
-                Path(output_file).parent.mkdir(parents=True, exist_ok=True)
-                Path(output_file).write_text(json_str, encoding="utf-8")
+                out_path = Path(output_file)
+                out_path.parent.mkdir(parents=True, exist_ok=True)
+                out_path.write_text(json_str, encoding="utf-8")
             else:
                 print(json_str)
         else:
