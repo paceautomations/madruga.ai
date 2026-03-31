@@ -64,6 +64,26 @@ def _validate_artifact_path(platform: str, artifact: str) -> Path:
     return artifact_path
 
 
+def _inject_delivered_at(platform: str, epic: str, delivered_at: str) -> None:
+    """Inject delivered_at into pitch.md frontmatter (string insert, no YAML round-trip)."""
+    pitch = REPO_ROOT / "platforms" / platform / "epics" / epic / "pitch.md"
+    if not pitch.exists():
+        return
+    content = pitch.read_text(encoding="utf-8")
+    if not content.startswith("---"):
+        return
+    # Find closing --- of frontmatter
+    end = content.find("---", 3)
+    if end == -1:
+        return
+    fm_block = content[3:end]
+    if "delivered_at:" in fm_block:
+        return  # already set
+    # Insert before closing ---
+    updated = content[:end] + f"delivered_at: {delivered_at}\n" + content[end:]
+    pitch.write_text(updated, encoding="utf-8")
+
+
 def record_save(
     platform: str,
     node: str,
@@ -92,6 +112,7 @@ def record_save(
 
         # Batch all writes into a single transaction for atomicity
         now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        shipped_delivered_at = None  # track ship transition for post-txn filesystem write
         with transaction(conn) as txn:
             if epic:
                 upsert_epic_node(
@@ -124,8 +145,10 @@ def record_save(
                         current = existing[0]
                         if current["status"] not in ("blocked", "cancelled"):
                             new_status = current["status"]
+                            delivered_at = None
                             if done_count == len(nodes):
                                 new_status = "shipped"
+                                delivered_at = datetime.now(timezone.utc).strftime("%Y-%m-%d")
                             elif done_count > 0 and current["status"] == "proposed":
                                 new_status = "in_progress"
                             if new_status != current["status"]:
@@ -135,7 +158,10 @@ def record_save(
                                     epic,
                                     title=current["title"],
                                     status=new_status,
+                                    delivered_at=delivered_at,
                                 )
+                                if delivered_at:
+                                    shipped_delivered_at = delivered_at
             else:
                 upsert_pipeline_node(
                     txn,
@@ -166,6 +192,10 @@ def record_save(
                 epic_id=epic,
                 output_hash=output_hash,
             )
+
+    # Write delivered_at to pitch.md frontmatter (outside transaction — filesystem only)
+    if epic and shipped_delivered_at:
+        _inject_delivered_at(platform, epic, shipped_delivered_at)
 
     result = {
         "status": "ok",

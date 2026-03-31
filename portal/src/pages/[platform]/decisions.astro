@@ -11,20 +11,31 @@ export function getStaticPaths() {
 
 const { platform } = Astro.props;
 
-const allAdrFiles = import.meta.glob(
-  '/src/content/docs/*/decisions/ADR-*.md',
-  { eager: true },
-);
+// Primary: read from pipeline-status.json (single source of truth via DB)
+let decisions: any[] = [];
+try {
+  const statusData = await import('../../data/pipeline-status.json');
+  const platformData = (statusData.platforms || []).find((p: any) => p.id === platform);
+  decisions = platformData?.decisions || [];
+} catch { /* not generated yet */ }
 
-const adrs = Object.entries(allAdrFiles)
-  .filter(([path]) => path.includes(`/${platform}/`))
-  .map(([path, mod]) => {
-    const fm = (mod as any).frontmatter ?? {};
-    const slug = path.split('/').pop()!.replace('.md', '');
-    const num = slug.match(/ADR-(\d+)/)?.[1] ?? '000';
-    return { slug, num, ...fm };
-  })
-  .sort((a, b) => a.num.localeCompare(b.num));
+// Fallback: read from markdown frontmatter if JSON has no decisions
+if (decisions.length === 0) {
+  const allAdrFiles = import.meta.glob(
+    '/src/content/docs/*/decisions/ADR-*.md',
+    { eager: true },
+  );
+
+  decisions = Object.entries(allAdrFiles)
+    .filter(([path]) => path.includes(`/${platform}/`))
+    .map(([path, mod]) => {
+      const fm = (mod as any).frontmatter ?? {};
+      const slug = path.split('/').pop()!.replace('.md', '');
+      const num = slug.match(/ADR-(\d+)/)?.[1] ?? '000';
+      return { slug, num, ...fm };
+    })
+    .sort((a, b) => a.num.localeCompare(b.num));
+}
 ---
 
 <StarlightPage frontmatter={{ title: 'Decision Overviews', tableOfContents: false }}>
@@ -39,17 +50,21 @@ const adrs = Object.entries(allAdrFiles)
       </tr>
     </thead>
     <tbody>
-      {adrs.map((adr) => (
-        <tr>
-          <td>
-            <a href={`/${platform}/decisions/${adr.slug.toLowerCase()}/`}>ADR-{adr.num}</a>
-          </td>
-          <td>{adr.decision ?? '—'}</td>
-          <td>{adr.alternatives ?? '—'}</td>
-          <td>{adr.rationale ?? '—'}</td>
-          <td>{adr.status ?? '—'}</td>
-        </tr>
-      ))}
+      {decisions.map((adr: any) => {
+        const num = adr.num || '000';
+        const slug = adr.slug || `ADR-${num}`;
+        return (
+          <tr>
+            <td>
+              <a href={`/${platform}/decisions/${slug.toLowerCase()}/`}>ADR-{num}</a>
+            </td>
+            <td>{adr.decision ?? '—'}</td>
+            <td>{adr.alternatives ?? '—'}</td>
+            <td>{adr.rationale ?? '—'}</td>
+            <td>{adr.status ?? '—'}</td>
+          </tr>
+        );
+      })}
     </tbody>
   </table>
 </StarlightPage>

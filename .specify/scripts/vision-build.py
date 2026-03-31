@@ -40,7 +40,7 @@ def _desc_text(el: dict) -> str:
 
 def _bc_ids(data: dict) -> list[str]:
     """Collect all bounded context element IDs."""
-    return [eid for eid, el in data["elements"].items() if el.get("kind") == BC_KIND]
+    return [eid for eid, el in data.get("elements", {}).items() if el.get("kind") == BC_KIND]
 
 
 def validate_model(model_dir: Path) -> None:
@@ -90,7 +90,7 @@ def _containers_table(data: dict) -> str:
     rows = []
     bc_prefixes = tuple(f"{bc_id}." for bc_id in _bc_ids(data))
 
-    for eid, el in sorted(data["elements"].items()):
+    for eid, el in sorted(data.get("elements", {}).items()):
         if el.get("kind") not in CONTAINER_KINDS:
             continue
         if eid.startswith(bc_prefixes):
@@ -108,15 +108,16 @@ def _containers_table(data: dict) -> str:
 
 def _domains_table(data: dict) -> str:
     """Build markdown table of bounded contexts (domains)."""
+    elements = data.get("elements", {})
     rows = []
     for i, bc_id in enumerate(_bc_ids(data), 1):
-        bc = data["elements"][bc_id]
+        bc = elements.get(bc_id, {})
         title = _esc(bc.get("title", bc_id))
         desc = _esc(_desc_text(bc))
 
         modules = [
             _esc(el.get("title", eid.split(".")[-1]).split(" ")[0])
-            for eid, el in data["elements"].items()
+            for eid, el in elements.items()
             if eid.startswith(bc_id + ".") and el.get("kind") == MODULE_KIND
         ]
 
@@ -145,10 +146,11 @@ def _domains_table(data: dict) -> str:
 
 def _integrations_table(data: dict) -> str:
     """Build markdown table of external integrations."""
+    elements = data.get("elements", {})
     rows = []
     count = 0
 
-    for rel in data["relations"].values():
+    for rel in data.get("relations", {}).values():
         tech = rel.get("technology")
         if not tech:
             continue
@@ -157,8 +159,8 @@ def _integrations_table(data: dict) -> str:
         source_id = rel.get("source", {}).get("model", "?")
         target_id = rel.get("target", {}).get("model", "?")
 
-        source_name = _esc(data["elements"].get(source_id, {}).get("title", source_id.split(".")[-1]))
-        target_name = _esc(data["elements"].get(target_id, {}).get("title", target_id.split(".")[-1]))
+        source_name = _esc(elements.get(source_id, {}).get("title", source_id.split(".")[-1]))
+        target_name = _esc(elements.get(target_id, {}).get("title", target_id.split(".")[-1]))
 
         title = _esc(rel.get("title", "-"))
         meta = rel.get("metadata", {})
@@ -194,26 +196,22 @@ def _rel_kind_label(kind: str) -> str:
 
 def _ddd_relations_table(data: dict) -> str:
     """Build markdown table of DDD inter-domain relationships."""
+    elements = data.get("elements", {})
     rows = []
     bc_ids = set(_bc_ids(data))
 
-    def _is_bc_or_module(eid: str) -> bool:
-        el = data["elements"].get(eid, {})
-        kind = el.get("kind", "")
-        return kind in (BC_KIND, MODULE_KIND) or eid in bc_ids
-
     def _bc_name(eid: str) -> str:
         """Get the bounded context name for an element (module -> parent BC)."""
-        el = data["elements"].get(eid, {})
+        el = elements.get(eid, {})
         if el.get("kind") == BC_KIND or eid in bc_ids:
             return _esc(el.get("title", eid.split(".")[-1]))
         # module — find parent BC
         for bc_id in bc_ids:
             if eid.startswith(bc_id + "."):
-                return _esc(data["elements"][bc_id].get("title", bc_id.split(".")[-1]))
+                return _esc(elements.get(bc_id, {}).get("title", bc_id.split(".")[-1]))
         return _esc(el.get("title", eid.split(".")[-1]))
 
-    for rel in data["relations"].values():
+    for rel in data.get("relations", {}).values():
         kind = rel.get("kind", "")
         if kind not in DDD_REL_KINDS:
             continue
@@ -272,7 +270,9 @@ def build(platform: str, validate_only: bool = False, do_export_png: bool = Fals
 
     # export_json already validates the model (check=True fails on invalid input)
     data = export_json(model_dir)
-    print(f"[ok] {len(data['elements'])} elements, {len(data['relations'])} relations, {len(data['views'])} views")
+    print(
+        f"[ok] {len(data.get('elements', {}))} elements, {len(data.get('relations', {}))} relations, {len(data.get('views', {}))} views"
+    )
 
     eng_dir = PLATFORMS_DIR / platform / "engineering"
 

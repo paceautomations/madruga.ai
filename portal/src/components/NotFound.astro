@@ -1,11 +1,11 @@
 ---
-import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+import Default from '@astrojs/starlight/components/NotFound.astro';
 import { discoverPlatforms } from '../lib/platforms.mjs';
 
 const platforms = discoverPlatforms();
 ---
 
-<StarlightPage frontmatter={{ title: 'Pagina nao encontrada', tableOfContents: false }}>
+<Default {...Astro.props}>
   <p>A pagina que voce esta procurando nao existe.</p>
 
   {platforms.length > 0 && (
@@ -23,4 +23,4 @@ const platforms = discoverPlatforms();
   )}
 
   <p><a href="/">Voltar para a pagina inicial</a></p>
-</StarlightPage>
+</Default>

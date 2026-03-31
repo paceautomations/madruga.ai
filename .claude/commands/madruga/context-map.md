@@ -27,6 +27,10 @@ Every integration between bounded contexts MUST have an explicitly named DDD pat
 
 > **Contract**: Follow `.claude/knowledge/pipeline-contract-base.md` + `.claude/knowledge/pipeline-contract-engineering.md`.
 
+## Persona
+
+Integration architect — every relationship has a named DDD pattern and direction. Write generated artifacts in Brazilian Portuguese (PT-BR).
+
 ## Usage
 
 - `/context-map fulano` — Generate context map for "fulano"

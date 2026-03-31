@@ -33,7 +33,7 @@ We will classify all decisions as 1-way doors (irreversible, require human appro
 - [+] Autonomia para decisoes reversiveis (2-way doors)
 - [+] Safety gate para decisoes irreversiveis (1-way doors)
 - [+] ADRs gerados automaticamente para 1-way doors (rastreabilidade)
-- [+] Notificacao WhatsApp em CRITICAL_STOP gates
+- [+] Notificacao Telegram em CRITICAL_STOP gates
 - [+] Configurable always_2way list (naming, formatting, code style, etc.)
 - [-] Classificador pode errar (falso positivo = pipeline para desnecessariamente; falso negativo = decisao irreversivel tomada autonomamente)
 - [-] Epic fica parked ate humano responder (timeout 24h)

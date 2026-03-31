@@ -133,10 +133,16 @@ export default defineConfig({
   integrations: [
     starlight({
       title: 'Madruga-AI',
+      logo: {
+        src: './src/assets/logo.png',
+        alt: 'madruga.ai',
+      },
+      favicon: '/favicon.png',
       routeMiddleware: './src/routeData.ts',
       customCss: ['./src/styles/custom.css'],
       components: {
         Header: './src/components/CustomHeader.astro',
+        NotFound: './src/components/NotFound.astro',
       },
       head: [
         { tag: 'script', attrs: { src: '/sidebar-toggle.js', defer: true } },

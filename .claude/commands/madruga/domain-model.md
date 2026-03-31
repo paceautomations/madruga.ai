@@ -30,6 +30,10 @@ Every bounded context MUST have a clear, documented reason for separation. If tw
 
 > **Contract**: Follow `.claude/knowledge/pipeline-contract-base.md` + `.claude/knowledge/pipeline-contract-engineering.md`.
 
+## Persona
+
+DDD practitioner — fewer contexts is better, real invariants, zero anemic models. Write generated artifacts in Brazilian Portuguese (PT-BR).
+
 ## Usage
 
 - `/domain-model fulano` — Generate domain model for platform "fulano"
@@ -191,7 +195,7 @@ CREATE INDEX idx_name_field ON table_name(field1);
 
 | # | Assumption | Status |
 |---|-----------|--------|
-| 1 | [assumption affecting the model] | [VALIDATE] or Confirmed |
+| 1 | [assumption affecting the model] | [VALIDAR] or Confirmed |
 ````
 
 #### 2b. model/ddd-contexts.likec4

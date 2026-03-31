@@ -2,6 +2,11 @@
 title: "ADR-016: Observability — structlog + SQLite Metrics + Sentry Free"
 status: accepted
 date: 2026-03-30
+decision: Adotar structlog + SQLite metrics table (~100 LOC) para metricas custom e Sentry
+  cloud free tier para error tracking com stack traces e performance traces.
+alternatives: OpenTelemetry + Grafana Stack, PostHog self-hosted, Sentry self-hosted
+rationale: 80% do valor por 5% do esforco — metricas em SQLite reusam DB existente,
+  Sentry adiciona error tracking profissional com 15 min de setup
 ---
 # ADR-016: Observability — structlog + SQLite Metrics + Sentry Free
 

@@ -11,6 +11,12 @@ export const onRequest = defineRouteMiddleware((context) => {
 	const route = context.locals.starlightRoute;
 	const pathname = context.url.pathname;
 
+	// Root and 404 pages: hide sidebar (no platform context)
+	if (pathname === '/' || pathname === '/404/') {
+		route.sidebar = [];
+		return;
+	}
+
 	// Extract platform slug from URL: /fulano/... → "fulano"
 	const match = pathname.match(/^\/([^/]+)\//);
 	if (!match) return;

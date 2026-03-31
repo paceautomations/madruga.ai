@@ -5,6 +5,7 @@ status: shipped
 phase: pitch
 appetite: 2w
 priority: 1
+delivered_at: 2026-03-29
 ---
 # SQLite Foundation — BD para Estado do Pipeline
 

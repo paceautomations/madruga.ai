@@ -31,7 +31,7 @@ model {
     technology 'Python async'
   }
 
-  madrugaAi.dagExecutor -[sync]-> madrugaAi.pipelinePhases 'Despacha nodes do pipeline' {
+  madrugaAi.dagExecutor -[sync]-> madrugaAi.speckitBridge 'Despacha nodes — monta e executa prompts' {
     technology 'Python async'
   }
 
@@ -43,11 +43,7 @@ model {
     technology 'Python async'
   }
 
-  madrugaAi.orchestrator -[sync]-> madrugaAi.pipelinePhases 'Executa fases em sequencia' {
-    technology 'Python async'
-  }
-
-  madrugaAi.pipelinePhases -[sync]-> madrugaAi.speckitBridge 'Monta e executa prompts' {
+  madrugaAi.orchestrator -[sync]-> madrugaAi.speckitBridge 'Executa fases em sequencia' {
     technology 'Python async'
   }
 
@@ -55,11 +51,11 @@ model {
     technology 'Filesystem read'
   }
 
-  madrugaAi.pipelinePhases -[sync]-> madrugaAi.debateEngine 'Solicita review de specs' {
-    technology 'Python async'
+  madrugaAi.speckitBridge -[sync]-> madrugaAi.subagentJudge 'Solicita review multi-perspectiva' {
+    technology 'Claude Code Agent tool'
   }
 
-  madrugaAi.pipelinePhases -[sync]-> madrugaAi.decisionSystem 'Classifica decisoes' {
+  madrugaAi.speckitBridge -[sync]-> madrugaAi.decisionSystem 'Classifica decisoes' {
     technology 'Python async'
   }
 
@@ -88,19 +84,19 @@ model {
     technology 'subprocess (claude -p)'
   }
 
-  madrugaAi.debateEngine -[sync]-> claudeApi 'Debate rounds via claude -p' {
-    technology 'subprocess (claude -p)'
+  madrugaAi.subagentJudge -[sync]-> claudeApi 'Review via 3 subagents paralelos + 1 judge' {
+    technology 'Claude Code Agent tool'
   }
 
   madrugaAi.decisionSystem -[sync]-> claudeApi 'Classifica decisoes via claude -p' {
     technology 'subprocess (claude -p)'
   }
 
-  madrugaAi.runtimeDaemon -[async]-> whatsappNotif 'Notificacoes e decisoes' {
-    technology 'wpp-bridge (HTTP localhost:8030)'
+  madrugaAi.runtimeDaemon -[async]-> telegramBot 'Notificacoes e decisoes' {
+    technology 'Telegram Bot API (HTTPS outbound)'
   }
 
-  madrugaAi.pipelinePhases -[sync]-> githubApi 'Cria issues e PRs' {
+  madrugaAi.speckitBridge -[sync]-> githubApi 'Cria issues e PRs via gh CLI' {
     technology 'gh CLI'
   }
 
@@ -151,8 +147,8 @@ model {
   }
 
   // ── Core-Supporting ──
-  specDomain.specifyPhase -[customerSupplier]-> intelligence.debateModule 'Customer-Supplier' {
-    description 'Specification (customer) solicita review de specs a Intelligence (supplier) via debate engine'
+  specDomain.specifyPhase -[customerSupplier]-> intelligence.subagentJudgeModule 'Customer-Supplier' {
+    description 'Specification (customer) solicita review multi-perspectiva a Intelligence (supplier) via Subagent Judge (ADR-019)'
   }
 
   specDomain.planPhase -[customerSupplier]-> intelligence.decisionModule 'Customer-Supplier' {
@@ -176,8 +172,8 @@ model {
     description 'Integration se conforma ao formato de issues e PRs da GitHub API'
   }
 
-  integration.whatsappBridge -[conformist]-> whatsappNotif 'Conformist' {
-    description 'Integration se conforma ao protocolo do wpp-bridge (HTTP send/receive/ask_choice)'
+  integration.telegramAdapter -[conformist]-> telegramBot 'Conformist' {
+    description 'Integration se conforma ao protocolo da Telegram Bot API (sendMessage, InlineKeyboard, callback_query)'
   }
 
   integration.claudeClient -[conformist]-> claudeApi 'Conformist' {
@@ -192,7 +188,7 @@ model {
   execution.daemonProcess -[pubSub]-> observability.metricsCollector 'Pub-Sub'
   execution.pipelineRunner -[pubSub]-> observability.metricsCollector 'Pub-Sub'
   execution.dagExecutor -[pubSub]-> observability.metricsCollector 'Pub-Sub'
-  intelligence.debateModule -[pubSub]-> observability.metricsCollector 'Pub-Sub'
+  intelligence.subagentJudgeModule -[pubSub]-> observability.metricsCollector 'Pub-Sub'
   specDomain.specifyPhase -[pubSub]-> observability.metricsCollector 'Pub-Sub'
 
   // ── Documentation-Generic ──

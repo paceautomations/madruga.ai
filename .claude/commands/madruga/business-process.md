@@ -33,6 +33,10 @@ This document describes **how the business works from the perspective of the act
 
 > **Contract**: Follow `.claude/knowledge/pipeline-contract-base.md` + `.claude/knowledge/pipeline-contract-business.md`.
 
+## Persona
+
+Business analyst — maps real-world flows, challenges unrealistic happy paths. Write generated artifacts in Brazilian Portuguese (PT-BR).
+
 ## Usage
 
 - `/business-process fulano` — Generate business flows for the "fulano" platform
@@ -152,7 +156,7 @@ sequenceDiagram
 ```
 
 **Assumptions for this flow:**
-- [assumption 1] `[VALIDATE]` if not confirmed
+- [assumption 1] `[VALIDAR]` if not confirmed
 - [assumption 2]
 
 ---
@@ -166,7 +170,7 @@ sequenceDiagram
 
 | # | Assumption | Status |
 |---|-----------|--------|
-| 1 | [assumption affecting multiple flows] | [VALIDATE] or Confirmed |
+| 1 | [assumption affecting multiple flows] | [VALIDAR] or Confirmed |
 
 ---
 
@@ -184,7 +188,7 @@ sequenceDiagram
 3. **Actions:** business language. "Sends message", not "POST /api/messages". "Verifies payment", not "Queries payment_status table".
 4. **Deep dives use phases:** group steps into `rect` blocks with `note over` labels (e.g., "Fase 1 — Negocio"). Each phase should be visually distinct.
 5. **Exceptions:** every exception must have clear handling from the user's perspective. "What happens when X fails?"
-6. **Frequency/Impact:** quantify when possible. Mark `[VALIDATE]` if estimated.
+6. **Frequency/Impact:** quantify when possible. Mark `[VALIDAR]` if estimated.
 7. **Feedback loops:** the E2E diagram MUST show feedback arrows (dotted lines) where outputs of later flows retroaliment earlier docs (e.g., reconcile → business docs).
 8. **3-5 flows:** prioritized by business impact. Most critical flow first.
 9. **Skill annotations no flowchart E2E:** Todo no no `## Visao End-to-End` que corresponde a uma skill do pipeline DEVE incluir `\n(/command)` dentro do label (ex: `F1A["Criar Plataforma\n(/platform-new)"]`). Nos sem skill recebem nota descritiva (ex: `(sem skill)` ou `(manual)`). Usar o nome `/command` que o PM-Arquiteto digita — nao o ID interno.
@@ -200,7 +204,7 @@ sequenceDiagram
 | 4 | Does every deep dive have a happy path AND an exception path? | Add the missing one |
 | 5 | Are participants business actors, not technical components? | Rename to business role |
 | 6 | 3-5 flows (no more, no fewer without justification)? | Group or expand |
-| 7 | Every assumption marked [VALIDATE] or confirmed? | Mark it |
+| 7 | Every assumption marked [VALIDAR] or confirmed? | Mark it |
 | 8 | Flow Overview table present with frequency and impact? | Complete it |
 | 9 | Actor Glossary present? | Add it |
 | 10 | Deep dives use phase grouping (rect blocks with notes)? | Add phases |

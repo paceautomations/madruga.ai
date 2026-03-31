@@ -8,6 +8,10 @@ argument-hint: ""
 
 Lightweight interactive skill. Detects the current state of the repository and guides the user through the development process.
 
+## Persona
+
+Onboarding guide — immediate action, zero unnecessary theory. Write generated artifacts in Brazilian Portuguese (PT-BR).
+
 ## Instructions
 
 ### 1. Detect Current State

@@ -5,6 +5,7 @@ status: shipped
 phase: pitch
 appetite: 2w
 priority: 2
+delivered_at: 2026-03-29
 ---
 # Directory Unification — SpecKit Opera em epics/, DAG Dois Níveis
 

@@ -41,7 +41,7 @@ Language: documentation and comments are in **Brazilian Portuguese**. Code is in
 │   ├── src/lib/platforms.mjs  # Platform discovery + dynamic sidebar builder
 │   └── src/pages/[platform]/  # Dynamic routes for all platforms
 ├── .claude/
-│   ├── commands/madruga/      # 20 skills: 13 L1 nodes + 3 L2 nodes + 4 utilities
+│   ├── commands/madruga/      # 21 skills: 13 L1 nodes + 3 L2 nodes + 5 utilities
 │   ├── knowledge/             # Knowledge files loaded on-demand by skills
 │   └── settings.local.json    # Permissions and MCP server config
 └── docs/                      # Legacy docs
@@ -85,11 +85,16 @@ python3 .specify/scripts/vision-build.py <name> --export-png
 python3 .specify/scripts/post_save.py --platform <name> --node <id> --skill <skill> --artifact <path>  # record skill completion
 python3 .specify/scripts/post_save.py --reseed --platform <name>   # re-seed platform from filesystem
 python3 .specify/scripts/post_save.py --reseed-all                 # re-seed all platforms
+
+# ── Skill Management ──
+python3 .specify/scripts/skill-lint.py                 # lint all skills
+python3 .specify/scripts/skill-lint.py --skill <name>  # lint one skill
+python3 .specify/scripts/skill-lint.py --json           # JSON output
 ```
 
 ## Command Namespaces
 
-- **`madruga:*`** (e.g., `/vision`, `/adr`, `/pipeline`, `/getting-started`) — Full pipeline: L1 platform documentation (13 nodes) + L2 epic cycle (epic-context, verify, qa, reconcile) + utilities (pipeline, checkpoint, getting-started).
+- **`madruga:*`** (e.g., `/vision`, `/adr`, `/pipeline`, `/getting-started`) — Full pipeline: L1 platform documentation (13 nodes) + L2 epic cycle (epic-context, verify, qa, reconcile) + utilities (pipeline, checkpoint, getting-started, skills-mgmt).
 - **`speckit.*`** (e.g., `/speckit.specify`, `/speckit.plan`, `/speckit.tasks`) — Part of L2 epic cycle: specify → clarify → plan → tasks → analyze → implement.
 
 Both namespaces form a single continuous pipeline invoked via `/command-name` in Claude Code. Start with `/getting-started` for guided onboarding.
@@ -225,6 +230,7 @@ After reconcile: **PR → merge to main → next epic**.
 | `pipeline` | Table + Mermaid DAG (L1 + L2) + progress + next step |
 | `checkpoint` | Save STATE.md with session progress |
 | `getting-started` | Interactive onboarding |
+| `skills-mgmt` | Create, edit, lint, audit skills and knowledge files |
 | `speckit.checklist` | Custom checklist for a feature |
 | `speckit.constitution` | Create/update project constitution |
 | `speckit.taskstoissues` | Convert tasks to GitHub Issues |
@@ -300,3 +306,4 @@ After completing any implementation task (new code or refactor touching 3+ files
 | 008 | Quality & DX | Knowledge files. Skills enxutas. Verify + QA + Reconcile. |
 | 009 | Decision Log BD | BD source of truth para decisions + memory. FTS5. Import/export CLI. |
 | 010 | Pipeline Dashboard | Dashboard visual no portal. CLI status. Mermaid DAG. |
+| 011 | CI/CD Pipeline | GitHub Actions: lint, LikeC4 build, db-tests, templates, bash-tests, portal-build. |

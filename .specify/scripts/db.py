@@ -514,8 +514,8 @@ def upsert_epic(conn: sqlite3.Connection, platform_id: str, epic_id: str, title:
     conn.execute(
         """INSERT INTO epics
            (platform_id, epic_id, title, status, appetite, priority, branch_name, file_path,
-            created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            delivered_at, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(platform_id, epic_id) DO UPDATE SET
              title = excluded.title,
              status = excluded.status,
@@ -523,6 +523,7 @@ def upsert_epic(conn: sqlite3.Connection, platform_id: str, epic_id: str, title:
              priority = COALESCE(excluded.priority, epics.priority),
              branch_name = COALESCE(excluded.branch_name, epics.branch_name),
              file_path = COALESCE(excluded.file_path, epics.file_path),
+             delivered_at = COALESCE(excluded.delivered_at, epics.delivered_at),
              updated_at = excluded.updated_at
         """,
         (
@@ -534,6 +535,7 @@ def upsert_epic(conn: sqlite3.Connection, platform_id: str, epic_id: str, title:
             kwargs.get("priority"),
             kwargs.get("branch_name"),
             kwargs.get("file_path"),
+            kwargs.get("delivered_at"),
             _now(),
             _now(),
         ),
@@ -683,6 +685,59 @@ def get_decisions(
         params.append(decision_type)
     sql += " ORDER BY created_at"
     return [dict(r) for r in conn.execute(sql, params).fetchall()]
+
+
+def get_decisions_summary(conn: sqlite3.Connection, platform_id: str) -> list[dict]:
+    """Return lightweight decision summaries for portal display."""
+    rows = conn.execute(
+        """SELECT number, slug, title, status, decisions_json,
+                  consequences, body
+           FROM decisions
+           WHERE platform_id=? AND number IS NOT NULL
+           ORDER BY number""",
+        (platform_id,),
+    ).fetchall()
+    result = []
+    for r in rows:
+        d = dict(r)
+        decisions_list = json.loads(d.get("decisions_json") or "[]")
+        decision_text = decisions_list[0] if decisions_list and isinstance(decisions_list[0], str) else ""
+
+        rationale = ""
+        cons = d.get("consequences") or ""
+        for line in cons.split("\n"):
+            ls = line.strip()
+            if ls.startswith("- [+]"):
+                rationale = ls[5:].strip()
+                break
+
+        alternatives = ""
+        body = d.get("body") or ""
+        in_alt_section = False
+        alt_names = []
+        for line in body.split("\n"):
+            if line.startswith("## ") and "lternativ" in line:
+                in_alt_section = True
+                continue
+            if in_alt_section and line.startswith("## "):
+                break
+            if in_alt_section and line.startswith("### "):
+                alt_names.append(line[4:].strip())
+        if alt_names:
+            alternatives = ", ".join(alt_names)
+
+        result.append(
+            {
+                "num": f"{d['number']:03d}" if d["number"] else "000",
+                "slug": d.get("slug") or "",
+                "title": d.get("title") or "",
+                "status": d.get("status") or "",
+                "decision": decision_text,
+                "alternatives": alternatives,
+                "rationale": rationale,
+            }
+        )
+    return result
 
 
 # ══════════════════════════════════════
@@ -1650,6 +1705,9 @@ def seed_from_filesystem(conn: sqlite3.Connection, platform_id: str, platform_di
                     if appetite is not None:
                         appetite = str(appetite).strip('"').strip("'")
                     priority = frontmatter.get("priority")
+                    delivered_at = frontmatter.get("delivered_at")
+                    if delivered_at is not None:
+                        delivered_at = str(delivered_at).strip('"').strip("'")
 
                     upsert_epic(
                         txn,
@@ -1660,6 +1718,7 @@ def seed_from_filesystem(conn: sqlite3.Connection, platform_id: str, platform_di
                         status=epic_status or "proposed",
                         appetite=appetite,
                         priority=priority,
+                        delivered_at=delivered_at,
                     )
                     epics_seeded += 1
 

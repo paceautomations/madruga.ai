@@ -82,14 +82,14 @@ Read `.specify/memory/constitution.md`.
 ### 2. Generate <Artifact>
 - Follow template if one exists
 - Include alternatives considered
-- Mark [VALIDATE] where there is no supporting data
+- Mark [VALIDAR] where there is no supporting data
 - PT-BR for prose, EN for code
 
 ### 3. Auto-Review
 | # | Check | Action on Failure |
 |---|-------|-------------------|
 | 1 | Does every decision have >=2 alternatives? | Add them |
-| 2 | Is every assumption marked [VALIDATE] or backed by data? | Mark it |
+| 2 | Is every assumption marked [VALIDAR] or backed by data? | Mark it |
 | 3 | Were recent best practices researched? | Research |
 | 4 | Are trade-offs explicit? | Add pros/cons |
 | 5 | [Artifact-specific checks] | ... |
@@ -139,7 +139,7 @@ If the script fails, proceed normally (DB is additive, not blocking).
 | Layer | Behavioral Directive | Contract File |
 |-------|---------------------|---------------|
 | Business | "Your instinct is to REDUCE scope. Ask 'is this essential for v1?' before adding. Quantify everything — no vague adjectives without numbers. Mark `[VALIDAR]` when no evidence exists." | `pipeline-contract-business.md` |
-| Research | "Your default is `[DADOS INSUFICIENTES]`. Only assert with a verifiable source. Every factual claim must have a URL or reference. No URL → `[FONTE NÃO VERIFICADA]`." | (base only) |
+| Research | "Your default is `[DADOS INSUFICIENTES]`. Only assert with a verifiable source. Every factual claim must have a URL or reference. No URL → `[FONTE?]`." | (base only) |
 | Engineering | "Your first question is always: 'Is this the simplest thing that works?' Default to fewer components, fewer abstractions, fewer moving parts. Prefer stdlib over library, single process over distributed." | `pipeline-contract-engineering.md` |
 | Planning | "Your instinct is to CUT scope. Default appetite is 2 weeks. If an epic needs more, it should be split. Sequence by risk: uncertain epics first, mechanical epics later." | `pipeline-contract-planning.md` |
 
@@ -163,13 +163,13 @@ Every skill's auto-review MUST include these universal checks plus artifact-spec
 | # | Check | Applies to |
 |---|-------|-----------|
 | 1 | Every decision has >=2 alternatives documented | All |
-| 2 | Every assumption marked [VALIDATE] or backed by data | All |
+| 2 | Every assumption marked [VALIDAR] or backed by data | All |
 | 3 | Best practices researched (2025-2026) | Business + Engineering |
 | 4 | Trade-offs explicit (pros/cons) | All |
 | 5 | Zero technical terms in business artifacts | Business only |
 | 6 | Mermaid/LikeC4 diagrams included where applicable | Engineering |
 | 7 | Max line count respected | All |
-| 8 | Verifiable sources? Every factual claim has URL or reference. No URL → [FONTE NÃO VERIFICADA] | Research + Engineering |
+| 8 | Verifiable sources? Every factual claim has URL or reference. No URL → [FONTE?] | Research + Engineering |
 
 ---
 

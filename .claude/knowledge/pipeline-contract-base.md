@@ -43,16 +43,42 @@ For epic cycle skills, add `--epic <NNN>` to check epic-level prerequisites.
 
 Read dependency artifacts. Identify implicit assumptions. Use deep research (subagents, Context7, web) where needed.
 
-Present **Structured Questions** in 4 categories before generating:
+Present **Structured Questions** in 4 categories before generating. **Number each question sequentially (1, 2, 3…)** so the user can reply by number (e.g., "1 — sim, 2 — opcao B, 3 — voce define"):
 
-| Category | Pattern |
-|----------|---------|
-| **Premissas** | "Assumo que [X]. Correto?" |
-| **Trade-offs** | "[A] mais simples ou [B] mais robusto?" |
-| **Gaps** | "Não encontrei info sobre [X]. Você define ou devo pesquisar?" |
-| **Provocação** | "[Y] é o padrão, mas [Z] pode ser melhor porque [motivo]." |
+| # | Category | Pattern |
+|---|----------|---------|
+| 1 | **Premissas** | "Assumo que [X]. Correto?" |
+| 2 | **Trade-offs** | "[A] mais simples ou [B] mais robusto?" |
+| 3 | **Gaps** | "Não encontrei info sobre [X]. Você define ou devo pesquisar?" |
+| 4 | **Provocação** | "[Y] é o padrão, mas [Z] pode ser melhor porque [motivo]." |
 
 Present alternatives (≥2 options with pros/cons for every decision).
+
+### Pushback Protocol
+
+After receiving user answers, evaluate each response:
+- **Strong** (specific, with evidence or clear reasoning): accept
+- **Weak** (vague, generic, no evidence): challenge
+
+**Pushback rules:**
+- Max **3 pushbacks** per round (prioritize weakest answers)
+- Max **1 round** — after the round, accept remaining weak answers with `[RISCO: weak answer]` tag
+- Format: "**Problem:** [why insufficient] → **Expected:** [what a strong answer looks like]"
+- If answers to Provocation or Gaps categories reveal weak evidence for key assumptions, ALWAYS challenge
+- If user insists after pushback, accept and tag `[DECISAO DO USUARIO]`
+
+### Uncertainty Markers (standard vocabulary)
+
+Use consistently across ALL artifacts. These are searchable — enabling audits of assumption quality.
+
+| Marker | Meaning | When to use |
+|--------|---------|-------------|
+| `[VALIDAR]` | Assumption not confirmed | Inferred premise, no user confirmation |
+| `[ESTIMAR]` | Number is a guess | Metrics without source or real data |
+| `[DEFINIR]` | Decision pending | Deferred choice, needs user input |
+| `[FONTE?]` | Claim without verifiable source | Statement without URL/reference |
+| `[RISCO: ...]` | Accepted despite weak evidence | Post-pushback, user insisted |
+| `[DECISAO DO USUARIO]` | User overrode recommendation | Record for traceability |
 
 **Wait for answers BEFORE generating.** Never generate based on assumptions alone.
 
@@ -71,7 +97,7 @@ Deterministic, executable checks only. No LLM judgment.
 | 1 | Output file exists and is non-empty | `test -s <file>` |
 | 2 | Line count within bounds | `wc -l` against expected range |
 | 3 | Required sections present | `grep` for mandatory headings |
-| 4 | No placeholder markers remain | `grep -c 'TODO\|TKTK\|???\|PLACEHOLDER'` = 0 |
+| 4 | No unresolved placeholder markers remain | `grep -c 'TODO\|TKTK\|???\|PLACEHOLDER'` = 0 (uncertainty markers like `[VALIDAR]` are allowed — they signal conscious uncertainty) |
 | 5 | HANDOFF block present at footer | `grep 'handoff:'` at end of file |
 
 ### Tier 2 — Human Gates
@@ -85,6 +111,8 @@ Tier 1 checks + **scorecard** presented to the human reviewer.
 | 3 | Trade-offs explicit (pros/cons) | Yes/No |
 | 4 | Best practices researched (current year) | Yes/No |
 | 5 | [Artifact-specific checks] | Yes/No |
+| 6 | Kill criteria defined (what would invalidate this artifact)? | Yes/No |
+| 7 | Confidence level stated (Alta/Media/Baixa with justification)? | Yes/No |
 
 Present scorecard to user with honest self-assessment. Flag weak spots.
 
@@ -168,6 +196,8 @@ handoff:
   to: <next-skill>
   context: "<1-2 sentences of context for the next skill>"
   blockers: []
+  confidence: Alta/Media/Baixa
+  kill_criteria: "[condition that would invalidate this artifact]"
 ```
 
 ---

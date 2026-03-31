@@ -1,9 +1,10 @@
 ---
 import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
-import { discoverPlatforms } from '../lib/platforms.mjs';
+import { discoverPlatforms, buildSidebar } from '../lib/platforms.mjs';
 
 const platforms = discoverPlatforms();
 const singlePlatform = platforms.length === 1 ? platforms[0] : null;
+const sidebar = buildSidebar(platforms);
 ---
 
 {singlePlatform ? (
@@ -20,11 +21,11 @@ const singlePlatform = platforms.length === 1 ? platforms[0] : null;
     </body>
   </html>
 ) : (
-  <StarlightPage frontmatter={{ title: 'Plataformas', tableOfContents: false }}>
+  <StarlightPage frontmatter={{ title: 'Plataformas', tableOfContents: false }} sidebar={sidebar}>
     <p>Selecione uma plataforma para visualizar sua documentação arquitetural.</p>
     <div class="platform-cards">
       {platforms.map((p) => (
-        <a href={`/${p.name}/business/vision/`} class="platform-card">
+        <a href={`/${p.name}/dashboard/`} class="platform-card">
           <h2>{p.title}</h2>
           <p>{p.description}</p>
           <span class="badge">{p.lifecycle}</span>

@@ -22,6 +22,10 @@ After scaffolding, follow the pipeline DAG with `/vision <name>`.
 
 > **Contract**: Follow `.claude/knowledge/pipeline-contract-base.md` + `.claude/knowledge/pipeline-contract-business.md`.
 
+## Persona
+
+Pragmatic DevOps — fast scaffolding, immediate validation. Write generated artifacts in Brazilian Portuguese (PT-BR).
+
 ## Usage
 
 - `/platform-new my-saas` — Create platform "my-saas"

@@ -12,7 +12,7 @@ rationale: Processo unico — sem overhead de coordenacao distribuida
 
 ## Contexto
 
-O sistema precisa executar pipelines spec-to-code de forma autonoma: monitorar kanban (Obsidian), detectar epics prontos, executar pipeline (specify -> plan -> tasks -> implement), e notificar resultados via WhatsApp. A execucao precisa ser continua (nao batch), com slot-based scheduling para controlar paralelismo e evitar context rot.
+O sistema precisa executar pipelines spec-to-code de forma autonoma: monitorar kanban (Obsidian), detectar epics prontos, executar pipeline (specify -> plan -> tasks -> implement), e notificar resultados via Telegram. A execucao precisa ser continua (nao batch), com slot-based scheduling para controlar paralelismo e evitar context rot.
 
 ## Decisao
 
@@ -36,7 +36,7 @@ We will use a Python asyncio daemon running 24/7 with a slot-based orchestrator,
 
 - [+] Processo unico — sem overhead de coordenacao distribuida
 - [+] Slot-based orchestrator controla paralelismo (max N pipelines simultaneos)
-- [+] asyncio permite I/O concorrente sem threads (claude -p, Obsidian polling, WhatsApp)
+- [+] asyncio permite I/O concorrente sem threads (claude -p, Obsidian polling, Telegram)
 - [+] Estado em memoria + SQLite — sem dependencia de broker externo
 - [-] Single point of failure — se o daemon cair, tudo para (mitigado com systemd/supervisord)
 - [-] Requer maquina always-on (nao serverless)

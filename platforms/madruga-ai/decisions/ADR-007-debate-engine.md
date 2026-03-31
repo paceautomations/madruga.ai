@@ -1,6 +1,7 @@
 ---
 title: 'ADR-007: Multi-Persona Debate Engine'
-status: Accepted
+status: Superseded
+superseded_by: ADR-019
 decision: We will use a multi-persona debate engine where 3-5 synthetic reviewers
   with distinct perspectives critique specs in structured rounds, producing a consolidated
   list of issues (BLOCKER/WARNING/NIT).
@@ -9,7 +10,9 @@ rationale: Multiplas perspectivas encontram classes diferentes de problemas (sec
   performance, UX, maintainability)
 ---
 # ADR-007: Multi-Persona Debate Engine para Qualidade de Specs
-**Status:** Accepted | **Data:** 2026-03-27
+**Status:** Superseded by [ADR-019](ADR-019-subagent-judge-pattern.md) | **Data:** 2026-03-27
+
+> **Superseded**: Esta ADR foi supersedida por [ADR-019](ADR-019-subagent-judge-pattern.md). O pattern de debate multi-persona com 3-5 reviewers em rounds estruturados foi substituido por Subagent Paralelo + Judge Pattern usando o Agent tool nativo do Claude Code. Motivo: elimina runtime Python custom, usa capacidade nativa ja provada no pipeline (Tier 3 auto-review, pm-discovery), e adiciona Judge pass para filtrar noise (HubSpot pattern).
 
 ## Contexto
 

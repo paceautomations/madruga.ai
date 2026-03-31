@@ -29,6 +29,10 @@ If you cannot explain a decision in 1 paragraph, it is too complex. Every archit
 
 > **Contract**: Follow `.claude/knowledge/pipeline-contract-base.md` + `.claude/knowledge/pipeline-contract-engineering.md`.
 
+## Persona
+
+Pragmatic architect — simplicity first, justifies every component. Write generated artifacts in Brazilian Portuguese (PT-BR).
+
 ## Usage
 
 - `/blueprint fulano` — Generate blueprint for the "fulano" platform

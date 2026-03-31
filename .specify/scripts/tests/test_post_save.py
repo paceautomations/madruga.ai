@@ -172,6 +172,74 @@ def test_reseed(setup_platform):
         db_mod.DB_PATH = original_db
 
 
+def test_inject_delivered_at(setup_platform):
+    """_inject_delivered_at writes delivered_at to pitch.md frontmatter."""
+    tmp_path, db_path = setup_platform
+    import post_save
+
+    original_repo = post_save.REPO_ROOT
+    post_save.REPO_ROOT = tmp_path
+
+    try:
+        post_save._inject_delivered_at("test-plat", "001-test-epic", "2026-03-30")
+        pitch = tmp_path / "platforms" / "test-plat" / "epics" / "001-test-epic" / "pitch.md"
+        content = pitch.read_text()
+        assert "delivered_at: 2026-03-30" in content
+        # Verify idempotent — second call doesn't duplicate
+        post_save._inject_delivered_at("test-plat", "001-test-epic", "2026-03-31")
+        content2 = pitch.read_text()
+        assert content2.count("delivered_at:") == 1
+        assert "2026-03-30" in content2  # original date preserved
+    finally:
+        post_save.REPO_ROOT = original_repo
+
+
+def test_ship_transition_sets_delivered_at(setup_platform):
+    """When all epic nodes complete, delivered_at is set in DB and pitch.md."""
+    tmp_path, db_path = setup_platform
+    import post_save
+    import db as db_mod
+
+    original_repo = post_save.REPO_ROOT
+    original_db = db_mod.DB_PATH
+    post_save.REPO_ROOT = tmp_path
+    db_mod.DB_PATH = db_path
+
+    try:
+        from db import get_conn as gc, get_epics, upsert_epic, upsert_epic_node, upsert_platform
+
+        conn = gc(db_path)
+        upsert_platform(conn, "test-plat", name="test-plat", repo_path="platforms/test-plat")
+        upsert_epic(conn, "test-plat", "001-test-epic", title="Test Epic")
+        # Create a single epic node so completing it triggers ship
+        upsert_epic_node(conn, "test-plat", "001-test-epic", "specify", "pending")
+        conn.close()
+
+        result = post_save.record_save(
+            platform="test-plat",
+            node="specify",
+            skill="speckit.specify",
+            artifact="epics/001-test-epic/spec.md",
+            epic="001-test-epic",
+        )
+        assert result["status"] == "ok"
+
+        conn = gc(db_path)
+        epics = get_epics(conn, "test-plat")
+        epic = [e for e in epics if e["epic_id"] == "001-test-epic"][0]
+        assert epic["status"] == "shipped"
+        assert epic["delivered_at"] is not None
+
+        # Verify pitch.md was updated
+        pitch = tmp_path / "platforms" / "test-plat" / "epics" / "001-test-epic" / "pitch.md"
+        content = pitch.read_text()
+        assert "delivered_at:" in content
+        conn.close()
+    finally:
+        post_save.REPO_ROOT = original_repo
+        db_mod.DB_PATH = original_db
+
+
 def test_reseed_missing_platform(setup_platform):
     """Test reseed with non-existent platform."""
     tmp_path, db_path = setup_platform

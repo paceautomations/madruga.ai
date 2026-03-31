@@ -5,6 +5,7 @@ status: shipped
 phase: pitch
 appetite: 2w
 priority: 3
+delivered_at: 2026-03-29
 ---
 # Epic 008 — Quality & Developer Experience
 

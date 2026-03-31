@@ -1,21 +1,30 @@
 ---
 title: "ADR-015: WhatsApp via wpp-bridge como Canal de Notificacoes"
-status: accepted
+status: superseded
+superseded_by: ADR-018
 date: 2026-03-30
+decision: Manter WhatsApp como canal de notificacoes usando wpp-bridge como gateway HTTP
+  local. Supersedida por ADR-018 (Telegram Bot API).
+alternatives: Telegram Bot API (aiogram), ntfy.sh (push notifications), Discord Webhooks/Bot
+rationale: Operador ja usa WhatsApp como app principal (zero fricao de adocao)
 ---
 # ADR-015: WhatsApp via wpp-bridge como Canal de Notificacoes
 
 ## Status
 
-Accepted — 2026-03-30
+Superseded by [ADR-018](ADR-018-telegram-bot-notifications.md) — 2026-03-31
 
 ## Contexto
 
 O daemon Madruga AI precisa notificar o operador sobre status de epics, decisoes pendentes (1-way-door), e erros criticos. O canal deve suportar comunicacao bidirecional: o daemon envia, o operador responde para aprovar/rejeitar decisoes.
 
-O operador (Gabriel) usa WhatsApp como app principal de comunicacao. Um gateway wpp-bridge ja existe e funciona em `general/services/madruga-ai/src/integrations/messaging/providers/whatsapp.py`. O runtime engine sera migrado para o repo madruga.ai, incluindo o wpp-bridge.
+O operador (Gabriel) usa WhatsApp como app principal de comunicacao. Um gateway wpp-bridge ja existe e funciona em `general/services/madruga-ai/src/integrations/messaging/providers/whatsapp.py`.
+
+> **Nota (2026-03-31):** Alem da mudanca de canal (ADR-018), a premissa de migracao de codigo de `general/` para `madruga.ai` foi abandonada. O runtime sera construido do zero em madruga.ai, capturando aprendizados mas sem migracao de codigo.
 
 ## Decisao
+
+> **Superseded**: Esta ADR foi supersedida por [ADR-018](ADR-018-telegram-bot-notifications.md). Telegram Bot API substitui WhatsApp via wpp-bridge como canal de notificacoes. Motivo: instabilidade do wpp-bridge, overhead de Chromium headless, decisao de nao migrar codigo de `general`.
 
 Manter WhatsApp como canal de notificacoes, usando wpp-bridge como gateway HTTP local. Migrar o codigo do provider e do bridge de `general/services/` para dentro do repo `madruga.ai` junto com o runtime engine.
 

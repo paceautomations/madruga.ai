@@ -72,9 +72,9 @@ Times de engenharia de software (1-20 engenheiros) que precisam manter documenta
 | LikeC4 model + vision-build pipeline | Funcional | Alta |
 | Portal Starlight com auto-discovery | Funcional | Alta |
 | SpecKit pipeline (specify, plan, tasks) | Funcional (interativo) | Alta |
-| SpeckitBridge (autonomo) | Construido, migracao pendente | Alta |
-| Daemon 24/7 + Orchestrator | Construido, migracao pendente | Media |
-| Debate Engine (multi-persona) | Construido, migracao pendente | Media |
+| SpeckitBridge (autonomo) | Planejado — construcao nativa (sem migracao de general/) | Alta |
+| Daemon 24/7 + Orchestrator | Planejado — construcao nativa (sem migracao de general/) | Media |
+| Debate Engine | Planejado — Subagent Paralelo + Judge Pattern (ADR-019) | Media |
 | RECONCILE loop | Planejado | Media |
 | Codebase Mapping (`speckit.map`) | Planejado | Media |
 

@@ -27,6 +27,10 @@ Every milestone must have an associated epic with testable acceptance criteria. 
 
 > **Contract**: Follow `.claude/knowledge/pipeline-contract-base.md` + `.claude/knowledge/pipeline-contract-planning.md`.
 
+## Persona
+
+Head of Product — outcome-driven, cuts scope, sequences by risk and dependency. Write generated artifacts in Brazilian Portuguese (PT-BR).
+
 ## Usage
 
 - `/roadmap fulano` — Generate roadmap for "fulano"
@@ -42,7 +46,6 @@ Save to `platforms/<name>/planning/roadmap.md`.
 
 **Required reading:**
 - `epics/*/pitch.md` — all epics with appetite and dependencies
-- `engineering/blueprint.md` — NFRs that constrain sequencing
 - `engineering/blueprint.md` — NFRs, deploy topology, shared infrastructure
 - `business/vision.md` — business priorities
 
@@ -54,6 +57,7 @@ Save to `platforms/<name>/planning/roadmap.md`.
 | **Trade-offs** | "Risk-first (resolve uncertainties early) or value-first (deliver value fast)?" |
 | **Gaps** | "Is there an external deadline? Team/budget constraints?" |
 | **Challenge** | "If you could deliver only 1 epic, which one?" |
+| **Outcomes** | "Which business outcomes (leading indicators) should each epic impact? E.g., 'reduce churn from 5% to 3%'" |
 
 Wait for answers BEFORE generating the roadmap.
 
@@ -75,6 +79,16 @@ updated: YYYY-MM-DD
 **MVP Epics:** [list with total appetite]
 **MVP Criterion:** [what defines "minimum viable product"]
 **Total MVP Appetite:** [N weeks]
+
+---
+
+## Objetivos e Resultados
+
+| Objetivo de Negocio | Product Outcome (leading indicator) | Baseline | Target | Epics |
+|---------------------|--------------------------------------|----------|--------|-------|
+| [objetivo 1] | [outcome mensuravel — mudanca que o time controla] | [atual ou ESTIMAR] | [meta] | NNN, NNN |
+
+> Cada epic DEVE conectar a pelo menos 1 outcome. Epic sem outcome → questionar inclusao ou mover para "Nao Este Ciclo".
 
 ---
 
@@ -127,6 +141,16 @@ graph LR
 | Risk | Impact | Probability | Mitigation |
 |------|--------|-------------|-----------|
 | ... | ... | ... | ... |
+
+---
+
+## Nao Este Ciclo
+
+| Item | Motivo da Exclusao | Revisitar Quando |
+|------|--------------------|------------------|
+| [item considerado mas excluido] | [razao com dados — nao "baixa prioridade"] | [trigger ou data concreta] |
+
+> Tao importante quanto o que entra — evita rediscussao no proximo ciclo.
 ```
 
 ### Important: Lightweight Epic Entries
@@ -149,6 +173,8 @@ When updating the roadmap:
 | 5 | Is the timeline realistic (sum of appetites)? | Adjust |
 | 6 | Do milestones have testable criteria? | Make measurable |
 | 7 | Does the Mermaid Gantt render? | Fix |
+| 8 | "Objetivos e Resultados" section present? | Add outcomes |
+| 9 | "Nao Este Ciclo" section present with min 1 entry? | Add excluded items |
 
 ## Error Handling
 
@@ -158,4 +184,5 @@ When updating the roadmap:
 | Circular dependencies | Resolve before generating |
 | No deadline | Use appetite as relative estimate |
 | Team size undefined | Note that parallelism depends on team size |
+| Initiative without outcome | Ask: "which business outcome does this advance?" — if none, move to "Nao Este Ciclo" |
 

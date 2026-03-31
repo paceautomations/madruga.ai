@@ -5,6 +5,7 @@ status: shipped
 phase: pitch
 appetite: 1w
 priority: 5
+delivered_at: 2026-03-30
 ---
 # Pipeline Dashboard
 

@@ -2,6 +2,11 @@
 title: "ADR-017: Custom DAG Executor para Automacao do Pipeline"
 status: accepted
 date: 2026-03-30
+decision: Construir custom DAG executor em Python (500-800 LOC) que le platform.yaml,
+  faz topological sort, e executa via claude -p subprocess. YAML como unico source of truth.
+alternatives: Prefect 3 (OSS), Temporal (durable execution), Apache Airflow
+rationale: Zero deps novas, human gates implementados exatamente como necessario, reusa
+  80% da infraestrutura existente (db.py, post_save.py, pipeline_nodes)
 ---
 # ADR-017: Custom DAG Executor para Automacao do Pipeline
 
@@ -15,16 +20,16 @@ O pipeline Madruga AI tem 24 nodes em 2 niveis: L1 (13 nodes, foundation) e L2 (
 
 Hoje as skills sao invocadas manualmente via Claude Code (`/command`). O objetivo e automatizar a execucao: ler a definicao do DAG, resolver dependencias, despachar nodes prontos via `claude -p`, pausar em human gates, e adaptar automaticamente quando o YAML muda.
 
-O runtime engine existente em `general/services/madruga-ai` tem um orchestrator (priority queue + semaphore) com fases hardcoded em Python. A nova abordagem deve ser data-driven: o YAML define o comportamento, nao o codigo.
+O runtime engine em `general/services/madruga-ai` tem um orchestrator (priority queue + semaphore) com fases hardcoded em Python — serviu como prototipo e fonte de aprendizados, mas a nova implementacao sera construida do zero em madruga.ai (sem migracao de codigo). A nova abordagem deve ser data-driven: o YAML define o comportamento, nao o codigo.
 
 ## Decisao
 
-Construir um custom DAG executor em Python que le `platform.yaml`, faz topological sort dos nodes, e executa sequencialmente via `claude -p` subprocess. Human gates pausam a execucao, gravam estado no SQLite, notificam via WhatsApp, e resumem quando aprovado.
+Construir um custom DAG executor em Python que le `platform.yaml`, faz topological sort dos nodes, e executa sequencialmente via `claude -p` subprocess. Human gates pausam a execucao, gravam estado no SQLite, notificam via Telegram, e resumem quando aprovado.
 
 **Estimativa realista de escopo:** 500-800 LOC para producao, distribuido em:
 - DAG parser + topological sort (~80 LOC)
 - Dispatch loop com state machine por node (~150 LOC)
-- Human gate pause/resume (SQLite persist + CLI resume + WhatsApp notify) (~150 LOC)
+- Human gate pause/resume (SQLite persist + CLI resume + Telegram notify) (~150 LOC)
 - Error handling, retry, timeout, watchdog (~100 LOC)
 - L2 epic cycle (branch management, scoping) (~100 LOC)
 - Status reporting + integration com post_save.py (~50-100 LOC)
@@ -60,7 +65,7 @@ O YAML e o unico source of truth — mudar nodes, dependencias, ou gates no YAML
 ### Positivas
 - YAML como unico source of truth — mudar o pipeline e editar um arquivo, nao codigo
 - Zero dependencias novas — reusa Python stdlib + pyyaml + SQLite ja existentes
-- Human gates implementados exatamente como o projeto precisa (SQLite + WhatsApp + resume CLI)
+- Human gates implementados exatamente como o projeto precisa (SQLite + Telegram + resume CLI)
 - Reusa 80% da infraestrutura: db.py, post_save.py, pipeline_nodes table, platform.yaml
 - Migracao para Temporal e limpa se necessario: YAML fica igual, troca o dispatch backend
 

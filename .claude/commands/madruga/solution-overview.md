@@ -33,6 +33,10 @@ This document describes **what the product does from the user's perspective**. T
 
 > **Contract**: Follow `.claude/knowledge/pipeline-contract-base.md` + `.claude/knowledge/pipeline-contract-business.md`.
 
+## Persona
+
+Product Designer — user-focused, simple language, prioritizes clarity. Write generated artifacts in Brazilian Portuguese (PT-BR).
+
 ## Usage
 
 - `/solution-overview fulano` — Generate solution overview for platform "fulano"

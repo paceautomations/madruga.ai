@@ -27,7 +27,7 @@ graph LR
     subgraph acl["ACL Layer"]
         claude_acl["Claude API Client"]
         github_acl["GitHub Client"]
-        whatsapp_acl["WhatsApp Bridge"]
+        telegram_acl["Telegram Adapter"]
         likec4_acl["LikeC4 CLI Wrapper"]
         copier_acl["Copier CLI Wrapper"]
         sentry_acl["Sentry Adapter"]
@@ -36,7 +36,7 @@ graph LR
     subgraph external["Sistemas Externos"]
         claude["Claude API<br/>(Anthropic)"]
         github["GitHub"]
-        whatsapp["WhatsApp<br/>(wpp-bridge :8030)"]
+        telegram["Telegram<br/>(Bot API HTTPS)"]
         likec4["LikeC4 CLI"]
         copier["Copier CLI"]
         sentry["Sentry Cloud"]
@@ -58,9 +58,9 @@ graph LR
     pipeline --> github_acl
     github_acl --> github
 
-    dag --> whatsapp_acl
-    decisions --> whatsapp_acl
-    whatsapp_acl --> whatsapp
+    dag --> telegram_acl
+    decisions --> telegram_acl
+    telegram_acl --> telegram
 
     vision --> likec4_acl
     portal --> likec4_acl
@@ -94,7 +94,7 @@ graph LR
 |---|---------|-----------|---------|-----------|-------|----------|
 | 1 | **Claude API** | `claude -p` subprocess | Pipeline/Debate/Bridge/DAG Executor -> Claude | per-phase / per-round | Prompts compostos (skill + template + context), respostas texto | Retry 3x com backoff; circuit breaker apos 5 falhas; se falhar, fase marcada `failed` |
 | 2 | **GitHub** | `gh` CLI / REST API | Orchestrator/Pipeline -> GitHub | per-epic / per-task | Issues, PRs, labels, comments, branch creation | Retry 3x; rate limit 429 com backoff exponencial |
-| 3 | **WhatsApp** | HTTP via wpp-bridge (:8030) | DAG Executor/Decision System -> WhatsApp | per-human-gate / per-critical-decision | Notificacoes de status, decisoes (ask_choice), alertas criticos | Health check cada 60s; se offline: modo log-only; fallback ntfy.sh (opcional) |
+| 3 | **Telegram** | HTTPS (Telegram Bot API, aiogram) | DAG Executor/Decision System -> Telegram | per-human-gate / per-critical-decision | Notificacoes de status, decisoes (ask_choice com inline buttons), alertas criticos | Health check cada 60s (getMe); se unreachable: modo log-only; fallback ntfy.sh (opcional) |
 | 4 | **LikeC4 CLI** | Subprocess (`likec4`) | Vision Build / Portal -> LikeC4 | per-build | JSON export, PNG export, compilacao de modelos | Falha de compilacao aborta o build com erro descritivo |
 | 5 | **Copier CLI** | Subprocess (`copier`) | Platform CLI -> Copier | per-command | Scaffolding (copy), sync (update), answers YAML | Falha aborta operacao; rollback manual |
 | 6 | **Sentry** | HTTPS (sentry-sdk) | Daemon -> Sentry Cloud | per-error / per-request | Error events, stack traces, breadcrumbs, performance traces | Fire-and-forget; falha de envio nao afeta daemon |
@@ -125,21 +125,21 @@ claude -p --model opus --output-format json --allowedTools Read,Write,Edit,Bash 
 
 **Mitigacoes**: `--output-format json` (evita hang bug), semaforo max 3, watchdog SIGKILL, `--allowedTools` explicito.
 
-### WhatsApp — Notificacoes via wpp-bridge
+### Telegram — Notificacoes via Bot API
 
-Gateway HTTP local (wpp-bridge, porta 8030) que ponte para WhatsApp Web. Tres operacoes:
+Telegram Bot (aiogram, long-polling) para notificacoes bidirecionais. Tres operacoes:
 
-| Operacao | Endpoint | Quando |
-|----------|----------|--------|
-| `send` | POST /send | Status updates, alertas |
-| `ask_choice` | POST /send + GET /messages (poll) | Human gates, decisoes 1-way-door |
-| `alert` | POST /send (com emoji level) | Erros criticos, timeouts |
+| Operacao | Telegram API | Quando |
+|----------|-------------|--------|
+| `send` | `sendMessage` | Status updates, alertas |
+| `ask_choice` | `sendMessage` + `InlineKeyboardMarkup` + `callback_query` handler | Human gates, decisoes 1-way-door |
+| `alert` | `sendMessage` (com emoji level) | Erros criticos, timeouts |
 
-**Plano de degradacao** (ADR-015):
-1. Health check cada 60s (GET /status)
+**Plano de degradacao** (ADR-018):
+1. Health check cada 60s (HTTPS `getMe`)
 2. 3 falhas consecutivas → modo log-only (human gates pausam)
 3. Fallback ntfy.sh (HTTP POST, zero deps, opcional)
-4. Operador reconecta wpp-bridge manualmente
+4. Quando Telegram volta, daemon detecta e retoma notificacoes
 
 **Volume esperado**: < 20 notificacoes por dia.
 

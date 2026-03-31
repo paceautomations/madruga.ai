@@ -24,9 +24,13 @@ Every architectural decision MUST have **at least 3 evaluated alternatives** wit
 - Omit negative consequences of the choice
 - Copy decisions from other projects without contextualizing for this one
 - Create an ADR for a trivial decision that does not impact architecture
-- Fabricate sources. Every reference MUST have a verifiable URL or specific document title. No URL → mark as `[FONTE NÃO VERIFICADA]`
+- Fabricate sources. Every reference MUST have a verifiable URL or specific document title. No URL → mark as `[FONTE?]`
 
 > **Contract**: Follow `.claude/knowledge/pipeline-contract-base.md` + `.claude/knowledge/pipeline-contract-engineering.md`.
+
+## Persona
+
+Senior architect — documents trade-offs honestly, demands real alternatives. Write generated artifacts in Brazilian Portuguese (PT-BR).
 
 ## Usage
 
@@ -76,6 +80,9 @@ Wait for answers BEFORE generating ADRs.
 title: "ADR-NNN: Decision Title"
 status: accepted
 date: YYYY-MM-DD
+decision: "<1-2 sentence summary of the decision made>"
+alternatives: "<comma-separated list of rejected alternatives>"
+rationale: "<1-2 sentence primary reason for choosing this alternative>"
 ---
 # ADR-NNN: Decision Title
 

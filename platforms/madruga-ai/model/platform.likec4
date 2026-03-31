@@ -20,7 +20,7 @@ model {
 
     speckitBridge = worker 'SpeckitBridge' {
       technology 'Python 3.12+'
-      description 'Compositor que le .claude/commands/ e .specify/templates/, monta prompts contextuais com constitution + memory, e executa via claude -p'
+      description 'Compositor que le skills e templates, monta prompts contextuais com constitution + memory, e executa as 7 fases do pipeline (specify, clarify, plan, tasks, implement, reconcile, analyze) via claude -p'
     }
 
     runtimeDaemon = worker 'Runtime Daemon' {
@@ -38,14 +38,9 @@ model {
       description 'Slot-based scheduler que controla paralelismo de pipelines, gerencia filas e prioridades'
     }
 
-    pipelinePhases = worker 'Pipeline Phases' {
-      technology 'Python 3.12+ (7 modulos)'
-      description 'Fases do pipeline spec-to-code: specify, clarify, plan, tasks, implement, reconcile, analyze'
-    }
-
-    debateEngine = worker 'Debate Engine' {
-      technology 'Python 3.12+'
-      description 'Multi-persona debate com 3-5 reviewers sinteticos que criticam specs em rounds estruturados (BLOCKER/WARNING/NIT)'
+    subagentJudge = worker 'Subagent Judge' {
+      technology 'Python 3.12+ + Claude Code Agent tool'
+      description 'Subagent Paralelo + Judge Pattern: 3 personas (Architecture Reviewer, Bug Hunter, Simplifier) + 1 juiz que filtra por Accuracy/Actionability/Severity (ADR-019). Output: BLOCKER/WARNING/NIT'
     }
 
     decisionSystem = worker 'Decision System' {

@@ -5,9 +5,9 @@ model {
     description 'LLM backend para geracao de specs, debate, decisoes, e implementacao. Invocado via claude -p subprocess pelo SpeckitBridge e DAG Executor'
   }
 
-  whatsappNotif = externalService 'WhatsApp' {
-    technology 'wpp-bridge (HTTP gateway :8030)'
-    description 'Canal de notificacoes criticas via wpp-bridge: pipeline concluido, erros, decisoes que requerem atencao humana. Bidirecional (send + ask_choice)'
+  telegramBot = externalService 'Telegram' {
+    technology 'Telegram Bot API (aiogram, HTTPS outbound)'
+    description 'Canal de notificacoes criticas via Telegram Bot: pipeline concluido, erros, decisoes que requerem atencao humana. Bidirecional (send + ask_choice com inline buttons)'
   }
 
   githubApi = externalService 'GitHub' {

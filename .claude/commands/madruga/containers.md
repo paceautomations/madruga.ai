@@ -27,6 +27,10 @@ One container = one reason to exist. If two containers do the same thing, merge 
 
 > **Contract**: Follow `.claude/knowledge/pipeline-contract-base.md` + `.claude/knowledge/pipeline-contract-engineering.md`.
 
+## Persona
+
+Platform engineer — one responsibility per container, explicit protocols. Write generated artifacts in Brazilian Portuguese (PT-BR).
+
 ## Usage
 
 - `/containers fulano` — Generate containers for "fulano"

@@ -1,10 +1,10 @@
 ---
 title: "Containers"
-updated: 2026-03-30
+updated: 2026-03-31
 ---
 # C4 L2 — Containers
 
-Visao de containers (unidades deployaveis) do Madruga AI. O sistema combina um portal de documentacao SSG, ferramentas CLI em Python, um runtime engine asyncio com DAG executor, e integracoes com sistemas externos (Claude API, GitHub, WhatsApp).
+Visao de containers (unidades deployaveis) do Madruga AI. O sistema combina um portal de documentacao SSG, ferramentas CLI em Python, um runtime engine asyncio com DAG executor, e integracoes com sistemas externos (Claude API, GitHub, Telegram).
 
 ## Diagrama
 
@@ -31,11 +31,10 @@ graph TB
         daemon["Daemon<br/>daemon.py<br/>:8040"]
         dag_executor["DAG Executor<br/>dag_runner.py"]
         orchestrator["Orchestrator<br/>orchestrator.py"]
-        pipeline["Pipeline Phases<br/>7 fases"]
     end
 
     subgraph intelligence["Intelligence (Python)"]
-        debate["Debate Engine<br/>debate/"]
+        judge["Subagent Judge<br/>Claude Code Agent tool"]
         decisions["Decision System<br/>decisions/"]
     end
 
@@ -53,7 +52,7 @@ graph TB
     subgraph external["Sistemas Externos"]
         claude_api["Claude API<br/>claude -p subprocess"]
         github["GitHub<br/>Issues, PRs"]
-        whatsapp["WhatsApp<br/>via wpp-bridge :8030"]
+        telegram["Telegram<br/>Bot API (aiogram)"]
         likec4_cli["LikeC4 CLI<br/>npm global"]
         copier_cli["Copier CLI<br/>pip"]
         sentry_cloud["Sentry Cloud<br/>Free Tier"]
@@ -76,25 +75,24 @@ graph TB
 
     daemon --> dag_executor
     daemon --> orchestrator
-    dag_executor --> pipeline
+    dag_executor --> speckit_bridge
     dag_executor --> claude_api
-    orchestrator --> pipeline
-    pipeline --> speckit_bridge
-    pipeline --> claude_api
-    pipeline --> debate
-    pipeline --> decisions
+    orchestrator --> speckit_bridge
+    speckit_bridge --> claude_api
+    speckit_bridge --> judge
+    speckit_bridge --> decisions
 
-    debate --> claude_api
-    decisions --> whatsapp
+    judge --> claude_api
+    decisions --> telegram
 
     orchestrator --> sqlite
     dag_executor --> sqlite
-    pipeline --> sqlite
+    speckit_bridge --> sqlite
     dashboard --> sqlite
     sentry_sdk --> sentry_cloud
 
     orchestrator --> github
-    pipeline --> git
+    speckit_bridge --> git
 
     style portal fill:#E1F5FE
     style daemon fill:#FFF3E0
@@ -111,17 +109,16 @@ graph TB
 | 2 | **Platform CLI** | Python (platform.py) | Gerencia plataformas: new, lint, sync, register, status, import/export | CLI |
 | 3 | **Vision Build** | Python (vision-build.py) | Exporta LikeC4 JSON e popula tabelas AUTO em markdown | CLI |
 | 4 | **SpecKit Skills** | Markdown (.claude/commands/) | 20 skills consumidos interativamente pelo Claude Code | Claude Code |
-| 5 | **SpeckitBridge** | Python (speckit/bridge.py) | Compositor que le skills/templates/constituicao e transforma skills interativos em prompts autonomos | Lib |
+| 5 | **SpeckitBridge** | Python (speckit/bridge.py) | Compositor que le skills/templates/constituicao, monta prompts contextuais, e executa as 7 fases do pipeline (specify, clarify, plan, tasks, implement, reconcile, analyze) via claude -p | Lib |
 | 6 | **Daemon** | Python asyncio (daemon.py) + FastAPI | Processo 24/7 que orquestra execucao autonoma do pipeline. Inclui dashboard e health endpoints | :8040 |
-| 7 | **DAG Executor** | Python (dag_runner.py) | Le pipeline DAG de platform.yaml, resolve dependencias (topological sort), despacha nodes via claude -p, gerencia human gates | Lib |
+| 7 | **DAG Executor** | Python (dag_runner.py) | Le pipeline DAG de platform.yaml, resolve dependencias (topological sort), despacha nodes via claude -p, gerencia human gates (pause/resume via SQLite) | Lib |
 | 8 | **Orchestrator** | Python asyncio (orchestrator.py) | Gerencia ciclo de vida de epics, priority queue, slot semaphore, retries | Lib |
-| 9 | **Pipeline Phases** | Python (7 modulos) | Executores das fases: specify, plan, tasks, implement, persona_interview, review, vision | Lib |
-| 10 | **Debate Engine** | Python (debate/) | Debates multi-persona com convergencia para decisoes complexas | Lib |
-| 11 | **Decision System** | Python (decisions/) | Classificador 1-way/2-way door com gates de aprovacao | Lib |
-| 12 | **State Store** | SQLite WAL (madruga.db) | Persistencia de pipeline state, epics, decisions, memory, provenance, metrics | File |
-| 13 | **Dashboard** | FastAPI + HTML | Dashboard web de status, metricas, e pipeline progress | :8040 |
-| 14 | **Copier Templates** | Jinja2 + YAML | Scaffolding de novas plataformas com estrutura padrao | CLI |
-| 15 | **wpp-bridge** | Node.js | Gateway HTTP para WhatsApp Web — send, receive, ask_choice | :8030 |
+| 9 | **Subagent Judge** | Python + Claude Code Agent tool | Subagent Paralelo + Judge Pattern (ADR-019): 3 personas (Architecture Reviewer, Bug Hunter, Simplifier) + 1 juiz que filtra por Accuracy/Actionability/Severity. Output: BLOCKER/WARNING/NIT | Lib |
+| 10 | **Decision System** | Python (decisions/) | Classificador 1-way/2-way door com gates de aprovacao e geracao automatica de ADRs | Lib |
+| 11 | **State Store** | SQLite WAL (madruga.db) | Persistencia de pipeline state, epics, decisions, memory, provenance, metrics | File |
+| 12 | **Dashboard** | FastAPI + HTML | Dashboard web de status, metricas, e pipeline progress | :8040 |
+| 13 | **Copier Templates** | Jinja2 + YAML | Scaffolding de novas plataformas com estrutura padrao | CLI |
+| 14 | **Telegram Adapter** | Python (aiogram) | Adapter para Telegram Bot API (ADR-018) — send, ask_choice (inline buttons), alert | HTTPS outbound |
 <!-- /AUTO:containers -->
 
 ## Requisitos Nao-Funcionais
@@ -135,7 +132,7 @@ graph TB
 | **Storage** | Zero ops | SQLite file-based, sem servidor | State Store |
 | **Observabilidade** | Health em < 500ms | FastAPI endpoint dedicado | Dashboard |
 | **Isolamento** | ACL por integracao | Anti-Corruption Layer pattern | Todas integracoes |
-| **Idempotencia** | Fases re-executaveis | Check de pre-condicoes + context acumulado | Pipeline Phases |
+| **Idempotencia** | Fases re-executaveis | Check de pre-condicoes + context acumulado | SpeckitBridge |
 | **Extensibilidade** | N plataformas | Copier template + auto-discovery | Portal, Platform CLI |
 | **Versionamento** | Tudo em Git | Filesystem-first, zero lock-in | Todos |
 | **Concorrencia** | Max 3 claude -p | Semaforo asyncio | DAG Executor |

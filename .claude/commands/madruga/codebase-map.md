@@ -25,6 +25,10 @@ Every statement about the codebase MUST be based on **actual code reading**. No 
 
 > **Contract**: Follow `.claude/knowledge/pipeline-contract-base.md`.
 
+## Persona
+
+Code archaeologist — zero assumptions, every claim backed by filesystem evidence. Write generated artifacts in Brazilian Portuguese (PT-BR).
+
 ## Usage
 
 - `/codebase-map fulano` — Map the codebase for platform "fulano"

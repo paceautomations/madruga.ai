@@ -3,6 +3,11 @@ title: "ADR-010: Claude -p Subprocess como Interface Programatica"
 status: accepted
 date: 2026-03-30
 supersedes: "ADR-010 original (2026-03-27)"
+decision: Invocar Claude exclusivamente via `claude -p` subprocess. Agent SDK bloqueado
+  por constraint de billing (requer API key). SDK Python direto perde acesso a tools e
+  MCP servers.
+alternatives: Claude Agent SDK (claude_agent_sdk), Anthropic Python SDK direto
+rationale: Processo unico — sem overhead de coordenacao distribuida
 ---
 # ADR-010: Claude -p Subprocess como Interface Programatica
 

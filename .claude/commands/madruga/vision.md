@@ -32,6 +32,10 @@ This document is **exclusively about the business**. Technical decisions, archit
 
 > **Contract**: Follow `.claude/knowledge/pipeline-contract-base.md` + `.claude/knowledge/pipeline-contract-business.md`.
 
+## Persona
+
+Product strategist — pitch mindset, minimum scope, zero technical jargon. Write generated artifacts in Brazilian Portuguese (PT-BR).
+
 ## Usage
 
 - `/vision fulano` — Generate one-pager for platform "fulano"

@@ -63,7 +63,7 @@ model {
     }
 
     dagExecutor = module 'DAG Executor' {
-      description 'Le pipeline DAG de platform.yaml, resolve dependencias via topological sort, despacha nodes via claude -p, gerencia human gates (pause/resume via SQLite + WhatsApp notify)'
+      description 'Le pipeline DAG de platform.yaml, resolve dependencias via topological sort, despacha nodes via claude -p, gerencia human gates (pause/resume via SQLite + Telegram notify)'
     }
 
     orchestratorSlots = module 'Orchestrator Slots' {
@@ -77,10 +77,10 @@ model {
 
   intelligence = boundedContext 'Intelligence' {
     #supporting
-    description 'Dominio supporting: debate engine, decision system, stress test. Garante qualidade de specs via review automatizado.'
+    description 'Dominio supporting: Subagent Judge (ADR-019), decision classifier (1-way/2-way door), stress test. Garante qualidade de specs via review automatizado.'
 
-    debateModule = module 'Debate Module' {
-      description 'Orquestra debate multi-persona com 3-5 reviewers sinteticos em rounds estruturados'
+    subagentJudgeModule = module 'Subagent Judge' {
+      description 'Subagent Paralelo + Judge Pattern: 3 personas paralelas + 1 juiz que filtra noise por Accuracy/Actionability/Severity (ADR-019)'
     }
 
     decisionModule = module 'Decision Module' {
@@ -98,10 +98,10 @@ model {
 
   integration = boundedContext 'Integration' {
     #generic
-    description 'Dominio generico: adapters para sistemas externos (WhatsApp, GitHub, Claude API, Sentry). ACLs isolam o core.'
+    description 'Dominio generico: adapters para sistemas externos (Telegram, GitHub, Claude API, Sentry). ACLs isolam o core.'
 
-    whatsappBridge = module 'WhatsApp Bridge' {
-      description 'Envio de notificacoes e decisoes via wpp-bridge (HTTP gateway localhost:8030): send, ask_choice, alert'
+    telegramAdapter = module 'Telegram Adapter' {
+      description 'Envio de notificacoes e decisoes via Telegram Bot API (aiogram): send, ask_choice (inline buttons), alert'
     }
 
     githubOps = module 'GitHub Ops' {
@@ -122,7 +122,7 @@ model {
     description 'Dominio generico: dashboard, health checks, metricas SQLite, Sentry. Visibilidade sobre estado e performance do sistema.'
 
     healthCheck = module 'Health Check' {
-      description 'Verifica saude do sistema: daemon alive, SQLite acessivel, wpp-bridge online, git status limpo'
+      description 'Verifica saude do sistema: daemon alive, SQLite acessivel, Telegram Bot reachable, git status limpo'
     }
 
     dashboardWeb = module 'Dashboard Web' {

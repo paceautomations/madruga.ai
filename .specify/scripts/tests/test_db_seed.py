@@ -143,3 +143,41 @@ def test_seed_epic_shipped_status(tmp_db, tmp_path):
     assert len(epics) == 1
     assert epics[0]["status"] == "shipped"
     assert epics[0]["appetite"] == "2w"
+
+
+def test_seed_reads_delivered_at(tmp_db, tmp_path):
+    """Seed reads delivered_at from shipped epic frontmatter."""
+    from db import seed_from_filesystem, get_epics
+
+    pdir = tmp_path / "plat-delivered"
+    pdir.mkdir(parents=True)
+    (pdir / "platform.yaml").write_text(
+        "name: plat-delivered\ntitle: Test\nlifecycle: design\npipeline:\n  nodes: []\n"
+    )
+    epic_dir = pdir / "epics" / "010-dashboard"
+    epic_dir.mkdir(parents=True)
+    (epic_dir / "pitch.md").write_text(
+        '---\ntitle: "Dashboard"\nstatus: shipped\ndelivered_at: 2026-03-30\n---\n# Dashboard\n'
+    )
+
+    seed_from_filesystem(tmp_db, "plat-delivered", pdir)
+    epics = get_epics(tmp_db, "plat-delivered")
+    assert len(epics) == 1
+    assert epics[0]["delivered_at"] == "2026-03-30"
+
+
+def test_seed_delivered_at_null_for_non_shipped(tmp_db, tmp_path):
+    """Non-shipped epic has no delivered_at."""
+    from db import seed_from_filesystem, get_epics
+
+    pdir = tmp_path / "plat-planned"
+    pdir.mkdir(parents=True)
+    (pdir / "platform.yaml").write_text("name: plat-planned\ntitle: Test\nlifecycle: design\npipeline:\n  nodes: []\n")
+    epic_dir = pdir / "epics" / "012-feature"
+    epic_dir.mkdir(parents=True)
+    (epic_dir / "pitch.md").write_text('---\ntitle: "Feature"\nstatus: planned\n---\n# Feature\n')
+
+    seed_from_filesystem(tmp_db, "plat-planned", pdir)
+    epics = get_epics(tmp_db, "plat-planned")
+    assert len(epics) == 1
+    assert epics[0]["delivered_at"] is None

@@ -16,6 +16,18 @@
   --sl-content-pad-x: 2rem;
 }
 
+/* ── 1b. Logo Sizing ── */
+.site-title img {
+  height: var(--sl-nav-height, 3.5rem);
+  width: auto;
+  padding: 0;
+}
+
+.site-title {
+  gap: 0.4rem;
+  color: var(--sl-color-white);
+}
+
 /* ── 2. Layout (hide right sidebar, full width) ── */
 .right-sidebar-container,
 starlight-toc,

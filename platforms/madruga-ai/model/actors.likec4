@@ -5,6 +5,6 @@ model {
   }
 
   daemon = person 'Daemon Autonomo' {
-    description 'Processo asyncio 24/7 que executa pipeline spec-to-code autonomamente via DAG Executor + claude -p, lendo pipeline de platform.yaml e notificando resultados via WhatsApp'
+    description 'Processo asyncio 24/7 que executa pipeline spec-to-code autonomamente via DAG Executor + claude -p, lendo pipeline de platform.yaml e notificando resultados via Telegram'
   }
 }

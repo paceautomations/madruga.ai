@@ -1,6 +1,6 @@
 ---
 title: "Domain Model"
-updated: 2026-03-30
+updated: 2026-03-31
 ---
 # Modelo de Dominio + Schema
 
@@ -455,7 +455,99 @@ classDiagram
 
 ---
 
-## Integration (Generic) — WhatsApp Bridge, GitHub Ops, Claude API, Sentry
+## Intelligence (Supporting) — Subagent Judge, Decision System, Stress Test
+
+Responsavel por garantir qualidade de specs e decisoes via review automatizado. Debate multi-persona substituido por Subagent Paralelo + Judge Pattern (ADR-019): 3 personas executam em paralelo via Claude Code Agent tool, 1 juiz filtra noise por Accuracy/Actionability/Severity. `[A SER IMPLEMENTADO — Epics 014-015]`
+
+### Modelo de Dominio
+
+```mermaid
+classDiagram
+    class SubagentJudge {
+        +string[] persona_ids
+        +string judge_criteria
+        +run_parallel_review(artifact: string) ReviewResult[]
+        +judge_filter(reviews: ReviewResult[]) ConsolidatedReview
+    }
+
+    class ReviewResult {
+        +string persona_id
+        +string persona_role
+        +Issue[] issues
+        +string summary
+    }
+
+    class Issue {
+        +string severity
+        +string description
+        +string location
+        +string suggestion
+        +is_actionable() bool
+    }
+
+    class ConsolidatedReview {
+        +Issue[] blockers
+        +Issue[] warnings
+        +Issue[] nits
+        +string verdict
+        +float confidence_score
+        +should_block() bool
+    }
+
+    class DecisionClassifier {
+        +classify(decision: string) DoorType
+        +register_adr(decision: string, type: DoorType)
+        +escalate_to_human(decision: string, reason: string)
+    }
+
+    class DoorType {
+        <<enumeration>>
+        ONE_WAY_DOOR
+        TWO_WAY_DOOR
+    }
+
+    class StressTestRunner {
+        +string[] scenarios
+        +run(spec: string, scenarios: string[]) StressResult[]
+        +generate_scenarios(spec: string) string[]
+    }
+
+    class StressResult {
+        +string scenario
+        +string finding
+        +string severity
+        +string mitigation
+    }
+
+    SubagentJudge --> ReviewResult : produces
+    ReviewResult --> Issue : contains
+    SubagentJudge --> ConsolidatedReview : consolidates into
+    ConsolidatedReview --> Issue : filters
+    DecisionClassifier --> DoorType : classifies as
+    StressTestRunner --> StressResult : produces
+```
+
+### Storage Model
+
+Intelligence nao possui storage proprio — consome artefatos de Specification e persiste resultados via Execution (SQLite events + pipeline_runs).
+
+| Dado | Destino | Formato |
+|------|---------|---------|
+| Review consolidado | `pipeline_runs` (SQLite) | JSON payload |
+| Decisoes classificadas | `decisions` (SQLite) | Row com `decision_type` |
+| Stress test results | `events` (SQLite) | Event log |
+
+### Invariantes
+
+- Subagent Judge **sempre** executa 3 personas em paralelo (Architecture Reviewer, Bug Hunter, Simplifier) — ADR-019
+- Judge pass filtra por 3 criterios: Accuracy (factual?), Actionability (fixavel?), Severity (impacta producao?)
+- Toda decisao 1-way-door **deve** gerar ADR automaticamente (ADR-013)
+- Stress test **deve** cobrir pelo menos: scale 10x, failure modes, edge cases, security threats
+- Review results sao **imutaveis** apos consolidacao (append-only em events)
+
+---
+
+## Integration (Generic) — Telegram Adapter, GitHub Ops, Claude API, Sentry
 
 Responsavel pela comunicacao com sistemas externos. Cada integracao tem uma Anti-Corruption Layer (ACL) que isola contratos externos do dominio interno.
 
@@ -470,11 +562,12 @@ classDiagram
         +execute_skill(skill_name: string, context: map) string
     }
 
-    class WhatsAppBridge {
-        +string bridge_url
-        +send(phone: string, message: string)
-        +ask_choice(phone: string, question: string, options: string[]) string
-        +alert(phone: string, level: string, message: string)
+    class TelegramAdapter {
+        +string bot_token
+        +int chat_id
+        +send(chat_id: int, message: string)
+        +ask_choice(chat_id: int, question: string, options: string[]) string
+        +alert(chat_id: int, level: string, message: string)
     }
 
     class GitHubClient {
@@ -507,7 +600,7 @@ classDiagram
     }
 
     ClaudeAPIClient ..|> ACLAdapter : implements
-    WhatsAppBridge ..|> ACLAdapter : implements
+    TelegramAdapter ..|> ACLAdapter : implements
     GitHubClient ..|> ACLAdapter : implements
     LikeC4CLI ..|> ACLAdapter : implements
     SentryAdapter ..|> ACLAdapter : implements
@@ -520,7 +613,7 @@ Este contexto nao possui storage proprio. Todas as interacoes sao **passthrough*
 | Sistema | Protocolo | Dados Trafegados |
 |---------|-----------|------------------|
 | Claude API | `claude -p` (subprocess) | Prompts compostos, respostas de texto |
-| WhatsApp | HTTP via wpp-bridge (:8030) | Notificacoes, decisoes (ask_choice), alertas |
+| Telegram | HTTPS (Telegram Bot API) | Notificacoes, decisoes (inline buttons), alertas |
 | GitHub | `gh` CLI / REST API | Issues, PRs, labels, comments |
 | LikeC4 CLI | Subprocess | JSON export, PNG export, compilation |
 | Sentry | HTTPS (sentry-sdk) | Error events, performance traces, breadcrumbs |
@@ -530,8 +623,8 @@ Este contexto nao possui storage proprio. Todas as interacoes sao **passthrough*
 - Toda chamada a sistema externo **deve** passar pela ACL correspondente
 - Falhas em sistemas externos **nao** devem propagar excecoes para o dominio (fail gracefully)
 - Claude API e invocado via `claude -p` como subprocess (nao via SDK direto — ADR-010)
-- wpp-bridge opera somente em localhost:8030 (sem exposicao externa — ADR-015)
-- WhatsApp notifications sao **fire-and-forget** (sem confirmacao de leitura)
+- Telegram Bot usa outbound HTTPS only — sem porta inbound, sem exposicao de rede (ADR-018)
+- Telegram notifications sao **fire-and-forget** (sem confirmacao de leitura)
 - Sentry opera como fire-and-forget — falha de envio nao afeta o daemon (ADR-016)
 - GitHub operations **devem** respeitar rate limits (backoff exponencial em 429)
 

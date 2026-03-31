@@ -6,7 +6,7 @@ updated: 2026-03-30
 
 ## Resumo Executivo
 
-A plataforma Madruga AI esta em transicao de sistema de documentacao arquitetural para pipeline autonomo de spec-to-code. O runtime engine (daemon, orchestrator, debate engine, SpeckitBridge) existe em `general/services/madruga-ai` e sera migrado para este repositorio. As 4 decisoes tecnologicas abaixo definem como o runtime se comunica com Claude, notifica o operador, observa sua propria saude, e automatiza a execucao do pipeline.
+A plataforma Madruga AI esta em transicao de sistema de documentacao arquitetural para pipeline autonomo de spec-to-code. O runtime engine (daemon, orchestrator, debate engine, SpeckitBridge) sera construido nativamente neste repositorio, capturando aprendizados de `general/services/madruga-ai` mas sem migracao de codigo. As 4 decisoes tecnologicas abaixo definem como o runtime se comunica com Claude, notifica o operador, observa sua propria saude, e automatiza a execucao do pipeline.
 
 Contexto: daemon Python 3.12 asyncio rodando em WSL2 local. Subscription Claude Code (sem API key separada). Stack existente: SQLite WAL, structlog, FastAPI, Astro portal.
 
@@ -55,7 +55,7 @@ O runtime engine precisa invocar Claude programaticamente para executar skills (
 
 ### Contexto
 
-O daemon precisa notificar o operador sobre status de epics, decisoes pendentes, e erros. O canal atual e WhatsApp via wpp-bridge (gateway HTTP local). A implementacao sera migrada de `general/services/` para dentro do `madruga.ai`.
+O daemon precisa notificar o operador sobre status de epics, decisoes pendentes, e erros. O canal sera Telegram Bot API via aiogram (ADR-018 supersedeu ADR-015). A implementacao sera construida nativamente em `madruga.ai`.
 
 ### Matriz de Alternativas
 
@@ -84,6 +84,8 @@ O daemon precisa notificar o operador sobre status de epics, decisoes pendentes,
 ### Recomendacao
 
 **WhatsApp via wpp-bridge** — manter o canal onde o operador ja esta. Migrar o codigo do bridge e do provider para dentro do `madruga.ai` junto com o runtime engine. Refinamentos na implementacao serao definidos no epic de migracao.
+
+> **Atualizado 2026-03-31:** Decisao revista — **Telegram Bot API (aiogram)** escolhido como canal de notificacoes. Motivacao: wpp-bridge depende de protocolo WhatsApp Web nao-oficial (instavel), exige headless Chromium (~200-400MB RAM), session desconecta com QR code manual, sem inline buttons. Alem disso, a decisao de nao migrar o codigo de `general` elimina a vantagem de "codigo ja existe". Ver [ADR-018](../decisions/ADR-018-telegram-bot-notifications.md).
 
 ---
 
@@ -161,7 +163,7 @@ O pipeline tem 24 nodes em 2 niveis (L1: 13, L2: 11 por epic). Cada node tem dep
 **Custom DAG Executor (YAML-driven):**
 - Pros: ~200 LOC, zero deps, YAML e source of truth direto, 80% ja construido (platform.yaml tem DAG, check-prerequisites.sh faz resolucao, post_save.py grava estado, db.py tem schema)
 - Cons: sem crash recovery automatico (SQLite checkpoints sao suficientes), sem web UI (portal dashboard ja existe)
-- Arquitetura: `dag_runner.py` le `platform.yaml` → topological sort → dispatch loop → `claude -p` por node → `post_save.py` grava → human gates pausam, Telegram/WhatsApp notifica, resume quando aprovado
+- Arquitetura: `dag_runner.py` le `platform.yaml` → topological sort → dispatch loop → `claude -p` por node → `post_save.py` grava → human gates pausam, Telegram notifica, resume quando aprovado
 - Source: implementacao existente em `.specify/scripts/`
 
 **Prefect 3:**
@@ -188,7 +190,7 @@ O pipeline tem 24 nodes em 2 niveis (L1: 13, L2: 11 por epic). Cada node tem dep
 | # | Decisao | Recomendacao | Confianca | Gate |
 |---|---------|-------------|-----------|------|
 | 1 | Interface com Claude | `claude -p` subprocess | Alta | auto |
-| 2 | Canal de notificacoes | WhatsApp via wpp-bridge (migrado) | Alta | 1-way-door |
+| 2 | Canal de notificacoes | ~~WhatsApp via wpp-bridge~~ → Telegram Bot API (aiogram) — ver ADR-018 | Alta | 1-way-door |
 | 3 | Observability | structlog+SQLite + Sentry free | Alta | auto |
 | 4 | Automacao DAG-driven | Custom DAG executor (YAML→SQLite→subprocess) | Alta | 1-way-door |
 
@@ -199,7 +201,7 @@ O pipeline tem 24 nodes em 2 niveis (L1: 13, L2: 11 por epic). Cada node tem dep
 ### Premissas
 
 1. Subscription Claude Code Max se mantem ativa e sem restricoes adicionais em `claude -p` [VALIDAR periodicamente]
-2. wpp-bridge continua funcional e mantenivel apos migracao [VALIDAR no epic]
+2. ~~wpp-bridge continua funcional e mantenivel apos migracao~~ [INVALIDADA — ver ADR-018, substituido por Telegram Bot API]
 3. Sentry free tier (5K erros/mes) e suficiente para daemon single-user [VALIDAR em producao]
 4. 24 nodes e escala suficiente para custom executor vs framework [VALIDAR se pipeline crescer para 50+]
 
@@ -208,7 +210,7 @@ O pipeline tem 24 nodes em 2 niveis (L1: 13, L2: 11 por epic). Cada node tem dep
 | Risco | Probabilidade | Impacto | Mitigacao |
 |-------|--------------|---------|-----------|
 | Anthropic restringe `claude -p` headless em subscription | Baixa | Critico | Monitorar changelogs. Fallback: migrar para API key (Agent SDK) |
-| wpp-bridge WhatsApp Web session desconecta frequentemente | Media | Medio | Reconexao automatica, health check, fallback para ntfy.sh/Telegram |
+| ~~wpp-bridge WhatsApp Web session desconecta frequentemente~~ | ~~Media~~ | ~~Medio~~ | [ELIMINADO — ver ADR-018, substituido por Telegram Bot API] |
 | Sentry free tier descontinuado ou limites reduzidos | Baixa | Baixo | structlog+SQLite cobre 80% — Sentry e complementar |
 | Custom DAG executor nao escala para pipelines complexos | Baixa | Medio | Migracao para Temporal quando necessario (YAML fica igual) |
 | Bug de hang em `claude -p` stream-json bloqueia daemon | Media | Medio | Usar --output-format json, watchdog timer com SIGKILL |

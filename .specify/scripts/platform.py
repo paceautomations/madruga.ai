@@ -52,7 +52,7 @@ AUTO_MARKERS = {
     "engineering/context-map.md": ["domains", "relations"],
     "engineering/integrations.md": ["integrations"],
 }
-ADR_REQUIRED_FIELDS = ["title", "status"]
+ADR_REQUIRED_FIELDS = ["title", "status", "decision", "alternatives", "rationale"]
 EPIC_REQUIRED_FIELDS = ["title", "status"]
 
 
@@ -148,8 +148,6 @@ def cmd_list() -> None:
 
 def cmd_new(name: str) -> None:
     """Scaffold a new platform via copier copy, register in portal, inject LikeC4 loader."""
-    import re
-
     if not re.match(r"^[a-z][a-z0-9-]*$", name):
         _error(
             f"Invalid platform name '{name}'. "
@@ -511,6 +509,7 @@ def cmd_status(name: str | None, show_all: bool, as_json: bool, output_file: str
 
     from db import (
         get_conn,
+        get_decisions_summary,
         get_epic_nodes,
         get_epic_status,
         get_epics,
@@ -617,6 +616,7 @@ def cmd_status(name: str | None, show_all: bool, as_json: bool, output_file: str
                     "nodes": merged_nodes,
                 },
                 "l2": {"epics": epics_data},
+                "decisions": get_decisions_summary(conn, pname),
             }
             result["platforms"].append(platform_data)
 

@@ -10,7 +10,7 @@ views {
 
     include architect, daemon
     include madrugaAi
-    include claudeApi, whatsappNotif, githubApi, likec4Cli, sentryCloud
+    include claudeApi, telegramBot, githubApi, likec4Cli, sentryCloud
     include sqliteDb, gitFs
   }
 
@@ -20,7 +20,7 @@ views {
 
     include *
     include architect, daemon
-    include claudeApi, whatsappNotif, githubApi, likec4Cli, sentryCloud
+    include claudeApi, telegramBot, githubApi, likec4Cli, sentryCloud
     include sqliteDb, gitFs
   }
 
@@ -35,7 +35,7 @@ views {
     include integration, integration.*
     include observability, observability.*
     include architect, daemon
-    include claudeApi, whatsappNotif, githubApi, likec4Cli, sentryCloud
+    include claudeApi, telegramBot, githubApi, likec4Cli, sentryCloud
     include sqliteDb, gitFs
   }
 
@@ -54,7 +54,7 @@ views {
     description 'Bounded context Specification: specify, plan, tasks, clarify, analyze'
 
     include *
-    include intelligence.debateModule, intelligence.decisionModule
+    include intelligence.subagentJudgeModule, intelligence.decisionModule
   }
 
   view executionDetail of execution {
@@ -62,14 +62,14 @@ views {
     description 'Bounded context Execution: daemon, DAG executor, orchestrator, pipeline runner'
 
     include *
-    include integration.claudeClient, integration.whatsappBridge
+    include integration.claudeClient, integration.telegramAdapter
     include sqliteDb
     include claudeApi
   }
 
   view intelligenceDetail of intelligence {
     title 'Intelligence — Supporting Domain'
-    description 'Bounded context Intelligence: debate, decisions, stress test'
+    description 'Bounded context Intelligence: Subagent Judge (ADR-019), Decision Classifier, Stress Test'
 
     include *
     include claudeApi
@@ -81,7 +81,7 @@ views {
 
   dynamic view businessFlow {
     title 'Spec-to-Code Pipeline — Fluxo Completo'
-    description 'Pipeline autonomo: DAG executor le platform.yaml → resolve deps → despacha nodes via claude -p → human gates pausam → WhatsApp notifica → resume. 7 fases, 2 loops de feedback, 1 reconciliation final.'
+    description 'Pipeline autonomo: DAG executor le platform.yaml → resolve deps → despacha nodes via claude -p → human gates pausam → Telegram notifica → resume. 7 fases, 2 loops de feedback, 1 reconciliation final.'
 
     autoLayout TopBottom
 
@@ -136,14 +136,14 @@ views {
     }
 
     // ════════════════════════════════════
-    //  FASE 4: DEBATE (spec → review → spec melhorada)
+    //  FASE 4: REVIEW (spec → Subagent Judge → spec melhorada)
     // ════════════════════════════════════
 
-    specDomain.clarifyEngine -> intelligence.debateModule 'spec.md clarificada' {
+    specDomain.clarifyEngine -> intelligence.subagentJudgeModule 'spec.md clarificada' {
       notes '''
-        **Debate Engine**
-        - 3-5 personas sinteticas (arquiteto, dev senior, PM, security)
-        - N rounds de critica estruturada
+        **Subagent Judge (ADR-019)**
+        - 3 personas paralelas: Architecture Reviewer, Bug Hunter, Simplifier
+        - 1 Judge pass filtra por Accuracy, Actionability, Severity
         - Output: BLOCKER / WARNING / NIT
         - BLOCKERs devem ser resolvidos antes de prosseguir
       '''
@@ -153,7 +153,7 @@ views {
     //  FASE 5: PLAN (spec → plan.md)
     // ════════════════════════════════════
 
-    intelligence.debateModule -> specDomain.planPhase 'spec.md aprovada (sem BLOCKERs)' {
+    intelligence.subagentJudgeModule -> specDomain.planPhase 'spec.md aprovada (sem BLOCKERs)' {
       notes '''
         **Plan Phase**
         - Gera plan.md com design detalhado
@@ -230,17 +230,17 @@ views {
     //  HUMAN GATE (decisoes 1-way-door)
     // ════════════════════════════════════
 
-    execution.dagExecutor -> integration.whatsappBridge 'Human gate: solicita aprovacao' {
+    execution.dagExecutor -> integration.telegramAdapter 'Human gate: solicita aprovacao' {
       notes '''
         **Human Gate**
         - DAG Executor pausa em nodes com gate=human ou 1-way-door
         - Grava estado pending_approval no SQLite
-        - Notifica via WhatsApp (ask_choice com opcoes)
-        - Resume quando operador aprova (via WhatsApp ou CLI)
+        - Notifica via Telegram (ask_choice com inline buttons)
+        - Resume quando operador aprova (via Telegram ou CLI)
       '''
     }
 
-    integration.whatsappBridge -> whatsappNotif 'Envia mensagem via wpp-bridge'
+    integration.telegramAdapter -> telegramBot 'Envia mensagem via Telegram Bot API'
 
     // ════════════════════════════════════
     //  OBSERVABILIDADE (passiva)
@@ -249,7 +249,7 @@ views {
     parallel {
       execution.pipelineRunner -> observability.metricsCollector 'Trace pipeline execution'
       execution.dagExecutor -> observability.metricsCollector 'Trace DAG execution'
-      intelligence.debateModule -> observability.metricsCollector 'Trace debate rounds'
+      intelligence.subagentJudgeModule -> observability.metricsCollector 'Trace review cycles'
       specDomain.specifyPhase -> observability.metricsCollector 'Trace spec generation'
     }
 

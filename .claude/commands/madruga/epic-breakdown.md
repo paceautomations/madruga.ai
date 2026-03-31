@@ -27,18 +27,18 @@ If the problem cannot be explained in 2 sentences, the epic is poorly defined. E
 
 > **Contract**: Follow `.claude/knowledge/pipeline-contract-base.md` + `.claude/knowledge/pipeline-contract-planning.md`.
 
+## Persona
+
+Product Manager (Shape Up) — problem before solution, appetite as constraint. Write generated artifacts in Brazilian Portuguese (PT-BR).
+
 ## Usage
 
 - `/epic-breakdown fulano` — Break platform "fulano" into epics
 - `/epic-breakdown` — Prompt for name
 
-## Output Modes
+## Output
 
-**Mode 1 — Roadmap-only (default):** Add epic entries to `platforms/<name>/planning/roadmap.md` in the "Proximos Epics" table. **Do NOT create** `epics/NNN-slug/` directories or `pitch.md` files. This keeps the roadmap as the single source of planned work without file proliferation.
-
-**Mode 2 — Full pitch (on request):** When the user explicitly requests detailed epic files (e.g., "create pitch for epic 011"), create `epics/NNN-slug/pitch.md`. Only use this mode when the epic is about to enter the L2 cycle (implementation).
-
-Default is Mode 1. Auto-number epics sequentially from the highest existing epic number.
+Always create `epics/NNN-slug/pitch.md` with minimal content. Auto-number epics sequentially from the highest existing epic number. The detailed implementation context (context.md, branch creation, architectural decisions) is handled later by `epic-context`.
 
 ## Instructions
 
@@ -70,21 +70,13 @@ Wait for answers BEFORE generating epics.
 
 ### 2. Generate Epics
 
-**Mode 1 (Roadmap-only, default):** Add a row to the "Proximos Epics" table in `planning/roadmap.md` for each epic. Format:
-
-```markdown
-| NNN | Epic Title | Descricao resumida | Complexidade (Pequena/Media/Grande) | Prioridade sugerida |
-```
-
-Do NOT create directories or files. The epic will be detailed later when prioritized for implementation.
-
-**Mode 2 (Full pitch, only when explicitly requested):** Create a directory and pitch:
-
-`epics/NNN-slug/pitch.md`
+For each epic, create `epics/NNN-slug/pitch.md` with **minimal content**. The full pitch (Solution, Rabbit Holes, No-gos, Acceptance Criteria) is generated later by `epic-context` when the epic enters L2.
 
 ```markdown
 ---
+id: NNN
 title: "Epic NNN: Title"
+status: planned
 appetite: 2w | 6w
 priority: P1 | P2 | P3
 ---
@@ -98,39 +90,6 @@ priority: P1 | P2 | P3
 
 **[2w | 6w]** — [size justification]
 
-## Solution
-
-[High-level approach. What will be built, not how. 1-2 paragraphs.]
-
-### Bounded Contexts Involved
-- [Context A] — [what changes in this context]
-- [Context B] — [what changes]
-
-### Containers Impacted
-- [Container X] — [what changes]
-
-## Rabbit Holes
-
-[Things that can consume unnecessary time. Where NOT to go deep.]
-
-1. [Rabbit hole 1] — [why to avoid]
-2. [Rabbit hole 2] — [why to avoid]
-
-## No-gos
-
-[Explicitly out of scope for this epic.]
-
-1. [No-go 1] — [will be addressed in which epic, or never]
-2. [No-go 2]
-
-## Acceptance Criteria
-
-[Testable checklist. When all items are checked, the epic is done.]
-
-- [ ] [Criterion 1 — measurable]
-- [ ] [Criterion 2]
-- [ ] [Criterion 3]
-
 ## Dependencies
 
 - Depends on: [epic NNN] (if applicable)
@@ -143,11 +102,8 @@ priority: P1 | P2 | P3
 |---|-------|-------------------|
 | 1 | Does every epic have a defined problem (not a feature)? | Rewrite as a problem |
 | 2 | Is appetite realistic (2w or 6w)? | Adjust or split |
-| 3 | Are no-gos explicit? | Add them |
-| 4 | Are acceptance criteria testable? | Make them measurable |
-| 5 | Is there no scope overlap between epics? | Resolve |
-| 6 | Are bounded contexts mapped to epics? | Map them |
-| 7 | Are inter-epic dependencies acyclic? | Resolve cycles |
+| 3 | Is there no scope overlap between epics? | Resolve |
+| 4 | Are inter-epic dependencies acyclic? | Resolve cycles |
 
 ### Tier 3 — Adversarial Review (1-way-door)
 

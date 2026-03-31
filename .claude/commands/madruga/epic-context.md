@@ -127,7 +127,7 @@ updated: YYYY-MM-DD
 | 3 | Are blueprint constraints present? | Add them |
 | 4 | Does every decision have >=2 documented alternatives? | Add |
 | 5 | Are trade-offs explicit (pros/cons)? | Add pros/cons |
-| 6 | Are assumptions marked [VALIDATE] or backed by data? | Mark [VALIDATE] |
+| 6 | Are assumptions marked [VALIDAR] or backed by data? | Mark [VALIDAR] |
 
 ### 4. Gate: Human
 

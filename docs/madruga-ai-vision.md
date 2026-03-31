@@ -133,7 +133,7 @@ paceautomations/madruga.ai/
 │   ├── memory/                        # SQLite store, learning, patterns
 │   ├── clarify/                       # Gap analysis engine
 │   ├── git/                           # Worktree + PR creation
-│   ├── integrations/                  # Obsidian CRUD, WhatsApp bridge
+│   ├── integrations/                  # Obsidian CRUD, Telegram adapter
 │   ├── speckit/                       # SpeckitBridge (compositor — le de .claude/ e .specify/)
 │   ├── stress/                        # Arch fitness, spec compliance
 │   ├── dashboard/                     # FastAPI web dashboard
@@ -491,7 +491,7 @@ O engine Python que executa o pipeline autonomamente ja esta construido em `pace
 | **Memory/Learning** | `memory/db.py`, `learning.py`, `patterns.py`, `persona_accuracy.py` | SQLite store, pattern extraction, learning loop |
 | **Clarify** | `clarify/engine.py` | Gap analysis com 9 categorias |
 | **Git Ops** | `git/worktree.py`, `pr.py` | Git worktree para implement + PR creation |
-| **Integrations** | `integrations/obsidian.py`, `messaging/` (WhatsApp) | CRUD Obsidian + WhatsApp bridge |
+| **Integrations** | `integrations/obsidian.py`, `messaging/` (Telegram) | CRUD Obsidian + Telegram adapter |
 | **Quality** | `stress/arch_fitness.py`, `coverage.py`, `spec_test.py` | Architecture fitness functions + spec compliance |
 | **SpecKit Bridge** | `speckit/bridge.py` | Compositor de prompts — le de `.claude/commands/` + `.specify/templates/` + `.specify/memory/`, nao contem agentes |
 | **Infra** | `health.py`, `dashboard/`, `deploy/`, `server.py` | FastAPI dashboard + systemd service |
@@ -721,7 +721,7 @@ Capacidades existentes:
 - Orchestrator com max_slots configuravel (`orchestrator.py`)
 - Circuit breaker + retry com backoff (`api/circuit_breaker.py`)
 - Decision gates: 1-way door → park epic, 2-way door → auto-decide (`decisions/`)
-- WhatsApp notifications em gates criticos (`integrations/messaging/`)
+- Telegram notifications em gates criticos (`integrations/messaging/`)
 - Dashboard web com status em tempo real (`dashboard/`)
 - PID file + graceful shutdown (`deploy/madruga-ai.service`)
 
