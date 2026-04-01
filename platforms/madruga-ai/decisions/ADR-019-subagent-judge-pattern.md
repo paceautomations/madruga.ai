@@ -3,7 +3,7 @@ title: "ADR-019: Subagent Paralelo + Judge Pattern para Review de Specs"
 status: accepted
 date: 2026-03-31
 supersedes: ADR-007
-decision: Usar Claude Code Agent tool (subagents paralelos) com 3 personas especializadas
+decision: Usar Claude Code Agent tool (subagents paralelos) com 4 personas especializadas
   + 1 Judge pass para review multi-perspectiva de specs, plans, code e ADRs.
 alternatives: Multi-persona debate engine custom (ADR-007), Claude Code Agent Teams
   (experimental), Single-pass review
@@ -26,15 +26,16 @@ A decisao de nao migrar codigo de `general/` para `madruga.ai` elimina a premiss
 
 ## Decisao
 
-Usar **Claude Code Agent tool** (subagents paralelos) com 3 personas especializadas + 1 Judge pass para review multi-perspectiva de specs, plans, code e ADRs.
+Usar **Claude Code Agent tool** (subagents paralelos) com 4 personas especializadas + 1 Judge pass para review multi-perspectiva de specs, plans, code e ADRs.
 
-**3 Personas (paralelas):**
+**4 Personas (paralelas):**
 
 | Persona | Foco | Exemplos de findings |
 |---------|------|---------------------|
 | **Architecture Reviewer** | Drift de ADRs, violacoes de blueprint, acoplamento, MECE | "Este servico viola ADR-004 (file-based storage)" |
 | **Bug Hunter** | Edge cases, error handling, seguranca, null safety, OWASP | "SQL injection possivel na query sem sanitizacao" |
 | **Simplifier** | Over-engineering, dead code, alternativas mais simples | "Este wrapper adiciona indirection sem valor" |
+| **Stress Tester** | Scale 10x, failure modes, concurrency, resource exhaustion | "Sem timeout em chamada de rede" |
 
 **1 Judge pass (sequencial, apos personas):**
 - Recebe findings agregados de todas as personas
