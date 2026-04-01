@@ -53,24 +53,36 @@ export function discoverPlatforms(platformsDir) {
 }
 
 /**
+ * Load pipeline-status.json once (cached per process).
+ */
+let _statusCache = undefined;
+function _loadStatusData() {
+  if (_statusCache !== undefined) return _statusCache;
+  try {
+    const statusPath = path.join(__dirname, '..', 'data', 'pipeline-status.json');
+    if (!fs.existsSync(statusPath)) { _statusCache = null; return null; }
+    _statusCache = JSON.parse(fs.readFileSync(statusPath, 'utf8'));
+    return _statusCache;
+  } catch {
+    _statusCache = null;
+    return null;
+  }
+}
+
+/**
  * Load epic status from pipeline-status.json (DB source of truth).
  * Returns a map of epicId → { status, ... } for the given platform.
  */
 function loadDbEpicStatus(platformName) {
-  try {
-    const statusPath = path.join(__dirname, '..', 'data', 'pipeline-status.json');
-    if (!fs.existsSync(statusPath)) return {};
-    const statusData = JSON.parse(fs.readFileSync(statusPath, 'utf8'));
-    const platform = (statusData.platforms || []).find((p) => p.id === platformName);
-    if (!platform?.l2?.epics) return {};
-    const map = {};
-    for (const e of platform.l2.epics) {
-      map[e.id] = e;
-    }
-    return map;
-  } catch {
-    return {};
+  const statusData = _loadStatusData();
+  if (!statusData) return {};
+  const platform = (statusData.platforms || []).find((p) => p.id === platformName);
+  if (!platform?.l2?.epics) return {};
+  const map = {};
+  for (const e of platform.l2.epics) {
+    map[e.id] = e;
   }
+  return map;
 }
 
 /**

@@ -37,6 +37,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 
+import yaml
+
 from config import REPO_ROOT  # noqa: F401
 from db import (
     compute_file_hash,
@@ -87,22 +89,21 @@ def _inject_ship_fields(platform: str, epic: str, delivered_at: str) -> None:
         fm_block += "status: shipped\n"
 
     # Add delivered_at if not present
-    if "delivered_at:" not in fm_block:
+    if not re.search(r"^delivered_at:", fm_block, re.MULTILINE):
         fm_block += f"delivered_at: {delivered_at}\n"
 
     updated = "---" + fm_block + body
     pitch.write_text(updated, encoding="utf-8")
 
 
-def _get_required_epic_nodes(platform: str) -> set[str]:
+def _get_required_epic_nodes(platform: str, pipeline_data: dict | None = None) -> set[str]:
     """Read required (non-optional) epic cycle node IDs from platform.yaml."""
-    import yaml
-
-    yaml_path = REPO_ROOT / "platforms" / platform / "platform.yaml"
-    if not yaml_path.exists():
-        return set()
-    data = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
-    cycle_nodes = data.get("pipeline", {}).get("epic_cycle", {}).get("nodes", [])
+    if pipeline_data is None:
+        yaml_path = REPO_ROOT / "platforms" / platform / "platform.yaml"
+        if not yaml_path.exists():
+            return set()
+        pipeline_data = yaml.safe_load(yaml_path.read_text(encoding="utf-8")).get("pipeline", {})
+    cycle_nodes = pipeline_data.get("epic_cycle", {}).get("nodes", [])
     return {n["id"] for n in cycle_nodes if not n.get("optional", False)}
 
 
@@ -271,7 +272,6 @@ def detect_from_path(file_path: str) -> dict | None:
     epic_cycle nodes) to auto-detect which node produced the artifact.
     Returns a dict ready for record_save(), or None if no match.
     """
-    import yaml
 
     path = Path(file_path).resolve()
     platforms_dir = REPO_ROOT / "platforms"

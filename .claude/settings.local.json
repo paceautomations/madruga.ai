@@ -77,6 +77,30 @@
     "deny": [],
     "defaultMode": "dontAsk"
   },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write(platforms/**)",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 30,
+            "command": "python3 .specify/scripts/hook_post_save.py 2>/dev/null || true"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit(platforms/**)",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 30,
+            "command": "python3 .specify/scripts/hook_post_save.py 2>/dev/null || true"
+          }
+        ]
+      }
+    ]
+  },
   "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "supabase",
