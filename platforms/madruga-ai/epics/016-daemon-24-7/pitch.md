@@ -19,3 +19,8 @@ O pipeline so executa quando um humano invoca skills manualmente no terminal. Na
 
 - Depends on: 014 (notificacoes para gates), 013 (DAG executor)
 - Blocks: nenhum (ultimo epic do MVP)
+
+## Implementation Notes
+
+- **Polling loop do Telegram**: epic 014 entrega `telegram_bot.py` como script standalone. O daemon 016 deve refatorar para integrar o polling como coroutine asyncio composavel dentro do event loop principal.
+- **Fallback ntfy.sh**: ADR-018 define ntfy.sh como fallback quando Telegram API esta unreachable. Implementar neste epic (~15-20 LOC, HTTP POST simples).

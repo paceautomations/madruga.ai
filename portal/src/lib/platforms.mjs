@@ -53,13 +53,37 @@ export function discoverPlatforms(platformsDir) {
 }
 
 /**
- * Discover epics for a platform by reading pitch.md frontmatter.
+ * Load epic status from pipeline-status.json (DB source of truth).
+ * Returns a map of epicId → { status, ... } for the given platform.
+ */
+function loadDbEpicStatus(platformName) {
+  try {
+    const statusPath = path.join(__dirname, '..', 'data', 'pipeline-status.json');
+    if (!fs.existsSync(statusPath)) return {};
+    const statusData = JSON.parse(fs.readFileSync(statusPath, 'utf8'));
+    const platform = (statusData.platforms || []).find((p) => p.id === platformName);
+    if (!platform?.l2?.epics) return {};
+    const map = {};
+    for (const e of platform.l2.epics) {
+      map[e.id] = e;
+    }
+    return map;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Discover epics for a platform by reading pitch.md frontmatter,
+ * enriched with DB status from pipeline-status.json.
  * Returns sorted array of { dir, id, title, status, phase }.
  */
 export function discoverEpics(platformName, platformsDir) {
   const dir = platformsDir ?? PLATFORMS_DIR;
   const epicsDir = path.join(dir, platformName, 'epics');
   if (!fs.existsSync(epicsDir)) return [];
+
+  const dbEpics = loadDbEpicStatus(platformName);
 
   return fs
     .readdirSync(epicsDir, { withFileTypes: true })
@@ -71,12 +95,18 @@ export function discoverEpics(platformName, platformsDir) {
       const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
       if (!fmMatch) return null;
       const fm = yaml.load(fmMatch[1]);
+      const epicKey = fm.id != null ? String(fm.id) : d.name.split('-')[0];
+      // DB status takes precedence over frontmatter
+      const dbEpic = dbEpics[d.name] || dbEpics[epicKey];
+      const effectiveStatus = dbEpic?.status ?? fm.status ?? 'planned';
       return {
         dir: d.name,
-        id: fm.id ?? d.name.split('-')[0],
+        id: epicKey,
         title: fm.title ?? d.name,
-        status: fm.status ?? 'planned',
-        phase: fm.phase ?? 'later',
+        status: effectiveStatus,
+        phase: effectiveStatus === 'shipped' ? null
+          : effectiveStatus === 'in_progress' ? 'now'
+          : (fm.phase ?? 'later'),
         delivered_at: fm.delivered_at instanceof Date
           ? fm.delivered_at.toISOString().slice(0, 10)
           : (fm.delivered_at ?? null),
@@ -105,7 +135,7 @@ export function buildSidebar(platforms) {
     const epicItems = epics.map((e) => ({
       label: `${e.id} · ${e.title}`,
       link: `/${p.name}/epics/${e.dir}/pitch/`,
-      badge: phaseBadgeVariant[e.phase]
+      badge: e.phase && phaseBadgeVariant[e.phase]
         ? { text: e.phase, variant: phaseBadgeVariant[e.phase] }
         : undefined,
     }));

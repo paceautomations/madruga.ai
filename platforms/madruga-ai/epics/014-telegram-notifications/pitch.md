@@ -1,7 +1,7 @@
 ---
 id: 014
 title: "Telegram Notifications"
-status: planned
+status: in_progress
 appetite: 2w
 priority: 2
 ---

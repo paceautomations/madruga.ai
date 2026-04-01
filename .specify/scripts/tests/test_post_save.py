@@ -20,8 +20,16 @@ def setup_platform(tmp_path):
     pdir.mkdir(parents=True)
     (pdir / "platform.yaml").write_text(
         "name: test-plat\ntitle: Test\nlifecycle: design\n"
-        "pipeline:\n  nodes:\n    - id: vision\n      outputs: ['business/vision.md']\n"
+        "pipeline:\n"
+        "  nodes:\n"
+        "    - id: vision\n      outputs: ['business/vision.md']\n"
         "      depends: []\n      gate: human\n"
+        "  epic_cycle:\n"
+        "    nodes:\n"
+        "      - id: specify\n        skill: speckit.specify\n        outputs: ['{epic}/spec.md']\n        depends: []\n        gate: human\n"
+        "      - id: plan\n        skill: speckit.plan\n        outputs: ['{epic}/plan.md']\n        depends: [specify]\n        gate: human\n"
+        "      - id: implement\n        skill: speckit.implement\n        outputs: ['{epic}/code']\n        depends: [plan]\n        gate: auto\n"
+        "      - id: clarify\n        skill: speckit.clarify\n        outputs: ['{epic}/spec.md']\n        depends: [specify]\n        gate: human\n        optional: true\n"
     )
 
     # Create an artifact
@@ -172,8 +180,8 @@ def test_reseed(setup_platform):
         db_mod.DB_PATH = original_db
 
 
-def test_inject_delivered_at(setup_platform):
-    """_inject_delivered_at writes delivered_at to pitch.md frontmatter."""
+def test_inject_ship_fields_delivered_at_idempotent(setup_platform):
+    """_inject_ship_fields is idempotent for delivered_at."""
     tmp_path, db_path = setup_platform
     import post_save
 
@@ -181,21 +189,23 @@ def test_inject_delivered_at(setup_platform):
     post_save.REPO_ROOT = tmp_path
 
     try:
-        post_save._inject_delivered_at("test-plat", "001-test-epic", "2026-03-30")
+        post_save._inject_ship_fields("test-plat", "001-test-epic", "2026-03-30")
         pitch = tmp_path / "platforms" / "test-plat" / "epics" / "001-test-epic" / "pitch.md"
         content = pitch.read_text()
         assert "delivered_at: 2026-03-30" in content
+        assert "status: shipped" in content
         # Verify idempotent — second call doesn't duplicate
-        post_save._inject_delivered_at("test-plat", "001-test-epic", "2026-03-31")
+        post_save._inject_ship_fields("test-plat", "001-test-epic", "2026-03-31")
         content2 = pitch.read_text()
         assert content2.count("delivered_at:") == 1
         assert "2026-03-30" in content2  # original date preserved
+        assert content2.count("status:") == 1
     finally:
         post_save.REPO_ROOT = original_repo
 
 
 def test_ship_transition_sets_delivered_at(setup_platform):
-    """When all epic nodes complete, delivered_at is set in DB and pitch.md."""
+    """When all required epic nodes complete, delivered_at is set in DB and pitch.md."""
     tmp_path, db_path = setup_platform
     import post_save
     import db as db_mod
@@ -211,14 +221,21 @@ def test_ship_transition_sets_delivered_at(setup_platform):
         conn = gc(db_path)
         upsert_platform(conn, "test-plat", name="test-plat", repo_path="platforms/test-plat")
         upsert_epic(conn, "test-plat", "001-test-epic", title="Test Epic")
-        # Create a single epic node so completing it triggers ship
-        upsert_epic_node(conn, "test-plat", "001-test-epic", "specify", "pending")
+        # Pre-complete 2 of 3 required nodes (specify, plan); implement is pending
+        upsert_epic_node(conn, "test-plat", "001-test-epic", "specify", "done")
+        upsert_epic_node(conn, "test-plat", "001-test-epic", "plan", "done")
+        upsert_epic_node(conn, "test-plat", "001-test-epic", "implement", "pending")
         conn.close()
 
+        # Create the plan.md artifact (implement needs it)
+        plan_path = tmp_path / "platforms" / "test-plat" / "epics" / "001-test-epic" / "plan.md"
+        plan_path.write_text("# Plan\nTest plan.")
+
+        # Complete last required node — should trigger ship
         result = post_save.record_save(
             platform="test-plat",
-            node="specify",
-            skill="speckit.specify",
+            node="implement",
+            skill="speckit.implement",
             artifact="epics/001-test-epic/spec.md",
             epic="001-test-epic",
         )
@@ -233,7 +250,48 @@ def test_ship_transition_sets_delivered_at(setup_platform):
         # Verify pitch.md was updated
         pitch = tmp_path / "platforms" / "test-plat" / "epics" / "001-test-epic" / "pitch.md"
         content = pitch.read_text()
+        assert "status: shipped" in content
         assert "delivered_at:" in content
+        conn.close()
+    finally:
+        post_save.REPO_ROOT = original_repo
+        db_mod.DB_PATH = original_db
+
+
+def test_partial_nodes_do_not_ship(setup_platform):
+    """Epic with only some required nodes done stays in_progress, not shipped."""
+    tmp_path, db_path = setup_platform
+    import post_save
+    import db as db_mod
+
+    original_repo = post_save.REPO_ROOT
+    original_db = db_mod.DB_PATH
+    post_save.REPO_ROOT = tmp_path
+    db_mod.DB_PATH = db_path
+
+    try:
+        from db import get_conn as gc, get_epics, upsert_epic, upsert_platform
+
+        conn = gc(db_path)
+        upsert_platform(conn, "test-plat", name="test-plat", repo_path="platforms/test-plat")
+        upsert_epic(conn, "test-plat", "001-test-epic", title="Test Epic")
+        conn.close()
+
+        # Complete only specify — plan and implement still missing
+        result = post_save.record_save(
+            platform="test-plat",
+            node="specify",
+            skill="speckit.specify",
+            artifact="epics/001-test-epic/spec.md",
+            epic="001-test-epic",
+        )
+        assert result["status"] == "ok"
+
+        conn = gc(db_path)
+        epics = get_epics(conn, "test-plat")
+        epic = [e for e in epics if e["epic_id"] == "001-test-epic"][0]
+        # Must NOT be shipped — only 1 of 3 required nodes done
+        assert epic["status"] == "in_progress"
         conn.close()
     finally:
         post_save.REPO_ROOT = original_repo
@@ -257,3 +315,68 @@ def test_reseed_missing_platform(setup_platform):
     finally:
         post_save.REPO_ROOT = original_repo
         db_mod.DB_PATH = original_db
+
+
+def test_epic_shipped_with_skipped_nodes(setup_platform):
+    """Epic with required nodes done + optional skipped transitions to shipped."""
+    tmp_path, db_path = setup_platform
+    import post_save
+    import db as db_mod
+
+    original_repo = post_save.REPO_ROOT
+    original_db = db_mod.DB_PATH
+    post_save.REPO_ROOT = tmp_path
+    db_mod.DB_PATH = db_path
+
+    try:
+        from db import get_conn as gc, get_epics, upsert_epic, upsert_epic_node, upsert_platform
+
+        conn = gc(db_path)
+        upsert_platform(conn, "test-plat", name="test-plat", repo_path="platforms/test-plat")
+        upsert_epic(conn, "test-plat", "001-test-epic", title="Test Epic")
+        # Required nodes: specify (done), plan (done), implement (pending)
+        # Optional node: clarify (skipped)
+        upsert_epic_node(conn, "test-plat", "001-test-epic", "specify", "done")
+        upsert_epic_node(conn, "test-plat", "001-test-epic", "plan", "done")
+        upsert_epic_node(conn, "test-plat", "001-test-epic", "clarify", "skipped")
+        upsert_epic_node(conn, "test-plat", "001-test-epic", "implement", "pending")
+        conn.close()
+
+        # Complete last required node — should trigger ship
+        result = post_save.record_save(
+            platform="test-plat",
+            node="implement",
+            skill="speckit.implement",
+            artifact="epics/001-test-epic/spec.md",
+            epic="001-test-epic",
+        )
+        assert result["status"] == "ok"
+
+        conn = gc(db_path)
+        epics = get_epics(conn, "test-plat")
+        epic = [e for e in epics if e["epic_id"] == "001-test-epic"][0]
+        assert epic["status"] == "shipped"
+        conn.close()
+    finally:
+        post_save.REPO_ROOT = original_repo
+        db_mod.DB_PATH = original_db
+
+
+def test_inject_ship_fields_updates_status(setup_platform):
+    """_inject_ship_fields writes both status: shipped and delivered_at."""
+    tmp_path, db_path = setup_platform
+    import post_save
+
+    original_repo = post_save.REPO_ROOT
+    post_save.REPO_ROOT = tmp_path
+
+    try:
+        post_save._inject_ship_fields("test-plat", "001-test-epic", "2026-04-01")
+        pitch = tmp_path / "platforms" / "test-plat" / "epics" / "001-test-epic" / "pitch.md"
+        content = pitch.read_text()
+        assert "status: shipped" in content
+        assert "delivered_at: 2026-04-01" in content
+        # Verify original "title: Test Epic" is preserved
+        assert "title: Test Epic" in content
+    finally:
+        post_save.REPO_ROOT = original_repo

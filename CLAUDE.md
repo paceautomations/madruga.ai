@@ -300,6 +300,8 @@ After completing any implementation task (new code or refactor touching 3+ files
 - Bash 5.x
 - Astro + Starlight (portal)
 - LikeC4 (architecture models)
+- Python 3.12 (compativel com 3.11+) + aiogram >= 3.15, pyyaml (existente) (010-telegram-notifications)
+- SQLite WAL mode (existente — `.pipeline/madruga.db`) (010-telegram-notifications)
 
 ## Epic Workflow
 - **Planned epics** live only in `planning/roadmap.md` as table entries — no files created
@@ -317,3 +319,6 @@ After completing any implementation task (new code or refactor touching 3+ files
 | 011 | CI/CD Pipeline | GitHub Actions: lint, LikeC4 build, db-tests, templates, bash-tests, portal-build. |
 | 012 | Multi-repo Implement | ensure_repo (SSH/HTTPS), worktree, implement_remote (claude -p --cwd), PR via gh. 3 scripts, 28 testes. |
 | 013 | DAG Executor + SpeckitBridge | dag_executor.py: Kahn's topological sort, claude -p dispatch, human gates (CLI pause/resume), retry/circuit breaker/watchdog. Migration 007. 43 testes. |
+
+## Recent Changes
+- 010-telegram-notifications: Added Python 3.12 (compativel com 3.11+) + aiogram >= 3.15, pyyaml (existente)

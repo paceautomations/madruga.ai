@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -64,8 +65,8 @@ def _validate_artifact_path(platform: str, artifact: str) -> Path:
     return artifact_path
 
 
-def _inject_delivered_at(platform: str, epic: str, delivered_at: str) -> None:
-    """Inject delivered_at into pitch.md frontmatter (string insert, no YAML round-trip)."""
+def _inject_ship_fields(platform: str, epic: str, delivered_at: str) -> None:
+    """Update pitch.md frontmatter with status: shipped and delivered_at."""
     pitch = REPO_ROOT / "platforms" / platform / "epics" / epic / "pitch.md"
     if not pitch.exists():
         return
@@ -77,11 +78,32 @@ def _inject_delivered_at(platform: str, epic: str, delivered_at: str) -> None:
     if end == -1:
         return
     fm_block = content[3:end]
-    if "delivered_at:" in fm_block:
-        return  # already set
-    # Insert before closing ---
-    updated = content[:end] + f"delivered_at: {delivered_at}\n" + content[end:]
+    body = content[end:]
+
+    # Update status within frontmatter block
+    if re.search(r"^status:", fm_block, re.MULTILINE):
+        fm_block = re.sub(r"^status:.*$", "status: shipped", fm_block, flags=re.MULTILINE)
+    else:
+        fm_block += "status: shipped\n"
+
+    # Add delivered_at if not present
+    if "delivered_at:" not in fm_block:
+        fm_block += f"delivered_at: {delivered_at}\n"
+
+    updated = "---" + fm_block + body
     pitch.write_text(updated, encoding="utf-8")
+
+
+def _get_required_epic_nodes(platform: str) -> set[str]:
+    """Read required (non-optional) epic cycle node IDs from platform.yaml."""
+    import yaml
+
+    yaml_path = REPO_ROOT / "platforms" / platform / "platform.yaml"
+    if not yaml_path.exists():
+        return set()
+    data = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
+    cycle_nodes = data.get("pipeline", {}).get("epic_cycle", {}).get("nodes", [])
+    return {n["id"] for n in cycle_nodes if not n.get("optional", False)}
 
 
 def record_save(
@@ -139,17 +161,21 @@ def record_save(
                 # Skip if epic is blocked or cancelled (manual override only)
                 nodes = get_epic_nodes(txn, platform, epic)
                 if nodes:
-                    done_count = sum(1 for n in nodes if n["status"] == "done")
+                    completed_count = sum(1 for n in nodes if n["status"] in ("done", "skipped"))
+                    completed_ids = {n["node_id"] for n in nodes if n["status"] in ("done", "skipped")}
+                    required_nodes = _get_required_epic_nodes(platform)
                     existing = [e for e in get_epics(txn, platform) if e["epic_id"] == epic]
                     if existing:
                         current = existing[0]
                         if current["status"] not in ("blocked", "cancelled"):
                             new_status = current["status"]
                             delivered_at = None
-                            if done_count == len(nodes):
+                            # Ship only when ALL required (non-optional) nodes are done
+                            all_required_done = required_nodes and required_nodes.issubset(completed_ids)
+                            if all_required_done:
                                 new_status = "shipped"
                                 delivered_at = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-                            elif done_count > 0 and current["status"] == "proposed":
+                            elif completed_count > 0 and current["status"] == "proposed":
                                 new_status = "in_progress"
                             if new_status != current["status"]:
                                 upsert_epic(
@@ -193,9 +219,9 @@ def record_save(
                 output_hash=output_hash,
             )
 
-    # Write delivered_at to pitch.md frontmatter (outside transaction — filesystem only)
+    # Sync ship fields to pitch.md frontmatter (outside transaction — filesystem only)
     if epic and shipped_delivered_at:
-        _inject_delivered_at(platform, epic, shipped_delivered_at)
+        _inject_ship_fields(platform, epic, shipped_delivered_at)
 
     result = {
         "status": "ok",

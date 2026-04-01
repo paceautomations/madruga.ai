@@ -367,6 +367,7 @@ def run_pipeline(
         get_resumable_nodes,
         insert_run,
         complete_run,
+        upsert_epic_node,
         upsert_pipeline_node,
     )
 
@@ -399,7 +400,10 @@ def run_pipeline(
         # Skip optional nodes with skip_condition
         if node.optional and node.skip_condition:
             log.info("Skipping optional node: %s (%s)", node.id, node.skip_condition)
-            upsert_pipeline_node(conn, platform_name, node.id, status="skipped") if not epic_slug else None
+            if epic_slug:
+                upsert_epic_node(conn, platform_name, epic_slug, node.id, status="skipped")
+            else:
+                upsert_pipeline_node(conn, platform_name, node.id, status="skipped")
             continue
 
         # Check dependencies satisfied
@@ -449,7 +453,10 @@ def run_pipeline(
         # Record success
         run_id = insert_run(conn, platform_name, node.id, epic_id=epic_slug)
         complete_run(conn, run_id, status="completed")
-        upsert_pipeline_node(conn, platform_name, node.id, status="done")
+        if epic_slug:
+            upsert_epic_node(conn, platform_name, epic_slug, node.id, status="done")
+        else:
+            upsert_pipeline_node(conn, platform_name, node.id, status="done")
         completed_nodes.add(node.id)
         log.info("Node '%s' completed successfully", node.id)
 
