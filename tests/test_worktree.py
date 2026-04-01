@@ -111,7 +111,7 @@ class TestCreateWorktree:
         wt_ok = MagicMock(returncode=0)
 
         with patch("subprocess.run", side_effect=[fetch_ok, branch_check, wt_ok]) as mock_run:
-            result = create_worktree("test", "001-feature")
+            create_worktree("test", "001-feature")
 
         # Should call git worktree add WITHOUT -b flag
         wt_call = mock_run.call_args_list[-1]

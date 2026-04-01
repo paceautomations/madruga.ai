@@ -181,3 +181,50 @@ def test_seed_delivered_at_null_for_non_shipped(tmp_db, tmp_path):
     epics = get_epics(tmp_db, "plat-planned")
     assert len(epics) == 1
     assert epics[0]["delivered_at"] is None
+
+
+def test_reseed_preserves_shipped_status(tmp_db, tmp_path):
+    """Reseed does not regress shipped→proposed when pitch.md says planned."""
+    from db import seed_from_filesystem, get_epics, upsert_epic
+
+    pdir = tmp_path / "plat-guard"
+    pdir.mkdir(parents=True)
+    (pdir / "platform.yaml").write_text("name: plat-guard\ntitle: Test\nlifecycle: design\npipeline:\n  nodes: []\n")
+    epic_dir = pdir / "epics" / "012-shipped"
+    epic_dir.mkdir(parents=True)
+    # pitch.md says "planned" (stale)
+    (epic_dir / "pitch.md").write_text('---\ntitle: "Shipped Epic"\nstatus: planned\n---\n# Shipped Epic\n')
+
+    # First seed to create the epic
+    seed_from_filesystem(tmp_db, "plat-guard", pdir)
+    # Manually set to shipped in DB (simulating post_save transition)
+    upsert_epic(tmp_db, "plat-guard", "012-shipped", title="Shipped Epic", status="shipped")
+    epics = get_epics(tmp_db, "plat-guard")
+    assert epics[0]["status"] == "shipped"
+
+    # Reseed again — pitch.md still says "planned"
+    seed_from_filesystem(tmp_db, "plat-guard", pdir)
+    epics = get_epics(tmp_db, "plat-guard")
+    assert epics[0]["status"] == "shipped"  # must NOT regress to proposed
+
+
+def test_reseed_accepts_blocked_override(tmp_db, tmp_path):
+    """Reseed accepts blocked status from filesystem even if DB says shipped."""
+    from db import seed_from_filesystem, get_epics, upsert_epic
+
+    pdir = tmp_path / "plat-block"
+    pdir.mkdir(parents=True)
+    (pdir / "platform.yaml").write_text("name: plat-block\ntitle: Test\nlifecycle: design\npipeline:\n  nodes: []\n")
+    epic_dir = pdir / "epics" / "013-blocked"
+    epic_dir.mkdir(parents=True)
+    (epic_dir / "pitch.md").write_text('---\ntitle: "Blocked Epic"\nstatus: blocked\n---\n# Blocked Epic\n')
+
+    # First seed
+    seed_from_filesystem(tmp_db, "plat-block", pdir)
+    # Set to shipped in DB
+    upsert_epic(tmp_db, "plat-block", "013-blocked", title="Blocked Epic", status="shipped")
+
+    # Reseed — pitch.md says "blocked" (legitimate override)
+    seed_from_filesystem(tmp_db, "plat-block", pdir)
+    epics = get_epics(tmp_db, "plat-block")
+    assert epics[0]["status"] == "blocked"  # must accept the override

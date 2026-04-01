@@ -1,7 +1,7 @@
 ---
 id: 013
 title: "DAG Executor + SpeckitBridge"
-status: planned
+status: shipped
 appetite: 6w
 priority: 1
 delivered_at: 2026-03-31

@@ -1757,7 +1757,16 @@ def seed_from_filesystem(conn: sqlite3.Connection, platform_id: str, platform_di
 
                     # Status: map frontmatter value to DB constraint
                     raw_status = str(frontmatter.get("status", "")).lower().strip()
-                    epic_status = _EPIC_STATUS_MAP.get(raw_status)
+                    fs_status = _EPIC_STATUS_MAP.get(raw_status) or "proposed"
+
+                    # Guard: never regress shipped→proposed via reseed.
+                    # blocked/cancelled from filesystem are legitimate overrides.
+                    existing_row = txn.execute(
+                        "SELECT status FROM epics WHERE platform_id=? AND epic_id=?",
+                        (platform_id, epic_id),
+                    ).fetchone()
+                    if existing_row and existing_row[0] == "shipped" and fs_status == "proposed":
+                        fs_status = "shipped"
 
                     # Appetite and priority from frontmatter
                     appetite = frontmatter.get("appetite")
@@ -1774,7 +1783,7 @@ def seed_from_filesystem(conn: sqlite3.Connection, platform_id: str, platform_di
                         epic_id,
                         title=title_line or epic_id,
                         file_path=f"epics/{epic_id}/pitch.md",
-                        status=epic_status or "proposed",
+                        status=fs_status,
                         appetite=appetite,
                         priority=priority,
                         delivered_at=delivered_at,

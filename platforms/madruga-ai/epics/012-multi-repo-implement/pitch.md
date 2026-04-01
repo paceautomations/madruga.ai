@@ -1,7 +1,7 @@
 ---
 id: 012
 title: "Multi-repo Implement"
-status: planned
+status: shipped
 appetite: 2w
 priority: 1
 delivered_at: 2026-03-31

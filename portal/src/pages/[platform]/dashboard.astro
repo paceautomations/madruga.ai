@@ -72,7 +72,7 @@ function getEpicPhase(epic: any): { phaseId: string; subStage: string } {
   // Check epic-level status first (from DB)
   if (epic.status === 'shipped') return { phaseId: 'shipped', subStage: '' };
   if (!epic.nodes || epic.nodes.length === 0) return { phaseId: 'backlog', subStage: '' };
-  const doneIds = new Set(epic.nodes.filter((n: any) => n.status === 'done').map((n: any) => n.id));
+  const doneIds = new Set(epic.nodes.filter((n: any) => n.status === 'done' || n.status === 'skipped').map((n: any) => n.id));
   if (doneIds.size >= ALL_L2_STAGES.length) return { phaseId: 'shipped', subStage: '' };
   if (doneIds.size === 0) return { phaseId: 'backlog', subStage: '' };
   // Find last done stage

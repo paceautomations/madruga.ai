@@ -188,7 +188,7 @@ class TestEnsureRepo:
         ssh_ok = MagicMock(returncode=0)
         with patch("subprocess.run", return_value=ssh_ok):
             with patch("fcntl.flock") as mock_flock:
-                with patch("builtins.open", mock_open()) as mock_file:
+                with patch("builtins.open", mock_open()):
                     ensure_repo("test")
 
         # flock should have been called (LOCK_EX and LOCK_UN)
