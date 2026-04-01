@@ -28,6 +28,7 @@ from aiogram.types import CallbackQuery
 
 sys.path.insert(0, os.path.dirname(__file__))
 
+from db import approve_gate, reject_gate  # noqa: E402
 from telegram_adapter import TelegramAdapter  # noqa: E402
 
 logger = structlog.get_logger(__name__)
@@ -188,14 +189,14 @@ async def handle_gate_callback(
         await callback.answer("Gate ja resolvido")
         return
 
-    # Update DB
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    new_status = "approved" if action == "a" else "rejected"
-    conn.execute(
-        "UPDATE pipeline_runs SET gate_status=?, gate_resolved_at=? WHERE run_id=? AND gate_status='waiting_approval'",
-        (new_status, now, run_id),
-    )
-    conn.commit()
+    # Update DB via db.py functions (single source of truth)
+    if action == "a":
+        updated = approve_gate(conn, run_id)
+    else:
+        updated = reject_gate(conn, run_id)
+    if not updated:
+        await callback.answer("Gate ja resolvido")
+        return
 
     # Edit message to remove buttons and show result
     resolved_text = format_resolved_message(gate, action)
@@ -289,7 +290,11 @@ async def async_main(args: argparse.Namespace) -> None:
         logger.error("missing_env_var", var="MADRUGA_TELEGRAM_CHAT_ID")
         sys.exit(1)
 
-    chat_id = int(chat_id_str)
+    try:
+        chat_id = int(chat_id_str)
+    except ValueError:
+        logger.error("invalid_chat_id", value=chat_id_str)
+        sys.exit(1)
 
     # Import DB connection (path resolution via config.py)
     from db import get_conn, migrate
@@ -305,6 +310,14 @@ async def async_main(args: argparse.Namespace) -> None:
         offset = load_offset(conn)
         if offset:
             logger.info("resuming_from_offset", offset=offset)
+
+        # Persist offset after each update for crash recovery
+        @dp.update.outer_middleware()
+        async def _persist_offset(handler, event, data):
+            result = await handler(event, data)
+            if event.update_id:
+                save_offset(conn, event.update_id)
+            return result
 
         # Register callback handler
         @dp.callback_query(F.data.startswith("gate:"))

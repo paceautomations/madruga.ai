@@ -157,7 +157,7 @@ graph LR
 | Etapa | Ferramenta | Gate |
 |-------|------------|------|
 | Lint Python | ruff | Zero warnings |
-| Testes | pytest (98 testes) | 100% pass |
+| Testes | pytest (135 testes) | 100% pass |
 | Portal build | `npm run build` | Build sem erros |
 | Template tests | pytest (.specify/templates/) | 100% pass |
 | Platform lint | `platform.py lint --all` | Estrutura valida |

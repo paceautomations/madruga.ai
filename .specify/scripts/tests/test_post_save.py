@@ -26,10 +26,19 @@ def setup_platform(tmp_path):
         "      depends: []\n      gate: human\n"
         "  epic_cycle:\n"
         "    nodes:\n"
-        "      - id: specify\n        skill: speckit.specify\n        outputs: ['{epic}/spec.md']\n        depends: []\n        gate: human\n"
-        "      - id: plan\n        skill: speckit.plan\n        outputs: ['{epic}/plan.md']\n        depends: [specify]\n        gate: human\n"
-        "      - id: implement\n        skill: speckit.implement\n        outputs: ['{epic}/code']\n        depends: [plan]\n        gate: auto\n"
-        "      - id: clarify\n        skill: speckit.clarify\n        outputs: ['{epic}/spec.md']\n        depends: [specify]\n        gate: human\n        optional: true\n"
+        "      - id: specify\n        skill: speckit.specify\n"
+        "        outputs: ['{epic}/spec.md']\n"
+        "        depends: []\n        gate: human\n"
+        "      - id: plan\n        skill: speckit.plan\n"
+        "        outputs: ['{epic}/plan.md']\n"
+        "        depends: [specify]\n        gate: human\n"
+        "      - id: implement\n        skill: speckit.implement\n"
+        "        outputs: ['{epic}/code']\n"
+        "        depends: [plan]\n        gate: auto\n"
+        "      - id: clarify\n        skill: speckit.clarify\n"
+        "        outputs: ['{epic}/spec.md']\n"
+        "        depends: [specify]\n        gate: human\n"
+        "        optional: true\n"
     )
 
     # Create an artifact

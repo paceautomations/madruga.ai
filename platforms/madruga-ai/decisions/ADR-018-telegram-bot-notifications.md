@@ -33,7 +33,7 @@ Alem disso, a decisao de **nao migrar** o wpp-bridge de `general` para `madruga.
 
 Usar **Telegram Bot API via aiogram** como canal de notificacoes do daemon, substituindo WhatsApp via wpp-bridge.
 
-A interface `MessagingProvider` permanece abstrata com 3 metodos (`send`, `ask_choice`, `alert`). A implementacao muda de `WhatsAppBridge` para `TelegramAdapter`. Isso mantem a escolha de canal como **2-way door** — trocar provider requer apenas nova implementacao, sem mudar daemon ou pipeline.
+A interface `MessagingProvider` permanece abstrata com 4 metodos (`send`, `ask_choice`, `alert`, `edit_message`). A implementacao muda de `WhatsAppBridge` para `TelegramAdapter`. Isso mantem a escolha de canal como **2-way door** — trocar provider requer apenas nova implementacao, sem mudar daemon ou pipeline.
 
 **Modo de operacao: long-polling** (nao webhook). O bot usa `aiogram`'s built-in polling loop para receber updates. Isso evita necessidade de porta inbound, tunnel, ou certificado HTTPS — o daemon faz apenas requests HTTPS outbound para `api.telegram.org`.
 

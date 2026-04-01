@@ -264,6 +264,68 @@ def reseed_all() -> list[dict]:
     return results
 
 
+def detect_from_path(file_path: str) -> dict | None:
+    """Infer platform, epic, node, skill, and artifact from a file path.
+
+    Matches the path against output patterns in platform.yaml (L1 nodes and
+    epic_cycle nodes) to auto-detect which node produced the artifact.
+    Returns a dict ready for record_save(), or None if no match.
+    """
+    import yaml
+
+    path = Path(file_path).resolve()
+    platforms_dir = REPO_ROOT / "platforms"
+
+    # Extract platform name from path: platforms/<name>/...
+    try:
+        rel = path.relative_to(platforms_dir)
+    except ValueError:
+        return None
+    parts = rel.parts
+    if len(parts) < 2:
+        return None
+    platform = parts[0]
+    artifact = str(Path(*parts[1:]))  # relative to platform dir
+
+    yaml_path = platforms_dir / platform / "platform.yaml"
+    if not yaml_path.exists():
+        return None
+    data = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
+    pipeline = data.get("pipeline", {})
+
+    # Check if this is an epic artifact: epics/<epic-id>/...
+    epic = None
+    if len(parts) >= 3 and parts[1] == "epics":
+        epic = parts[2]
+
+    # Try L2 epic cycle nodes first (if epic is set)
+    if epic:
+        for node_cfg in pipeline.get("epic_cycle", {}).get("nodes", []):
+            for output_pattern in node_cfg.get("outputs", []):
+                expected = output_pattern.replace("{epic}", f"epics/{epic}")
+                if artifact == expected:
+                    return {
+                        "platform": platform,
+                        "epic": epic,
+                        "node": node_cfg["id"],
+                        "skill": node_cfg["skill"],
+                        "artifact": artifact,
+                    }
+
+    # Try L1 pipeline nodes
+    for node_cfg in pipeline.get("nodes", []):
+        for output in node_cfg.get("outputs", []):
+            if artifact == output:
+                return {
+                    "platform": platform,
+                    "node": node_cfg["id"],
+                    "skill": node_cfg.get("skill", node_cfg["id"]),
+                    "artifact": artifact,
+                }
+
+    return None
+
+
 def main():
     parser = argparse.ArgumentParser(description="Record pipeline state after artifact save")
     parser.add_argument("--platform", help="Platform name (e.g., fulano)")
@@ -280,8 +342,22 @@ def main():
         action="store_true",
         help="Re-seed all platforms from filesystem",
     )
+    parser.add_argument(
+        "--detect-from-path",
+        dest="detect_path",
+        help="Auto-detect platform/node/skill from file path (used by hooks)",
+    )
 
     args = parser.parse_args()
+
+    if args.detect_path:
+        detected = detect_from_path(args.detect_path)
+        if not detected:
+            # Not a recognized pipeline artifact — silently exit
+            return
+        result = record_save(**detected)
+        print(json.dumps(result))
+        return
 
     if args.reseed_all:
         results = reseed_all()

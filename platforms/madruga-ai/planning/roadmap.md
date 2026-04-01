@@ -43,6 +43,7 @@ gantt
     011 CI/CD Pipeline          :done, e011, 2026-03-30, 1d
     012 Multi-repo Implement   :done, e012, 2026-03-31, 1d
     013 DAG Executor + Bridge    :done, e013, 2026-03-31, 1d
+    014 Telegram Notifications   :done, e014, 2026-04-01, 1d
 ```
 
 | # | Epic | Descricao | Status | Concluido |
@@ -55,6 +56,7 @@ gantt
 | 011 | CI/CD Pipeline | GitHub Actions: lint (ruff + platform lint), LikeC4 build, db-tests, template tests, bash-tests, portal-build. 6 jobs. | **shipped** | 2026-03-30 |
 | 012 | Multi-repo Implement | git worktree para repos externos. ensure_repo (SSH/HTTPS), worktree isolado, implement_remote (claude -p --cwd), PR via gh. 3 scripts, 28 testes. | **shipped** | 2026-03-31 |
 | 013 | DAG Executor + SpeckitBridge | Custom DAG executor: Kahn's topological sort, claude -p dispatch, human gates (CLI pause/resume), retry/circuit breaker/watchdog. 494 LOC + 110 LOC extensions. 43 testes. | **shipped** | 2026-03-31 |
+| 014 | Telegram Notifications | Bot Telegram standalone (aiogram 3.x): notifica human gates pendentes, inline keyboard approve/reject, health check, backoff exponencial, offset persistence. Migration 008. 28 testes. | **shipped** | 2026-04-01 |
 
 ---
 
@@ -67,7 +69,7 @@ gantt
     section MVP
     012 Multi-repo Implement     :done, e012, 2026-03-31, 1d
     013 DAG Executor + Bridge    :done, e013, 2026-03-31, 1d
-    014 Telegram Notifications   :e014, after e013, 2w
+    014 Telegram Notifications   :done, e014, 2026-04-01, 1d
     015 Subagent Judge           :e015, after e013, 2w
     016 Daemon 24/7              :e016, after e014, 2w
 ```
@@ -78,7 +80,7 @@ gantt
 |-------|------|----------|-------|--------------------------|
 | 1 | 012 Multi-repo Implement | 2w (real: 1d) | Medio | Value-first: desbloqueia Fulano imediatamente. Escopo bem definido + reutilizacao de db.py reduziu appetite de 2w para 1d. |
 | 2 | 013 DAG Executor + SpeckitBridge | 6w | Alto | Value: runtime funcional. Real: ~1d. Infraestrutura existente (db.py, post_save.py) + decisoes bem capturadas em context.md reduziram escopo. |
-| 3 | 014 Telegram Notifications | 2w | Baixo | Depende da gate state machine de 013. aiogram e framework maduro — baixo risco tecnico. |
+| 3 | 014 Telegram Notifications | 2w (real: 1d) | Baixo | Depende da gate state machine de 013. aiogram e framework maduro — baixo risco tecnico. Appetite reduzido: scope claro + framework maduro. |
 | 3 | 015 Subagent Judge + Decision Classifier | 2w | Medio | Paralelo com 014. Agent tool ja provado no pipeline. Risco em calibracao de personas/judge. |
 | 4 | 016 Daemon 24/7 | 2w | Baixo | Ultimo — monta em cima de tudo. Mecanico: asyncio event loop + health checks + systemd. |
 

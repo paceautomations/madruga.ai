@@ -1,9 +1,10 @@
 ---
 id: 014
 title: "Telegram Notifications"
-status: in_progress
+status: shipped
 appetite: 2w
 priority: 2
+delivered_at: 2026-04-01
 ---
 # Telegram Notifications
 

@@ -27,6 +27,7 @@ Tudo vive em um unico lugar, versionado, consultavel por qualquer membro do time
 | **Mapeamento de processos de negocio** | Fluxos de negocio documentados com diagramas visuais navegaveis | Entende como o negocio funciona antes de decidir o que construir |
 | **Implementacao em repositorios externos** | Ciclos de implementacao operam diretamente no repositorio de codigo da plataforma-alvo, criando PRs automaticamente | Documentacao e codigo vivem conectados mesmo quando estao em lugares diferentes |
 | **Execucao autonoma do pipeline** | DAG executor processa pipeline L1/L2 automaticamente: topological sort, dispatch via claude -p, human gates com pause/resume, retry com circuit breaker. Operador executa via CLI | O arquiteto foca em decisoes estrategicas — pipeline executa sozinho entre gates |
+| **Notificacoes via Telegram** | Bot Telegram com inline keyboard para aprovar/rejeitar human gates do pipeline. Health check, backoff exponencial, offset persistence | Operador nunca perde uma decisao critica — notificacao chega em segundos |
 
 ---
 
@@ -34,7 +35,6 @@ Tudo vive em um unico lugar, versionado, consultavel por qualquer membro do time
 
 | Feature | Descricao | Por que é importante |
 |---------|-----------|---------------------|
-| **Notificacoes em tempo real** | Alertas via mensageria quando uma decisao precisa de aprovacao ou quando algo falha | Revisor nunca perde uma decisao critica — mesmo fora do horario |
 | **Revisao multi-perspectiva** | Especificacoes revisadas automaticamente por multiplas perspectivas (arquitetura, bugs, simplicidade) antes de implementar | Pega problemas que uma unica perspectiva nao ve |
 | **Deteccao e correcao de divergencias** | Apos implementacao, o sistema compara codigo com documentacao e corrige automaticamente | Documentacao nunca vira ficcao — o ciclo se fecha sozinho |
 

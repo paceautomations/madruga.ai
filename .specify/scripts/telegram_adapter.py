@@ -9,13 +9,10 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-import structlog
 from aiogram import Bot
 from aiogram.enums import ParseMode
 from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-
-logger = structlog.get_logger(__name__)
 
 MAX_MESSAGE_LENGTH = 4096
 
@@ -34,6 +31,10 @@ class MessagingProvider(ABC):
     @abstractmethod
     async def alert(self, chat_id: int, text: str, level: str = "info") -> int:
         """Envia alerta com indicador visual de severidade. Retorna message_id."""
+
+    @abstractmethod
+    async def edit_message(self, chat_id: int, message_id: int, text: str, reply_markup: object | None = None) -> None:
+        """Edita mensagem existente. Usado para remover botoes apos resolucao."""
 
 
 ALERT_PREFIXES = {

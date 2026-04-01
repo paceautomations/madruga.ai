@@ -319,6 +319,7 @@ After completing any implementation task (new code or refactor touching 3+ files
 | 011 | CI/CD Pipeline | GitHub Actions: lint, LikeC4 build, db-tests, templates, bash-tests, portal-build. |
 | 012 | Multi-repo Implement | ensure_repo (SSH/HTTPS), worktree, implement_remote (claude -p --cwd), PR via gh. 3 scripts, 28 testes. |
 | 013 | DAG Executor + SpeckitBridge | dag_executor.py: Kahn's topological sort, claude -p dispatch, human gates (CLI pause/resume), retry/circuit breaker/watchdog. Migration 007. 43 testes. |
+| 014 | Telegram Notifications | Bot Telegram standalone (aiogram 3.x): notifica human gates, inline keyboard approve/reject, health check, backoff, offset persistence. Migration 008. 28 testes. |
 
 ## Recent Changes
-- 010-telegram-notifications: Added Python 3.12 (compativel com 3.11+) + aiogram >= 3.15, pyyaml (existente)
+- 014-telegram-notifications: telegram_bot.py + telegram_adapter.py. structlog>=24.0. 135 testes totais.
