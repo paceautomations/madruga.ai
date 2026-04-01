@@ -720,6 +720,16 @@ def _build_parser():  # -> argparse.ArgumentParser
     p.add_argument("name", help="Platform name")
     p.add_argument("epic_slug", help="Epic slug")
 
+    # Gate management (epic 013)
+    gate_p = sub.add_parser("gate", help="Manage human gates (approve/reject/list)")
+    gate_sub = gate_p.add_subparsers(dest="gate_action", help="Gate action")
+    ga = gate_sub.add_parser("approve", help="Approve a pending gate")
+    ga.add_argument("run_id", help="Run ID to approve")
+    gr = gate_sub.add_parser("reject", help="Reject a pending gate")
+    gr.add_argument("run_id", help="Run ID to reject")
+    gl = gate_sub.add_parser("list", help="List pending gates")
+    gl.add_argument("name", help="Platform name")
+
     return parser
 
 
@@ -769,6 +779,16 @@ def main() -> None:
         cmd_worktree(args.name, args.epic_slug)
     elif args.command == "worktree-cleanup":
         cmd_worktree_cleanup(args.name, args.epic_slug)
+    elif args.command == "gate":
+        if not args.gate_action:
+            print("Usage: platform.py gate {approve|reject|list}")
+            sys.exit(1)
+        if args.gate_action == "approve":
+            cmd_gate_approve(args.run_id)
+        elif args.gate_action == "reject":
+            cmd_gate_reject(args.run_id)
+        elif args.gate_action == "list":
+            cmd_gate_list(args.name)
 
 
 def cmd_ensure_repo(name: str) -> None:
@@ -795,6 +815,50 @@ def cmd_worktree_cleanup(name: str, epic_slug: str) -> None:
 
     cleanup_worktree(name, epic_slug)
     _ok(f"Worktree cleaned up: {name}/{epic_slug}")
+
+
+def cmd_gate_approve(run_id: str) -> None:
+    """Approve a pending human gate."""
+    from db import approve_gate, get_conn
+
+    conn = get_conn()
+    if approve_gate(conn, run_id):
+        _ok(f"Gate approved: {run_id}")
+    else:
+        _error(f"No pending gate found for run_id: {run_id}")
+        sys.exit(1)
+    conn.close()
+
+
+def cmd_gate_reject(run_id: str) -> None:
+    """Reject a pending human gate."""
+    from db import get_conn, reject_gate
+
+    conn = get_conn()
+    if reject_gate(conn, run_id):
+        _ok(f"Gate rejected: {run_id}")
+    else:
+        _error(f"No pending gate found for run_id: {run_id}")
+        sys.exit(1)
+    conn.close()
+
+
+def cmd_gate_list(name: str) -> None:
+    """List pending gates for a platform."""
+    from db import get_conn, get_pending_gates
+
+    conn = get_conn()
+    gates = get_pending_gates(conn, name)
+    conn.close()
+    if not gates:
+        print("No pending gates.")
+        return
+    print(f"{'Run ID':<12s} {'Node':<25s} {'Epic':<30s} {'Waiting Since'}")
+    print("-" * 80)
+    for g in gates:
+        epic = g.get("epic_id") or "-"
+        since = g.get("started_at") or "-"
+        print(f"{g['run_id']:<12s} {g['node_id']:<25s} {epic:<30s} {since}")
 
 
 if __name__ == "__main__":

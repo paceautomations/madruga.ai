@@ -4,6 +4,7 @@ title: "DAG Executor + SpeckitBridge"
 status: planned
 appetite: 6w
 priority: 1
+delivered_at: 2026-03-31
 ---
 # DAG Executor + SpeckitBridge
 

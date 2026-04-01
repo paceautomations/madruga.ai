@@ -1424,6 +1424,65 @@ def get_runs(conn: sqlite3.Connection, platform_id: str) -> list[dict]:
 
 
 # ══════════════════════════════════════
+# Gate Management
+# ══════════════════════════════════════
+
+
+def approve_gate(conn: sqlite3.Connection, run_id: str) -> bool:
+    """Approve a pending human gate. Returns True if a row was updated."""
+    cur = conn.execute(
+        "UPDATE pipeline_runs SET gate_status='approved', gate_resolved_at=? "
+        "WHERE run_id=? AND gate_status='waiting_approval'",
+        (_now(), run_id),
+    )
+    conn.commit()
+    return cur.rowcount > 0
+
+
+def reject_gate(conn: sqlite3.Connection, run_id: str) -> bool:
+    """Reject a pending human gate. Returns True if a row was updated."""
+    cur = conn.execute(
+        "UPDATE pipeline_runs SET gate_status='rejected', gate_resolved_at=? "
+        "WHERE run_id=? AND gate_status='waiting_approval'",
+        (_now(), run_id),
+    )
+    conn.commit()
+    return cur.rowcount > 0
+
+
+def get_pending_gates(conn: sqlite3.Connection, platform_id: str) -> list[dict]:
+    """List all runs with gate_status='waiting_approval' for a platform."""
+    rows = conn.execute(
+        "SELECT run_id, platform_id, epic_id, node_id, gate_status, "
+        "gate_notified_at, started_at FROM pipeline_runs "
+        "WHERE platform_id=? AND gate_status='waiting_approval' ORDER BY started_at",
+        (platform_id,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_resumable_nodes(conn: sqlite3.Connection, platform_id: str, epic_id: str | None = None) -> set[str]:
+    """Return set of node_ids that are completed or approved (for resume)."""
+    if epic_id:
+        rows = conn.execute(
+            "SELECT node_id FROM epic_nodes WHERE platform_id=? AND epic_id=? AND status='done'",
+            (platform_id, epic_id),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT node_id FROM pipeline_nodes WHERE platform_id=? AND status='done'",
+            (platform_id,),
+        ).fetchall()
+    done = {r[0] for r in rows}
+    # Also include nodes with approved gates (ready to execute)
+    approved = conn.execute(
+        "SELECT DISTINCT node_id FROM pipeline_runs WHERE platform_id=? AND gate_status='approved'",
+        (platform_id,),
+    ).fetchall()
+    return done | {r[0] for r in approved}
+
+
+# ══════════════════════════════════════
 # Events
 # ══════════════════════════════════════
 

@@ -81,6 +81,14 @@ python3 .specify/scripts/vision-build.py <name>              # populate AUTO tab
 python3 .specify/scripts/vision-build.py <name> --validate-only
 python3 .specify/scripts/vision-build.py <name> --export-png
 
+# ── DAG Executor ──
+python3 .specify/scripts/dag_executor.py --platform <name> --dry-run     # print execution order
+python3 .specify/scripts/dag_executor.py --platform <name>                # execute L1 pipeline
+python3 .specify/scripts/dag_executor.py --platform <name> --epic <slug>  # execute L2 epic cycle
+python3 .specify/scripts/dag_executor.py --platform <name> --resume       # resume from checkpoint
+python3 .specify/scripts/platform.py gate list <name>                     # list pending gates
+python3 .specify/scripts/platform.py gate approve <run-id>                # approve a gate
+
 # ── DB State (post-save) ──
 python3 .specify/scripts/post_save.py --platform <name> --node <id> --skill <skill> --artifact <path>  # record skill completion
 python3 .specify/scripts/post_save.py --reseed --platform <name>   # re-seed platform from filesystem
@@ -308,3 +316,4 @@ After completing any implementation task (new code or refactor touching 3+ files
 | 010 | Pipeline Dashboard | Dashboard visual no portal. CLI status. Mermaid DAG. |
 | 011 | CI/CD Pipeline | GitHub Actions: lint, LikeC4 build, db-tests, templates, bash-tests, portal-build. |
 | 012 | Multi-repo Implement | ensure_repo (SSH/HTTPS), worktree, implement_remote (claude -p --cwd), PR via gh. 3 scripts, 28 testes. |
+| 013 | DAG Executor + SpeckitBridge | dag_executor.py: Kahn's topological sort, claude -p dispatch, human gates (CLI pause/resume), retry/circuit breaker/watchdog. Migration 007. 43 testes. |
