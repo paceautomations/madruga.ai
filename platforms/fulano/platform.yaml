@@ -182,16 +182,16 @@ pipeline:
         depends: ["implement"]
         gate: auto
 
-      - id: verify
-        skill: "madruga:verify"
-        outputs: ["{epic}/verify-report.md"]
+      - id: judge
+        skill: "madruga:judge"
+        outputs: ["{epic}/judge-report.md"]
         depends: ["analyze-post"]
         gate: auto-escalate
 
       - id: qa
         skill: "madruga:qa"
         outputs: ["{epic}/qa-report.md"]
-        depends: ["verify"]
+        depends: ["judge"]
         gate: human
 
       - id: reconcile
@@ -200,4 +200,4 @@ pipeline:
         depends: ["qa"]
         gate: human
         optional: true
-        skip_condition: "verify score >= 95% and zero drift"
+        skip_condition: "judge score >= 95% and zero drift"

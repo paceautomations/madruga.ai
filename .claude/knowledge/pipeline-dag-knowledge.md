@@ -240,6 +240,18 @@ After L1 completes (roadmap done), the pipeline continues into L2. Each epic fro
 - **Merged by**: User after reconcile completes — via PR or manual merge
 - **Guard**: All epic cycle skills check `git branch --show-current` and STOP if on main (see pipeline-contract-base.md Step 0)
 
+### Parallel Epics Constraint (ARCHITECTURAL INVARIANT)
+
+**Self-ref platforms (repo.name == own repo) MUST execute epics sequentially — NEVER in parallel.**
+Parallel epic execution is ONLY safe for external repos, where each epic gets an isolated git worktree (`worktree.py`).
+
+Why: self-ref platforms share a single working directory, DB (`.pipeline/madruga.db`), and skill/knowledge files. Parallel epics would cause:
+1. Branch checkout conflicts (two epics overwriting each other's files)
+2. SQLite state desync (post_save.py writes to different DB copies)
+3. Stale skills (worktree freezes `.claude/commands/` at branch point)
+
+If parallel self-ref epics are ever needed, ALL L2 skills (not just implement) must run inside the worktree, and the DB must use a shared absolute path. Until then: sequential only.
+
 ### Cycle Steps
 
 | Step | Skill | Gate | Purpose |
@@ -252,7 +264,7 @@ After L1 completes (roadmap done), the pipeline continues into L2. Each epic fro
 | 6 | speckit.analyze | auto | Pre-implementation consistency check (spec/plan/tasks) |
 | 7 | speckit.implement | auto | Execute tasks |
 | 8 | speckit.analyze | auto | Post-implementation consistency check |
-| 9 | madruga:verify | auto-escalate | Check spec adherence |
+| 9 | madruga:judge | auto-escalate | Tech-reviewers quality review (4 personas + judge pass) |
 | 10 | madruga:qa | human | Comprehensive testing — static analysis, tests, code review, browser QA |
 | 11 | madruga:reconcile | human | Detect and fix documentation drift |
 

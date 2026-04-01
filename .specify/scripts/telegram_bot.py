@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import logging
 import os
 import random
@@ -27,6 +28,7 @@ from aiogram.enums import ParseMode
 from aiogram.types import CallbackQuery
 
 sys.path.insert(0, os.path.dirname(__file__))
+
 
 from db import approve_gate, reject_gate  # noqa: E402
 from telegram_adapter import TelegramAdapter  # noqa: E402
@@ -124,6 +126,56 @@ def format_resolved_message(gate: dict, action: str) -> str:
     return "\n".join(lines)
 
 
+def format_decision_message(decision: dict) -> str:
+    """Format HTML message for a 1-way-door decision notification.
+
+    Args:
+        decision: dict with keys: description, context, alternatives (list of str),
+                  risk_score (dict with risk, reversibility, score),
+                  skill (str), platform (str), epic (str, optional).
+    """
+    risk = decision.get("risk_score", {})
+    lines = [
+        "<b>Pipeline \u2014 Decisao 1-Way-Door</b>",
+        "",
+        f"<b>Skill:</b> <code>{decision.get('skill', '?')}</code>",
+        f"<b>Plataforma:</b> {decision.get('platform', '?')}",
+    ]
+    epic = decision.get("epic")
+    if epic:
+        lines.append(f"<b>Epic:</b> {epic}")
+    lines.extend(
+        [
+            "",
+            f"<b>Decisao:</b> {decision.get('description', '?')}",
+            f"<b>Score de Risco:</b> {risk.get('score', '?')} "
+            f"(Risco={risk.get('risk', '?')} \u00d7 Reversibilidade={risk.get('reversibility', '?')})",
+            f"<b>Contexto:</b> {decision.get('context', 'N/A')}",
+        ]
+    )
+    alternatives = decision.get("alternatives", [])
+    if alternatives:
+        lines.append("")
+        lines.append("<b>Alternativas:</b>")
+        for i, alt in enumerate(alternatives, 1):
+            lines.append(f"{i}. {alt}")
+    return "\n".join(lines)
+
+
+def format_decision_resolved_message(decision: dict, action: str) -> str:
+    """Format HTML message after a decision is approved/rejected."""
+    verdict = "Aprovada" if action == "a" else "Rejeitada"
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    lines = [
+        f"<b>Pipeline \u2014 Decisao {verdict}</b>",
+        "",
+        f"<b>Decisao:</b> {decision.get('description', '?')}",
+        f"<b>Resolvido:</b> {now}",
+        f"<b>Veredicto:</b> {verdict} via Telegram",
+    ]
+    return "\n".join(lines)
+
+
 # --- Gate notification ---
 
 
@@ -150,7 +202,100 @@ async def notify_gate(
     logger.info("gate_notified", run_id=run_id, message_id=message_id)
 
 
+# --- Decision notification (1-way-door) ---
+
+
+async def notify_oneway_decision(
+    adapter: TelegramAdapter,
+    chat_id: int,
+    decision: dict,
+    conn: sqlite3.Connection,
+) -> None:
+    """Send 1-way-door decision notification via Telegram and record in DB.
+
+    Args:
+        decision: dict with keys: id, description, context, alternatives,
+                  risk_score (dict), skill, platform, epic (optional).
+    """
+    text = format_decision_message(decision)
+    decision_id = decision["id"]
+    choices = [
+        ("\u2705 Aprovar", f"decision:{decision_id}:a"),
+        ("\u274c Rejeitar", f"decision:{decision_id}:r"),
+    ]
+    message_id = await adapter.ask_choice(chat_id, text, choices)
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    conn.execute(
+        "INSERT INTO events (platform_id, entity_type, entity_id, action, payload, created_at) "
+        "VALUES (?, 'decision', ?, 'decision_notified', ?, ?)",
+        (
+            decision.get("platform", "unknown"),
+            decision_id,
+            json.dumps({"message_id": message_id}),
+            now,
+        ),
+    )
+    conn.commit()
+    logger.info("decision_notified", decision_id=decision_id, message_id=message_id)
+
+
 # --- Callback handling ---
+
+
+def parse_decision_callback_data(data: str) -> tuple[str, str] | None:
+    """Parse 'decision:{id}:{action}'. Returns (decision_id, action) or None."""
+    parts = data.split(":")
+    if len(parts) != 3 or parts[0] != "decision" or parts[2] not in ("a", "r"):
+        return None
+    return parts[1], parts[2]
+
+
+async def handle_decision_callback(
+    callback: CallbackQuery,
+    adapter: TelegramAdapter,
+    conn: sqlite3.Connection,
+) -> None:
+    """Process approve/reject callback for a 1-way-door decision."""
+    parsed = parse_decision_callback_data(callback.data)
+    if not parsed:
+        await callback.answer("Dados invalidos")
+        return
+
+    decision_id, action = parsed
+    chat_id = callback.message.chat.id
+    message_id = callback.message.message_id
+
+    verdict = "approved" if action == "a" else "rejected"
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    # Lookup platform_id from the original decision_notified event
+    row = conn.execute(
+        "SELECT platform_id FROM events WHERE entity_type='decision' AND entity_id=? AND action='decision_notified'",
+        (decision_id,),
+    ).fetchone()
+    platform_id = row[0] if row else "unknown"
+
+    # Record decision result in events
+    conn.execute(
+        "INSERT INTO events (platform_id, entity_type, entity_id, action, payload, created_at) "
+        "VALUES (?, 'decision', ?, 'decision_resolved', ?, ?)",
+        (
+            platform_id,
+            decision_id,
+            json.dumps({"verdict": verdict}),
+            now,
+        ),
+    )
+    conn.commit()
+
+    # Edit message to remove buttons
+    decision_info = {"description": decision_id}
+    resolved_text = format_decision_resolved_message(decision_info, action)
+    await adapter.edit_message(chat_id, message_id, resolved_text, reply_markup=None)
+
+    label = "Aprovada" if action == "a" else "Rejeitada"
+    await callback.answer(f"Decisao {label}")
+    logger.info("decision_resolved", decision_id=decision_id, verdict=verdict)
 
 
 def parse_callback_data(data: str) -> tuple[str, str] | None:
@@ -319,10 +464,14 @@ async def async_main(args: argparse.Namespace) -> None:
                 save_offset(conn, event.update_id)
             return result
 
-        # Register callback handler
+        # Register callback handlers
         @dp.callback_query(F.data.startswith("gate:"))
         async def _handle_gate(callback: CallbackQuery):
             await handle_gate_callback(callback, adapter, conn)
+
+        @dp.callback_query(F.data.startswith("decision:"))
+        async def _handle_decision(callback: CallbackQuery):
+            await handle_decision_callback(callback, adapter, conn)
 
         logger.info(
             "bot_starting",

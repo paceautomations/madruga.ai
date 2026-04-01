@@ -116,15 +116,41 @@ Tier 1 checks + **scorecard** presented to the human reviewer.
 
 Present scorecard to user with honest self-assessment. Flag weak spots.
 
-### Tier 3 — 1-Way-Door Gates
+**Note**: For human gates that want optional Judge review, see the `/madruga:judge` skill. Not enabled by default for Tier 2.
 
-Tier 1 + Tier 2 + **subagent adversarial review**.
+### Tier 3 — 1-Way-Door Gates (Judge / Tech Reviewers)
 
-After completing Tier 2, launch a subagent (Agent tool, subagent_type="general-purpose") with:
-- The complete artifact text
-- Prompt: "You are a staff engineer reviewing this artifact for a 1-way-door decision. Be harsh and direct. Check for: missed alternatives, unsupported claims, hidden assumptions, scope creep, simpler approaches. Output a bullet list of issues (BLOCKER/WARNING/NIT) and an overall verdict."
+Tier 1 + Tier 2 + **multi-persona Judge review**.
 
-Incorporate feedback: fix blockers, note warnings in the scorecard.
+After completing Tier 2, run the Judge following the `/madruga:judge` skill:
+
+1. Read `.claude/knowledge/judge-config.yaml` — load the `engineering` team.
+2. For each persona, read the prompt file from `.claude/knowledge/personas/`.
+3. Launch **4 Agent tool calls in parallel** (single message) — each with the artifact + persona prompt.
+4. Aggregate findings from all personas.
+5. Run **Judge pass**: filter each finding by Accuracy/Actionability/Severity (see the `/madruga:judge` skill §4).
+6. Generate score: `100 - (blockers×20 + warnings×5 + nits×1)`, min 0.
+7. Handle degradation per the `/madruga:judge` skill §6 (4/4→normal, 3/4→partial, ≤1/4→fail).
+8. If BLOCKERs found → attempt to fix automatically, then re-verify.
+9. Present consolidated Judge report in the gate (score + filtered findings).
+
+---
+
+## Inline Decision Detection (L2 Skills Only)
+
+During L2 skill execution (especially `speckit.implement`), watch for decisions that may be irreversible. When encountering a significant decision:
+
+1. Read `.claude/knowledge/decision-classifier-knowledge.md` for pattern matching rules.
+2. Match the decision description against the risk patterns table.
+3. Calculate score: `Risk (1-5) × Reversibility (1-5)`.
+4. **If score < 15**: 2-way-door — proceed automatically, log the decision.
+5. **If score ≥ 15**: 1-way-door — **PAUSE execution**:
+   - Format decision with context, score breakdown, and alternatives.
+   - Notify via Telegram using `notify_oneway_decision()` from `telegram_bot.py`.
+   - Wait for approve/reject response before continuing.
+   - **Fail closed**: If Telegram is unavailable, pipeline pauses (does not proceed).
+
+This is a complement to the Judge safety net (which catches escaped 1-way-doors at the end of the cycle).
 
 ---
 

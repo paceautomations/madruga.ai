@@ -1,0 +1,34 @@
+# Judge Config — Review Teams
+# Extensible: add new teams by adding entries here + persona prompt files.
+
+review_teams:
+  engineering:
+    name: "Tech Reviewers"
+    personas:
+      - id: arch-reviewer
+        role: "Architecture Reviewer"
+        prompt: ".claude/knowledge/personas/arch-reviewer.md"
+      - id: bug-hunter
+        role: "Bug Hunter"
+        prompt: ".claude/knowledge/personas/bug-hunter.md"
+      - id: simplifier
+        role: "Simplifier"
+        prompt: ".claude/knowledge/personas/simplifier.md"
+      - id: stress-tester
+        role: "Stress Tester"
+        prompt: ".claude/knowledge/personas/stress-tester.md"
+    runs_at:
+      - tier3-l1     # 1-way-door gates no L1
+      - judge-l2     # Node judge no L2 (substitui verify)
+
+# Extensão futura:
+#  product:
+#    name: "Product Reviewers"
+#    personas:
+#      - id: pm-reviewer
+#        role: "PM Reviewer"
+#        prompt: ".claude/knowledge/personas/pm-reviewer.md"
+#      - id: designer-reviewer
+#        role: "Designer Reviewer"
+#        prompt: ".claude/knowledge/personas/designer-reviewer.md"
+#    runs_at: [specify, plan]

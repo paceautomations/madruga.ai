@@ -251,3 +251,168 @@ class TestOffsetPersistence:
         assert load_offset(conn) == 12345
         save_offset(conn, 67890)
         assert load_offset(conn) == 67890
+
+
+# --- Decision notification tests (Epic 015) ---
+
+
+def _make_conn_with_events():
+    """Create in-memory DB with pipeline_runs + events schema."""
+    conn = _make_conn()
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS events (
+            event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            platform_id TEXT NOT NULL,
+            entity_type TEXT,
+            entity_id TEXT,
+            action TEXT NOT NULL,
+            actor TEXT,
+            payload TEXT,
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+        )"""
+    )
+    return conn
+
+
+def _sample_decision(decision_id="dec-1"):
+    return {
+        "id": decision_id,
+        "description": "drop column legacy_id from users table",
+        "context": "Column has been unused for 6 months",
+        "alternatives": ["Add deprecation warning first", "Keep column but stop writing"],
+        "risk_score": {"risk": 5, "reversibility": 5, "score": 25},
+        "skill": "speckit.implement",
+        "platform": "madruga-ai",
+        "epic": "015-subagent-judge",
+    }
+
+
+class TestFormatDecisionMessage:
+    def test_contains_key_fields(self):
+        from telegram_bot import format_decision_message
+
+        msg = format_decision_message(_sample_decision())
+        assert "1-Way-Door" in msg
+        assert "drop column legacy_id" in msg
+        assert "Score de Risco" in msg
+        assert "25" in msg
+        assert "Alternativas" in msg
+        assert "deprecation" in msg.lower()
+
+    def test_without_epic(self):
+        from telegram_bot import format_decision_message
+
+        d = _sample_decision()
+        del d["epic"]
+        msg = format_decision_message(d)
+        assert "Epic" not in msg
+
+    def test_without_alternatives(self):
+        from telegram_bot import format_decision_message
+
+        d = _sample_decision()
+        d["alternatives"] = []
+        msg = format_decision_message(d)
+        assert "Alternativas" not in msg
+
+
+class TestNotifyOnewayDecision:
+    def test_sends_message_and_records_event(self):
+        from telegram_bot import notify_oneway_decision
+
+        conn = _make_conn_with_events()
+        adapter = AsyncMock()
+        adapter.ask_choice.return_value = 42
+
+        decision = _sample_decision()
+        asyncio.get_event_loop().run_until_complete(notify_oneway_decision(adapter, 123, decision, conn))
+
+        adapter.ask_choice.assert_called_once()
+        call_args = adapter.ask_choice.call_args
+        assert call_args[0][0] == 123  # chat_id
+        choices = call_args[0][2]
+        callback_datas = [c[1] for c in choices]
+        assert "decision:dec-1:a" in callback_datas
+        assert "decision:dec-1:r" in callback_datas
+
+        # Verify event recorded
+        row = conn.execute("SELECT * FROM events WHERE action='decision_notified'").fetchone()
+        assert row is not None
+
+
+class TestParseDecisionCallbackData:
+    def test_valid_approve(self):
+        from telegram_bot import parse_decision_callback_data
+
+        result = parse_decision_callback_data("decision:dec-1:a")
+        assert result == ("dec-1", "a")
+
+    def test_valid_reject(self):
+        from telegram_bot import parse_decision_callback_data
+
+        result = parse_decision_callback_data("decision:dec-1:r")
+        assert result == ("dec-1", "r")
+
+    def test_invalid_prefix(self):
+        from telegram_bot import parse_decision_callback_data
+
+        assert parse_decision_callback_data("gate:run-1:a") is None
+
+    def test_invalid_action(self):
+        from telegram_bot import parse_decision_callback_data
+
+        assert parse_decision_callback_data("decision:dec-1:x") is None
+
+
+class TestHandleDecisionCallback:
+    def test_approve_records_event_and_edits_message(self):
+        from telegram_bot import handle_decision_callback
+
+        conn = _make_conn_with_events()
+        # Pre-insert a decision_notified event so platform_id lookup works
+        conn.execute(
+            "INSERT INTO events (platform_id, entity_type, entity_id, action, payload, created_at) "
+            "VALUES ('madruga-ai', 'decision', 'dec-1', 'decision_notified', '{\"message_id\": 42}', '2026-04-01')"
+        )
+        conn.commit()
+
+        callback = AsyncMock()
+        callback.data = "decision:dec-1:a"
+        callback.message = MagicMock()
+        callback.message.chat = MagicMock()
+        callback.message.chat.id = 123
+        callback.message.message_id = 42
+
+        adapter = AsyncMock()
+
+        asyncio.get_event_loop().run_until_complete(handle_decision_callback(callback, adapter, conn))
+
+        # Event recorded
+        row = conn.execute("SELECT payload FROM events WHERE action='decision_resolved'").fetchone()
+        assert row is not None
+        assert "approved" in row[0]
+
+        # Message edited
+        adapter.edit_message.assert_called_once()
+        callback.answer.assert_called_once()
+        assert "aprovada" in callback.answer.call_args[0][0].lower()
+
+    def test_reject_records_event(self):
+        from telegram_bot import handle_decision_callback
+
+        conn = _make_conn_with_events()
+
+        callback = AsyncMock()
+        callback.data = "decision:dec-1:r"
+        callback.message = MagicMock()
+        callback.message.chat = MagicMock()
+        callback.message.chat.id = 123
+        callback.message.message_id = 42
+
+        adapter = AsyncMock()
+
+        asyncio.get_event_loop().run_until_complete(handle_decision_callback(callback, adapter, conn))
+
+        row = conn.execute("SELECT payload FROM events WHERE action='decision_resolved'").fetchone()
+        assert "rejected" in row[0]
+        assert "rejeitada" in callback.answer.call_args[0][0].lower()

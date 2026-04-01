@@ -1,5 +1,5 @@
 ---
-description: Verify implementation adherence against spec, tasks, and architecture with a coverage score
+description: "[DEPRECATED] Use /madruga:judge instead. Redirects to Judge skill."
 arguments:
   - name: platform
     description: "Platform/product name."
@@ -9,107 +9,36 @@ arguments:
     required: false
 argument-hint: "[platform] [epic-number]"
 handoffs:
-  - label: QA Testing
-    agent: madruga/qa
-    prompt: "Verify complete. Run comprehensive QA testing."
+  - label: Judge (replacement)
+    agent: madruga/judge
+    prompt: "Verify is deprecated. Use /madruga:judge for tech-reviewers quality review."
 ---
 
-# Verify — Adherence Verification
+# Verify — DEPRECATED
 
-> **Contract**: Follow steps 0 and 5 from `.claude/knowledge/pipeline-contract-base.md`.
+> **This skill has been replaced by `/madruga:judge`** (Epic 015).
+>
+> The Judge provides multi-persona review (4 specialized reviewers + Judge pass) instead of the old single-perspective verify.
 
-Compare implementation against spec (FRs covered?), tasks (phantom completions?), and architecture (drift?). Generate a report with an adherence score.
+## Migration
 
-## Cardinal Rule: ZERO Phantom Completion
+- **Old**: `/madruga:verify <platform> <epic>` → `verify-report.md`
+- **New**: `/madruga:judge <platform> <epic>` → `judge-report.md`
 
-If a task is marked [X] but the code does not exist, it is a **BLOCKER**. No task is considered done without filesystem evidence.
+## What Changed
 
-## Persona
+| Aspect | Verify (old) | Judge (new) |
+|--------|-------------|-------------|
+| Reviewers | Single generic check | 4 specialized personas in parallel |
+| Focus | Adherence (spec vs code) | Engineering quality (bugs, architecture, simplicity, stress) |
+| Output | verify-report.md | judge-report.md |
+| Scoring | Coverage % | Quality score (100 - blockers×20 - warnings×5 - nits×1) |
+| Gate | auto-escalate | auto-escalate (same) |
 
-QA Lead / Auditor. Skeptical, factual. Write generated artifacts in Brazilian Portuguese (PT-BR).
+**Note**: Adherence checking (spec vs code) is now handled by `speckit.analyze` (pre and post implementation). The Judge focuses on engineering quality.
 
-## Usage
+## Redirect
 
-- `/verify fulano 001` — Verify epic 001 of platform "fulano"
-- `/verify` — Prompt for the platform and epic
+When invoked, this skill redirects to `/madruga:judge` with the same arguments.
 
-## Output Directory
-
-Save to `platforms/<name>/epics/<NNN>/verify-report.md`.
-
-## Instructions
-
-Confirm that spec.md and tasks.md exist for the epic (in the corresponding spec directory).
-
-### 1. Collect Context + Verify
-
-- Read spec.md — extract functional requirements (FR-NNN)
-- Read tasks.md — extract tasks and their status ([X] vs [ ])
-- Scan the filesystem or git diff — verify implemented code
-- Read architecture docs — verify alignment
-
-### 2. Generate Verify Report
-
-All generated content MUST be in PT-BR:
-
-```markdown
----
-title: "Verify Report — Epic <N>"
-updated: YYYY-MM-DD
----
-# Verify Report
-
-## Score: [N]%
-
-## Coverage Matrix
-
-| FR | Descricao | Implementado? | Evidencia |
-|----|-----------|--------------|-----------|
-| FR-001 | ... | Sim/Nao/Parcial | [file:line] |
-
-## Phantom Completion Check
-
-| Task | Status | Codigo Existe? | Veredicto |
-|------|--------|---------------|-----------|
-| T001 | [X] | Sim/Nao | OK/PHANTOM |
-
-## Architecture Drift
-
-| Area | Esperado (ADR/Blueprint) | Encontrado | Drift? |
-|------|-------------------------|-----------|--------|
-| ... | ... | ... | Sim/Nao |
-
-## Blockers
-[List of critical problems]
-
-## Warnings
-[List of non-critical problems]
-
-## Recomendacoes
-[What to do to reach 100%]
-```
-
-### 3. Auto-Review
-
-| # | Check | Action on Failure |
-|---|-------|-------------------|
-| 1 | Every FR verified? | Verify it |
-| 2 | Every task marked [X] has evidence? | Verify it |
-| 3 | Drift identified? | Report it |
-| 4 | Every decision has >=2 documented alternatives? | Add them |
-| 5 | Explicit trade-offs? | Add them |
-| 6 | Assumptions marked [VALIDAR] or backed by data? | Mark them |
-
-### 4. Gate: Auto-Escalate
-
-- If score >= 80% AND 0 blockers: **AUTO** — save the report, report success
-- If score < 80% OR blockers found: **ESCALATE** — present the report to the user with details
-
-## Error Handling
-
-| Problem | Action |
-|---------|--------|
-| No spec.md | Suggest `/speckit.specify` |
-| No tasks.md | Suggest `/speckit.tasks` |
-| No code implemented | Score 0%, list everything as pending |
-
+Execute `/madruga:judge` with the provided platform and epic arguments.
