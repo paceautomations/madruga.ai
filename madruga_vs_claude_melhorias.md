@@ -3,6 +3,8 @@
 > **Objetivo**: Comparar a codebase do madruga.ai com as best practices extraidas do Claude Code CLI (`@anthropic-ai/claude-code` v2.1.88). Identificar o que estamos fazendo bem e oportunidades concretas de melhoria.
 >
 > **Criterios**: Priorizamos apenas o que faz sentido para **performance**, **consistencia** e **confiabilidade** do pipeline. Nada de over-engineering.
+>
+> **Fontes**: Analise direta do source code + [artigo do Akita on Rails](https://akitaonrails.com/2026/03/31/codigo-fonte-do-claude-code-vazou-o-que-achamos-dentro/) com insights de [@thekitze](https://x.com/thekitze), [@iamfakeguru](https://x.com/iamfakeguru), [@altryne](https://x.com/altryne).
 
 ---
 
@@ -365,7 +367,98 @@ signal.signal(signal.SIGINT, _handle_sigint)
 
 ---
 
-## Parte 3: Resumo Executivo
+## Parte 3: Insights do Artigo Akita — O Que Muda na Analise
+
+> Fonte: [Akita on Rails — O codigo fonte do Claude Code vazou](https://akitaonrails.com/2026/03/31/codigo-fonte-do-claude-code-vazou-o-que-achamos-dentro/)
+
+### O Que o Artigo Revela e Nossa Analise Nao Cobria
+
+#### I1. Dream System — Consolidacao de Memoria como Subagent
+
+O Claude Code tem um sistema chamado "Dream" que roda em background como subagent. Trigger: 24h desde o ultimo sonho + 5 sessoes + lock exclusivo. Fases: Orient → Gather → Consolidate → Prune. Mantém indice < 200 linhas e < 25KB.
+
+**Principio critico**: Memoria e tratada como **pista, nao verdade**. O modelo precisa verificar antes de confiar. O subagent recebe bash read-only — pode olhar mas nao modificar.
+
+**Relevancia para madruga.ai**: Nosso memory system (`.claude/memory/`) segue a mesma taxonomia (user, feedback, project, reference). Mas **nao temos consolidacao automatica**. Memories acumulam sem pruning. Considerar um script de consolidacao que:
+1. Detecte memorias contraditorias
+2. Converta datas relativas para absolutas
+3. Mantenha MEMORY.md abaixo de 200 linhas
+4. Rode como cron ou hook pos-sessao
+
+---
+
+#### I2. Circuit Breaker de Compactacao — 3 Linhas que Economizam 250K API Calls/Dia
+
+O artigo revela que 1,279 sessoes tinham 50+ falhas consecutivas de compactacao (ate 3,272), desperdicando ~250K chamadas de API por dia globalmente. Fix: **3 linhas** — limitar falhas consecutivas a 3 antes de desabilitar compactacao.
+
+**Relevancia para madruga.ai**: Nosso `dag_executor.py` ja tem circuit breaker (5 falhas → open), mas nosso **skill dispatch nao tem**. Se um skill falha repetidamente via `claude -p`, o retry loop gasta tokens sem parar. Adicionar:
+
+```python
+# Em dispatch_with_retry(), apos 3 falhas CONSECUTIVAS do MESMO skill:
+if consecutive_failures >= 3:
+    log.error("Skill '%s' failed 3x consecutively. Disabling retries.", node.skill)
+    return False, "consecutive failure limit reached"
+```
+
+**Impacto**: Previne desperdicio catastrofico de tokens. A Anthropic perdeu 250K calls/dia por falta disso.
+
+---
+
+#### I3. Vibe Coding Disciplinado vs Staff-Engineer Spaghetti
+
+O artigo cita nota **6.5/10** do GPT-5.4 para o codebase do Claude Code. `print.ts` tem 5,594 linhas com funcao de 3,167 linhas e 12 niveis de nesting. `main.tsx` tem 803KB num unico arquivo.
+
+**Licao direta**: O Akita defende que CI deveria rejeitar complexidade ciclomatica alta. Funcao > 50 linhas precisa ser quebrada. Nenhum arquivo deveria passar de ~500 linhas.
+
+**Relevancia para madruga.ai**: Nosso maior arquivo e `db.py` (1,794 linhas). Nao e critico ainda, mas e o unico que esta perto do limite. Considerar split em modulos:
+- `db_core.py` — connection, migration, transaction
+- `db_pipeline.py` — pipeline/node/run operations
+- `db_decisions.py` — ADR/memory/FTS5 operations
+
+Nosso `qa.md` (742 linhas) e o maior skill — mas skills sao documentos, nao codigo, entao o threshold e diferente.
+
+---
+
+#### I4. Cache Bugs que Custam 10-20x
+
+O `@altryne` reportou que invalidacao de cache faz tokens custarem 10-20x mais. Bug na flag `--resume` quebra cache.
+
+**Relevancia para madruga.ai**: Nosso `dag_executor.py` usa `claude -p` para cada node. Cada chamada e uma sessao nova = zero prompt cache. O contexto de platform.yaml, dependencies, e contract e re-enviado do zero em cada node.
+
+**Sugestao M15**: Considerar `--resume` + session ID para manter cache entre nodes consecutivos do mesmo pipeline run. Economia estimada: 40-60% de tokens no pipeline L1.
+
+---
+
+#### I5. CLAUDE.md e Literalmente o System Prompt
+
+O artigo confirma: CLAUDE.md e injetado inteiro no system prompt. O `@iamfakeguru` publicou guardrails mecanicos: verificacao pos-edicao (tsc/eslint), releitura antes de editar, leitura em chunks para arquivos grandes, quebrar trabalho em subagentes.
+
+**Relevancia para madruga.ai**: Nosso CLAUDE.md ja e extenso e bem estruturado. Mas nao temos:
+1. **Guardrail de verificacao pos-save** — o skill salva o artifact mas nao verifica se o markdown e valido
+2. **Chunked reading** — skills que leem platform.yaml + todos os dependency artifacts podem exceder o limite de 2,000 linhas por read
+3. **Truncation awareness** — nosso `compose_skill_prompt()` trunca a 30K/50K chars, mas nao avisa o LLM que truncou
+
+---
+
+#### I6. O Que a Anthropic Deveria Ter Feito (E Nos Devemos Fazer)
+
+O artigo lista 4 prevencoes que teriam evitado o vazamento:
+
+| Prevencao | Nosso equivalente |
+|-----------|------------------|
+| `*.map` no `.npmignore` | N/A — nao publicamos npm |
+| Bundler sem source maps em prod | Relevante se publicarmos portal |
+| CI check que rejeita `.map` em pacotes | Nosso `ci.yml` deveria checar por secrets e arquivos sensiveis |
+| Pipeline de release com review manual | Nosso pipeline e review-by-design (human gates) |
+
+**Sugestao M16**: Adicionar step no `ci.yml` que verifica:
+- Nenhum `.env`, `.map`, `credentials` nos arquivos commitados
+- Nenhum API key hardcoded (regex simples)
+- `db.py` migrations sao incrementais (nao recriam tabelas existentes)
+
+---
+
+## Parte 4: Resumo Executivo
 
 ### O Que NAO Mudar
 
@@ -382,17 +475,30 @@ signal.signal(signal.SIGINT, _handle_sigint)
 
 | Fase | Melhorias | Esforco | Impacto |
 |------|-----------|---------|---------|
-| **Imediato** (proximo epic) | M3 (context managers), M4 (fail-closed gates) | 1h | Alto — elimina bugs de leak e typo |
-| **Curto prazo** (1-2 sprints) | M1 (schemas), M2 (error hierarchy), M8 (graceful shutdown) | 4h | Alto — confiabilidade do pipeline |
-| **Medio prazo** (3-4 sprints) | M5 (memoizacao), M6 (structured logging), M7 (skill lint++) | 4h | Medio — consistencia e DX |
-| **Backlog** | M9 (path security), M10 (deferred loading), M11 (race gates), M12 (stale cache), M13 (telemetry), M14 (DB lock) | 8h+ | Variado — avaliar por epic |
+| **Imediato** (proximo epic) | M3 (context managers), M4 (fail-closed gates), I2 (circuit breaker skill dispatch) | 2h | Alto — elimina leaks, typos, e desperdicio de tokens |
+| **Curto prazo** (1-2 sprints) | M1 (schemas), M2 (error hierarchy), M8 (graceful shutdown), I5 (CLAUDE.md guardrails), M16/I6 (CI secrets check) | 6h | Alto — confiabilidade do pipeline |
+| **Medio prazo** (3-4 sprints) | M5 (memoizacao), M6 (structured logging), M7 (skill lint++), I3 (split db.py), I1 (memory consolidation) | 8h | Medio — consistencia, DX, e economia de tokens |
+| **Backlog** | M9 (path security), M10 (deferred loading), M11 (race gates), M12 (stale cache), M13 (telemetry), M14 (DB lock), I4/M15 (session cache entre nodes) | 12h+ | Variado — avaliar por epic |
 
 ### Principio Guia
 
-> **Do Claude Code**: "Fail-closed defaults. Deny always wins. Defense in depth."
+> **Do Claude Code**: *"Fail-closed defaults. Deny always wins. Defense in depth."*
 >
-> **Traduzido para madruga.ai**: Valide inputs na entrada, feche resources no finally, trate gates desconhecidos como human, e nunca confie em string concatenacao para paths.
+> **Do Akita**: *"Velocidade sem disciplina produz debt acumulativo. Uma funcao de 3,167 linhas nao aparece da noite pro dia."*
+>
+> **Traduzido para madruga.ai**: Valide inputs na entrada, feche resources no finally, trate gates desconhecidos como human, nunca confie em string concatenacao para paths, e **trate memoria como pista, nao verdade**.
+
+### Anti-Patterns a Evitar (Aprendidos do Claude Code 6.5/10)
+
+| Anti-Pattern | Prevencao |
+|-------------|-----------|
+| Funcao > 500 linhas | CI com threshold de complexidade ciclomatica |
+| Arquivo > 1,500 linhas | Split em modulos por responsabilidade |
+| Retry loop sem circuit breaker | Limitar falhas consecutivas a 3 |
+| Cache invalidation silenciosa | Logar quando cache e invalidado e por que |
+| Memoria como verdade absoluta | Sempre verificar antes de confiar |
+| Vibe coding sem review | Cada skill tem auto-review (Tier 1/2/3) no contrato |
 
 ---
 
-> **Gerado**: 2026-04-01 | **Fonte**: Comparacao de `madruga.ai` (4,855 LOC Python + 4,506 LOC skills) com `@anthropic-ai/claude-code` v2.1.88 (2,215 files TypeScript)
+> **Gerado**: 2026-04-01 (atualizado com insights do [Akita on Rails](https://akitaonrails.com/2026/03/31/codigo-fonte-do-claude-code-vazou-o-que-achamos-dentro/)) | **Fonte**: Comparacao de `madruga.ai` (4,855 LOC Python + 4,506 LOC skills) com `@anthropic-ai/claude-code` v2.1.88 (2,215 files TypeScript)

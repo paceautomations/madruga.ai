@@ -79,14 +79,22 @@ By feature type in the epic:
 | Integration | Failure modes, retries, circuit breaker, timeouts |
 | Infra | Deploy strategy, scaling, monitoring thresholds |
 
-**Structured Questions:**
+**Structured Questions** (categorias conforme `pipeline-contract-base.md` Step 1):
 
-| Category | Question |
-|----------|----------|
-| **Assumptions** | "I assume [ADR-NNN decision] applies here. Correct?" |
-| **Trade-offs** | "For [gray area]: [simple approach A] or [robust approach B]?" |
-| **Gaps** | "Blueprint does not specify [detail X] for this epic. Define it?" |
-| **Challenge** | "[Obvious approach] may not be the best because [reason]." |
+Toda pergunta DEVE apresentar **≥2 opções com prós/contras/riscos e recomendação**, independente da categoria.
+
+**Micro-template** (aplicar em cada pergunta):
+
+> **A)** [opção] — Prós: [benefício]. Contras: [custo]. Riscos: [risco].
+> **B)** [opção] — Prós: [benefício]. Contras: [custo]. Riscos: [risco].
+> **Recomendação:** [A ou B] porque [razão].
+
+| Categoria | Padrão | Exemplo |
+|-----------|--------|---------|
+| **Premissas** | "Assumo [X] por causa de [ref]. Alternativas:" + opções | "Assumo ADR-003 (PostgreSQL) para este epic. **A)** PostgreSQL — Prós: consistência com stack. Contras: nenhum. Riscos: baixo. **B)** SQLite local + PG prod — Prós: velocidade dev. Contras: divergência ambientes. Riscos: bugs só em prod. **Rec:** A." |
+| **Trade-offs** | "Para [área cinza]: [A] ou [B]?" + opções | "Paginação da API: **A)** Offset — Prós: simples. Contras: lento >10k rows. Riscos: inconsistência com inserts. **B)** Cursor — Prós: performático. Contras: complexo no front. Riscos: baixo. **Rec:** B para >1k registros." |
+| **Gaps** | "Blueprint não especifica [X]. Opções:" + opções | "Sem estratégia de retry definida. **A)** Backoff exponencial 3x — Prós: resiliente. Contras: latência. Riscos: sobrecarga downstream. **B)** Fail-fast + DLQ — Prós: resposta rápida. Contras: reprocessamento manual. Riscos: perda sem monitoramento. **Rec:** A + circuit breaker." |
+| **Provocação** | "[Óbvio] pode não ser ideal porque [razão]. Alternativas:" + opções | "REST é padrão, mas gRPC pode ser melhor inter-container. **A)** REST — Prós: ecossistema maduro. Contras: overhead serialização. Riscos: baixo. **B)** gRPC — Prós: tipagem forte, streaming. Contras: tooling limitado. Riscos: curva aprendizado. **Rec:** B inter-serviço, A APIs públicas." |
 
 Wait for answers BEFORE generating.
 

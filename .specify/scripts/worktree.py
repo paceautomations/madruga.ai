@@ -34,7 +34,12 @@ def create_worktree(platform_name: str, epic_slug: str) -> Path:
     binding = _load_repo_binding(platform_name)
     repo_name = binding["name"]
 
-    # Self-ref → operate in current repo
+    # Self-ref → operate in current repo (no worktree).
+    # ARCHITECTURAL INVARIANT: self-ref platforms MUST run epics sequentially.
+    # Worktree isolation only works for external repos. Self-ref shares the
+    # working directory, .pipeline/madruga.db, and .claude/ skills — parallel
+    # epics here would cause checkout conflicts, DB desync, and stale skills.
+    # See pipeline-dag-knowledge.md "Parallel Epics Constraint".
     if _is_self_ref(repo_name):
         log.info("Self-ref platform '%s' → %s (no worktree)", platform_name, REPO_ROOT)
         return REPO_ROOT

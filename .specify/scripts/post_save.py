@@ -45,6 +45,7 @@ from db import (
     get_conn,
     get_epic_nodes,
     get_epics,
+    get_pipeline_nodes,
     get_platform,
     insert_event,
     insert_provenance,
@@ -56,6 +57,31 @@ from db import (
     upsert_platform,
     upsert_pipeline_node,
 )
+
+
+def _refresh_portal_status() -> None:
+    """Regenerate portal/src/data/pipeline-status.json (best-effort)."""
+    portal_json = REPO_ROOT / "portal" / "src" / "data" / "pipeline-status.json"
+    if not portal_json.parent.exists():
+        return
+    try:
+        import subprocess
+
+        subprocess.run(
+            [
+                sys.executable,
+                str(REPO_ROOT / ".specify" / "scripts" / "platform.py"),
+                "status",
+                "--all",
+                "--json",
+                "--output",
+                str(portal_json),
+            ],
+            capture_output=True,
+            timeout=10,
+        )
+    except Exception:
+        pass  # best-effort — never block the save
 
 
 def _validate_artifact_path(platform: str, artifact: str) -> Path:
@@ -138,25 +164,43 @@ def record_save(
         shipped_delivered_at = None  # track ship transition for post-txn filesystem write
         with transaction(conn) as txn:
             if epic:
-                upsert_epic_node(
-                    txn,
-                    platform,
-                    epic,
-                    node,
-                    "done",
-                    output_hash=output_hash,
-                    completed_by=skill,
-                    completed_at=now,
+                # Skip update if epic node was already completed by a real skill with same hash
+                existing_epic_node = next(
+                    (n for n in get_epic_nodes(txn, platform, epic) if n["node_id"] == node),
+                    None,
                 )
-                insert_event(
-                    txn,
-                    platform,
-                    "epic_node",
-                    f"{epic}/{node}",
-                    "completed",
-                    actor="claude",
-                    payload={"skill": skill, "artifact": artifact},
+                epic_was_completed_by_skill = (
+                    existing_epic_node
+                    and existing_epic_node.get("completed_by")
+                    and not existing_epic_node["completed_by"].startswith("seed")
                 )
+                skip_epic_update = (
+                    existing_epic_node
+                    and existing_epic_node["status"] == "done"
+                    and epic_was_completed_by_skill
+                    and existing_epic_node.get("output_hash")
+                    and output_hash == existing_epic_node["output_hash"]
+                )
+                if not skip_epic_update:
+                    upsert_epic_node(
+                        txn,
+                        platform,
+                        epic,
+                        node,
+                        "done",
+                        output_hash=output_hash,
+                        completed_by=skill,
+                        completed_at=now,
+                    )
+                    insert_event(
+                        txn,
+                        platform,
+                        "epic_node",
+                        f"{epic}/{node}",
+                        "completed",
+                        actor="claude",
+                        payload={"skill": skill, "artifact": artifact},
+                    )
 
                 # Auto-transition epic status based on node completion
                 # Skip if epic is blocked or cancelled (manual override only)
@@ -190,25 +234,45 @@ def record_save(
                                 if delivered_at:
                                     shipped_delivered_at = delivered_at
             else:
-                upsert_pipeline_node(
-                    txn,
-                    platform,
-                    node,
-                    "done",
-                    output_hash=output_hash,
-                    output_files=json.dumps([artifact]),
-                    completed_by=skill,
-                    completed_at=now,
+                # Skip update if node was already completed by a real skill with the same hash
+                # (prevents side-effect edits from other skills overwriting completed_at)
+                # Allow update if completed_by is from seed (not a real skill execution)
+                existing_node = next(
+                    (n for n in get_pipeline_nodes(txn, platform) if n["node_id"] == node),
+                    None,
                 )
-                insert_event(
-                    txn,
-                    platform,
-                    "node",
-                    node,
-                    "completed",
-                    actor="claude",
-                    payload={"skill": skill, "artifact": artifact},
+                was_completed_by_skill = (
+                    existing_node
+                    and existing_node.get("completed_by")
+                    and not existing_node["completed_by"].startswith("seed")
                 )
+                skip_update = (
+                    existing_node
+                    and existing_node["status"] == "done"
+                    and was_completed_by_skill
+                    and existing_node.get("output_hash")
+                    and output_hash == existing_node["output_hash"]
+                )
+                if not skip_update:
+                    upsert_pipeline_node(
+                        txn,
+                        platform,
+                        node,
+                        "done",
+                        output_hash=output_hash,
+                        output_files=json.dumps([artifact]),
+                        completed_by=skill,
+                        completed_at=now,
+                    )
+                    insert_event(
+                        txn,
+                        platform,
+                        "node",
+                        node,
+                        "completed",
+                        actor="claude",
+                        payload={"skill": skill, "artifact": artifact},
+                    )
 
             # Record provenance
             insert_provenance(
@@ -223,6 +287,9 @@ def record_save(
     # Sync ship fields to pitch.md frontmatter (outside transaction — filesystem only)
     if epic and shipped_delivered_at:
         _inject_ship_fields(platform, epic, shipped_delivered_at)
+
+    # Refresh portal dashboard JSON (best-effort, non-blocking)
+    _refresh_portal_status()
 
     result = {
         "status": "ok",

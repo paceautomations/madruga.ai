@@ -116,6 +116,29 @@ def test_get_stale_nodes(tmp_db):
     assert stale[0]["node_id"] == "solution-overview"
 
 
+def test_repair_timestamps(tmp_db):
+    """repair_timestamps restores completed_at from events table."""
+    from db import upsert_platform, upsert_pipeline_node, insert_event, repair_timestamps
+
+    upsert_platform(tmp_db, "p1", name="P1", repo_path="platforms/p1")
+    # Node was originally completed at a specific time
+    upsert_pipeline_node(tmp_db, "p1", "vision", "done", completed_at="2026-03-15T10:00:00Z")
+    insert_event(tmp_db, "p1", "node", "vision", "completed", actor="claude", payload={"skill": "madruga:vision"})
+
+    # Simulate a reseed overwriting completed_at with a bad timestamp
+    upsert_pipeline_node(tmp_db, "p1", "vision", "done", completed_at="2026-04-01T13:14:37Z")
+
+    # Get the event timestamp for comparison
+    event_ts = tmp_db.execute(
+        "SELECT created_at FROM events WHERE entity_id='vision' AND action='completed'"
+    ).fetchone()["created_at"]
+
+    repaired = repair_timestamps(tmp_db, "p1")
+    assert len(repaired) == 1
+    assert repaired[0]["node_id"] == "vision"
+    assert repaired[0]["new"] == event_ts
+
+
 def test_get_platform_status(tmp_db):
     from db import upsert_platform, upsert_pipeline_node, get_platform_status
 

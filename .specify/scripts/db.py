@@ -1561,6 +1561,39 @@ def get_stale_nodes(conn: sqlite3.Connection, platform_id: str, dag_edges: dict[
     return stale
 
 
+def repair_timestamps(conn: sqlite3.Connection, platform_id: str) -> list[dict]:
+    """Reset completed_at from events table where a more accurate timestamp exists.
+
+    Returns list of repaired nodes with old and new timestamps.
+    """
+    nodes = get_pipeline_nodes(conn, platform_id)
+    repaired = []
+    for node in nodes:
+        if node["status"] != "done" or not node["completed_at"]:
+            continue
+        # Find the latest 'completed' event for this node (set by actual skill execution)
+        row = conn.execute(
+            """SELECT created_at FROM events
+               WHERE platform_id=? AND entity_type='node' AND entity_id=? AND action='completed'
+               ORDER BY created_at DESC LIMIT 1""",
+            (platform_id, node["node_id"]),
+        ).fetchone()
+        if row and row["created_at"] != node["completed_at"]:
+            conn.execute(
+                "UPDATE pipeline_nodes SET completed_at=? WHERE platform_id=? AND node_id=?",
+                (row["created_at"], platform_id, node["node_id"]),
+            )
+            repaired.append(
+                {
+                    "node_id": node["node_id"],
+                    "old": node["completed_at"],
+                    "new": row["created_at"],
+                }
+            )
+    conn.commit()
+    return repaired
+
+
 def get_platform_status(conn: sqlite3.Connection, platform_id: str) -> dict:
     rows = get_pipeline_nodes(conn, platform_id)
     total = len(rows)
@@ -1646,6 +1679,10 @@ def seed_from_filesystem(conn: sqlite3.Connection, platform_id: str, platform_di
 
         nodes_seeded = 0
         pipeline = manifest.get("pipeline", {})
+
+        # Load existing node timestamps so reseed never overwrites them
+        existing_nodes = {n["node_id"]: n for n in get_pipeline_nodes(txn, platform_id)}
+
         for node in pipeline.get("nodes", []):
             nid = node["id"]
             outputs = node.get("outputs", [])
@@ -1669,9 +1706,12 @@ def seed_from_filesystem(conn: sqlite3.Connection, platform_id: str, platform_di
 
             completed_at = None
             if status == "done" and output_files:
-                first_file = pdir / output_files[0]
-                if first_file.exists():
-                    completed_at = _file_mtime_iso(first_file)
+                existing = existing_nodes.get(nid)
+                # Only use file mtime if the node has no existing completed_at
+                if not (existing and existing.get("completed_at")):
+                    first_file = pdir / output_files[0]
+                    if first_file.exists():
+                        completed_at = _file_mtime_iso(first_file)
 
             upsert_pipeline_node(
                 txn,
@@ -1725,7 +1765,11 @@ def seed_from_filesystem(conn: sqlite3.Connection, platform_id: str, platform_di
                 for dep_id in node.get("depends", []):
                     if node_statuses.get(dep_id) == "pending":
                         node_statuses[dep_id] = "done"
-                        upsert_pipeline_node(txn, platform_id, dep_id, "done", completed_by="seed-backfill")
+                        dep_existing = existing_nodes.get(dep_id)
+                        backfill_at = None if (dep_existing and dep_existing.get("completed_at")) else _now()
+                        upsert_pipeline_node(
+                            txn, platform_id, dep_id, "done", completed_by="seed-backfill", completed_at=backfill_at
+                        )
                         changed = True
 
         epics_seeded = 0

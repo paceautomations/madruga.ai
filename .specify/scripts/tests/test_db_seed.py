@@ -228,3 +228,59 @@ def test_reseed_accepts_blocked_override(tmp_db, tmp_path):
     seed_from_filesystem(tmp_db, "plat-block", pdir)
     epics = get_epics(tmp_db, "plat-block")
     assert epics[0]["status"] == "blocked"  # must accept the override
+
+
+def test_reseed_preserves_completed_at(tmp_db, sample_platform_dir):
+    """Reseed must NOT overwrite completed_at when node already has one in DB."""
+    from db import seed_from_filesystem, get_pipeline_nodes, upsert_pipeline_node
+
+    # First seed — sets completed_at from file mtime
+    seed_from_filesystem(tmp_db, "test-plat", sample_platform_dir)
+    _ = {n["node_id"]: n for n in get_pipeline_nodes(tmp_db, "test-plat")}
+
+    # Manually set a specific completed_at (simulating record_save from skill execution)
+    original_ts = "2026-03-15T10:00:00Z"
+    upsert_pipeline_node(tmp_db, "test-plat", "vision", "done", completed_at=original_ts)
+
+    # Modify the file to change its mtime (simulating a reconcile edit)
+    vision_file = sample_platform_dir / "business" / "vision.md"
+    vision_file.write_text("---\ntitle: Vision\n---\n# Vision\nUpdated content.\n")
+
+    # Reseed — should preserve the original completed_at, not use new file mtime
+    seed_from_filesystem(tmp_db, "test-plat", sample_platform_dir)
+    nodes_after = {n["node_id"]: n for n in get_pipeline_nodes(tmp_db, "test-plat")}
+
+    assert nodes_after["vision"]["completed_at"] == original_ts
+
+
+def test_seed_backfill_sets_completed_at(tmp_db, tmp_path):
+    """Backfilled dependency nodes get a completed_at timestamp."""
+    from db import seed_from_filesystem, get_pipeline_nodes
+
+    pdir = tmp_path / "plat-backfill"
+    pdir.mkdir(parents=True)
+    (pdir / "platform.yaml").write_text("""
+name: plat-backfill
+title: Test
+lifecycle: design
+pipeline:
+  nodes:
+    - id: A
+      outputs: ["a.md"]
+      depends: []
+      gate: human
+    - id: B
+      outputs: ["b.md"]
+      depends: ["A"]
+      gate: human
+""")
+    # Only B exists — A should be backfilled as done
+    (pdir / "b.md").write_text("# B\n")
+
+    seed_from_filesystem(tmp_db, "plat-backfill", pdir)
+    nodes = {n["node_id"]: n for n in get_pipeline_nodes(tmp_db, "plat-backfill")}
+
+    assert nodes["A"]["status"] == "done"  # backfilled
+    assert nodes["A"]["completed_at"] is not None  # must have a timestamp
+    assert nodes["B"]["status"] == "done"
+    assert nodes["B"]["completed_at"] is not None
