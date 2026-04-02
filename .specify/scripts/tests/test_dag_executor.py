@@ -110,7 +110,7 @@ async def test_retry_with_async_sleep():
     breaker = CircuitBreaker()
     call_count = 0
 
-    async def mock_dispatch(node, cwd, prompt, timeout=600):
+    async def mock_dispatch(node, cwd, prompt, timeout=3000):
         nonlocal call_count
         call_count += 1
         if call_count < 3:
@@ -135,7 +135,7 @@ async def test_circuit_breaker_with_async_dispatch():
 
     breaker = CircuitBreaker(max_failures=1)
 
-    async def mock_dispatch(node, cwd, prompt, timeout=600):
+    async def mock_dispatch(node, cwd, prompt, timeout=3000):
         return False, "permanent error"
 
     with (

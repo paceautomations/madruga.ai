@@ -37,7 +37,7 @@ from config import REPO_ROOT  # noqa: E402
 
 log = logging.getLogger(__name__)
 
-DEFAULT_TIMEOUT = int(os.environ.get("MADRUGA_EXECUTOR_TIMEOUT", "600"))
+DEFAULT_TIMEOUT = int(os.environ.get("MADRUGA_EXECUTOR_TIMEOUT", "3000"))
 RETRY_BACKOFFS = [5, 10, 20]
 CB_MAX_FAILURES = 5
 CB_RECOVERY_SECONDS = 300
