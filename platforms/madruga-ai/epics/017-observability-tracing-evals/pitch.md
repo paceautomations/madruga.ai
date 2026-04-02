@@ -21,9 +21,6 @@ Adicionar observabilidade real-time, tracing hierarquico e eval scoring ao pipel
 - Depends on: 016 (daemon 24/7), 013 (DAG executor)
 - Blocks: nenhum
 
-
-## Implementation Context
-
 ## Captured Decisions
 
 | # | Area | Decision | Architectural Reference |
