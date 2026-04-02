@@ -205,12 +205,12 @@ def dispatch_node(
     if not shutil.which("claude"):
         return False, "claude CLI not found in PATH"
 
-    cmd = ["claude", "-p", prompt, "--cwd", str(cwd), "--output-format", "json"]
+    cmd = ["claude", "-p", prompt, "--output-format", "json"]
     log.info("Dispatching node '%s' (skill: %s, timeout: %ds)", node.id, node.skill, timeout)
     log.debug("Command: %s", " ".join(cmd[:4]) + " ...")
 
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, cwd=str(cwd))
         if result.returncode != 0:
             error = result.stderr.strip()[:500] if result.stderr else f"exitcode {result.returncode}"
             log.error("Node '%s' failed: %s", node.id, error)
@@ -276,13 +276,14 @@ async def dispatch_node_async(
     if not shutil.which("claude"):
         return False, "claude CLI not found in PATH"
 
-    cmd = ["claude", "-p", prompt, "--cwd", str(cwd), "--output-format", "json"]
+    cmd = ["claude", "-p", prompt, "--output-format", "json"]
     log.info("Dispatching node '%s' async (skill: %s, timeout: %ds)", node.id, node.skill, timeout)
 
     process = await asyncio.create_subprocess_exec(
         *cmd,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
+        cwd=str(cwd),
     )
     try:
         stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
