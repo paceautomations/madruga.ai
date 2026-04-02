@@ -137,6 +137,8 @@ def _file_mtime_iso(path: Path) -> str:
 _EPIC_STATUS_MAP = {
     "proposed": "proposed",
     "planned": "proposed",
+    "drafted": "drafted",
+    "draft": "drafted",
     "in_progress": "in_progress",
     "in progress": "in_progress",
     "shipped": "shipped",
@@ -1637,6 +1639,81 @@ def get_epic_status(conn: sqlite3.Connection, platform_id: str, epic_id: str) ->
     }
 
 
+def compute_epic_status(
+    conn: sqlite3.Connection,
+    platform_id: str,
+    epic_id: str,
+    required_node_ids: set[str],
+    current_status: str,
+    completed_ids: set[str] | None = None,
+) -> tuple[str, str | None]:
+    """Derive epic status from epic_nodes completion.
+
+    Returns (new_status, delivered_at_or_None).
+    Pass completed_ids to avoid a redundant DB query when caller already has the data.
+    Safety: never regresses shipped to a lesser status.
+    """
+    if current_status in ("blocked", "cancelled", "shipped", "drafted"):
+        return current_status, None
+
+    if completed_ids is None:
+        nodes = get_epic_nodes(conn, platform_id, epic_id)
+        completed_ids = {n["node_id"] for n in nodes if n["status"] in ("done", "skipped")}
+
+    if required_node_ids and required_node_ids.issubset(completed_ids):
+        delivered_at = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        return "shipped", delivered_at
+    elif len(completed_ids) > 0 and current_status == "proposed":
+        return "in_progress", None
+    return current_status, None
+
+
+def _resolve_epic_outputs(outputs: list[str], epic_id: str) -> list[str]:
+    """Resolve {epic} placeholder in output patterns."""
+    return [o.replace("{epic}", f"epics/{epic_id}") for o in outputs]
+
+
+def seed_epic_nodes_from_disk(
+    txn: sqlite3.Connection,
+    platform_id: str,
+    epic_id: str,
+    pdir: Path,
+    epic_cycle: list[dict],
+    existing_epic_nodes: dict[str, dict] | None = None,
+) -> set[str]:
+    """Seed epic_nodes from output files on disk. Returns set of completed node IDs."""
+    if existing_epic_nodes is None:
+        existing_epic_nodes = {n["node_id"]: n for n in get_epic_nodes(txn, platform_id, epic_id)}
+
+    completed = {nid for nid, n in existing_epic_nodes.items() if n["status"] in ("done", "skipped")}
+
+    for node_cfg in epic_cycle:
+        nid = node_cfg["id"]
+        outputs = node_cfg.get("outputs", [])
+        resolved = _resolve_epic_outputs(outputs, epic_id)
+        exists = all((pdir / r).exists() for r in resolved) if resolved else False
+        if not exists:
+            continue
+        first_file = pdir / resolved[0]
+        en_existing = existing_epic_nodes.get(nid)
+        en_completed_at = None
+        if not (en_existing and en_existing.get("completed_at")):
+            en_completed_at = _file_mtime_iso(first_file)
+        upsert_epic_node(
+            txn,
+            platform_id,
+            epic_id,
+            nid,
+            "done",
+            output_hash=compute_file_hash(first_file),
+            completed_by=en_existing["completed_by"] if en_existing else f"seed:{node_cfg['skill']}",
+            completed_at=en_completed_at,
+        )
+        completed.add(nid)
+
+    return completed
+
+
 # ══════════════════════════════════════
 # Seed from filesystem
 # ══════════════════════════════════════
@@ -1832,6 +1909,31 @@ def seed_from_filesystem(conn: sqlite3.Connection, platform_id: str, platform_di
                         priority=priority,
                         delivered_at=delivered_at,
                     )
+
+                    # Seed epic_nodes from output files on disk
+                    epic_cycle = pipeline.get("epic_cycle", {}).get("nodes", [])
+                    completed_ids = seed_epic_nodes_from_disk(txn, platform_id, epic_id, pdir, epic_cycle)
+
+                    # Recalculate epic status from completed nodes
+                    required_ids = {n["id"] for n in epic_cycle if not n.get("optional", False)}
+                    new_status, new_delivered = compute_epic_status(
+                        txn,
+                        platform_id,
+                        epic_id,
+                        required_ids,
+                        fs_status,
+                        completed_ids=completed_ids,
+                    )
+                    if new_status != fs_status:
+                        upsert_epic(
+                            txn,
+                            platform_id,
+                            epic_id,
+                            title=title_line or epic_id,
+                            status=new_status,
+                            delivered_at=new_delivered,
+                        )
+
                     epics_seeded += 1
 
     logger.info("Seeded %s: %d nodes, %d epics", platform_id, nodes_seeded, epics_seeded)

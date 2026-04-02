@@ -236,9 +236,24 @@ After L1 completes (roadmap done), the pipeline continues into L2. Each epic fro
 **Every epic MUST run on a dedicated branch.** NEVER commit epic work directly to main.
 
 - **Branch naming**: `epic/<platform>/<NNN-slug>` (e.g., `epic/fulano/001-channel-pipeline`)
-- **Created by**: `epic-context` (Step 1) — the first skill in the cycle creates the branch
+- **Created by**: `epic-context` (normal mode) — the first skill in the cycle creates the branch
 - **Merged by**: User after reconcile completes — via PR or manual merge
 - **Guard**: All epic cycle skills check `git branch --show-current` and STOP if on main (see pipeline-contract-base.md Step 0)
+
+### Draft Mode (Planning Ahead)
+
+`/epic-context --draft <platform> <epic>` creates context artifacts on main WITHOUT creating a branch.
+This enables planning multiple epics ahead while another epic is executing on its branch.
+
+- **Status**: `drafted` (DB status — daemon ignores, branch guard blocks other L2 skills)
+- **Artifacts created on main**: `epics/<NNN>/context.md` (possibly research.md, data-model.md)
+- **Promotion**: Running `/epic-context <platform> <epic>` on a drafted epic performs a delta review (what changed since draft?), revises decisions, creates the branch, and transitions status to `in_progress`
+- **Gate**: Draft mode uses auto gate (no human approval — approval happens at promotion)
+
+Safety: drafted epics cannot accidentally enter the L2 cycle because:
+1. Daemon only polls `status='in_progress'` (daemon.py poll_active_epics)
+2. All other L2 skills check `current_branch starts with epic/` (pipeline-contract-base.md Step 0)
+3. `compute_epic_status()` in db.py does not auto-promote `drafted` epics
 
 ### Parallel Epics Constraint (ARCHITECTURAL INVARIANT)
 
@@ -256,7 +271,7 @@ If parallel self-ref epics are ever needed, ALL L2 skills (not just implement) m
 
 | Step | Skill | Gate | Purpose |
 |------|-------|------|---------|
-| 1 | madruga:epic-context | human | **Create branch** + capture implementation context |
+| 1 | madruga:epic-context | human / auto (draft) | **Create branch** + capture context (or `--draft` on main) |
 | 2 | speckit.specify | human | Feature specification |
 | 3 | speckit.clarify | human | Reduce ambiguity in spec before planning |
 | 4 | speckit.plan | human | Design artifacts |

@@ -111,9 +111,31 @@ graph TD
     ...
 ```
 
+### 3b. Render Drafted Epics
+
+Query DB for epics with `status='drafted'`:
+
+```python
+drafted = [e for e in epics if e['status'] == 'drafted']
+```
+
+If any drafted epics exist, render a separate section:
+
+```
+## Epics Rascunhados (Draft)
+
+| Epic | Titulo | Rascunhado em | Ativavel? |
+|------|--------|---------------|-----------|
+| 017-nome | ... | 2026-04-02 | Sim (nenhum epic in_progress) |
+
+Para ativar: `/epic-context <platform> <epic-number>` (delta review + branch)
+```
+
+The "Ativavel?" column checks if any other epic is currently `in_progress` for the same platform (self-ref sequential constraint).
+
 ### 4. Render L2 (per epic)
 
-For each epic with status data:
+For each epic with status data (exclude `drafted` — those are shown in 3b):
 
 ```
 ## Pipeline L2 — Epic <NNN-slug> (<N>/10 done)

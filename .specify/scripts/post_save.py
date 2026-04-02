@@ -40,7 +40,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 import yaml
 
 from config import REPO_ROOT  # noqa: F401
-from db import (
+from db import (  # noqa: F401 — compute_epic_status used in record_save
+    compute_epic_status,
     compute_file_hash,
     get_conn,
     get_epic_nodes,
@@ -50,6 +51,7 @@ from db import (
     insert_event,
     insert_provenance,
     migrate,
+    seed_epic_nodes_from_disk,
     seed_from_filesystem,
     transaction,
     upsert_epic,
@@ -133,12 +135,24 @@ def _get_required_epic_nodes(platform: str, pipeline_data: dict | None = None) -
     return {n["id"] for n in cycle_nodes if not n.get("optional", False)}
 
 
+def _backfill_epic_predecessors(txn, platform: str, epic: str, pipeline_data: dict) -> set[str]:
+    """Backfill missing epic_nodes whose output files exist on disk.
+
+    Returns set of all completed node IDs (existing + newly backfilled).
+    """
+
+    epic_cycle = pipeline_data.get("epic_cycle", {}).get("nodes", [])
+    pdir = REPO_ROOT / "platforms" / platform
+    return seed_epic_nodes_from_disk(txn, platform, epic, pdir, epic_cycle)
+
+
 def record_save(
     platform: str,
     node: str,
     skill: str,
     artifact: str,
     epic: str | None = None,
+    epic_status: str | None = None,
 ) -> dict:
     """Record a skill's artifact save in the DB."""
     artifact_path = _validate_artifact_path(platform, artifact)
@@ -202,37 +216,43 @@ def record_save(
                         payload={"skill": skill, "artifact": artifact},
                     )
 
-                # Auto-transition epic status based on node completion
-                # Skip if epic is blocked or cancelled (manual override only)
-                nodes = get_epic_nodes(txn, platform, epic)
-                if nodes:
-                    completed_count = sum(1 for n in nodes if n["status"] in ("done", "skipped"))
-                    completed_ids = {n["node_id"] for n in nodes if n["status"] in ("done", "skipped")}
-                    required_nodes = _get_required_epic_nodes(platform)
-                    existing = [e for e in get_epics(txn, platform) if e["epic_id"] == epic]
-                    if existing:
-                        current = existing[0]
-                        if current["status"] not in ("blocked", "cancelled"):
-                            new_status = current["status"]
-                            delivered_at = None
-                            # Ship only when ALL required (non-optional) nodes are done
-                            all_required_done = required_nodes and required_nodes.issubset(completed_ids)
-                            if all_required_done:
-                                new_status = "shipped"
-                                delivered_at = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-                            elif completed_count > 0 and current["status"] == "proposed":
-                                new_status = "in_progress"
-                            if new_status != current["status"]:
-                                upsert_epic(
-                                    txn,
-                                    platform,
-                                    epic,
-                                    title=current["title"],
-                                    status=new_status,
-                                    delivered_at=delivered_at,
-                                )
-                                if delivered_at:
-                                    shipped_delivered_at = delivered_at
+                # Backfill missing predecessor nodes whose artifacts exist on disk
+                yaml_path = REPO_ROOT / "platforms" / platform / "platform.yaml"
+                pipeline_data = (
+                    yaml.safe_load(yaml_path.read_text(encoding="utf-8")).get("pipeline", {})
+                    if yaml_path.exists()
+                    else {}
+                )
+                completed_ids = _backfill_epic_predecessors(txn, platform, epic, pipeline_data)
+
+                # Auto-transition epic status using centralized logic
+                existing_epics = [e for e in get_epics(txn, platform) if e["epic_id"] == epic]
+                if existing_epics:
+                    current = existing_epics[0]
+                    if epic_status:
+                        # Explicit override (e.g., --epic-status drafted)
+                        new_status, delivered_at = epic_status, None
+                    else:
+                        required_nodes = _get_required_epic_nodes(platform, pipeline_data)
+                        new_status, delivered_at = compute_epic_status(
+                            txn,
+                            platform,
+                            epic,
+                            required_nodes,
+                            current["status"],
+                            completed_ids=completed_ids,
+                        )
+                    if new_status != current["status"]:
+                        upsert_epic(
+                            txn,
+                            platform,
+                            epic,
+                            title=current["title"],
+                            status=new_status,
+                            delivered_at=delivered_at,
+                        )
+                        if delivered_at:
+                            shipped_delivered_at = delivered_at
             else:
                 # Skip update if node was already completed by a real skill with the same hash
                 # (prevents side-effect edits from other skills overwriting completed_at)
@@ -403,6 +423,7 @@ def main():
         help="Relative path to artifact within platform dir (e.g., business/vision.md)",
     )
     parser.add_argument("--epic", help="Epic ID for L2 nodes (e.g., 001-channel-pipeline)")
+    parser.add_argument("--epic-status", dest="epic_status", help="Override epic status (e.g., drafted)")
     parser.add_argument("--reseed", action="store_true", help="Re-seed platform from filesystem")
     parser.add_argument(
         "--reseed-all",
@@ -449,6 +470,7 @@ def main():
         skill=args.skill,
         artifact=args.artifact,
         epic=args.epic,
+        epic_status=args.epic_status,
     )
     print(json.dumps(result))
 

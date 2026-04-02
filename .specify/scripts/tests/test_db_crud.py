@@ -370,3 +370,40 @@ def test_resolve_repo_path_legacy(tmp_db):
     upsert_platform(tmp_db, "old", name="Old", repo_path="platforms/old")
     path = resolve_repo_path(tmp_db, "old")
     assert path == str(REPO_ROOT / "platforms" / "old")
+
+
+# --- Draft status tests ---
+
+
+def test_epic_drafted_status(tmp_db):
+    """Epic can be created with drafted status."""
+    from db import get_epics, upsert_epic, upsert_platform
+
+    upsert_platform(tmp_db, "p1", name="P1", repo_path="platforms/p1")
+    upsert_epic(tmp_db, "p1", "017-test", title="Test Draft", status="drafted")
+    epics = get_epics(tmp_db, "p1")
+    drafted = [e for e in epics if e["epic_id"] == "017-test"]
+    assert len(drafted) == 1
+    assert drafted[0]["status"] == "drafted"
+
+
+def test_epic_status_map_drafted():
+    """_EPIC_STATUS_MAP includes drafted."""
+    from db import _EPIC_STATUS_MAP
+
+    assert _EPIC_STATUS_MAP["drafted"] == "drafted"
+    assert _EPIC_STATUS_MAP["draft"] == "drafted"
+
+
+def test_compute_epic_status_does_not_promote_drafted(tmp_db):
+    """compute_epic_status does not auto-promote drafted epics."""
+    from db import compute_epic_status, upsert_epic, upsert_epic_node, upsert_platform
+
+    upsert_platform(tmp_db, "p1", name="P1", repo_path="platforms/p1")
+    upsert_epic(tmp_db, "p1", "017-test", title="Test", status="drafted")
+    upsert_epic_node(tmp_db, "p1", "017-test", "epic-context", "done")
+
+    new_status, _ = compute_epic_status(
+        tmp_db, "p1", "017-test", required_node_ids={"epic-context"}, current_status="drafted"
+    )
+    assert new_status == "drafted"

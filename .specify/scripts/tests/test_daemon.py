@@ -173,6 +173,22 @@ async def test_dag_scheduler_poll_interval():
     mock_sleep.assert_awaited_with(15)
 
 
+@pytest.mark.asyncio
+async def test_poll_active_epics_ignores_drafted():
+    """poll_active_epics only returns in_progress, not drafted epics."""
+    from daemon import poll_active_epics
+
+    mock_conn = MagicMock()
+    mock_conn.execute.return_value.fetchall.return_value = []
+
+    result = poll_active_epics(mock_conn)
+    assert result == []
+    # Verify the SQL only queries in_progress
+    sql = mock_conn.execute.call_args[0][0]
+    assert "in_progress" in sql
+    assert "drafted" not in sql
+
+
 # --- T022: US3 Tests ---
 
 
