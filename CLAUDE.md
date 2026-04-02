@@ -48,6 +48,7 @@ Prototipar primeiro, refinar depois. Ship imperfeito hoje > perfeito nunca.
 ## Hooks ativos
 
 - PostToolUse em `platforms/**` → auto-registra no SQLite (hook_post_save.py)
+- PostToolUse em `.claude/commands/**` e `.claude/knowledge/**` → skill-lint automático (hook_skill_lint.py)
 - PostToolUse em `.claude/**/memory/**` → auto-sync memory (sync_memory.py)
 - Git post-merge → auto-reseed DB se migrations mudaram
 - Auto-simplify: após implementação tocando 3+ arquivos → rodar /simplify (skip one-liners/docs)
@@ -57,6 +58,13 @@ Prototipar primeiro, refinar depois. Ship imperfeito hoje > perfeito nunca.
 Plan mode → auto-review com subagent antes de apresentar. Prompt do subagent: "You are a staff engineer reviewing an implementation plan. Be harsh and direct. Check for: missed edge cases, over-engineering, simpler alternatives, security risks, missing error handling at boundaries, unrealistic assumptions. Output a bullet list of issues found (BLOCKER/WARNING/NIT) and an overall verdict."
 LOC estimates: multiplicar por 1.5-2x (docstrings, argparse, logging não entram na base).
 Scripts < 300 LOC: escrever completo + testes de uma vez (batch), sem incrementalismo vazio.
+
+## Skill & knowledge editing policy
+
+Edits to `.claude/commands/` and `.claude/knowledge/` MUST go through `/madruga:skills-mgmt`.
+Never edit these files directly — always use `/madruga:skills-mgmt edit <name>` (or create/lint/audit).
+Direct edits bypass validation (frontmatter, handoff chains, archetype compliance, dedup).
+PostToolUse hook runs skill-lint automatically as safety net.
 
 ## Epic workflow
 
@@ -76,3 +84,10 @@ decisões arquiteturais da sessão, hipóteses de debug em andamento.
 Editar sources .likec4, rodar vision-build.py para regenerar AUTO markers.
 Adicionar platformLoaders em LikeC4Diagram.tsx ao criar plataforma.
 Epic branches obrigatórias para L2. Commitar em main só via PR.
+
+## Active Technologies
+- Python 3.12+ + FastAPI, uvicorn, aiogram, structlog, sentry-sdk[fastapi], pyyaml (epic/madruga-ai/016-daemon-24-7)
+- SQLite WAL mode (.pipeline/madruga.db) — state store, checkpoints, gate status (epic/madruga-ai/016-daemon-24-7)
+
+## Recent Changes
+- epic/madruga-ai/016-daemon-24-7: Added Python 3.12+ + FastAPI, uvicorn, aiogram, structlog, sentry-sdk[fastapi], pyyaml

@@ -27,7 +27,11 @@
 15. [Error Handling](#15-error-handling)
 16. [Performance Engineering](#16-performance-engineering)
 17. [Catalog of Patterns & Principles](#17-catalog-of-patterns--principles)
-18. [Lessons for Our Codebase](#18-lessons-for-our-codebase)
+18. [Hidden Features (44 Feature Flags)](#18-hidden-features-44-feature-flags)
+19. [Anti-Patterns & Technical Debt](#19-anti-patterns--technical-debt)
+20. [Defense Against Copying & Abuse](#20-defense-against-copying--abuse)
+21. [Dream System (Memory Consolidation)](#21-dream-system-memory-consolidation)
+22. [Lessons for Our Codebase](#22-lessons-for-our-codebase)
 
 ---
 
@@ -970,7 +974,145 @@ LRU with dual limits: entry count (100) + total byte size (25MB). Timestamp-base
 
 ---
 
-## 18. Lessons for Our Codebase
+## 18. Hidden Features (44 Feature Flags)
+
+> **Fonte**: [Analise do Akita on Rails](https://akitaonrails.com/2026/03/31/codigo-fonte-do-claude-code-vazou-o-que-achamos-dentro/) + analise direta do source.
+
+O codigo revela **44 feature flags** cobrindo funcionalidades prontas mas nao lancadas. Codigo real escondido atras de flags que compilam pra `false` nos builds externos via `bun:bundle` dead code elimination.
+
+### 18.1 KAIROS — Assistente Persistente Proativo
+
+Modo que nao espera input do usuario. Observa, registra e age proativamente:
+
+- Arquivos de log diarios append-only
+- Prompts `<tick>` em intervalos regulares — decide agir ou ficar quieto
+- **Budget de 15 segundos**: qualquer acao proativa que bloquearia o workflow > 15s e adiada
+- Tools exclusivos: `SendUserFile`, `PushNotification`, `SubscribePR` (monitora PRs)
+
+### 18.2 BUDDY — Tamagotchi no Terminal
+
+Sistema completo de pet companion estilo gacha:
+
+- 18 especies, raridade, variantes shiny, stats procedurais
+- PRNG Mulberry32 seedado pelo hash do userId (determinístico — mesmo usuario, mesmo buddy)
+- 5 stats: DEBUGGING, PATIENCE, CHAOS, WISDOM, SNARK
+- 6 estilos de olhos, 8 opcoes de chapeu, sprites ASCII de 5 linhas com animacoes
+- "Alma" escrita pelo Claude no primeiro hatch
+
+### 18.3 ULTRAPLAN — 30 Minutos de Planejamento Remoto
+
+- Offloads planejamento complexo para sessao remota rodando Opus 4.6
+- Ate 30 minutos de thinking time
+- Terminal faz polling a cada 3 segundos
+- Valor sentinela `__ULTRAPLAN_TELEPORT_LOCAL__` "teletransporta" resultado de volta
+
+### 18.4 Coordinator Mode — Multi-Agent
+
+Orquestracao multi-agente completa:
+
+- Research em paralelo, sintese pelo coordenador, implementacao por workers
+- Prompt ensina paralelismo explicitamente e proibe delegacao preguicosa: *"Do NOT say 'based on your findings' - read the actual findings and specify exactly what to do"*
+- Teammates in-process com `AsyncLocalStorage` para isolamento de contexto
+- Workers em processos separados via tmux/iTerm2 panes
+- Sincronizacao de memoria entre agentes
+
+### 18.5 Undercover Mode
+
+Funcionarios Anthropic (`USER_TYPE === 'ant'`) usam Claude Code em repos publicos. O Undercover Mode impede vazamento de info interna:
+
+```
+## UNDERCOVER MODE - CRITICAL
+You are operating UNDERCOVER in a PUBLIC/OPEN-SOURCE repository.
+Your commit messages, PR titles, and PR bodies MUST NOT contain
+ANY Anthropic-internal information. Do not blow your cover.
+```
+
+Codinomes internos sao nomes de animais: **Tengu** (Claude Code), **Fennec** (Opus), **Capybara**, **Numbat**. Fast Mode = "Penguin Mode" com kill-switch `tengu_penguins_off`.
+
+### 18.6 Outras Flags
+
+`BRIDGE_MODE`, `VOICE_MODE`, `WORKFLOW_SCRIPTS`, `AFK_MODE`, `advisor-tool`, `history_snipping` — prontas mas nao lancadas.
+
+---
+
+## 19. Anti-Patterns & Technical Debt
+
+> **Fonte**: Analise do [@thekitze](https://x.com/thekitze) — GPT-5.4 avaliou o codebase em **6.5/10**. Descricao: *"This is not junior spaghetti. This is staff-engineer spaghetti: performance-aware, feature-flagged, telemetry-instrumented, surgically optimized spaghetti."*
+
+### 19.1 Problemas Reais Encontrados
+
+| Problema | Detalhe |
+|----------|---------|
+| `print.ts` | 5,594 linhas com UMA funcao de 3,167 linhas e 12 niveis de nesting |
+| `main.tsx` | 803,924 bytes num unico arquivo |
+| `interactiveHelpers.tsx` | 57,424 bytes |
+| Bug de compactacao | 1,279 sessoes tiveram 50+ falhas consecutivas (ate 3,272), desperdicando ~250K chamadas de API/dia globalmente. Fix: 3 linhas |
+| Cache bugs | Invalidacao de cache faz tokens nao-cacheados custarem 10-20x mais. Bug na `--resume` flag quebra cache sem workaround |
+
+### 19.2 Licao Critica
+
+Comentario no proprio fonte:
+> *"1,279 sessions had 50+ consecutive failures (up to 3,272) in a single session, wasting ~250K API calls per day globally."*
+
+O fix foram **3 linhas**: limitar falhas consecutivas a 3 antes de desabilitar compactacao. Isso prova que circuit breakers simples previnem desperdicio catastrofico.
+
+### 19.3 O Que Isso Ensina
+
+- Velocidade sem disciplina produz debt acumulativo. Uma funcao de 3,167 linhas nao aparece da noite pro dia
+- CI que rejeita complexidade ciclomatica alta teria prevenido isso
+- Review rigoroso + refactoring continuo > gerar codigo com IA e fazer commit
+- **Vibe coding sem disciplina e anti-pattern** mesmo quando feito por staff engineers
+
+---
+
+## 20. Defense Against Copying & Abuse
+
+### 20.1 Anti-Distillation
+
+O servidor pode injetar **tools falsas** no system prompt. Objetivo: envenenar trafego gravado por quem estiver tentando destilar o comportamento do Claude Code para treinar concorrentes.
+
+### 20.2 Signed Summarization
+
+Mecanismo de sumarizacao de texto de conectores, **assinado criptograficamente**, para que parte do trafego observavel nao corresponda ao raciocinio bruto original.
+
+### 20.3 Client Attestation
+
+Cada request inclui header de billing com placeholder `cch=00000`. O runtime nativo do **Bun substitui abaixo da camada JavaScript** por um hash calculado. O binario tenta provar que e Claude Code legítimo. Isso explica por que ferramentas third-party como OpenCode enfrentaram resistencia — tinha enforcement tecnico embutido no transporte.
+
+### 20.4 Frustration Detection
+
+Regex para detectar frustracao do usuario: palavrao, insulto, "this sucks". Pragmatico — `wtf|ffs|shit` como sentiment analysis barato e imediato em vez de LLM call.
+
+---
+
+## 21. Dream System (Memory Consolidation)
+
+> O nome e intencional. E o Claude sonhando.
+
+### 21.1 Triggers (3 portas — todas precisam passar)
+
+1. 24 horas desde o ultimo sonho
+2. Pelo menos 5 sessoes desde o ultimo sonho
+3. Lock de consolidacao adquirido (impede sonhos concorrentes)
+
+### 21.2 Fases
+
+| Fase | Acao |
+|------|------|
+| **Orient** | `ls` no diretorio de memoria, le indice |
+| **Gather** | Busca sinais novos em logs, memorias desatualizadas, transcricoes |
+| **Consolidate** | Escreve/atualiza topic files, converte datas relativas → absolutas, deleta fatos contraditos |
+| **Prune** | Mantém indice abaixo de 200 linhas e ~25KB |
+
+### 21.3 Principio Fundamental
+
+> **Memoria nao e tratada como verdade. E tratada como pista.** O sistema assume que memoria pode estar velha, errada ou contraditoria. O modelo ainda precisa verificar antes de confiar. Isso e o oposto de "joga tudo num banco vetorial e deixa a magia acontecer."
+
+O subagent de sonho recebe **bash read-only**. Pode olhar o projeto mas nao pode modificar nada. Puramente consolidacao.
+
+---
+
+## 22. Lessons for Our Codebase
 
 ### What to Adopt
 

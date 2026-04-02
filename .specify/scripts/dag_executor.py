@@ -17,8 +17,10 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import asyncio
 import logging
 import os
+import random
 import shutil
 import subprocess
 import sys
@@ -261,6 +263,204 @@ def dispatch_with_retry(
     return False, last_error
 
 
+# ── Async Dispatch (for daemon integration) ─────────────────────────
+
+
+async def dispatch_node_async(
+    node: Node,
+    cwd: str | Path,
+    prompt: str,
+    timeout: int = DEFAULT_TIMEOUT,
+) -> tuple[bool, str | None]:
+    """Async version of dispatch_node using asyncio.create_subprocess_exec."""
+    if not shutil.which("claude"):
+        return False, "claude CLI not found in PATH"
+
+    cmd = ["claude", "-p", prompt, "--cwd", str(cwd), "--output-format", "json"]
+    log.info("Dispatching node '%s' async (skill: %s, timeout: %ds)", node.id, node.skill, timeout)
+
+    process = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    try:
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
+        if process.returncode != 0:
+            error = stderr.decode()[:500] if stderr else f"exitcode {process.returncode}"
+            log.error("Node '%s' failed: %s", node.id, error)
+            return False, error
+        return True, None
+    except asyncio.TimeoutError:
+        process.kill()
+        await process.wait()
+        error = f"timeout after {timeout}s"
+        log.error("Node '%s': %s", node.id, error)
+        return False, error
+
+
+async def dispatch_with_retry_async(
+    node: Node,
+    cwd: str | Path,
+    prompt: str,
+    timeout: int,
+    breaker: CircuitBreaker,
+) -> tuple[bool, str | None]:
+    """Async version of dispatch_with_retry using asyncio.sleep."""
+    if not breaker.check():
+        return False, "circuit breaker OPEN"
+
+    last_error = None
+    for attempt, backoff in enumerate([0] + RETRY_BACKOFFS, 1):
+        if backoff > 0:
+            jittered = backoff + random.uniform(0, backoff * 0.3)
+            log.info("Retry %d/%d for node '%s' after %.1fs", attempt - 1, len(RETRY_BACKOFFS), node.id, jittered)
+            await asyncio.sleep(jittered)
+
+        success, error = await dispatch_node_async(node, cwd, prompt, timeout)
+        if success:
+            breaker.record_success()
+            return True, None
+        last_error = error
+
+    breaker.record_failure()
+    return False, last_error
+
+
+# ── Async Pipeline (for daemon) ─────────────────────────────────────
+
+
+async def run_pipeline_async(
+    platform_name: str,
+    epic_slug: str | None = None,
+    resume: bool = False,
+    timeout: int = DEFAULT_TIMEOUT,
+    semaphore: "asyncio.Semaphore | None" = None,
+    conn: object | None = None,
+) -> int:
+    """Async version of run_pipeline for daemon integration.
+
+    Returns exit code: 0=success or paused at gate, 1=failure.
+    Human gates are written to DB and the function returns (daemon continues).
+    If conn is provided, it is reused (not closed). Otherwise a new one is created.
+    """
+    platform_dir = REPO_ROOT / "platforms" / platform_name
+    yaml_path = platform_dir / "platform.yaml"
+
+    if not yaml_path.exists():
+        log.error("platform.yaml not found: %s", yaml_path)
+        return 1
+
+    mode = "l2" if epic_slug else "l1"
+    nodes = parse_dag(yaml_path, mode=mode, epic=epic_slug)
+    ordered = topological_sort(nodes)
+
+    log.info("Pipeline async %s — %d nodes in %s mode", platform_name, len(ordered), mode.upper())
+
+    from db import (
+        complete_run,
+        get_conn,
+        get_pending_gates,
+        get_resumable_nodes,
+        insert_run,
+        upsert_epic_node,
+        upsert_pipeline_node,
+    )
+
+    owns_conn = conn is None
+    if owns_conn:
+        conn = get_conn()
+    completed_nodes: set[str] = set()
+
+    if resume:
+        completed_nodes = get_resumable_nodes(conn, platform_name, epic_slug)
+        pending = get_pending_gates(conn, platform_name)
+        if epic_slug:
+            pending = [g for g in pending if g.get("epic_id") == epic_slug]
+        for gate in pending:
+            if gate["node_id"] not in completed_nodes:
+                log.info("Gate pendente para '%s' — daemon aguardara aprovacao", gate["node_id"])
+                if owns_conn:
+                    conn.close()
+                return 0
+        log.info("Resume async: %d nodes already completed", len(completed_nodes))
+
+    breaker = CircuitBreaker()
+    cwd = REPO_ROOT
+
+    for node in ordered:
+        if node.id in completed_nodes:
+            log.info("Skipping completed node: %s", node.id)
+            continue
+
+        if node.optional and node.skip_condition:
+            log.info("Skipping optional node: %s (%s)", node.id, node.skip_condition)
+            if epic_slug:
+                upsert_epic_node(conn, platform_name, epic_slug, node.id, status="skipped")
+            else:
+                upsert_pipeline_node(conn, platform_name, node.id, status="skipped")
+            continue
+
+        node_deps = set(node.depends)
+        if not node_deps.issubset(completed_nodes):
+            missing = node_deps - completed_nodes
+            log.warning("Node '%s' blocked — missing deps: %s", node.id, missing)
+            continue
+
+        # Human gate: write to DB and return (daemon will poll for approval)
+        if node.gate in HUMAN_GATES:
+            run_id = insert_run(conn, platform_name, node.id, epic_id=epic_slug)
+            conn.execute(
+                "UPDATE pipeline_runs SET gate_status='waiting_approval', gate_notified_at=datetime('now') "
+                "WHERE run_id=?",
+                (run_id,),
+            )
+            conn.commit()
+            log.info("Gate '%s' aguardando aprovacao (run_id=%s)", node.id, run_id)
+            if owns_conn:
+                conn.close()
+            return 0
+
+        prompt = compose_skill_prompt(platform_name, node, platform_dir, epic_slug)
+
+        if semaphore:
+            async with semaphore:
+                success, error = await dispatch_with_retry_async(node, cwd, prompt, timeout, breaker)
+        else:
+            success, error = await dispatch_with_retry_async(node, cwd, prompt, timeout, breaker)
+
+        if not success:
+            run_id = insert_run(conn, platform_name, node.id, epic_id=epic_slug, error=error)
+            complete_run(conn, run_id, status="failed", error=error)
+            log.error("Node '%s' failed after retries: %s", node.id, error)
+            if owns_conn:
+                conn.close()
+            return 1
+
+        ok, verify_error = verify_outputs(node, platform_dir)
+        if not ok:
+            run_id = insert_run(conn, platform_name, node.id, epic_id=epic_slug, error=verify_error)
+            complete_run(conn, run_id, status="failed", error=verify_error)
+            log.error("Node '%s': %s", node.id, verify_error)
+            if owns_conn:
+                conn.close()
+            return 1
+
+        run_id = insert_run(conn, platform_name, node.id, epic_id=epic_slug)
+        complete_run(conn, run_id, status="completed")
+        if epic_slug:
+            upsert_epic_node(conn, platform_name, epic_slug, node.id, status="done")
+        else:
+            upsert_pipeline_node(conn, platform_name, node.id, status="done")
+        completed_nodes.add(node.id)
+        log.info("Node '%s' completed successfully (async)", node.id)
+
+    log.info("Pipeline async %s complete — %d nodes executed", mode.upper(), len(completed_nodes))
+    if owns_conn:
+        conn.close()
+    return 0
+
+
 # ── Prompt Composition ───────────────────────────────────────────────
 
 
@@ -333,6 +533,11 @@ def run_pipeline(
     """Execute the pipeline DAG.
 
     Returns exit code: 0=success or paused at gate, 1=failure.
+
+    ARCHITECTURAL INVARIANT: This function processes epics sequentially.
+    Parallel epic execution is ONLY safe for external repos (via worktree
+    isolation). Self-ref platforms share working dir, DB, and skills —
+    see pipeline-dag-knowledge.md "Parallel Epics Constraint".
     """
     platform_dir = REPO_ROOT / "platforms" / platform_name
     yaml_path = platform_dir / "platform.yaml"

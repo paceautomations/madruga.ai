@@ -389,3 +389,53 @@ def test_inject_ship_fields_updates_status(setup_platform):
         assert "title: Test Epic" in content
     finally:
         post_save.REPO_ROOT = original_repo
+
+
+def test_record_save_skips_when_hash_unchanged(setup_platform):
+    """record_save should NOT overwrite completed_at when hash is unchanged."""
+    tmp_path, db_path = setup_platform
+    import post_save
+    import db as db_mod
+
+    original_repo = post_save.REPO_ROOT
+    original_db = db_mod.DB_PATH
+    post_save.REPO_ROOT = tmp_path
+    db_mod.DB_PATH = db_path
+
+    try:
+        # First save — records the node as done
+        result1 = post_save.record_save(
+            platform="test-plat",
+            node="vision",
+            skill="madruga:vision",
+            artifact="business/vision.md",
+        )
+        assert result1["status"] == "ok"
+
+        # Get the original completed_at
+        conn = get_conn(db_path)
+        nodes = get_pipeline_nodes(conn, "test-plat")
+        original_ts = next(n for n in nodes if n["node_id"] == "vision")["completed_at"]
+        conn.close()
+
+        # Second save — same file, same hash (simulates hook from side-effect edit)
+        import time
+
+        time.sleep(0.1)  # ensure datetime.now() would differ
+        post_save.record_save(
+            platform="test-plat",
+            node="vision",
+            skill="madruga:vision",
+            artifact="business/vision.md",
+        )
+
+        # completed_at should NOT have changed
+        conn = get_conn(db_path)
+        nodes = get_pipeline_nodes(conn, "test-plat")
+        new_ts = next(n for n in nodes if n["node_id"] == "vision")["completed_at"]
+        conn.close()
+
+        assert new_ts == original_ts, f"completed_at changed from {original_ts} to {new_ts}"
+    finally:
+        post_save.REPO_ROOT = original_repo
+        db_mod.DB_PATH = original_db

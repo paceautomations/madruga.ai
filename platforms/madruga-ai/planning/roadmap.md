@@ -45,6 +45,7 @@ gantt
     013 DAG Executor + Bridge    :done, e013, 2026-03-31, 1d
     014 Telegram Notifications   :done, e014, 2026-04-01, 1d
     015 Subagent Judge           :done, e015, 2026-04-01, 1d
+    016 Daemon 24/7              :done, e016, 2026-04-01, 1d
 ```
 
 | # | Epic | Descricao | Status | Concluido |
@@ -59,6 +60,7 @@ gantt
 | 013 | DAG Executor + SpeckitBridge | Custom DAG executor: Kahn's topological sort, claude -p dispatch, human gates (CLI pause/resume), retry/circuit breaker/watchdog. 494 LOC + 110 LOC extensions. 43 testes. | **shipped** | 2026-03-31 |
 | 014 | Telegram Notifications | Bot Telegram standalone (aiogram 3.x): notifica human gates pendentes, inline keyboard approve/reject, health check, backoff exponencial, offset persistence. Migration 008. 28 testes. | **shipped** | 2026-04-01 |
 | 015 | Subagent Judge + Decision Classifier | Tech-reviewers: 4 personas paralelas (Arch Reviewer, Bug Hunter, Simplifier, Stress Tester) + Judge pass. Decision Classifier (risk score). Substitui verify (L2) e Tier 3 (L1). YAML config extensivel. 47 testes. | **shipped** | 2026-04-01 |
+| 016 | Daemon 24/7 | FastAPI + asyncio daemon: dag_scheduler (poll epics, dispatch pipeline), Telegram integration (gate approvals via inline keyboard), health_checker (degradation state machine + systemd watchdog), ntfy.sh fallback, Sentry. Endpoints /health + /status. systemd unit file. 393 LOC daemon + ~200 LOC async dag_executor. 221 testes. | **shipped** | 2026-04-01 |
 
 ---
 
@@ -73,7 +75,7 @@ gantt
     013 DAG Executor + Bridge    :done, e013, 2026-03-31, 1d
     014 Telegram Notifications   :done, e014, 2026-04-01, 1d
     015 Subagent Judge           :done, e015, 2026-04-01, 1d
-    016 Daemon 24/7              :e016, after e014, 2w
+    016 Daemon 24/7              :done, e016, 2026-04-01, 1d
 ```
 
 ### Sequencia e Justificativa
@@ -84,7 +86,7 @@ gantt
 | 2 | 013 DAG Executor + SpeckitBridge | 6w | Alto | Value: runtime funcional. Real: ~1d. Infraestrutura existente (db.py, post_save.py) + decisoes bem capturadas em context.md reduziram escopo. |
 | 3 | 014 Telegram Notifications | 2w (real: 1d) | Baixo | Depende da gate state machine de 013. aiogram e framework maduro — baixo risco tecnico. Appetite reduzido: scope claro + framework maduro. |
 | 3 | 015 Subagent Judge + Decision Classifier | 2w (real: 1d) | Medio→Baixo | Paralelo com 014. Agent tool ja provado. Knowledge files = maioria do deliverable. Calibracao validada com 7 ADRs reais. |
-| 4 | 016 Daemon 24/7 | 2w | Baixo | Ultimo — monta em cima de tudo. Mecanico: asyncio event loop + health checks + systemd. |
+| 4 | 016 Daemon 24/7 | 2w (real: 1d) | Baixo | Ultimo — monta em cima de tudo. Mecanico: asyncio event loop + health checks + systemd. Appetite reduzido: modulos existentes (dag_executor, telegram_bot) ja tinham 90% da logica. |
 
 > 014 e 015 podem rodar em paralelo apos 013. Gantt mostra sequencial por team size = 1.
 
@@ -115,7 +117,7 @@ graph LR
 |-----------|-------|---------------------|------------|
 | **Fulano Operacional** | 012 | `speckit.implement` executa em repo Fulano via worktree, PR criado com `gh` | Semana 2 | Tooling pronto (ensure_repo, worktree, implement_remote). Falta teste end-to-end com Fulano real. |
 | **Runtime Funcional** | 012, 013 | DAG executor processa 1 pipeline L1 completo via CLI, human gates pausam/resumem corretamente | Semana 8 | Tooling pronto (ensure_repo, worktree, dag_executor). Falta teste end-to-end com claude -p real. |
-| **Autonomia MVP** | 012-016 | 1 epic completo (pitch-to-PR) processado pelo daemon em repo Fulano, com Telegram notifications e Subagent Judge review | Semana 14 |
+| **Autonomia MVP** | 012-016 | 1 epic completo (pitch-to-PR) processado pelo daemon em repo Fulano, com Telegram notifications e Subagent Judge review | **Alcancado 2026-04-01** — todos os 5 epics MVP shipped. Falta validacao end-to-end com Fulano real. |
 
 ---
 
@@ -129,7 +131,7 @@ Epics abaixo sao **candidatos identificados** para o MVP de autonomia. Cada um t
 | 013 | DAG Executor + SpeckitBridge | Skills invocadas manualmente. Para autonomia, pipeline precisa de execucao data-driven com human gate pause/resume. | Custom DAG executor (~500-800 LOC, ADR-017): le YAML, topological sort, dispatch via `claude -p`, state machine por node. SpeckitBridge compoe prompts para modo autonomo. **Gate state machine completa** definida aqui: pause → persist SQLite → wait signal → resume. Metricas basicas (run counter, success/failure, duration). | 6w (Grande) | **P1** | 012 |
 | 014 | Telegram Notifications | Sem canal de notificacao, human gates travam pipeline autonomo. Operador nao sabe quando precisa aprovar algo. | TelegramAdapter (aiogram, long-polling, ADR-018): `send`, `ask_choice` (inline buttons approve/reject), `alert`. Health check periodico (`getMe`). Fallback log-only quando unreachable. Consome gate state machine de 013. | 2w (Media) | **P1** | 013 |
 | 015 | Subagent Judge + Decision Classifier | Specs geradas autonomamente nao tem quality gate multi-perspectiva. Decisoes 1-way-door nao sao classificadas automaticamente. | SubagentJudge: 3 personas paralelas (Architecture Reviewer, Bug Hunter, Simplifier) + 1 Judge pass filtra por Accuracy/Actionability/Severity (ADR-019). DecisionClassifier: classifica 1-way/2-way door, auto-gera ADR para 1-way. Integra com pipeline gates. | 2w (Media) | **P1** | 013 |
-| 016 | Daemon 24/7 | Runtime (013) e notificacoes (014) existem mas precisam ser iniciados manualmente. Precisa de processo persistente. | MadrugaDaemon asyncio (ADR-006): slot-based orchestrator, health checks (SQLite, Telegram, git), timeout watchdog para gates pendentes (24h escalation), systemd service. Pipeline observability: cost tracking, failure dashboard, credit burn alerts. | 2w (Media) | **P2** | 013, 014, 015 |
+| 016 | Daemon 24/7 | Runtime (013) e notificacoes (014) existem mas precisam ser iniciados manualmente. Precisa de processo persistente. | MadrugaDaemon asyncio (ADR-006): FastAPI lifespan + TaskGroup compoe dag_scheduler, Telegram polling, health_checker, gate_poller. Endpoints /health + /status. systemd Type=notify com watchdog. ntfy.sh fallback. Gate reminder 24h. Sentry auto-instrumentation. | 2w (real: 1d) | **P2** | 013, 014, 015 |
 
 ---
 

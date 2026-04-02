@@ -385,6 +385,22 @@ def cmd_register(name: str) -> None:
 # ══════════════════════════════════════
 
 
+def cmd_repair_timestamps(name: str) -> None:
+    """Repair completed_at timestamps from events table."""
+    from db import get_conn, migrate, repair_timestamps
+
+    with get_conn() as conn:
+        migrate(conn)
+        repaired = repair_timestamps(conn, name)
+
+    if repaired:
+        print(f"=== {name}: repaired {len(repaired)} node(s) ===")
+        for r in repaired:
+            print(f"  {r['node_id']}: {r['old']} → {r['new']}")
+    else:
+        print(f"=== {name}: all timestamps OK ===")
+
+
 def cmd_check_stale(name: str) -> None:
     """Check for stale pipeline nodes (dependencies completed after them)."""
     from db import get_conn, get_stale_nodes, migrate
@@ -678,6 +694,10 @@ def _build_parser():  # -> argparse.ArgumentParser
     p = sub.add_parser("check-stale", help="Detect stale pipeline nodes")
     p.add_argument("name", help="Platform name")
 
+    # repair-timestamps
+    p = sub.add_parser("repair-timestamps", help="Repair completed_at from events table")
+    p.add_argument("name", help="Platform name")
+
     # import-adrs
     p = sub.add_parser("import-adrs", help="Import ADR markdown files into DB")
     p.add_argument("name", help="Platform name")
@@ -756,6 +776,8 @@ def main() -> None:
         cmd_register(args.name)
     elif args.command == "check-stale":
         cmd_check_stale(args.name)
+    elif args.command == "repair-timestamps":
+        cmd_repair_timestamps(args.name)
     elif args.command == "import-adrs":
         cmd_import_adrs(args.name)
     elif args.command == "export-adrs":

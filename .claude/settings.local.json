@@ -98,6 +98,26 @@
             "command": "python3 .specify/scripts/hook_post_save.py 2>/dev/null || true"
           }
         ]
+      },
+      {
+        "matcher": "Write(.claude/commands/**)|Write(.claude/knowledge/**)",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 20,
+            "command": "python3 .specify/scripts/hook_skill_lint.py 2>/dev/null || true"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit(.claude/commands/**)|Edit(.claude/knowledge/**)",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 20,
+            "command": "python3 .specify/scripts/hook_skill_lint.py 2>/dev/null || true"
+          }
+        ]
       }
     ]
   },
