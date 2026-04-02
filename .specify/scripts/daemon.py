@@ -115,6 +115,7 @@ async def dag_scheduler(conn, semaphore, shutdown_event, poll_interval=15):
                         epic_slug=epic_id,
                         resume=True,
                         semaphore=semaphore,
+                        gate_mode=os.environ.get("MADRUGA_MODE", "manual"),
                     )
                     # C2: notify via ntfy when pipeline fails (circuit breaker likely involved)
                     if result != 0:

@@ -42,6 +42,8 @@ RETRY_BACKOFFS = [5, 10, 20]
 CB_MAX_FAILURES = 5
 CB_RECOVERY_SECONDS = 300
 HUMAN_GATES = frozenset({"human", "1-way-door"})
+VALID_GATE_MODES = frozenset({"manual", "interactive", "auto"})
+DEFAULT_GATE_MODE = os.environ.get("MADRUGA_MODE", "manual")
 
 
 # ── Data Structures ─────────────────────────────────────────────────
@@ -338,13 +340,24 @@ async def run_pipeline_async(
     timeout: int = DEFAULT_TIMEOUT,
     semaphore: "asyncio.Semaphore | None" = None,
     conn: object | None = None,
+    gate_mode: str | None = None,
 ) -> int:
     """Async version of run_pipeline for daemon integration.
+
+    gate_mode: 'manual' (default) — pause at human gates, wait for CLI/Telegram approval.
+               'interactive' — print summary, wait for y/n on stdin.
+               'auto' — auto-approve all human gates, run pipeline end-to-end.
 
     Returns exit code: 0=success or paused at gate, 1=failure.
     Human gates are written to DB and the function returns (daemon continues).
     If conn is provided, it is reused (not closed). Otherwise a new one is created.
     """
+    gmode = gate_mode or DEFAULT_GATE_MODE
+    if gmode not in VALID_GATE_MODES:
+        log.error("Invalid gate_mode '%s'. Valid: %s", gmode, VALID_GATE_MODES)
+        return 1
+    log.info("Gate mode: %s", gmode)
+
     platform_dir = REPO_ROOT / "platforms" / platform_name
     yaml_path = platform_dir / "platform.yaml"
 
@@ -423,29 +436,44 @@ async def run_pipeline_async(
             log.warning("Node '%s' blocked — missing deps: %s", node.id, missing)
             continue
 
-        # Human gate: check if already approved, otherwise pause
+        # Human gate handling based on gmode
         if node.gate in HUMAN_GATES:
-            approved_run = conn.execute(
-                "SELECT run_id FROM pipeline_runs "
-                "WHERE platform_id=? AND node_id=? AND gate_status='approved' "
-                "AND (epic_id=? OR (epic_id IS NULL AND ? IS NULL))",
-                (platform_name, node.id, epic_slug, epic_slug),
-            ).fetchone()
-            if not approved_run:
-                # First time hitting this gate — pause and wait for approval
-                run_id = insert_run(conn, platform_name, node.id, epic_id=epic_slug)
-                conn.execute(
-                    "UPDATE pipeline_runs SET gate_status='waiting_approval', gate_notified_at=datetime('now') "
-                    "WHERE run_id=?",
-                    (run_id,),
-                )
-                conn.commit()
-                log.info("Gate '%s' aguardando aprovacao (run_id=%s)", node.id, run_id)
-                if owns_conn:
-                    conn.close()
-                return 0
-            # Gate already approved — proceed with dispatch
-            log.info("Gate '%s' approved — dispatching", node.id)
+            if gmode == "auto":
+                log.info("Auto-approving gate '%s' (mode=auto)", node.id)
+            elif gmode == "interactive":
+                print(f"\n>>> Gate '{node.id}' (type: {node.gate}, skill: {node.skill})")
+                print(f"    Next: dispatch '{node.skill}' for epic '{epic_slug or 'L1'}'")
+                try:
+                    answer = input("    Approve? [y/N] ").strip().lower()
+                except EOFError:
+                    answer = "n"
+                if answer != "y":
+                    log.info("Gate '%s' rejected by user (interactive mode)", node.id)
+                    if owns_conn:
+                        conn.close()
+                    return 0
+                log.info("Gate '%s' approved by user (interactive mode)", node.id)
+            else:
+                # gmode == "manual": check DB for prior approval, or pause
+                approved_run = conn.execute(
+                    "SELECT run_id FROM pipeline_runs "
+                    "WHERE platform_id=? AND node_id=? AND gate_status='approved' "
+                    "AND (epic_id=? OR (epic_id IS NULL AND ? IS NULL))",
+                    (platform_name, node.id, epic_slug, epic_slug),
+                ).fetchone()
+                if not approved_run:
+                    run_id = insert_run(conn, platform_name, node.id, epic_id=epic_slug)
+                    conn.execute(
+                        "UPDATE pipeline_runs SET gate_status='waiting_approval', gate_notified_at=datetime('now') "
+                        "WHERE run_id=?",
+                        (run_id,),
+                    )
+                    conn.commit()
+                    log.info("Gate '%s' aguardando aprovacao (run_id=%s)", node.id, run_id)
+                    if owns_conn:
+                        conn.close()
+                    return 0
+                log.info("Gate '%s' approved — dispatching", node.id)
 
         prompt = compose_skill_prompt(platform_name, node, platform_dir, epic_slug)
 
@@ -555,8 +583,11 @@ def run_pipeline(
     resume: bool = False,
     dry_run: bool = False,
     timeout: int = DEFAULT_TIMEOUT,
+    gate_mode: str | None = None,
 ) -> int:
     """Execute the pipeline DAG.
+
+    gate_mode: 'manual' | 'interactive' | 'auto' (see run_pipeline_async).
 
     Returns exit code: 0=success or paused at gate, 1=failure.
 
@@ -565,6 +596,11 @@ def run_pipeline(
     isolation). Self-ref platforms share working dir, DB, and skills —
     see pipeline-dag-knowledge.md "Parallel Epics Constraint".
     """
+    gmode = gate_mode or DEFAULT_GATE_MODE
+    if gmode not in VALID_GATE_MODES:
+        log.error("Invalid gate_mode '%s'. Valid: %s", gmode, VALID_GATE_MODES)
+        return 1
+
     platform_dir = REPO_ROOT / "platforms" / platform_name
     yaml_path = platform_dir / "platform.yaml"
 
@@ -644,20 +680,36 @@ def run_pipeline(
             log.warning("Node '%s' blocked — missing deps: %s", node.id, missing)
             continue
 
-        # Human gate: pause and exit
+        # Human gate handling based on gmode
         if node.gate in HUMAN_GATES:
-            run_id = insert_run(conn, platform_name, node.id, epic_id=epic_slug)
-            conn.execute(
-                "UPDATE pipeline_runs SET gate_status='waiting_approval', gate_notified_at=datetime('now') "
-                "WHERE run_id=?",
-                (run_id,),
-            )
-            conn.commit()
-            print(f"\nAguardando aprovacao para '{node.id}' (gate: {node.gate}).")
-            print(f"Execute: python3 .specify/scripts/platform_cli.py gate approve {run_id}")
-            print("Apos aprovar, re-execute com --resume.\n")
-            conn.close()
-            return 0
+            if gmode == "auto":
+                log.info("Auto-approving gate '%s' (mode=auto)", node.id)
+            elif gmode == "interactive":
+                print(f"\n>>> Gate '{node.id}' (type: {node.gate}, skill: {node.skill})")
+                print(f"    Next: dispatch '{node.skill}' for epic '{epic_slug or 'L1'}'")
+                try:
+                    answer = input("    Approve? [y/N] ").strip().lower()
+                except EOFError:
+                    answer = "n"
+                if answer != "y":
+                    log.info("Gate '%s' rejected by user (interactive mode)", node.id)
+                    conn.close()
+                    return 0
+                log.info("Gate '%s' approved by user (interactive mode)", node.id)
+            else:
+                # gmode == "manual": pause and wait for external approval
+                run_id = insert_run(conn, platform_name, node.id, epic_id=epic_slug)
+                conn.execute(
+                    "UPDATE pipeline_runs SET gate_status='waiting_approval', gate_notified_at=datetime('now') "
+                    "WHERE run_id=?",
+                    (run_id,),
+                )
+                conn.commit()
+                print(f"\nAguardando aprovacao para '{node.id}' (gate: {node.gate}).")
+                print(f"Execute: python3 .specify/scripts/platform_cli.py gate approve {run_id}")
+                print("Apos aprovar, re-execute com --resume.\n")
+                conn.close()
+                return 0
 
         # Compose prompt
         prompt = compose_skill_prompt(platform_name, node, platform_dir, epic_slug)
@@ -711,6 +763,12 @@ def main() -> None:
     parser.add_argument(
         "--timeout", type=int, default=DEFAULT_TIMEOUT, help=f"Watchdog timeout in seconds (default: {DEFAULT_TIMEOUT})"
     )
+    parser.add_argument(
+        "--mode",
+        choices=["manual", "interactive", "auto"],
+        default=None,
+        help="Gate mode: manual (default, pause at gates), interactive (y/n prompt), auto (no pauses)",
+    )
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose logging")
     args = parser.parse_args()
 
@@ -724,6 +782,7 @@ def main() -> None:
             resume=args.resume,
             dry_run=args.dry_run,
             timeout=args.timeout,
+            gate_mode=args.mode,
         )
     )
 

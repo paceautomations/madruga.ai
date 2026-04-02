@@ -266,3 +266,57 @@ async def test_gate_approved_triggers_dispatch():
         result = await run_pipeline_async("test-plat", epic_slug="e1", resume=True, conn=conn)
 
     assert dispatch_called, "specify should have been dispatched after gate approval"
+
+
+@pytest.mark.asyncio
+async def test_auto_mode_skips_gate_approval():
+    """In auto mode, human gates are auto-approved without DB interaction."""
+    import sqlite3
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    for ddl in [
+        "CREATE TABLE epic_nodes (platform_id TEXT, epic_id TEXT, node_id TEXT, status TEXT, "
+        "output_hash TEXT, completed_at TEXT, completed_by TEXT, PRIMARY KEY (platform_id, epic_id, node_id))",
+        "CREATE TABLE pipeline_nodes (platform_id TEXT, node_id TEXT, status TEXT, "
+        "output_hash TEXT, input_hashes TEXT, output_files TEXT, completed_at TEXT, "
+        "completed_by TEXT, line_count INT, PRIMARY KEY (platform_id, node_id))",
+        "CREATE TABLE pipeline_runs (run_id TEXT PRIMARY KEY, platform_id TEXT, epic_id TEXT, "
+        "node_id TEXT, status TEXT DEFAULT 'running', gate_status TEXT, agent TEXT, "
+        "tokens_in INT, tokens_out INT, cost_usd REAL, duration_ms INT, error TEXT, "
+        "started_at TEXT, completed_at TEXT, gate_notified_at TEXT, gate_resolved_at TEXT, "
+        "telegram_message_id TEXT)",
+        "CREATE TABLE events (event_id INTEGER PRIMARY KEY AUTOINCREMENT, platform_id TEXT, "
+        "entity_type TEXT, entity_id TEXT, action TEXT, actor TEXT, payload TEXT, created_at TEXT)",
+    ]:
+        conn.execute(ddl)
+
+    conn.execute("INSERT INTO epic_nodes VALUES ('p', 'e1', 'epic-context', 'done', NULL, '2026-01-01', 'test')")
+
+    from dag_executor import run_pipeline_async
+
+    nodes = [
+        Node("epic-context", "madruga:epic-context", [], [], "human", "business", False, None),
+        Node("specify", "speckit.specify", [], ["epic-context"], "human", "business", False, None),
+    ]
+
+    dispatched = []
+
+    async def mock_dispatch(node, *args, **kwargs):
+        dispatched.append(node.id)
+        return True, None
+
+    with (
+        patch("dag_executor.parse_dag", return_value=nodes),
+        patch("dag_executor.topological_sort", return_value=nodes),
+        patch("dag_executor.dispatch_with_retry_async", side_effect=mock_dispatch),
+        patch("dag_executor.verify_outputs", return_value=(True, None)),
+        patch("dag_executor.compose_skill_prompt", return_value="test"),
+        patch("dag_executor.REPO_ROOT", MagicMock()),
+    ):
+        result = await run_pipeline_async("p", epic_slug="e1", resume=True, conn=conn, gate_mode="auto")
+
+    assert "specify" in dispatched, "auto mode should dispatch without pausing"
+    # No waiting_approval runs should exist
+    gates = conn.execute("SELECT * FROM pipeline_runs WHERE gate_status='waiting_approval'").fetchall()
+    assert len(gates) == 0, "auto mode should not create waiting_approval gates"
