@@ -1464,24 +1464,23 @@ def get_pending_gates(conn: sqlite3.Connection, platform_id: str) -> list[dict]:
 
 
 def get_resumable_nodes(conn: sqlite3.Connection, platform_id: str, epic_id: str | None = None) -> set[str]:
-    """Return set of node_ids that are completed or approved (for resume)."""
+    """Return set of node_ids that are done or skipped (for resume).
+
+    Note: approved gates are NOT included — 'approved' means 'ready to execute',
+    not 'executed successfully'. The node must be dispatched, verified, and marked
+    done in epic_nodes/pipeline_nodes before it counts as resumable.
+    """
     if epic_id:
         rows = conn.execute(
-            "SELECT node_id FROM epic_nodes WHERE platform_id=? AND epic_id=? AND status='done'",
+            "SELECT node_id FROM epic_nodes WHERE platform_id=? AND epic_id=? AND status IN ('done', 'skipped')",
             (platform_id, epic_id),
         ).fetchall()
     else:
         rows = conn.execute(
-            "SELECT node_id FROM pipeline_nodes WHERE platform_id=? AND status='done'",
+            "SELECT node_id FROM pipeline_nodes WHERE platform_id=? AND status IN ('done', 'skipped')",
             (platform_id,),
         ).fetchall()
-    done = {r[0] for r in rows}
-    # Also include nodes with approved gates (ready to execute)
-    approved = conn.execute(
-        "SELECT DISTINCT node_id FROM pipeline_runs WHERE platform_id=? AND gate_status='approved'",
-        (platform_id,),
-    ).fetchall()
-    return done | {r[0] for r in approved}
+    return {r[0] for r in rows}
 
 
 # ══════════════════════════════════════

@@ -163,3 +163,106 @@ async def test_circuit_breaker_open_blocks_dispatch():
     success, error = await dispatch_with_retry_async(_make_node(), "/tmp", "test", 600, breaker)
     assert success is False
     assert "circuit breaker OPEN" in error
+
+
+# --- Tests for gate dispatch and resume fixes ---
+
+
+def test_resumable_nodes_excludes_approved_gates():
+    """get_resumable_nodes must NOT include nodes with gate_status='approved'."""
+    import sqlite3
+
+    from db import get_resumable_nodes
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute(
+        "CREATE TABLE epic_nodes (platform_id TEXT, epic_id TEXT, node_id TEXT, "
+        "status TEXT, output_hash TEXT, completed_at TEXT, completed_by TEXT, "
+        "PRIMARY KEY (platform_id, epic_id, node_id))"
+    )
+    conn.execute(
+        "CREATE TABLE pipeline_runs (run_id TEXT PRIMARY KEY, platform_id TEXT, "
+        "epic_id TEXT, node_id TEXT, status TEXT, gate_status TEXT, "
+        "agent TEXT, tokens_in INT, tokens_out INT, cost_usd REAL, "
+        "duration_ms INT, error TEXT, started_at TEXT, completed_at TEXT, "
+        "gate_notified_at TEXT, gate_resolved_at TEXT, telegram_message_id TEXT)"
+    )
+    # epic-context is done
+    conn.execute("INSERT INTO epic_nodes VALUES ('plat', 'e1', 'epic-context', 'done', NULL, '2026-01-01', 'test')")
+    # specify has an approved gate but is NOT done in epic_nodes
+    conn.execute(
+        "INSERT INTO pipeline_runs (run_id, platform_id, epic_id, node_id, status, gate_status, started_at) "
+        "VALUES ('r1', 'plat', 'e1', 'specify', 'running', 'approved', '2026-01-01')"
+    )
+
+    result = get_resumable_nodes(conn, "plat", "e1")
+    assert "epic-context" in result
+    assert "specify" not in result, "approved gate should NOT count as resumable"
+
+
+@pytest.mark.asyncio
+async def test_gate_approved_triggers_dispatch():
+    """After gate approval, run_pipeline_async dispatches the node instead of pausing."""
+    import sqlite3
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    # Minimal schema for the test
+    for ddl in [
+        "CREATE TABLE platforms (platform_id TEXT PRIMARY KEY, name TEXT, title TEXT, "
+        "lifecycle TEXT DEFAULT 'design', repo_path TEXT, metadata TEXT DEFAULT '{}', "
+        "created_at TEXT, updated_at TEXT)",
+        "CREATE TABLE epics (epic_id TEXT, platform_id TEXT, title TEXT, status TEXT DEFAULT 'proposed', "
+        "appetite TEXT, priority INT, branch_name TEXT, file_path TEXT, created_at TEXT, updated_at TEXT, "
+        "delivered_at TEXT, PRIMARY KEY (platform_id, epic_id))",
+        "CREATE TABLE epic_nodes (platform_id TEXT, epic_id TEXT, node_id TEXT, status TEXT, "
+        "output_hash TEXT, completed_at TEXT, completed_by TEXT, "
+        "PRIMARY KEY (platform_id, epic_id, node_id))",
+        "CREATE TABLE pipeline_nodes (platform_id TEXT, node_id TEXT, status TEXT, "
+        "output_hash TEXT, input_hashes TEXT, output_files TEXT, completed_at TEXT, "
+        "completed_by TEXT, line_count INT, PRIMARY KEY (platform_id, node_id))",
+        "CREATE TABLE pipeline_runs (run_id TEXT PRIMARY KEY, platform_id TEXT, epic_id TEXT, "
+        "node_id TEXT, status TEXT DEFAULT 'running', gate_status TEXT, agent TEXT, "
+        "tokens_in INT, tokens_out INT, cost_usd REAL, duration_ms INT, error TEXT, "
+        "started_at TEXT, completed_at TEXT, gate_notified_at TEXT, gate_resolved_at TEXT, "
+        "telegram_message_id TEXT)",
+        "CREATE TABLE events (event_id INTEGER PRIMARY KEY AUTOINCREMENT, platform_id TEXT, "
+        "entity_type TEXT, entity_id TEXT, action TEXT, actor TEXT, payload TEXT, created_at TEXT)",
+    ]:
+        conn.execute(ddl)
+
+    # epic-context done, specify has approved gate
+    conn.execute(
+        "INSERT INTO epic_nodes VALUES ('test-plat', 'e1', 'epic-context', 'done', NULL, '2026-01-01', 'test')"
+    )
+    conn.execute(
+        "INSERT INTO pipeline_runs (run_id, platform_id, epic_id, node_id, status, gate_status, started_at) "
+        "VALUES ('r1', 'test-plat', 'e1', 'specify', 'running', 'approved', '2026-01-01')"
+    )
+
+    from dag_executor import run_pipeline_async
+
+    nodes = [
+        Node("epic-context", "madruga:epic-context", ["{epic}/pitch.md"], [], "human", "business", False, None),
+        Node("specify", "speckit.specify", ["{epic}/spec.md"], ["epic-context"], "human", "business", False, None),
+    ]
+
+    dispatch_called = False
+
+    async def mock_dispatch(*args, **kwargs):
+        nonlocal dispatch_called
+        dispatch_called = True
+        return True, None
+
+    with (
+        patch("dag_executor.parse_dag", return_value=nodes),
+        patch("dag_executor.topological_sort", return_value=nodes),
+        patch("dag_executor.dispatch_with_retry_async", side_effect=mock_dispatch),
+        patch("dag_executor.verify_outputs", return_value=(True, None)),
+        patch("dag_executor.compose_skill_prompt", return_value="test prompt"),
+        patch("dag_executor.REPO_ROOT", MagicMock()),
+    ):
+        result = await run_pipeline_async("test-plat", epic_slug="e1", resume=True, conn=conn)
+
+    assert dispatch_called, "specify should have been dispatched after gate approval"

@@ -374,6 +374,21 @@ async def run_pipeline_async(
     completed_nodes: set[str] = set()
 
     if resume:
+        # Cleanup stale 'running' runs from previous crashes/failures
+        if epic_slug:
+            conn.execute(
+                "UPDATE pipeline_runs SET status='cancelled', completed_at=datetime('now') "
+                "WHERE platform_id=? AND epic_id=? AND status='running'",
+                (platform_name, epic_slug),
+            )
+        else:
+            conn.execute(
+                "UPDATE pipeline_runs SET status='cancelled', completed_at=datetime('now') "
+                "WHERE platform_id=? AND epic_id IS NULL AND status='running'",
+                (platform_name,),
+            )
+        conn.commit()
+
         completed_nodes = get_resumable_nodes(conn, platform_name, epic_slug)
         pending = get_pending_gates(conn, platform_name)
         if epic_slug:
@@ -408,19 +423,29 @@ async def run_pipeline_async(
             log.warning("Node '%s' blocked — missing deps: %s", node.id, missing)
             continue
 
-        # Human gate: write to DB and return (daemon will poll for approval)
+        # Human gate: check if already approved, otherwise pause
         if node.gate in HUMAN_GATES:
-            run_id = insert_run(conn, platform_name, node.id, epic_id=epic_slug)
-            conn.execute(
-                "UPDATE pipeline_runs SET gate_status='waiting_approval', gate_notified_at=datetime('now') "
-                "WHERE run_id=?",
-                (run_id,),
-            )
-            conn.commit()
-            log.info("Gate '%s' aguardando aprovacao (run_id=%s)", node.id, run_id)
-            if owns_conn:
-                conn.close()
-            return 0
+            approved_run = conn.execute(
+                "SELECT run_id FROM pipeline_runs "
+                "WHERE platform_id=? AND node_id=? AND gate_status='approved' "
+                "AND (epic_id=? OR (epic_id IS NULL AND ? IS NULL))",
+                (platform_name, node.id, epic_slug, epic_slug),
+            ).fetchone()
+            if not approved_run:
+                # First time hitting this gate — pause and wait for approval
+                run_id = insert_run(conn, platform_name, node.id, epic_id=epic_slug)
+                conn.execute(
+                    "UPDATE pipeline_runs SET gate_status='waiting_approval', gate_notified_at=datetime('now') "
+                    "WHERE run_id=?",
+                    (run_id,),
+                )
+                conn.commit()
+                log.info("Gate '%s' aguardando aprovacao (run_id=%s)", node.id, run_id)
+                if owns_conn:
+                    conn.close()
+                return 0
+            # Gate already approved — proceed with dispatch
+            log.info("Gate '%s' approved — dispatching", node.id)
 
         prompt = compose_skill_prompt(platform_name, node, platform_dir, epic_slug)
 
