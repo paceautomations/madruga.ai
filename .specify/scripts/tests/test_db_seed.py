@@ -284,3 +284,137 @@ pipeline:
     assert nodes["A"]["completed_at"] is not None  # must have a timestamp
     assert nodes["B"]["status"] == "done"
     assert nodes["B"]["completed_at"] is not None
+
+
+def test_seed_creates_epic_nodes(tmp_db, tmp_path):
+    """Seed creates epic_nodes when output artifacts exist on disk."""
+    from db import seed_from_filesystem, get_epic_nodes
+
+    pdir = tmp_path / "plat-en"
+    pdir.mkdir(parents=True)
+    (pdir / "platform.yaml").write_text(
+        "name: plat-en\ntitle: Test\nlifecycle: design\n"
+        "pipeline:\n"
+        "  nodes: []\n"
+        "  epic_cycle:\n"
+        "    nodes:\n"
+        "      - id: specify\n        skill: speckit.specify\n"
+        "        outputs: ['{epic}/spec.md']\n        depends: []\n        gate: human\n"
+        "      - id: plan\n        skill: speckit.plan\n"
+        "        outputs: ['{epic}/plan.md']\n        depends: [specify]\n        gate: human\n"
+    )
+    epic_dir = pdir / "epics" / "001-test"
+    epic_dir.mkdir(parents=True)
+    (epic_dir / "pitch.md").write_text('---\ntitle: "Test"\nstatus: in_progress\n---\n# Test\n')
+    (epic_dir / "spec.md").write_text("# Spec\nContent.")
+    # plan.md does NOT exist — only specify should be seeded
+
+    seed_from_filesystem(tmp_db, "plat-en", pdir)
+    nodes = get_epic_nodes(tmp_db, "plat-en", "001-test")
+    node_map = {n["node_id"]: n for n in nodes}
+
+    assert "specify" in node_map
+    assert node_map["specify"]["status"] == "done"
+    assert node_map["specify"]["completed_by"] == "seed:speckit.specify"
+    assert node_map["specify"]["completed_at"] is not None
+    # plan was NOT on disk, so should not be in epic_nodes
+    assert "plan" not in node_map
+
+
+def test_seed_epic_auto_ships(tmp_db, tmp_path):
+    """Seed auto-ships epic when all required nodes have artifacts on disk."""
+    from db import seed_from_filesystem, get_epics, get_epic_nodes
+
+    pdir = tmp_path / "plat-ship"
+    pdir.mkdir(parents=True)
+    (pdir / "platform.yaml").write_text(
+        "name: plat-ship\ntitle: Test\nlifecycle: design\n"
+        "pipeline:\n"
+        "  nodes: []\n"
+        "  epic_cycle:\n"
+        "    nodes:\n"
+        "      - id: specify\n        skill: speckit.specify\n"
+        "        outputs: ['{epic}/spec.md']\n        depends: []\n        gate: human\n"
+        "      - id: implement\n        skill: speckit.implement\n"
+        "        outputs: ['{epic}/tasks.md']\n        depends: [specify]\n        gate: auto\n"
+        "      - id: clarify\n        skill: speckit.clarify\n"
+        "        outputs: ['{epic}/spec.md']\n        depends: [specify]\n"
+        "        gate: human\n        optional: true\n"
+    )
+    epic_dir = pdir / "epics" / "001-ship"
+    epic_dir.mkdir(parents=True)
+    (epic_dir / "pitch.md").write_text('---\ntitle: "Ship Test"\nstatus: planned\n---\n# Ship\n')
+    # All required outputs exist
+    (epic_dir / "spec.md").write_text("# Spec\nDone.")
+    (epic_dir / "tasks.md").write_text("# Tasks\nDone.")
+
+    seed_from_filesystem(tmp_db, "plat-ship", pdir)
+    epics = get_epics(tmp_db, "plat-ship")
+    assert epics[0]["status"] == "shipped"
+    assert epics[0]["delivered_at"] is not None
+
+    nodes = get_epic_nodes(tmp_db, "plat-ship", "001-ship")
+    assert len(nodes) >= 2  # specify + implement at minimum
+
+
+def test_seed_epic_partial_stays_in_progress(tmp_db, tmp_path):
+    """Seed with partial nodes keeps epic in_progress, not shipped."""
+    from db import seed_from_filesystem, get_epics
+
+    pdir = tmp_path / "plat-partial"
+    pdir.mkdir(parents=True)
+    (pdir / "platform.yaml").write_text(
+        "name: plat-partial\ntitle: Test\nlifecycle: design\n"
+        "pipeline:\n"
+        "  nodes: []\n"
+        "  epic_cycle:\n"
+        "    nodes:\n"
+        "      - id: specify\n        skill: speckit.specify\n"
+        "        outputs: ['{epic}/spec.md']\n        depends: []\n        gate: human\n"
+        "      - id: implement\n        skill: speckit.implement\n"
+        "        outputs: ['{epic}/tasks.md']\n        depends: [specify]\n        gate: auto\n"
+    )
+    epic_dir = pdir / "epics" / "001-partial"
+    epic_dir.mkdir(parents=True)
+    (epic_dir / "pitch.md").write_text('---\ntitle: "Partial"\nstatus: in_progress\n---\n# P\n')
+    (epic_dir / "spec.md").write_text("# Spec\nDone.")
+    # tasks.md does NOT exist — implement not done
+
+    seed_from_filesystem(tmp_db, "plat-partial", pdir)
+    epics = get_epics(tmp_db, "plat-partial")
+    assert epics[0]["status"] == "in_progress"
+
+
+def test_seed_epic_nodes_preserves_existing_completed_at(tmp_db, tmp_path):
+    """Seed does not overwrite completed_at set by a real skill execution."""
+    from db import seed_from_filesystem, get_epic_nodes, upsert_epic_node, upsert_epic, upsert_platform
+
+    pdir = tmp_path / "plat-preserve"
+    pdir.mkdir(parents=True)
+    (pdir / "platform.yaml").write_text(
+        "name: plat-preserve\ntitle: Test\nlifecycle: design\n"
+        "pipeline:\n"
+        "  nodes: []\n"
+        "  epic_cycle:\n"
+        "    nodes:\n"
+        "      - id: specify\n        skill: speckit.specify\n"
+        "        outputs: ['{epic}/spec.md']\n        depends: []\n        gate: human\n"
+    )
+    epic_dir = pdir / "epics" / "001-pres"
+    epic_dir.mkdir(parents=True)
+    (epic_dir / "pitch.md").write_text('---\ntitle: "Pres"\nstatus: in_progress\n---\n# P\n')
+    (epic_dir / "spec.md").write_text("# Spec\nDone.")
+
+    # First seed
+    upsert_platform(tmp_db, "plat-preserve", name="plat-preserve", repo_path="platforms/plat-preserve")
+    upsert_epic(tmp_db, "plat-preserve", "001-pres", title="Pres")
+
+    # Manually set completed_at (simulating skill execution)
+    original_ts = "2026-03-20T12:00:00Z"
+    upsert_epic_node(tmp_db, "plat-preserve", "001-pres", "specify", "done", completed_at=original_ts)
+
+    # Reseed — should NOT overwrite completed_at
+    seed_from_filesystem(tmp_db, "plat-preserve", pdir)
+    nodes = get_epic_nodes(tmp_db, "plat-preserve", "001-pres")
+    specify = [n for n in nodes if n["node_id"] == "specify"][0]
+    assert specify["completed_at"] == original_ts

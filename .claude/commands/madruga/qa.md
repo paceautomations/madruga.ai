@@ -285,12 +285,34 @@ If no tooling is detected at all: `⏭️ L1: No static analysis tools configure
    # or: make build 2>&1
    ```
 
-3. **Judge:**
+3. **Smoke-test Python entrypoints (when Python files in diff):**
+
+   Detect files with `if __name__ == "__main__"` in the diff:
+   ```bash
+   git diff main...HEAD --name-only -- '*.py' | while read f; do
+     grep -q 'if __name__' "$f" 2>/dev/null && echo "$f"
+   done
+   ```
+
+   For each detected entrypoint:
+
+   | Entrypoint type | Smoke test | Success criteria |
+   |-----------------|-----------|------------------|
+   | Script with argparse | `timeout 5 python3 <file> --help 2>&1` | Exit 0, no ImportError |
+   | daemon.py | `timeout 10 python3 <file> 2>&1` | Contains "Uvicorn running" |
+   | Other | `python3 -c "import importlib.util; s=importlib.util.spec_from_file_location('_t','<file>'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)"` | No ImportError |
+
+   **Why this matters**: pytest caches stdlib modules in `sys.modules` before test fixtures inject script paths via `sys.path.insert`. A file shadowing a stdlib module (e.g. `platform.py`) passes all pytest tests but crashes on real startup. This step catches that class of bug.
+
+   - Import failure → S1 FAIL (runtime crash)
+   - Success → PASS (no separate report line)
+
+4. **Judge:**
    - Build success → PASS
    - Build failure → S1 FAIL (blocks deployment)
    - Build warnings → S3
 
-4. **Report:**
+5. **Report:**
    ```
    🏗️ L4: Build Verification
    ✅ Build succeeded (14.2s)

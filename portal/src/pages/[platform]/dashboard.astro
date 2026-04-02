@@ -1,7 +1,7 @@
 ---
 import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
 import PipelineDAG from '../../components/dashboard/PipelineDAG.tsx';
-import { discoverPlatforms } from '../../lib/platforms.mjs';
+import { discoverPlatforms, loadStatusData } from '../../lib/platforms.mjs';
 import { NODE_LABELS, NODE_ROUTE_OVERRIDES, resolveNodeHref } from '../../lib/constants';
 
 export function getStaticPaths() {
@@ -14,11 +14,8 @@ export function getStaticPaths() {
 const { manifest } = Astro.props;
 const platformName = manifest.name;
 
-// ── Load data ──
-let statusData = { generated_at: '', platforms: [] as any[] };
-try {
-  statusData = await import('../../data/pipeline-status.json');
-} catch { /* not generated yet */ }
+// ── Load data (fresh read via loadStatusData, no stale cache) ──
+const statusData = loadStatusData() || { generated_at: '', platforms: [] };
 
 const platform = (statusData.platforms || []).find((p: any) => p.id === platformName);
 const hasData = !!platform;
@@ -61,12 +58,12 @@ const PHASES = [
   { id: 'backlog', label: 'Backlog', stages: [] as string[] },
   { id: 'specifying', label: 'Specifying', stages: ['epic-context', 'specify', 'clarify'] },
   { id: 'planning', label: 'Planning', stages: ['plan', 'tasks', 'analyze'] },
-  { id: 'building', label: 'Building', stages: ['implement', 'analyze-post', 'verify'] },
+  { id: 'building', label: 'Building', stages: ['implement', 'analyze-post', 'judge'] },
   { id: 'shipping', label: 'Shipping', stages: ['qa', 'reconcile'] },
   { id: 'shipped', label: 'Shipped', stages: [] as string[] },
 ];
 
-const ALL_L2_STAGES = ['epic-context','specify','clarify','plan','tasks','analyze','implement','analyze-post','verify','qa','reconcile'];
+const ALL_L2_STAGES = ['epic-context','specify','clarify','plan','tasks','analyze','implement','analyze-post','judge','qa','reconcile'];
 
 function getEpicPhase(epic: any): { phaseId: string; subStage: string } {
   // Check epic-level status first (from DB)

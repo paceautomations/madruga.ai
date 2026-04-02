@@ -1,7 +1,8 @@
 ---
 id: 015
 title: "Subagent Judge + Decision Classifier"
-status: planned
+status: shipped
+delivered_at: 2026-04-01
 appetite: 2w
 priority: 2
 ---

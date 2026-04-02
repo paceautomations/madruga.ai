@@ -588,7 +588,7 @@ def run_pipeline(
         for gate in pending:
             if gate["node_id"] not in completed_nodes:
                 print(f"Gate pendente para '{gate['node_id']}'. Execute:")
-                print(f"  python3 .specify/scripts/platform.py gate approve {gate['run_id']}")
+                print(f"  python3 .specify/scripts/platform_cli.py gate approve {gate['run_id']}")
                 conn.close()
                 return 0
         log.info("Resume: %d nodes already completed", len(completed_nodes))
@@ -628,7 +628,7 @@ def run_pipeline(
             )
             conn.commit()
             print(f"\nAguardando aprovacao para '{node.id}' (gate: {node.gate}).")
-            print(f"Execute: python3 .specify/scripts/platform.py gate approve {run_id}")
+            print(f"Execute: python3 .specify/scripts/platform_cli.py gate approve {run_id}")
             print("Apos aprovar, re-execute com --resume.\n")
             conn.close()
             return 0

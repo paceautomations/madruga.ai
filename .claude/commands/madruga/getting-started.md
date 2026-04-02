@@ -16,7 +16,7 @@ Onboarding guide — immediate action, zero unnecessary theory. Write generated 
 
 ### 1. Detect Current State
 
-Run `python3 .specify/scripts/platform.py list` to detect existing platforms.
+Run `python3 .specify/scripts/platform_cli.py list` to detect existing platforms.
 
 ### 2. If No Platforms Exist
 

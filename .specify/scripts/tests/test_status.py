@@ -1,4 +1,4 @@
-"""Tests for platform.py status command."""
+"""Tests for platform_cli.py status command."""
 
 import json
 import subprocess
@@ -11,9 +11,9 @@ REPO_ROOT = SCRIPTS_DIR.parent.parent
 
 
 def run_status(*args: str) -> subprocess.CompletedProcess:
-    """Run platform.py status with given args."""
+    """Run platform_cli.py status with given args."""
     return subprocess.run(
-        [sys.executable, str(SCRIPTS_DIR / "platform.py"), "status", *args],
+        [sys.executable, str(SCRIPTS_DIR / "platform_cli.py"), "status", *args],
         capture_output=True,
         text=True,
         cwd=str(REPO_ROOT),

@@ -1,7 +1,7 @@
 # Makefile — madruga.ai task runner
 # Usage: make <target>
 
-PLATFORM := .specify/scripts/platform.py
+PLATFORM := .specify/scripts/platform_cli.py
 
 .PHONY: help test lint ruff status seed portal-dev portal-build
 

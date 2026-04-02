@@ -16,7 +16,7 @@ This is the documentation directory for the **fulano** platform within the madru
 Documentation lives here; code lives in the paceautomations/fulano-api repository.
 
 When working on this platform:
-1. Use `platform.py use fulano` to set as active
+1. Use `platform_cli.py use fulano` to set as active
 2. L1 skills (vision, domain-model, etc.) operate on files in this directory
 3. L2 epic cycle creates branches with prefix `epic/fulano/`
 4. See root CLAUDE.md for pipeline documentation and commands

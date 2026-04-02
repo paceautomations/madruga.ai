@@ -106,7 +106,7 @@ PLATFORM_YAML="$PLATFORM_DIR/platform.yaml"
 # Check platform exists
 if [ ! -d "$PLATFORM_DIR" ]; then
     if $JSON_MODE; then
-        printf '{"error":"Platform '\''%s'\'' not found","suggestion":"Run platform.py list to see available platforms"}\n' "$PLATFORM"
+        printf '{"error":"Platform '\''%s'\'' not found","suggestion":"Run platform_cli.py list to see available platforms"}\n' "$PLATFORM"
     else
         echo "ERROR: Platform '$PLATFORM' not found at $PLATFORM_DIR" >&2
     fi

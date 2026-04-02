@@ -3,7 +3,7 @@
   "type": "module",
   "version": "0.0.1",
   "scripts": {
-    "prestatus": "cd .. && python3 .specify/scripts/platform.py status --all --json --output portal/src/data/pipeline-status.json 2>/dev/null || echo '{\"generated_at\":\"\",\"platforms\":[]}' > portal/src/data/pipeline-status.json",
+    "prestatus": "cd .. && python3 .specify/scripts/platform_cli.py status --all --json --output portal/src/data/pipeline-status.json 2>/dev/null || echo '{\"generated_at\":\"\",\"platforms\":[]}' > portal/src/data/pipeline-status.json",
     "predev": "npm run prestatus",
     "dev": "astro dev",
     "start": "astro dev",
@@ -24,6 +24,9 @@
     "react-dom": "^19.2.4",
     "sharp": "^0.34.2",
     "svg-pan-zoom": "^3.6.2"
+  },
+  "overrides": {
+    "lodash-es": "^4.18.1"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",

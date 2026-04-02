@@ -72,7 +72,7 @@ def _refresh_portal_status() -> None:
         subprocess.run(
             [
                 sys.executable,
-                str(REPO_ROOT / ".specify" / "scripts" / "platform.py"),
+                str(REPO_ROOT / ".specify" / "scripts" / "platform_cli.py"),
                 "status",
                 "--all",
                 "--json",

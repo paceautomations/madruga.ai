@@ -31,7 +31,7 @@ _exclude:
   - __pycache__
 
 _tasks:
-  - command: "python3 ../../.specify/scripts/platform.py register {{ platform_name }}"
+  - command: "python3 ../../.specify/scripts/platform_cli.py register {{ platform_name }}"
     when: "{{ _copier_operation == 'copy' and register_portal }}"
 
 # ── Questions ──

@@ -13,7 +13,7 @@ handoffs:
 
 # Platform New — Scaffolding
 
-Create a new platform in the madruga.ai repository using the `platform.py new` script, which automatically:
+Create a new platform in the madruga.ai repository using the `platform_cli.py new` script, which automatically:
 1. Scaffolds via Copier (complete structure)
 2. Injects the import into LikeC4Diagram.tsx (diagrams work automatically)
 3. Updates portal symlinks (content appears in Starlight)
@@ -56,7 +56,7 @@ Also collect (to pass to copier via `-d`):
 Run the script that handles EVERYTHING automatically:
 
 ```bash
-python3 .specify/scripts/platform.py new <name>
+python3 .specify/scripts/platform_cli.py new <name>
 ```
 
 **In non-interactive context** (when copier cannot ask questions), use:
@@ -73,14 +73,14 @@ copier copy .specify/templates/platform/ platforms/<name>/ --trust --defaults \
 
 Then register in the portal (inject LikeC4 + symlinks):
 ```bash
-python3 .specify/scripts/platform.py register <name>
+python3 .specify/scripts/platform_cli.py register <name>
 ```
 
 ### 3. Verify
 
 ```bash
-python3 .specify/scripts/platform.py lint <name>
-python3 .specify/scripts/platform.py list
+python3 .specify/scripts/platform_cli.py lint <name>
+python3 .specify/scripts/platform_cli.py list
 ```
 
 ### 4. Next Step
@@ -129,7 +129,7 @@ platforms/<name>/
 |-------|--------|
 | copier not installed | `pip install copier` |
 | Platform already exists | Ask: overwrite or choose another name |
-| Scaffold OK but inject/symlinks fail | Run `python3 .specify/scripts/platform.py register <name>` (handles inject + symlinks + validation) |
-| Portal does not show the platform | Run `python3 .specify/scripts/platform.py register <name>` and restart `npm run dev` |
+| Scaffold OK but inject/symlinks fail | Run `python3 .specify/scripts/platform_cli.py register <name>` (handles inject + symlinks + validation) |
+| Portal does not show the platform | Run `python3 .specify/scripts/platform_cli.py register <name>` and restart `npm run dev` |
 | likec4 build fails on empty model | Normal — scaffold generates an empty `dynamic view businessFlow` that triggers a warning. Filling in the content resolves it. |
 

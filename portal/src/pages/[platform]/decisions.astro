@@ -1,6 +1,6 @@
 ---
 import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
-import { discoverPlatforms } from '../../lib/platforms.mjs';
+import { discoverPlatforms, loadStatusData } from '../../lib/platforms.mjs';
 
 export function getStaticPaths() {
   return discoverPlatforms().map((p) => ({
@@ -14,8 +14,8 @@ const { platform } = Astro.props;
 // Primary: read from pipeline-status.json (single source of truth via DB)
 let decisions: any[] = [];
 try {
-  const statusData = await import('../../data/pipeline-status.json');
-  const platformData = (statusData.platforms || []).find((p: any) => p.id === platform);
+  const statusData = loadStatusData();
+  const platformData = (statusData?.platforms || []).find((p: any) => p.id === platform);
   decisions = platformData?.decisions || [];
 } catch { /* not generated yet */ }
 

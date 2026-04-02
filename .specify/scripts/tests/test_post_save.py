@@ -439,3 +439,81 @@ def test_record_save_skips_when_hash_unchanged(setup_platform):
     finally:
         post_save.REPO_ROOT = original_repo
         db_mod.DB_PATH = original_db
+
+
+def test_backfill_epic_predecessors(setup_platform):
+    """Backfill fills missing nodes whose artifacts exist on disk."""
+    tmp_path, db_path = setup_platform
+    import post_save
+    import db as db_mod
+
+    original_repo = post_save.REPO_ROOT
+    original_db = db_mod.DB_PATH
+    post_save.REPO_ROOT = tmp_path
+    db_mod.DB_PATH = db_path
+
+    try:
+        from db import get_conn as gc, get_epic_nodes, upsert_epic, upsert_platform
+
+        conn = gc(db_path)
+        upsert_platform(conn, "test-plat", name="test-plat", repo_path="platforms/test-plat")
+        upsert_epic(conn, "test-plat", "001-test-epic", title="Test Epic")
+        conn.close()
+
+        # Create plan.md on disk (specify's spec.md already exists from fixture)
+        plan_path = tmp_path / "platforms" / "test-plat" / "epics" / "001-test-epic" / "plan.md"
+        plan_path.write_text("# Plan\nTest plan content.")
+
+        # Record only implement — backfill should fill specify + plan from disk
+        code_path = tmp_path / "platforms" / "test-plat" / "epics" / "001-test-epic" / "code"
+        code_path.write_text("# Code\nImplementation.")
+        result = post_save.record_save(
+            platform="test-plat",
+            node="implement",
+            skill="speckit.implement",
+            artifact="epics/001-test-epic/code",
+            epic="001-test-epic",
+        )
+        assert result["status"] == "ok"
+
+        conn = gc(db_path)
+        nodes = get_epic_nodes(conn, "test-plat", "001-test-epic")
+        node_map = {n["node_id"]: n for n in nodes}
+        conn.close()
+
+        # specify and plan should have been backfilled from disk
+        assert "specify" in node_map
+        assert node_map["specify"]["status"] == "done"
+        assert node_map["specify"]["completed_by"].startswith("seed:")
+        assert "plan" in node_map
+        assert node_map["plan"]["status"] == "done"
+        assert node_map["plan"]["completed_by"].startswith("seed:")
+        # implement was recorded directly
+        assert node_map["implement"]["completed_by"] == "speckit.implement"
+    finally:
+        post_save.REPO_ROOT = original_repo
+        db_mod.DB_PATH = original_db
+
+
+def test_compute_epic_status_never_regresses_shipped(setup_platform):
+    """compute_epic_status never downgrades shipped to a lesser status."""
+    tmp_path, db_path = setup_platform
+    import db as db_mod
+
+    original_db = db_mod.DB_PATH
+    db_mod.DB_PATH = db_path
+
+    try:
+        from db import compute_epic_status, get_conn as gc, upsert_epic, upsert_platform
+
+        conn = gc(db_path)
+        upsert_platform(conn, "test-plat", name="test-plat", repo_path="platforms/test-plat")
+        upsert_epic(conn, "test-plat", "001-test-epic", title="Test", status="shipped")
+
+        # No nodes at all — but epic is already shipped
+        new_status, delivered = compute_epic_status(conn, "test-plat", "001-test-epic", {"specify", "plan"}, "shipped")
+        assert new_status == "shipped"
+        assert delivered is None  # no new delivered_at needed
+        conn.close()
+    finally:
+        db_mod.DB_PATH = original_db

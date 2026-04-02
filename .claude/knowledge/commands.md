@@ -3,20 +3,20 @@
 ## Platform Management
 
 ```bash
-python3 .specify/scripts/platform.py list                    # listar plataformas
-python3 .specify/scripts/platform.py new <name>              # scaffold nova plataforma (copier)
-python3 .specify/scripts/platform.py lint <name>             # validar estrutura
-python3 .specify/scripts/platform.py lint --all              # validar todas
-python3 .specify/scripts/platform.py sync                    # copier update todas
-python3 .specify/scripts/platform.py register <name>         # injetar LikeC4 loader + validar model
-python3 .specify/scripts/platform.py import-adrs <name>      # importar ADRs markdown → DB
-python3 .specify/scripts/platform.py export-adrs <name>      # exportar decisions DB → markdown
-python3 .specify/scripts/platform.py import-memory           # importar .claude/memory/*.md → DB
-python3 .specify/scripts/platform.py export-memory           # exportar memory entries → markdown
-python3 .specify/scripts/platform.py use <name>              # definir plataforma ativa
-python3 .specify/scripts/platform.py current                 # mostrar plataforma ativa
-python3 .specify/scripts/platform.py status <name>           # pipeline status (tabela)
-python3 .specify/scripts/platform.py status --all --json     # todas plataformas (JSON)
+python3 .specify/scripts/platform_cli.py list                    # listar plataformas
+python3 .specify/scripts/platform_cli.py new <name>              # scaffold nova plataforma (copier)
+python3 .specify/scripts/platform_cli.py lint <name>             # validar estrutura
+python3 .specify/scripts/platform_cli.py lint --all              # validar todas
+python3 .specify/scripts/platform_cli.py sync                    # copier update todas
+python3 .specify/scripts/platform_cli.py register <name>         # injetar LikeC4 loader + validar model
+python3 .specify/scripts/platform_cli.py import-adrs <name>      # importar ADRs markdown → DB
+python3 .specify/scripts/platform_cli.py export-adrs <name>      # exportar decisions DB → markdown
+python3 .specify/scripts/platform_cli.py import-memory           # importar .claude/memory/*.md → DB
+python3 .specify/scripts/platform_cli.py export-memory           # exportar memory entries → markdown
+python3 .specify/scripts/platform_cli.py use <name>              # definir plataforma ativa
+python3 .specify/scripts/platform_cli.py current                 # mostrar plataforma ativa
+python3 .specify/scripts/platform_cli.py status <name>           # pipeline status (tabela)
+python3 .specify/scripts/platform_cli.py status --all --json     # todas plataformas (JSON)
 ```
 
 ## Portal
@@ -48,8 +48,8 @@ python3 .specify/scripts/dag_executor.py --platform <name> --dry-run     # print
 python3 .specify/scripts/dag_executor.py --platform <name>                # executar L1
 python3 .specify/scripts/dag_executor.py --platform <name> --epic <slug>  # executar L2 epic
 python3 .specify/scripts/dag_executor.py --platform <name> --resume       # resume checkpoint
-python3 .specify/scripts/platform.py gate list <name>                     # listar gates pendentes
-python3 .specify/scripts/platform.py gate approve <run-id>                # aprovar gate
+python3 .specify/scripts/platform_cli.py gate list <name>                     # listar gates pendentes
+python3 .specify/scripts/platform_cli.py gate approve <run-id>                # aprovar gate
 ```
 
 ## DB State (post-save)

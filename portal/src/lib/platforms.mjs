@@ -53,18 +53,14 @@ export function discoverPlatforms(platformsDir) {
 }
 
 /**
- * Load pipeline-status.json once (cached per process).
+ * Load pipeline-status.json (fresh read every call — no stale cache in dev).
  */
-let _statusCache = undefined;
-function _loadStatusData() {
-  if (_statusCache !== undefined) return _statusCache;
+export function loadStatusData() {
   try {
     const statusPath = path.join(__dirname, '..', 'data', 'pipeline-status.json');
-    if (!fs.existsSync(statusPath)) { _statusCache = null; return null; }
-    _statusCache = JSON.parse(fs.readFileSync(statusPath, 'utf8'));
-    return _statusCache;
+    if (!fs.existsSync(statusPath)) return null;
+    return JSON.parse(fs.readFileSync(statusPath, 'utf8'));
   } catch {
-    _statusCache = null;
     return null;
   }
 }
@@ -74,7 +70,7 @@ function _loadStatusData() {
  * Returns a map of epicId → { status, ... } for the given platform.
  */
 function loadDbEpicStatus(platformName) {
-  const statusData = _loadStatusData();
+  const statusData = loadStatusData();
   if (!statusData) return {};
   const platform = (statusData.platforms || []).find((p) => p.id === platformName);
   if (!platform?.l2?.epics) return {};

@@ -22,7 +22,7 @@ graph TB
     end
 
     subgraph cli_tools["CLI Tools (Python)"]
-        platform_cli["Platform CLI<br/>platform.py"]
+        platform_cli["Platform CLI<br/>platform_cli.py"]
         vision_build["Vision Build<br/>vision-build.py"]
         speckit_bridge["SpeckitBridge<br/>bridge.py"]
     end
@@ -106,7 +106,7 @@ graph TB
 | # | Container | Tecnologia | Responsabilidade | Porta |
 |---|-----------|-----------|------------------|-------|
 | 1 | **Portal** | Astro + Starlight + LikeC4 React | Site SSG de documentacao de arquitetura com diagramas interativos; auto-descobre todas as plataformas | :4321 |
-| 2 | **Platform CLI** | Python (platform.py) | Gerencia plataformas: new, lint, sync, register, status, import/export | CLI |
+| 2 | **Platform CLI** | Python (platform_cli.py) | Gerencia plataformas: new, lint, sync, register, status, import/export | CLI |
 | 3 | **Vision Build** | Python (vision-build.py) | Exporta LikeC4 JSON e popula tabelas AUTO em markdown | CLI |
 | 4 | **SpecKit Skills** | Markdown (.claude/commands/) | 20 skills consumidos interativamente pelo Claude Code | Claude Code |
 | 5 | **SpeckitBridge** | Python (speckit/bridge.py) | Compositor que le skills/templates/constituicao, monta prompts contextuais, e executa as 7 fases do pipeline (specify, clarify, plan, tasks, implement, reconcile, analyze) via claude -p | Lib |

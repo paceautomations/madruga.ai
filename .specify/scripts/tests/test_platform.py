@@ -1,11 +1,11 @@
-"""Tests for platform.py functions."""
+"""Tests for platform_cli.py functions."""
 
 import importlib
 import re
 import sys
 from pathlib import Path
 
-# Add scripts dir to path so we can import platform.py as a module
+# Add scripts dir to path so we can import platform_cli.py as a module
 _scripts_dir = str(Path(__file__).parent.parent)
 if _scripts_dir not in sys.path:
     sys.path.insert(0, _scripts_dir)
@@ -13,7 +13,7 @@ if _scripts_dir not in sys.path:
 # Import as 'plat' to avoid collision with stdlib 'platform'
 import importlib.util
 
-_spec = importlib.util.spec_from_file_location("plat", Path(__file__).parent.parent / "platform.py")
+_spec = importlib.util.spec_from_file_location("plat", Path(__file__).parent.parent / "platform_cli.py")
 plat = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(plat)
 

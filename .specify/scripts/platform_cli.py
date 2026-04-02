@@ -1,24 +1,26 @@
 #!/usr/bin/env python3
 """
-platform.py — Unified CLI for managing madruga.ai platforms.
+platform_cli.py — Unified CLI for managing madruga.ai platforms.
+
+Renamed from platform.py to avoid shadowing Python stdlib 'platform' module.
 
 Usage:
-    python3 .specify/scripts/platform.py new <name>        # scaffold via copier
-    python3 .specify/scripts/platform.py lint <name>        # validate structure
-    python3 .specify/scripts/platform.py lint --all         # validate all platforms
-    python3 .specify/scripts/platform.py sync [name]        # copier update (one or all)
-    python3 .specify/scripts/platform.py register <name>    # inject LikeC4 loader + validate model
-    python3 .specify/scripts/platform.py list               # list all platforms
-    python3 .specify/scripts/platform.py check-stale <name>  # detect stale pipeline nodes
-    python3 .specify/scripts/platform.py import-adrs <name> # import ADRs into DB
-    python3 .specify/scripts/platform.py export-adrs <name> # export decisions to markdown
-    python3 .specify/scripts/platform.py import-memory      # import .claude/memory into DB
-    python3 .specify/scripts/platform.py export-memory      # export memory entries to markdown
-    python3 .specify/scripts/platform.py status <name>      # pipeline status (human table)
-    python3 .specify/scripts/platform.py status --all       # all platforms (human table)
-    python3 .specify/scripts/platform.py status --all --json # all platforms (JSON for dashboards)
-    python3 .specify/scripts/platform.py use <name>         # set active platform
-    python3 .specify/scripts/platform.py current             # show active platform
+    python3 .specify/scripts/platform_cli.py new <name>        # scaffold via copier
+    python3 .specify/scripts/platform_cli.py lint <name>        # validate structure
+    python3 .specify/scripts/platform_cli.py lint --all         # validate all platforms
+    python3 .specify/scripts/platform_cli.py sync [name]        # copier update (one or all)
+    python3 .specify/scripts/platform_cli.py register <name>    # inject LikeC4 loader + validate model
+    python3 .specify/scripts/platform_cli.py list               # list all platforms
+    python3 .specify/scripts/platform_cli.py check-stale <name>  # detect stale pipeline nodes
+    python3 .specify/scripts/platform_cli.py import-adrs <name> # import ADRs into DB
+    python3 .specify/scripts/platform_cli.py export-adrs <name> # export decisions to markdown
+    python3 .specify/scripts/platform_cli.py import-memory      # import .claude/memory into DB
+    python3 .specify/scripts/platform_cli.py export-memory      # export memory entries to markdown
+    python3 .specify/scripts/platform_cli.py status <name>      # pipeline status (human table)
+    python3 .specify/scripts/platform_cli.py status --all       # all platforms (human table)
+    python3 .specify/scripts/platform_cli.py status --all --json # all platforms (JSON for dashboards)
+    python3 .specify/scripts/platform_cli.py use <name>         # set active platform
+    python3 .specify/scripts/platform_cli.py current             # show active platform
 """
 
 from __future__ import annotations
@@ -188,7 +190,7 @@ def cmd_new(name: str) -> None:
     print("\nNext steps:")
     print("  cd portal && npm run dev              # see it in the portal")
     print(f"  /pipeline {name}                      # see pipeline status and next step")
-    print(f"  python3 .specify/scripts/platform.py lint {name}  # validate")
+    print(f"  python3 .specify/scripts/platform_cli.py lint {name}  # validate")
 
 
 def cmd_lint(name: str | None, lint_all: bool = False) -> None:
@@ -516,7 +518,7 @@ def cmd_current() -> None:
     if active:
         print(f"Active platform: {active}")
     else:
-        print("No active platform set. Use: platform.py use <name>")
+        print("No active platform set. Use: platform_cli.py use <name>")
 
 
 def cmd_status(name: str | None, show_all: bool, as_json: bool, output_file: str | None = None) -> None:
@@ -665,7 +667,7 @@ def _build_parser():  # -> argparse.ArgumentParser
     import argparse
 
     parser = argparse.ArgumentParser(
-        prog="platform.py",
+        prog="platform_cli.py",
         description="Unified CLI for managing madruga.ai platforms.",
     )
     sub = parser.add_subparsers(dest="command", help="Available commands")
@@ -803,7 +805,7 @@ def main() -> None:
         cmd_worktree_cleanup(args.name, args.epic_slug)
     elif args.command == "gate":
         if not args.gate_action:
-            print("Usage: platform.py gate {approve|reject|list}")
+            print("Usage: platform_cli.py gate {approve|reject|list}")
             sys.exit(1)
         if args.gate_action == "approve":
             cmd_gate_approve(args.run_id)

@@ -1,7 +1,8 @@
 ---
 id: 016
 title: "Daemon 24/7"
-status: planned
+status: shipped
+delivered_at: 2026-04-01
 appetite: 2w
 priority: 3
 ---
