@@ -542,7 +542,18 @@ def compose_skill_prompt(
     if skill.startswith("speckit.") and epic_slug:
         skill_name = skill.split(".", 1)[1]
         epic_dir = platform_dir / "epics" / epic_slug
-        parts = [f"Execute /speckit.{skill_name} for platform '{platform_name}', epic '{epic_slug}'."]
+        output_dir = f"platforms/{platform_name}/epics/{epic_slug}"
+
+        parts = [
+            f"Execute /speckit.{skill_name} for platform '{platform_name}', epic '{epic_slug}'.",
+            "",
+            "CRITICAL CONSTRAINTS:",
+            f"- Save output to: {output_dir}/",
+            f"- You are on branch: epic/{platform_name}/{epic_slug}",
+            "- Do NOT create, switch, or checkout any other branch.",
+            "- Do NOT modify files outside the epic directory unless the skill requires it.",
+            f"- Expected output file: {', '.join(node.outputs)}",
+        ]
 
         # Include relevant epic artifacts as context
         context_files = ["pitch.md", "spec.md", "plan.md", "tasks.md"]
@@ -552,8 +563,8 @@ def compose_skill_prompt(
                 content = fpath.read_text()
                 if len(content) > 50000:
                     content = content[:50000] + "\n\n[... truncated ...]"
-                parts.append(f"## {fname}\n\n{content}")
-        return "\n\n---\n\n".join(parts)
+                parts.append(f"\n---\n\n## {fname}\n\n{content}")
+        return "\n".join(parts)
 
     # L1 madruga:* — instruction + dependency outputs as context
     parts = [f"Execute /{skill} {platform_name}"]
