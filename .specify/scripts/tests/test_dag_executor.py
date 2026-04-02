@@ -37,7 +37,10 @@ async def test_dispatch_node_async_success():
     mock_proc.communicate.return_value = (b"output", b"")
     mock_proc.returncode = 0
 
-    with patch("dag_executor.asyncio.create_subprocess_exec", return_value=mock_proc):
+    with (
+        patch("dag_executor.shutil.which", return_value="/usr/bin/claude"),
+        patch("dag_executor.asyncio.create_subprocess_exec", return_value=mock_proc),
+    ):
         success, error = await dispatch_node_async(_make_node(), "/tmp", "test prompt")
 
     assert success is True
@@ -54,7 +57,10 @@ async def test_dispatch_node_async_timeout():
     mock_proc.kill = MagicMock()
     mock_proc.wait = AsyncMock()
 
-    with patch("dag_executor.asyncio.create_subprocess_exec", return_value=mock_proc):
+    with (
+        patch("dag_executor.shutil.which", return_value="/usr/bin/claude"),
+        patch("dag_executor.asyncio.create_subprocess_exec", return_value=mock_proc),
+    ):
         success, error = await dispatch_node_async(_make_node(), "/tmp", "test", timeout=5)
 
     assert success is False
@@ -71,7 +77,10 @@ async def test_dispatch_node_async_failure():
     mock_proc.communicate.return_value = (b"", b"something went wrong")
     mock_proc.returncode = 1
 
-    with patch("dag_executor.asyncio.create_subprocess_exec", return_value=mock_proc):
+    with (
+        patch("dag_executor.shutil.which", return_value="/usr/bin/claude"),
+        patch("dag_executor.asyncio.create_subprocess_exec", return_value=mock_proc),
+    ):
         success, error = await dispatch_node_async(_make_node(), "/tmp", "test")
 
     assert success is False
