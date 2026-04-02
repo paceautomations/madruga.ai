@@ -44,6 +44,7 @@ CB_RECOVERY_SECONDS = 300
 HUMAN_GATES = frozenset({"human", "1-way-door"})
 VALID_GATE_MODES = frozenset({"manual", "interactive", "auto"})
 DEFAULT_GATE_MODE = os.environ.get("MADRUGA_MODE", "manual")
+DISALLOWED_TOOLS = "Bash(git checkout:*) Bash(git branch -:*) Bash(git switch:*)"
 
 
 # ── Data Structures ─────────────────────────────────────────────────
@@ -199,15 +200,26 @@ def dispatch_node(
     cwd: Path,
     prompt: str,
     timeout: int = DEFAULT_TIMEOUT,
-) -> tuple[bool, str | None]:
+    guardrail: str | None = None,
+) -> tuple[bool, str | None, str | None]:
     """Dispatch a skill via claude -p subprocess.
 
-    Returns (success, error_message).
+    Returns (success, error_message, stdout_content).
     """
     if not shutil.which("claude"):
-        return False, "claude CLI not found in PATH"
+        return False, "claude CLI not found in PATH", None
 
-    cmd = ["claude", "-p", prompt, "--output-format", "json"]
+    cmd = [
+        "claude",
+        "-p",
+        prompt,
+        "--output-format",
+        "json",
+        "--disallowedTools",
+        DISALLOWED_TOOLS,
+    ]
+    if guardrail:
+        cmd.extend(["--append-system-prompt", guardrail])
     log.info("Dispatching node '%s' (skill: %s, timeout: %ds)", node.id, node.skill, timeout)
     log.debug("Command: %s", " ".join(cmd[:4]) + " ...")
 
@@ -216,12 +228,12 @@ def dispatch_node(
         if result.returncode != 0:
             error = result.stderr.strip()[:500] if result.stderr else f"exitcode {result.returncode}"
             log.error("Node '%s' failed: %s", node.id, error)
-            return False, error
-        return True, None
+            return False, error, result.stdout
+        return True, None, result.stdout
     except subprocess.TimeoutExpired:
         error = f"timeout after {timeout}s"
         log.error("Node '%s': %s", node.id, error)
-        return False, error
+        return False, error, None
 
 
 def verify_outputs(node: Node, platform_dir: Path) -> tuple[bool, str | None]:
@@ -244,25 +256,31 @@ def dispatch_with_retry(
     prompt: str,
     timeout: int,
     breaker: CircuitBreaker,
-) -> tuple[bool, str | None]:
-    """Dispatch with retry (3x exponential backoff) and circuit breaker."""
+    guardrail: str | None = None,
+) -> tuple[bool, str | None, str | None]:
+    """Dispatch with retry (3x exponential backoff) and circuit breaker.
+
+    Returns (success, error_message, stdout_content).
+    """
     if not breaker.check():
-        return False, "circuit breaker OPEN"
+        return False, "circuit breaker OPEN", None
 
     last_error = None
+    last_stdout = None
     for attempt, backoff in enumerate([0] + RETRY_BACKOFFS, 1):
         if backoff > 0:
             log.info("Retry %d/%d for node '%s' after %ds", attempt - 1, len(RETRY_BACKOFFS), node.id, backoff)
             time.sleep(backoff)
 
-        success, error = dispatch_node(node, cwd, prompt, timeout)
+        success, error, stdout = dispatch_node(node, cwd, prompt, timeout, guardrail)
         if success:
             breaker.record_success()
-            return True, None
+            return True, None, stdout
         last_error = error
+        last_stdout = stdout
 
     breaker.record_failure()
-    return False, last_error
+    return False, last_error, last_stdout
 
 
 # ── Async Dispatch (for daemon integration) ─────────────────────────
@@ -273,12 +291,26 @@ async def dispatch_node_async(
     cwd: str | Path,
     prompt: str,
     timeout: int = DEFAULT_TIMEOUT,
-) -> tuple[bool, str | None]:
-    """Async version of dispatch_node using asyncio.create_subprocess_exec."""
-    if not shutil.which("claude"):
-        return False, "claude CLI not found in PATH"
+    guardrail: str | None = None,
+) -> tuple[bool, str | None, str | None]:
+    """Async version of dispatch_node using asyncio.create_subprocess_exec.
 
-    cmd = ["claude", "-p", prompt, "--output-format", "json"]
+    Returns (success, error_message, stdout_content).
+    """
+    if not shutil.which("claude"):
+        return False, "claude CLI not found in PATH", None
+
+    cmd = [
+        "claude",
+        "-p",
+        prompt,
+        "--output-format",
+        "json",
+        "--disallowedTools",
+        DISALLOWED_TOOLS,
+    ]
+    if guardrail:
+        cmd.extend(["--append-system-prompt", guardrail])
     log.info("Dispatching node '%s' async (skill: %s, timeout: %ds)", node.id, node.skill, timeout)
 
     process = await asyncio.create_subprocess_exec(
@@ -289,17 +321,18 @@ async def dispatch_node_async(
     )
     try:
         stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
+        stdout_text = stdout.decode() if stdout else ""
         if process.returncode != 0:
             error = stderr.decode()[:500] if stderr else f"exitcode {process.returncode}"
             log.error("Node '%s' failed: %s", node.id, error)
-            return False, error
-        return True, None
+            return False, error, stdout_text
+        return True, None, stdout_text
     except asyncio.TimeoutError:
         process.kill()
         await process.wait()
         error = f"timeout after {timeout}s"
         log.error("Node '%s': %s", node.id, error)
-        return False, error
+        return False, error, None
 
 
 async def dispatch_with_retry_async(
@@ -308,26 +341,32 @@ async def dispatch_with_retry_async(
     prompt: str,
     timeout: int,
     breaker: CircuitBreaker,
-) -> tuple[bool, str | None]:
-    """Async version of dispatch_with_retry using asyncio.sleep."""
+    guardrail: str | None = None,
+) -> tuple[bool, str | None, str | None]:
+    """Async version of dispatch_with_retry using asyncio.sleep.
+
+    Returns (success, error_message, stdout_content).
+    """
     if not breaker.check():
-        return False, "circuit breaker OPEN"
+        return False, "circuit breaker OPEN", None
 
     last_error = None
+    last_stdout = None
     for attempt, backoff in enumerate([0] + RETRY_BACKOFFS, 1):
         if backoff > 0:
             jittered = backoff + random.uniform(0, backoff * 0.3)
             log.info("Retry %d/%d for node '%s' after %.1fs", attempt - 1, len(RETRY_BACKOFFS), node.id, jittered)
             await asyncio.sleep(jittered)
 
-        success, error = await dispatch_node_async(node, cwd, prompt, timeout)
+        success, error, stdout = await dispatch_node_async(node, cwd, prompt, timeout, guardrail)
         if success:
             breaker.record_success()
-            return True, None
+            return True, None, stdout
         last_error = error
+        last_stdout = stdout
 
     breaker.record_failure()
-    return False, last_error
+    return False, last_error, last_stdout
 
 
 # ── Async Pipeline (for daemon) ─────────────────────────────────────
@@ -475,13 +514,13 @@ async def run_pipeline_async(
                     return 0
                 log.info("Gate '%s' approved — dispatching", node.id)
 
-        prompt = compose_skill_prompt(platform_name, node, platform_dir, epic_slug)
+        prompt, guardrail = compose_skill_prompt(platform_name, node, platform_dir, epic_slug)
 
         if semaphore:
             async with semaphore:
-                success, error = await dispatch_with_retry_async(node, cwd, prompt, timeout, breaker)
+                success, error, stdout = await dispatch_with_retry_async(node, cwd, prompt, timeout, breaker, guardrail)
         else:
-            success, error = await dispatch_with_retry_async(node, cwd, prompt, timeout, breaker)
+            success, error, stdout = await dispatch_with_retry_async(node, cwd, prompt, timeout, breaker, guardrail)
 
         if not success:
             run_id = insert_run(conn, platform_name, node.id, epic_id=epic_slug, error=error)
@@ -490,6 +529,27 @@ async def run_pipeline_async(
             if owns_conn:
                 conn.close()
             return 1
+
+        # Layer 4: verify branch didn't change
+        if epic_slug:
+            branch_check = subprocess.run(
+                ["git", "branch", "--show-current"], capture_output=True, text=True, cwd=str(cwd)
+            )
+            expected_branch = f"epic/{platform_name}/{epic_slug}"
+            actual_branch = branch_check.stdout.strip()
+            if actual_branch != expected_branch:
+                subprocess.run(["git", "checkout", expected_branch], cwd=str(cwd), capture_output=True)
+                log.error("claude -p changed branch to '%s', reverted to '%s'", actual_branch, expected_branch)
+
+        # Layer 5: save stdout as missing output for read-only skills
+        if stdout:
+            for output_path in node.outputs:
+                resolved = output_path.replace("{epic}", f"epics/{epic_slug}") if epic_slug else output_path
+                full_path = platform_dir / resolved
+                if not full_path.exists():
+                    full_path.parent.mkdir(parents=True, exist_ok=True)
+                    full_path.write_text(stdout)
+                    log.info("Saved stdout as missing output: %s", resolved)
 
         ok, verify_error = verify_outputs(node, platform_dir)
         if not ok:
@@ -523,12 +583,13 @@ def compose_skill_prompt(
     node: Node,
     platform_dir: Path,
     epic_slug: str | None = None,
-) -> str:
-    """Compose a prompt for dispatching a skill via claude -p.
+) -> tuple[str, str | None]:
+    """Compose a prompt + optional system guardrail for dispatching a skill via claude -p.
 
+    Returns (prompt, system_guardrail_or_None).
     For L1 madruga:* skills: instruction + dependency artifact contents.
     For L2 speckit.implement: delegates to implement_remote.compose_prompt().
-    For other L2 speckit.*: instruction + epic artifacts.
+    For other L2 speckit.*: instruction + epic artifacts + guardrail.
     """
     skill = node.skill
 
@@ -536,22 +597,31 @@ def compose_skill_prompt(
     if skill == "speckit.implement" and epic_slug:
         from implement_remote import compose_prompt
 
-        return compose_prompt(platform_name, epic_slug)
+        output_dir = f"platforms/{platform_name}/epics/{epic_slug}"
+        guardrail = (
+            f"MANDATORY: You are on branch epic/{platform_name}/{epic_slug}. "
+            f"Do NOT create or switch branches. "
+            f"Set SPECIFY_BASE_DIR={output_dir}/ for any SpecKit scripts."
+        )
+        return compose_prompt(platform_name, epic_slug), guardrail
 
-    # L2 speckit.* — instruction + epic context
-    if skill.startswith("speckit.") and epic_slug:
-        skill_name = skill.split(".", 1)[1]
+    # L2 speckit.* or madruga:* epic skills — instruction + epic context + guardrail
+    if epic_slug:
+        skill_name = skill.split(".", 1)[1] if skill.startswith("speckit.") else skill
+        skill_cmd = f"/speckit.{skill_name}" if skill.startswith("speckit.") else f"/{skill}"
         epic_dir = platform_dir / "epics" / epic_slug
         output_dir = f"platforms/{platform_name}/epics/{epic_slug}"
 
         parts = [
-            f"Execute /speckit.{skill_name} for platform '{platform_name}', epic '{epic_slug}'.",
+            f"Execute {skill_cmd} for platform '{platform_name}', epic '{epic_slug}'.",
             "",
             "CRITICAL CONSTRAINTS:",
-            f"- Save output to: {output_dir}/",
+            f"- export SPECIFY_BASE_DIR={output_dir}/",
+            f"- Save ALL output to: {output_dir}/",
             f"- You are on branch: epic/{platform_name}/{epic_slug}",
-            "- Do NOT create, switch, or checkout any other branch.",
-            "- Do NOT modify files outside the epic directory unless the skill requires it.",
+            "- Do NOT create, switch, or checkout any branch. The branch already exists.",
+            "- Do NOT run create-new-feature.sh. The epic directory already exists.",
+            "- Do NOT write files outside the epic directory.",
             f"- Expected output file: {', '.join(node.outputs)}",
         ]
 
@@ -564,7 +634,15 @@ def compose_skill_prompt(
                 if len(content) > 50000:
                     content = content[:50000] + "\n\n[... truncated ...]"
                 parts.append(f"\n---\n\n## {fname}\n\n{content}")
-        return "\n".join(parts)
+
+        guardrail = (
+            f"MANDATORY: Save all files to {output_dir}/. "
+            f"Current branch: epic/{platform_name}/{epic_slug}. "
+            f"Do NOT create branches, switch branches, or write outside the epic directory. "
+            f"Set SPECIFY_BASE_DIR={output_dir}/ if using SpecKit scripts. "
+            f"Do NOT run create-new-feature.sh."
+        )
+        return "\n".join(parts), guardrail
 
     # L1 madruga:* — instruction + dependency outputs as context
     parts = [f"Execute /{skill} {platform_name}"]
@@ -582,7 +660,7 @@ def compose_skill_prompt(
                 parts.append(f"## Context from {dep_id}\n\n{content}")
                 break
 
-    return "\n\n---\n\n".join(parts)
+    return "\n\n---\n\n".join(parts), None
 
 
 # ── Pipeline Orchestrator ────────────────────────────────────────────
@@ -723,10 +801,10 @@ def run_pipeline(
                 return 0
 
         # Compose prompt
-        prompt = compose_skill_prompt(platform_name, node, platform_dir, epic_slug)
+        prompt, guardrail = compose_skill_prompt(platform_name, node, platform_dir, epic_slug)
 
         # Dispatch with retry + circuit breaker
-        success, error = dispatch_with_retry(node, cwd, prompt, timeout, breaker)
+        success, error, stdout = dispatch_with_retry(node, cwd, prompt, timeout, breaker, guardrail)
 
         if not success:
             run_id = insert_run(conn, platform_name, node.id, epic_id=epic_slug, error=error)
@@ -734,6 +812,27 @@ def run_pipeline(
             log.error("Node '%s' failed after retries: %s", node.id, error)
             conn.close()
             return 1
+
+        # Layer 4: verify branch didn't change
+        if epic_slug:
+            branch_check = subprocess.run(
+                ["git", "branch", "--show-current"], capture_output=True, text=True, cwd=str(cwd)
+            )
+            expected_branch = f"epic/{platform_name}/{epic_slug}"
+            actual_branch = branch_check.stdout.strip()
+            if actual_branch != expected_branch:
+                subprocess.run(["git", "checkout", expected_branch], cwd=str(cwd), capture_output=True)
+                log.error("claude -p changed branch to '%s', reverted to '%s'", actual_branch, expected_branch)
+
+        # Layer 5: save stdout as missing output for read-only skills
+        if stdout:
+            for output_path in node.outputs:
+                resolved = output_path.replace("{epic}", f"epics/{epic_slug}") if epic_slug else output_path
+                full_path = platform_dir / resolved
+                if not full_path.exists():
+                    full_path.parent.mkdir(parents=True, exist_ok=True)
+                    full_path.write_text(stdout)
+                    log.info("Saved stdout as missing output: %s", resolved)
 
         # Verify outputs
         ok, verify_error = verify_outputs(node, platform_dir)

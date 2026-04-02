@@ -41,7 +41,7 @@ async def test_dispatch_node_async_success():
         patch("dag_executor.shutil.which", return_value="/usr/bin/claude"),
         patch("dag_executor.asyncio.create_subprocess_exec", return_value=mock_proc),
     ):
-        success, error = await dispatch_node_async(_make_node(), "/tmp", "test prompt")
+        success, error, _stdout = await dispatch_node_async(_make_node(), "/tmp", "test prompt")
 
     assert success is True
     assert error is None
@@ -61,7 +61,7 @@ async def test_dispatch_node_async_timeout():
         patch("dag_executor.shutil.which", return_value="/usr/bin/claude"),
         patch("dag_executor.asyncio.create_subprocess_exec", return_value=mock_proc),
     ):
-        success, error = await dispatch_node_async(_make_node(), "/tmp", "test", timeout=5)
+        success, error, _stdout = await dispatch_node_async(_make_node(), "/tmp", "test", timeout=5)
 
     assert success is False
     assert "timeout" in error
@@ -81,7 +81,7 @@ async def test_dispatch_node_async_failure():
         patch("dag_executor.shutil.which", return_value="/usr/bin/claude"),
         patch("dag_executor.asyncio.create_subprocess_exec", return_value=mock_proc),
     ):
-        success, error = await dispatch_node_async(_make_node(), "/tmp", "test")
+        success, error, _stdout = await dispatch_node_async(_make_node(), "/tmp", "test")
 
     assert success is False
     assert "something went wrong" in error
@@ -93,7 +93,7 @@ async def test_dispatch_node_async_no_claude():
     from dag_executor import dispatch_node_async
 
     with patch("dag_executor.shutil.which", return_value=None):
-        success, error = await dispatch_node_async(_make_node(), "/tmp", "test")
+        success, error, _stdout = await dispatch_node_async(_make_node(), "/tmp", "test")
 
     assert success is False
     assert "claude CLI not found" in error
@@ -110,18 +110,18 @@ async def test_retry_with_async_sleep():
     breaker = CircuitBreaker()
     call_count = 0
 
-    async def mock_dispatch(node, cwd, prompt, timeout=3000):
+    async def mock_dispatch(node, cwd, prompt, timeout=3000, guardrail=None):
         nonlocal call_count
         call_count += 1
         if call_count < 3:
-            return False, "transient error"
-        return True, None
+            return False, "transient error", None
+        return True, None, "output"
 
     with (
         patch("dag_executor.dispatch_node_async", side_effect=mock_dispatch),
         patch("dag_executor.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
     ):
-        success, error = await dispatch_with_retry_async(_make_node(), "/tmp", "test", 600, breaker)
+        success, error, _stdout = await dispatch_with_retry_async(_make_node(), "/tmp", "test", 600, breaker)
 
     assert success is True
     assert call_count == 3
@@ -135,14 +135,14 @@ async def test_circuit_breaker_with_async_dispatch():
 
     breaker = CircuitBreaker(max_failures=1)
 
-    async def mock_dispatch(node, cwd, prompt, timeout=3000):
-        return False, "permanent error"
+    async def mock_dispatch(node, cwd, prompt, timeout=3000, guardrail=None):
+        return False, "permanent error", None
 
     with (
         patch("dag_executor.dispatch_node_async", side_effect=mock_dispatch),
         patch("dag_executor.asyncio.sleep", new_callable=AsyncMock),
     ):
-        success, error = await dispatch_with_retry_async(_make_node(), "/tmp", "test", 600, breaker)
+        success, error, _stdout = await dispatch_with_retry_async(_make_node(), "/tmp", "test", 600, breaker)
 
     assert success is False
     assert breaker.state == "open"
@@ -160,7 +160,7 @@ async def test_circuit_breaker_open_blocks_dispatch():
     breaker.failure_count = 10
     breaker.last_failure_at = time.time()  # recent failure — stays open
 
-    success, error = await dispatch_with_retry_async(_make_node(), "/tmp", "test", 600, breaker)
+    success, error, _stdout = await dispatch_with_retry_async(_make_node(), "/tmp", "test", 600, breaker)
     assert success is False
     assert "circuit breaker OPEN" in error
 
@@ -253,14 +253,18 @@ async def test_gate_approved_triggers_dispatch():
     async def mock_dispatch(*args, **kwargs):
         nonlocal dispatch_called
         dispatch_called = True
-        return True, None
+        return True, None, "output"
+
+    mock_branch = MagicMock()
+    mock_branch.stdout = "epic/test-plat/e1\n"
 
     with (
         patch("dag_executor.parse_dag", return_value=nodes),
         patch("dag_executor.topological_sort", return_value=nodes),
         patch("dag_executor.dispatch_with_retry_async", side_effect=mock_dispatch),
         patch("dag_executor.verify_outputs", return_value=(True, None)),
-        patch("dag_executor.compose_skill_prompt", return_value="test prompt"),
+        patch("dag_executor.compose_skill_prompt", return_value=("test prompt", "guardrail")),
+        patch("dag_executor.subprocess.run", return_value=mock_branch),
         patch("dag_executor.REPO_ROOT", MagicMock()),
     ):
         result = await run_pipeline_async("test-plat", epic_slug="e1", resume=True, conn=conn)
@@ -304,14 +308,18 @@ async def test_auto_mode_skips_gate_approval():
 
     async def mock_dispatch(node, *args, **kwargs):
         dispatched.append(node.id)
-        return True, None
+        return True, None, "output"
+
+    mock_branch = MagicMock()
+    mock_branch.stdout = "epic/p/e1\n"
 
     with (
         patch("dag_executor.parse_dag", return_value=nodes),
         patch("dag_executor.topological_sort", return_value=nodes),
         patch("dag_executor.dispatch_with_retry_async", side_effect=mock_dispatch),
         patch("dag_executor.verify_outputs", return_value=(True, None)),
-        patch("dag_executor.compose_skill_prompt", return_value="test"),
+        patch("dag_executor.compose_skill_prompt", return_value=("test", "guardrail")),
+        patch("dag_executor.subprocess.run", return_value=mock_branch),
         patch("dag_executor.REPO_ROOT", MagicMock()),
     ):
         result = await run_pipeline_async("p", epic_slug="e1", resume=True, conn=conn, gate_mode="auto")
