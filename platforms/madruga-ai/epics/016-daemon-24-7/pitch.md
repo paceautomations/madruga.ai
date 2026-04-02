@@ -28,7 +28,6 @@ O pipeline so executa quando um humano invoca skills manualmente no terminal. Na
 - **Fallback ntfy.sh**: ADR-018 define ntfy.sh como fallback quando Telegram API esta unreachable. Implementar neste epic (~15-20 LOC, HTTP POST simples).
 
 
-# Epic 016 — Daemon 24/7 — Implementation Context
 
 ## Captured Decisions
 

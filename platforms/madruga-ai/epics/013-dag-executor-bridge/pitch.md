@@ -23,7 +23,6 @@ O pipeline hoje e invocado manualmente skill por skill. Nao existe runtime que e
 - Blocks: 014 (gate state machine necessaria para notificacoes), 015 (dispatch necessario para subagent judge)
 
 
-# Epic 013 — DAG Executor + SpeckitBridge — Implementation Context
 
 ## Captured Decisions
 

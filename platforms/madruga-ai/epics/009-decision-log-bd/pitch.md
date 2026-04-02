@@ -13,7 +13,6 @@ updated: 2026-03-29
 BD como source of truth para decisions e memory. FTS5 full-text search. CLI import/export. 5 novas migrations. 20+ funcoes em db.py.
 
 
-# Epic 009 — BD como Source of Truth para Decisions + Memory
 
 ## Resumo
 

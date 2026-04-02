@@ -160,17 +160,24 @@ Wait for answers BEFORE generating.
 
 ### 2. Generate / Enrich pitch.md
 
-**pitch.md is the single canonical file per epic.** It has two layers:
-- **Layer 1** (from `epic-breakdown`): Problem, Appetite, Dependencies, Implementation Notes
-- **Layer 2** (from this skill): Captured Decisions, Resolved Gray Areas, Applicable Constraints, Suggested Approach
+**pitch.md is the single canonical file per epic.** The output MUST be a cohesive document, NOT a mechanical append.
 
-**Merge behavior:**
+**When `pitch.md` already exists** (from `epic-breakdown`):
+1. READ the existing content completely
+2. **REVISE Layer 1 sections** (Problem, Appetite, Dependencies) — update with new context learned during questioning. Expand vague descriptions, correct assumptions, adjust appetite if evidence suggests different sizing. The original pitch was written with limited context; now you have more.
+3. **ADD Layer 2 sections** (Captured Decisions, Resolved Gray Areas, Applicable Constraints, Suggested Approach) after the revised Layer 1 sections
+4. **Keep a single H1 heading** — do NOT add a second H1 like "# Implementation Context". The file has ONE title.
+5. Do NOT use `---` horizontal rules as separators (breaks Starlight portal rendering)
+6. Add `updated: YYYY-MM-DD` to frontmatter
+7. The result must read as ONE coherent document written by one author, not two documents glued together
 
-- **If `pitch.md` already exists** (normal flow from epic-breakdown): READ the existing content, PRESERVE Layer 1 sections (Problem, Appetite, Dependencies, Implementation Notes), ADD/UPDATE Layer 2 sections below. Do NOT use `---` horizontal rules as separators (breaks Starlight portal rendering). Add `updated: YYYY-MM-DD` to frontmatter.
-- **If `pitch.md` does NOT exist** (ad-hoc epic): generate the COMPLETE file from scratch, including a minimal Problem/Appetite/Dependencies section derived from the user conversation, plus all Layer 2 sections.
-- **If `pitch.md` exists AND already has Layer 2 sections** (re-run / delta review): update the existing Layer 2 sections in-place.
+**When `pitch.md` does NOT exist** (ad-hoc epic):
+- Generate the COMPLETE file from scratch: frontmatter + Problem + Appetite + Dependencies + all Layer 2 sections
 
-Layer 2 template (append directly after Layer 1 content, NO `---` separator):
+**When `pitch.md` exists AND already has Layer 2 sections** (re-run / delta review):
+- Update the existing sections in-place, revising both Layer 1 and Layer 2 as needed
+
+Layer 2 sections (flow naturally after Layer 1, NO separator):
 
 ```markdown
 

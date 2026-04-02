@@ -23,7 +23,6 @@ O pipeline so opera no proprio repo (madruga.ai). Para gerar valor real, precisa
 - Blocks: 013 (DAG Executor precisa de multi-repo funcional)
 
 
-# Epic 012 — Multi-repo Implement — Implementation Context
 
 ## Captured Decisions
 

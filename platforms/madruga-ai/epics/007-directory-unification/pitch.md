@@ -53,7 +53,6 @@ SpecKit e Madruga operam em diretórios separados: SpecKit cria artifacts em `sp
 7. Todas skills com gate human têm HANDOFF block no template de output
 
 
-# Epic 007 — Implementation Context
 
 ## Captured Decisions
 

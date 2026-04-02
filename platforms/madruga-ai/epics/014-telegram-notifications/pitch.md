@@ -23,7 +23,6 @@ Human gates no pipeline requerem aprovacao humana, mas nao ha mecanismo de notif
 - Blocks: 016 (daemon precisa de notificacoes para operar autonomamente)
 
 
-# Epic 014 — Implementation Context
 
 ## Captured Decisions
 

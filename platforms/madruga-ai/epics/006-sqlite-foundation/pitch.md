@@ -52,7 +52,6 @@ Implementar SQLite como BD para todo estado do pipeline:
 6. Grep encontra `[DADOS INSUFICIENTES]` em tech-research.md e adr-gen.md
 
 
-# Epic 006 — Implementation Context
 
 ## Captured Decisions
 

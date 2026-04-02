@@ -23,7 +23,6 @@ Specs e artefatos gerados pelo pipeline nao passam por review multi-perspectiva 
 - Blocks: nenhum
 
 
-# Epic 015 — Implementation Context
 
 ## Resumo do Epic
 

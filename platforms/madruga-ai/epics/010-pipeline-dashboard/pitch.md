@@ -13,7 +13,6 @@ updated: 2026-03-30
 Dashboard visual no portal Starlight. CLI `status` com tabela + JSON. Mermaid DAG. Filtros por plataforma.
 
 
-# Epic 010 — Pipeline Dashboard — Implementation Context
 
 ## Resumo
 
