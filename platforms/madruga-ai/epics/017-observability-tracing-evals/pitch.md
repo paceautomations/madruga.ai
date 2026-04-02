@@ -1,12 +1,28 @@
 ---
-title: "Implementation Context — Epic 017"
+id: 017
+title: "Observability, Tracing & Evals"
+status: in_progress
+appetite: 2w
+priority: 4
 updated: 2026-04-02
 ---
-# Epic 017 — Implementation Context
+# Observability, Tracing & Evals
 
-## Escopo
+## Problem
 
 Adicionar observabilidade real-time, tracing hierarquico e eval scoring ao pipeline L2 automatizado. Dados persistidos em SQLite (extendendo schema existente), dashboards no portal Astro existente, evals via Judge pattern + metricas quantitativas.
+
+## Appetite
+
+**2w** — Epic de observabilidade. Extende schema SQLite existente + portal Astro.
+
+## Dependencies
+
+- Depends on: 016 (daemon 24/7), 013 (DAG executor)
+- Blocks: nenhum
+
+
+## Implementation Context
 
 ## Captured Decisions
 

@@ -38,7 +38,7 @@ Staff Engineer. Bridge architecture and implementation. Write all generated arti
 
 ## Output Directory
 
-Save to `platforms/<name>/epics/<NNN>/context.md`.
+Save to `platforms/<name>/epics/<NNN>/pitch.md` (enriches existing pitch if present, or creates from scratch for ad-hoc epics).
 
 ## Instructions
 
@@ -63,10 +63,10 @@ fi
 
 Check if a draft exists:
 1. Query DB: `SELECT status FROM epics WHERE platform_id=? AND epic_id=? AND status='drafted'`
-2. Check filesystem: `platforms/<name>/epics/<NNN>/context.md` exists
+2. Check filesystem: `platforms/<name>/epics/<NNN>/pitch.md` exists with deep-dive sections (## Captured Decisions)
 
 If both conditions met:
-- Read existing context.md
+- Read existing pitch.md
 - Proceed to **Step 0b (Delta Review)**
 - After delta review, create branch `epic/<platform>/<NNN-slug>` (or checkout if exists)
 
@@ -86,7 +86,7 @@ If the branch already exists (resuming work), just checkout.
 
 ### 0b. Delta Review (draft promotion only — Path B)
 
-Read the existing `context.md` frontmatter `updated` date as `$DRAFT_DATE`.
+Read the existing `pitch.md` frontmatter `updated` date as `$DRAFT_DATE`.
 
 Collect changes since draft:
 
@@ -115,17 +115,17 @@ conn.close()
 
 Present **Delta Summary**:
 - List each change category with items found
-- For each original decision in context.md, flag if related changes exist
+- For each original decision in pitch.md, flag if related changes exist
 - Ask: "Quais decisoes precisam revisao dado essas mudancas?"
 
-Wait for user response. Revise affected decisions in context.md during Step 2.
+Wait for user response. Revise affected decisions in pitch.md during Step 2.
 
 ### Additional required reading:
 - `epics/<NNN>/pitch.md` — epic scope
 - `engineering/blueprint.md` — stack and concerns
 - `engineering/domain-model.md` — DDD
 - `decisions/ADR-*.md` — relevant decisions
-- If Path B: existing `epics/<NNN>/context.md` (the draft)
+- If Path B: existing `epics/<NNN>/pitch.md` (the draft with deep-dive sections)
 
 ### 1. Collect Context + Ask Questions
 
@@ -158,14 +158,21 @@ Toda pergunta DEVE apresentar **≥2 opções com prós/contras/riscos e recomen
 
 Wait for answers BEFORE generating.
 
-### 2. Generate Context
+### 2. Generate / Enrich pitch.md
+
+**pitch.md is the single canonical file per epic.** It has two layers:
+- **Layer 1** (from `epic-breakdown`): Problem, Appetite, Dependencies, Implementation Notes
+- **Layer 2** (from this skill): Captured Decisions, Resolved Gray Areas, Applicable Constraints, Suggested Approach
+
+**Merge behavior:**
+
+- **If `pitch.md` already exists** (normal flow from epic-breakdown): READ the existing content, PRESERVE Layer 1 sections (Problem, Appetite, Dependencies, Implementation Notes), ADD/UPDATE Layer 2 sections below. Do NOT use `---` horizontal rules as separators (breaks Starlight portal rendering). Add `updated: YYYY-MM-DD` to frontmatter.
+- **If `pitch.md` does NOT exist** (ad-hoc epic): generate the COMPLETE file from scratch, including a minimal Problem/Appetite/Dependencies section derived from the user conversation, plus all Layer 2 sections.
+- **If `pitch.md` exists AND already has Layer 2 sections** (re-run / delta review): update the existing Layer 2 sections in-place.
+
+Layer 2 template (append directly after Layer 1 content, NO `---` separator):
 
 ```markdown
----
-title: "Implementation Context — Epic <N>"
-updated: YYYY-MM-DD
----
-# Epic <N> — Implementation Context
 
 ## Captured Decisions
 
@@ -186,7 +193,7 @@ updated: YYYY-MM-DD
 [Summary of the implementation approach]
 ```
 
-If Path B (draft promotion): merge delta review findings into the existing context, marking revised decisions with `[REVISADO]`.
+If Path B (draft promotion): merge delta review findings into the existing pitch.md, marking revised decisions with `[REVISADO]`.
 
 ### Auto-Review Additions
 
@@ -208,21 +215,21 @@ If Path B (draft promotion): merge delta review findings into the existing conte
 
 **Draft mode**: Register with `drafted` status:
 ```bash
-python3 .specify/scripts/post_save.py --platform <name> --epic <epic-id> --node epic-context --skill madruga:epic-context --artifact epics/<NNN>/context.md --epic-status drafted
+python3 .specify/scripts/post_save.py --platform <name> --epic <epic-id> --node epic-context --skill madruga:epic-context --artifact epics/<NNN>/pitch.md --epic-status drafted
 ```
 
 **Normal mode**: Register normally (status computed automatically):
 ```bash
-python3 .specify/scripts/post_save.py --platform <name> --epic <epic-id> --node epic-context --skill madruga:epic-context --artifact epics/<NNN>/context.md
+python3 .specify/scripts/post_save.py --platform <name> --epic <epic-id> --node epic-context --skill madruga:epic-context --artifact epics/<NNN>/pitch.md
 ```
 
 ## Error Handling
 
 | Issue | Action |
 |-------|--------|
-| Epic does not exist (no pitch.md) | Suggest running `/epic-breakdown` first |
+| Epic does not exist (no pitch.md) | OK for ad-hoc epics — generate complete pitch.md from scratch. If unclear, ask: "/epic-breakdown first or ad-hoc epic?" |
 | Architecture docs incomplete | List gaps, suggest completing the pipeline |
 | Too many gray areas (>10) | Prioritize the 5 most critical |
 | Draft mode on non-main branch | Warn but allow (user may have reasons) |
 | Delta review finds zero changes | Skip revision, proceed with existing draft as-is |
-| Draft exists but DB status is not `drafted` | Re-read context.md, treat as Path C (fresh) |
+| Draft exists but DB status is not `drafted` | Re-read pitch.md, treat as Path C (fresh) |

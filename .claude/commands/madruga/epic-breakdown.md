@@ -38,7 +38,7 @@ Product Manager (Shape Up) — problem before solution, appetite as constraint. 
 
 ## Output
 
-Always create `epics/NNN-slug/pitch.md` with minimal content. Auto-number epics sequentially from the highest existing epic number. The detailed implementation context (context.md, branch creation, architectural decisions) is handled later by `epic-context`.
+Always create `epics/NNN-slug/pitch.md` with minimal content. Auto-number epics sequentially from the highest existing epic number. The detailed implementation context (branch creation, architectural decisions) is enriched into the same `pitch.md` later by `epic-context`.
 
 ## Instructions
 

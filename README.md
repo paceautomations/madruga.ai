@@ -143,7 +143,7 @@ Repete para **cada epic** definido no roadmap. Cada epic roda em branch dedicada
 
 | # | Skill (comando) | Gate | Artefato / Acao | O que faz |
 |---|-----------------|------|-----------------|-----------|
-| 14 | `/epic-context` | human | `epics/<NNN>/context.md` | **Cria branch** `epic/<platform>/<NNN-slug>` + captura contexto de implementacao. Referencia blueprint, ADRs, domain model |
+| 14 | `/epic-context` | human | `epics/<NNN>/pitch.md` | **Cria branch** `epic/<platform>/<NNN-slug>` + enriquece pitch.md com decisoes de implementacao. Referencia blueprint, ADRs, domain model |
 | 15 | `/speckit.specify` | human | `epics/<NNN>/spec.md` | Cria especificacao da feature a partir de descricao em linguagem natural |
 | 16 | `/speckit.clarify` | human | Atualiza `spec.md` | Faz ate 5 perguntas para eliminar ambiguidades na spec |
 | 17 | `/speckit.plan` | human | `epics/<NNN>/plan.md` | Gera artefatos de design tecnico (componentes, interfaces, fluxos) |
@@ -406,7 +406,7 @@ Migrações ficam em `.pipeline/migrations/` (nomeadas `001_*.sql`, `002_*.sql`)
 │   │   │   ├── context-map.md    #   DDD context map
 │   │   │   ├── epic-breakdown.md #   Shape Up pitches
 │   │   │   ├── roadmap.md        #   Sequenciamento + MVP
-│   │   │   ├── epic-context.md   #   Cria branch + contexto do epic
+│   │   │   ├── epic-context.md   #   Cria branch + enriquece pitch.md
 │   │   │   ├── verify.md         #   Verifica codigo vs spec (score)
 │   │   │   ├── qa.md             #   QA via Playwright
 │   │   │   ├── reconcile.md      #   Detecta drift docs vs codigo

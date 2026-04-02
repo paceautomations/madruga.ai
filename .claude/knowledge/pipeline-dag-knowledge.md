@@ -246,7 +246,7 @@ After L1 completes (roadmap done), the pipeline continues into L2. Each epic fro
 This enables planning multiple epics ahead while another epic is executing on its branch.
 
 - **Status**: `drafted` (DB status — daemon ignores, branch guard blocks other L2 skills)
-- **Artifacts created on main**: `epics/<NNN>/context.md` (possibly research.md, data-model.md)
+- **Artifacts created on main**: `epics/<NNN>/pitch.md` (possibly research.md, data-model.md)
 - **Promotion**: Running `/epic-context <platform> <epic>` on a drafted epic performs a delta review (what changed since draft?), revises decisions, creates the branch, and transitions status to `in_progress`
 - **Gate**: Draft mode uses auto gate (no human approval — approval happens at promotion)
 

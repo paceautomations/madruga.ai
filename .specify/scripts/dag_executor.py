@@ -491,7 +491,7 @@ def compose_skill_prompt(
         parts = [f"Execute /speckit.{skill_name} for platform '{platform_name}', epic '{epic_slug}'."]
 
         # Include relevant epic artifacts as context
-        context_files = ["context.md", "pitch.md", "spec.md", "plan.md", "tasks.md"]
+        context_files = ["pitch.md", "spec.md", "plan.md", "tasks.md"]
         for fname in context_files:
             fpath = epic_dir / fname
             if fpath.exists():

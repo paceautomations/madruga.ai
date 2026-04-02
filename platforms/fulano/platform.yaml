@@ -134,7 +134,7 @@ pipeline:
     nodes:
       - id: epic-context
         skill: "madruga:epic-context"
-        outputs: ["{epic}/context.md"]
+        outputs: ["{epic}/pitch.md"]
         depends: []
         gate: human
 

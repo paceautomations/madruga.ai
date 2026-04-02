@@ -22,7 +22,7 @@ def compose_prompt(platform_name: str, epic_slug: str) -> str:
     epic_dir = REPO_ROOT / "platforms" / platform_name / "epics" / epic_slug
 
     artifacts = [
-        ("context.md", "## Epic Context", False),
+        ("pitch.md", "## Epic Pitch", False),
         ("spec.md", "## Feature Specification", True),
         ("plan.md", "## Implementation Plan", True),
         ("tasks.md", "## Tasks", True),
@@ -43,19 +43,19 @@ def compose_prompt(platform_name: str, epic_slug: str) -> str:
         total_size += len(content.encode())
         parts.append((filename, header, content))
 
-    # Truncate context.md if total > MAX_PROMPT_BYTES
+    # Truncate pitch.md if total > MAX_PROMPT_BYTES
     if total_size > MAX_PROMPT_BYTES:
         new_parts = []
         for filename, header, content in parts:
-            if filename == "context.md":
+            if filename == "pitch.md":
                 # Calculate how much to keep
                 excess = total_size - MAX_PROMPT_BYTES
                 keep = max(0, len(content.encode()) - excess)
                 if keep > 0:
                     content = content[:keep] + "\n\n[... truncated for size ...]"
                 else:
-                    content = "[context.md truncated — too large]"
-                log.warning("Truncated context.md to fit within %d bytes", MAX_PROMPT_BYTES)
+                    content = "[pitch.md truncated — too large]"
+                log.warning("Truncated pitch.md to fit within %d bytes", MAX_PROMPT_BYTES)
             new_parts.append((filename, header, content))
         parts = new_parts
 
