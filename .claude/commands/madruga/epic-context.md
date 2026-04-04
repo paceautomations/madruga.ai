@@ -68,21 +68,31 @@ Check if a draft exists:
 If both conditions met:
 - Read existing pitch.md
 - Proceed to **Step 0b (Delta Review)**
-- After delta review, create branch `epic/<platform>/<NNN-slug>` (or checkout if exists)
+- After delta review, apply the same cascade checkout logic as Path C to create or checkout `epic/<platform>/<NNN-slug>`
 
 **Path C: Normal mode, no draft** (current behavior)
 
 ```bash
-current_branch=$(git branch --show-current)
-if [ "$current_branch" = "main" ]; then
-    git checkout -b epic/<platform>/<NNN-slug>
+BRANCH="epic/<platform>/<NNN-slug>"
+BASE_BRANCH="<base_branch from platform.yaml>"
+
+# Resume: branch already exists locally → just check it out
+if git show-ref --verify --quiet "refs/heads/$BRANCH"; then
+    git checkout "$BRANCH"
+# Cascade: currently on another epic branch → new branch starts from its HEAD
+elif git branch --show-current | grep -qE "^epic/"; then
+    git checkout -b "$BRANCH"
+# First epic or on base branch → branch from origin/base_branch
+else
+    git fetch origin "$BASE_BRANCH"
+    git checkout -b "$BRANCH" "origin/$BASE_BRANCH"
 fi
 ```
 
 Branch naming: `epic/<platform>/<NNN-slug>` (e.g., `epic/fulano/001-channel-pipeline`).
-If the branch already exists (resuming work), just checkout.
+Cascade: if currently on another epic branch, the new branch starts from its HEAD — this is intentional. All epics are sequential, so the previous epic's reconcile (Phase 9) will have already pushed its branch before this runs.
 
-**Do NOT proceed with Path B or C if on main without creating/checking out a branch.**
+**Always** create or checkout an epic branch before proceeding.
 
 ### 0b. Delta Review (draft promotion only — Path B)
 

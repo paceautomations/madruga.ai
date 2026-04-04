@@ -617,3 +617,181 @@ async def test_health_checker_sends_pending_summary_on_recovery():
     assert daemon._daemon_state.daemon_state == "running"
     mock_adapter.send.assert_called_once()
     assert "2" in mock_adapter.send.call_args[0][1]
+
+
+# --- Daemon reliability fixes (F1, F2, F3, F9) ---
+
+
+@pytest.mark.asyncio
+async def test_dag_scheduler_proactive_branch_checkout():
+    """F3: dag_scheduler runs git checkout before dispatching epic."""
+    from daemon import dag_scheduler
+
+    shutdown = asyncio.Event()
+    mock_conn = MagicMock()
+
+    checkout_called = []
+
+    def mock_subprocess_run(cmd, **kwargs):
+        if cmd[0] == "git" and cmd[1] == "checkout":
+            checkout_called.append(cmd[2])
+        result = MagicMock()
+        result.returncode = 0
+        result.stderr = ""
+        return result
+
+    with (
+        patch(
+            "daemon.poll_active_epics",
+            return_value=[{"epic_id": "020", "platform_id": "test", "branch_name": "epic/test/020"}],
+        ),
+        patch("daemon.run_pipeline_async", new_callable=AsyncMock, return_value=0) as mock_run,
+        patch("daemon._running_epics", set()),
+        patch("subprocess.run", side_effect=mock_subprocess_run),
+    ):
+
+        async def _stop(*args, **kwargs):
+            shutdown.set()
+            return 0
+
+        mock_run.side_effect = _stop
+        await dag_scheduler(mock_conn, asyncio.Semaphore(3), shutdown, poll_interval=0.01)
+
+    assert "epic/test/020" in checkout_called
+
+
+@pytest.mark.asyncio
+async def test_dag_scheduler_platform_filter():
+    """F1: dag_scheduler passes platform_id to poll_active_epics."""
+    from daemon import dag_scheduler
+
+    shutdown = asyncio.Event()
+    mock_conn = MagicMock()
+    poll_calls = []
+
+    def mock_poll(conn, platform_id=None):
+        poll_calls.append(platform_id)
+        shutdown.set()
+        return []
+
+    with patch("daemon.poll_active_epics", side_effect=mock_poll):
+        await dag_scheduler(mock_conn, asyncio.Semaphore(3), shutdown, poll_interval=0.01, platform_id="madruga-ai")
+
+    assert poll_calls == ["madruga-ai"]
+
+
+@pytest.mark.asyncio
+async def test_dispatch_with_retry_abort_check():
+    """F2: dispatch_with_retry_async aborts when abort_check returns True."""
+    from dag_executor import CircuitBreaker, Node, dispatch_with_retry_async
+
+    node = Node(
+        id="test-node",
+        skill="test",
+        outputs=[],
+        depends=[],
+        gate="auto",
+        layer="test",
+        optional=False,
+        skip_condition=None,
+    )
+    breaker = CircuitBreaker(max_failures=3)
+
+    call_count = 0
+
+    async def mock_dispatch(*args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        return False, "simulated failure", None
+
+    with patch("dag_executor.dispatch_node_async", side_effect=mock_dispatch):
+        # abort_check returns True on first retry — should abort immediately
+        success, error, stdout = await dispatch_with_retry_async(
+            node,
+            "/tmp",
+            "test prompt",
+            60,
+            breaker,
+            abort_check=lambda: True,
+        )
+
+    assert not success
+    assert error == "epic_status_changed"
+    # Should have run once (initial attempt fails), then abort_check triggers before retry
+    assert call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_dispatch_with_retry_no_abort_check():
+    """F2: dispatch_with_retry_async retries normally when abort_check is None."""
+    from dag_executor import CircuitBreaker, Node, dispatch_with_retry_async
+
+    node = Node(
+        id="test-node",
+        skill="test",
+        outputs=[],
+        depends=[],
+        gate="auto",
+        layer="test",
+        optional=False,
+        skip_condition=None,
+    )
+    breaker = CircuitBreaker(max_failures=3)
+
+    call_count = 0
+
+    async def mock_dispatch(*args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 2:
+            return True, None, "ok"
+        return False, "fail", None
+
+    with patch("dag_executor.dispatch_node_async", side_effect=mock_dispatch):
+        success, error, stdout = await dispatch_with_retry_async(
+            node,
+            "/tmp",
+            "test prompt",
+            60,
+            breaker,
+            abort_check=None,
+        )
+
+    assert success
+    assert call_count == 2
+
+
+def test_auto_commit_epic_no_changes(tmp_path):
+    """F9: _auto_commit_epic returns True when no changes to commit."""
+    from dag_executor import _auto_commit_epic
+
+    with patch("dag_executor.subprocess.run") as mock_run:
+        # git status --porcelain returns empty (no changes)
+        mock_run.return_value = MagicMock(stdout="", returncode=0)
+        result = _auto_commit_epic(tmp_path, "test-plat", "001-epic")
+
+    assert result is True
+    # Only git status called, no git add or commit
+    assert mock_run.call_count == 1
+
+
+def test_auto_commit_epic_with_changes(tmp_path):
+    """F9: _auto_commit_epic runs git add + commit when changes exist."""
+    from dag_executor import _auto_commit_epic
+
+    call_log = []
+
+    def mock_run(cmd, **kwargs):
+        call_log.append(cmd[:3])
+        result = MagicMock()
+        result.stdout = "M file.py\n" if cmd[1] == "status" else ""
+        result.returncode = 0
+        return result
+
+    with patch("dag_executor.subprocess.run", side_effect=mock_run):
+        result = _auto_commit_epic(tmp_path, "test-plat", "001-epic")
+
+    assert result is True
+    assert ["git", "status", "--porcelain"] in call_log
+    assert ["git", "add", "-A"] in call_log
+    assert ["git", "commit", "-m"] in call_log

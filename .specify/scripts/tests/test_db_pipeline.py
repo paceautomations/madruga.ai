@@ -1,8 +1,8 @@
-"""Tests for db.py CRUD functions."""
+"""Tests for db_pipeline.py CRUD functions."""
 
 
 def test_upsert_get_platform(tmp_db):
-    from db import upsert_platform, get_platform
+    from db_pipeline import upsert_platform, get_platform
 
     upsert_platform(tmp_db, "test", name="Test", repo_path="platforms/test")
     p = get_platform(tmp_db, "test")
@@ -13,7 +13,7 @@ def test_upsert_get_platform(tmp_db):
 
 
 def test_upsert_platform_idempotent(tmp_db):
-    from db import upsert_platform, get_platform
+    from db_pipeline import upsert_platform, get_platform
 
     upsert_platform(tmp_db, "test", name="Test", repo_path="platforms/test")
     upsert_platform(tmp_db, "test", name="Test Updated", repo_path="platforms/test")
@@ -24,7 +24,7 @@ def test_upsert_platform_idempotent(tmp_db):
 
 
 def test_upsert_get_pipeline_node(tmp_db):
-    from db import upsert_platform, upsert_pipeline_node, get_pipeline_nodes
+    from db_pipeline import upsert_platform, upsert_pipeline_node, get_pipeline_nodes
 
     upsert_platform(tmp_db, "p1", name="P1", repo_path="platforms/p1")
     upsert_pipeline_node(tmp_db, "p1", "vision", "done", output_hash="sha256:abc123")
@@ -35,7 +35,7 @@ def test_upsert_get_pipeline_node(tmp_db):
 
 
 def test_upsert_get_epic(tmp_db):
-    from db import upsert_platform, upsert_epic, get_epics
+    from db_pipeline import upsert_platform, upsert_epic, get_epics
 
     upsert_platform(tmp_db, "p1", name="P1", repo_path="platforms/p1")
     upsert_epic(tmp_db, "p1", "001-test", title="Test Epic", status="proposed")
@@ -45,7 +45,7 @@ def test_upsert_get_epic(tmp_db):
 
 
 def test_upsert_get_epic_node(tmp_db):
-    from db import upsert_platform, upsert_epic, upsert_epic_node, get_epic_nodes
+    from db_pipeline import upsert_platform, upsert_epic, upsert_epic_node, get_epic_nodes
 
     upsert_platform(tmp_db, "p1", name="P1", repo_path="platforms/p1")
     upsert_epic(tmp_db, "p1", "001-test", title="Test")
@@ -56,7 +56,8 @@ def test_upsert_get_epic_node(tmp_db):
 
 
 def test_insert_decision_auto_id(tmp_db):
-    from db import upsert_platform, insert_decision, get_decisions
+    from db_decisions import insert_decision, get_decisions
+    from db_pipeline import upsert_platform
 
     upsert_platform(tmp_db, "p1", name="P1", repo_path="platforms/p1")
     did = insert_decision(tmp_db, "p1", "vision", "Test Decision", decisions=["chose A over B"])
@@ -67,7 +68,7 @@ def test_insert_decision_auto_id(tmp_db):
 
 
 def test_insert_provenance(tmp_db):
-    from db import upsert_platform, insert_provenance, get_provenance
+    from db_pipeline import upsert_platform, insert_provenance, get_provenance
 
     upsert_platform(tmp_db, "p1", name="P1", repo_path="platforms/p1")
     insert_provenance(tmp_db, "p1", "business/vision.md", "vision", output_hash="sha256:abc")
@@ -77,7 +78,7 @@ def test_insert_provenance(tmp_db):
 
 
 def test_insert_complete_run(tmp_db):
-    from db import upsert_platform, insert_run, complete_run, get_runs
+    from db_pipeline import upsert_platform, insert_run, complete_run, get_runs
 
     upsert_platform(tmp_db, "p1", name="P1", repo_path="platforms/p1")
     rid = insert_run(tmp_db, "p1", "vision", agent="claude-opus-4-6")
@@ -91,7 +92,7 @@ def test_insert_complete_run(tmp_db):
 
 
 def test_insert_get_events(tmp_db):
-    from db import upsert_platform, insert_event, get_events
+    from db_pipeline import upsert_platform, insert_event, get_events
 
     upsert_platform(tmp_db, "p1", name="P1", repo_path="platforms/p1")
     eid = insert_event(tmp_db, "p1", "platform", "p1", "created", actor="human")
@@ -103,7 +104,7 @@ def test_insert_get_events(tmp_db):
 
 
 def test_get_stale_nodes(tmp_db):
-    from db import upsert_platform, upsert_pipeline_node, get_stale_nodes
+    from db_pipeline import upsert_platform, upsert_pipeline_node, get_stale_nodes
 
     upsert_platform(tmp_db, "p1", name="P1", repo_path="platforms/p1")
     upsert_pipeline_node(tmp_db, "p1", "vision", "done", completed_at="2026-03-01T00:00:00Z")
@@ -118,7 +119,7 @@ def test_get_stale_nodes(tmp_db):
 
 def test_repair_timestamps(tmp_db):
     """repair_timestamps restores completed_at from events table."""
-    from db import upsert_platform, upsert_pipeline_node, insert_event, repair_timestamps
+    from db_pipeline import upsert_platform, upsert_pipeline_node, insert_event, repair_timestamps
 
     upsert_platform(tmp_db, "p1", name="P1", repo_path="platforms/p1")
     # Node was originally completed at a specific time
@@ -140,7 +141,7 @@ def test_repair_timestamps(tmp_db):
 
 
 def test_get_platform_status(tmp_db):
-    from db import upsert_platform, upsert_pipeline_node, get_platform_status
+    from db_pipeline import upsert_platform, upsert_pipeline_node, get_platform_status
 
     upsert_platform(tmp_db, "p1", name="P1", repo_path="platforms/p1")
     upsert_pipeline_node(tmp_db, "p1", "vision", "done")
@@ -154,7 +155,7 @@ def test_get_platform_status(tmp_db):
 
 
 def test_get_epic_status(tmp_db):
-    from db import upsert_platform, upsert_epic, upsert_epic_node, get_epic_status
+    from db_pipeline import upsert_platform, upsert_epic, upsert_epic_node, get_epic_status
 
     upsert_platform(tmp_db, "p1", name="P1", repo_path="platforms/p1")
     upsert_epic(tmp_db, "p1", "001-test", title="Test")
@@ -168,7 +169,7 @@ def test_get_epic_status(tmp_db):
 
 def test_upsert_pipeline_node_preserves_existing(tmp_db):
     """ON CONFLICT DO UPDATE must preserve existing values when new kwargs are None."""
-    from db import upsert_platform, upsert_pipeline_node, get_pipeline_nodes
+    from db_pipeline import upsert_platform, upsert_pipeline_node, get_pipeline_nodes
 
     upsert_platform(tmp_db, "p1", name="P1", repo_path="platforms/p1")
     # First upsert: set all fields
@@ -196,7 +197,7 @@ def test_upsert_pipeline_node_preserves_existing(tmp_db):
 
 def test_upsert_epic_node_preserves_existing(tmp_db):
     """ON CONFLICT DO UPDATE must preserve existing values for epic nodes."""
-    from db import upsert_platform, upsert_epic, upsert_epic_node, get_epic_nodes
+    from db_pipeline import upsert_platform, upsert_epic, upsert_epic_node, get_epic_nodes
 
     upsert_platform(tmp_db, "p1", name="P1", repo_path="platforms/p1")
     upsert_epic(tmp_db, "p1", "001-test", title="Test")
@@ -220,7 +221,7 @@ def test_upsert_epic_node_preserves_existing(tmp_db):
 
 def test_compute_file_hash_full_length(tmp_path):
     """Hash should be full SHA-256 (64 hex chars after prefix)."""
-    from db import compute_file_hash
+    from db_core import compute_file_hash
 
     f = tmp_path / "test.txt"
     f.write_text("hello")
@@ -237,7 +238,7 @@ def test_compute_file_hash_full_length(tmp_path):
 
 def test_upsert_platform_with_repo_fields(tmp_db):
     """Repo fields are stored and retrieved correctly."""
-    from db import upsert_platform, get_platform
+    from db_pipeline import upsert_platform, get_platform
 
     upsert_platform(
         tmp_db,
@@ -260,7 +261,7 @@ def test_upsert_platform_with_repo_fields(tmp_db):
 
 def test_upsert_platform_preserves_repo_fields(tmp_db):
     """COALESCE preserves existing repo fields when new params are None."""
-    from db import upsert_platform, get_platform
+    from db_pipeline import upsert_platform, get_platform
 
     upsert_platform(
         tmp_db,
@@ -282,7 +283,7 @@ def test_upsert_platform_preserves_repo_fields(tmp_db):
 
 def test_upsert_platform_without_repo_fields(tmp_db):
     """Platforms without repo fields have None values (backward compat)."""
-    from db import upsert_platform, get_platform
+    from db_pipeline import upsert_platform, get_platform
 
     upsert_platform(tmp_db, "legacy", name="Legacy", repo_path="platforms/legacy")
     p = get_platform(tmp_db, "legacy")
@@ -301,7 +302,7 @@ def test_upsert_platform_without_repo_fields(tmp_db):
 
 def test_set_get_local_config(tmp_db):
     """Round-trip set/get for local_config."""
-    from db import set_local_config, get_local_config
+    from db_pipeline import set_local_config, get_local_config
 
     set_local_config(tmp_db, "repos_base_dir", "~/repos")
     assert get_local_config(tmp_db, "repos_base_dir") == "~/repos"
@@ -313,7 +314,7 @@ def test_set_get_local_config(tmp_db):
 
 def test_get_local_config_default(tmp_db):
     """Missing key returns default."""
-    from db import get_local_config
+    from db_pipeline import get_local_config
 
     assert get_local_config(tmp_db, "nonexistent") is None
     assert get_local_config(tmp_db, "nonexistent", "fallback") == "fallback"
@@ -321,7 +322,7 @@ def test_get_local_config_default(tmp_db):
 
 def test_get_active_platform(tmp_db):
     """Active platform shorthand works."""
-    from db import set_local_config, get_active_platform
+    from db_pipeline import set_local_config, get_active_platform
 
     assert get_active_platform(tmp_db) is None
     set_local_config(tmp_db, "active_platform", "fulano")
@@ -330,7 +331,7 @@ def test_get_active_platform(tmp_db):
 
 def test_resolve_repo_path_external(tmp_db):
     """Platform with repo_org/repo_name resolves via convention."""
-    from db import upsert_platform, set_local_config, resolve_repo_path
+    from db_pipeline import upsert_platform, set_local_config, resolve_repo_path
 
     upsert_platform(
         tmp_db,
@@ -348,7 +349,7 @@ def test_resolve_repo_path_external(tmp_db):
 def test_resolve_repo_path_self_ref(tmp_db):
     """Self-referencing platform (madruga.ai) resolves to REPO_ROOT."""
     from config import REPO_ROOT
-    from db import upsert_platform, resolve_repo_path
+    from db_pipeline import upsert_platform, resolve_repo_path
 
     upsert_platform(
         tmp_db,
@@ -365,7 +366,7 @@ def test_resolve_repo_path_self_ref(tmp_db):
 def test_resolve_repo_path_legacy(tmp_db):
     """Platform without repo fields falls back to platforms/{id}."""
     from config import REPO_ROOT
-    from db import upsert_platform, resolve_repo_path
+    from db_pipeline import upsert_platform, resolve_repo_path
 
     upsert_platform(tmp_db, "old", name="Old", repo_path="platforms/old")
     path = resolve_repo_path(tmp_db, "old")
@@ -377,7 +378,7 @@ def test_resolve_repo_path_legacy(tmp_db):
 
 def test_epic_drafted_status(tmp_db):
     """Epic can be created with drafted status."""
-    from db import get_epics, upsert_epic, upsert_platform
+    from db_pipeline import get_epics, upsert_epic, upsert_platform
 
     upsert_platform(tmp_db, "p1", name="P1", repo_path="platforms/p1")
     upsert_epic(tmp_db, "p1", "017-test", title="Test Draft", status="drafted")
@@ -389,7 +390,7 @@ def test_epic_drafted_status(tmp_db):
 
 def test_epic_status_map_drafted():
     """_EPIC_STATUS_MAP includes drafted."""
-    from db import _EPIC_STATUS_MAP
+    from db_pipeline import _EPIC_STATUS_MAP
 
     assert _EPIC_STATUS_MAP["drafted"] == "drafted"
     assert _EPIC_STATUS_MAP["draft"] == "drafted"
@@ -397,7 +398,7 @@ def test_epic_status_map_drafted():
 
 def test_compute_epic_status_does_not_promote_drafted(tmp_db):
     """compute_epic_status does not auto-promote drafted epics."""
-    from db import compute_epic_status, upsert_epic, upsert_epic_node, upsert_platform
+    from db_pipeline import compute_epic_status, upsert_epic, upsert_epic_node, upsert_platform
 
     upsert_platform(tmp_db, "p1", name="P1", repo_path="platforms/p1")
     upsert_epic(tmp_db, "p1", "017-test", title="Test", status="drafted")

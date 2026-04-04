@@ -80,7 +80,7 @@ _ERROR_MARKERS = [
     r"\[ERROR\]",
     r"\[FATAL\]",
     r"Traceback \(most recent call last\)",
-    r"FAILED",
+    r"^FAILED\b",  # anchored to line start — avoids false positives in prose
     r"Exception:",
 ]
 
@@ -112,7 +112,7 @@ def score_node(
     actual_lines = content.count("\n") + 1 if content else 0
 
     scores = [
-        _score_quality(content, metrics),
+        _score_quality(content, metrics, node_id),
         _score_adherence(content, node_id),
         _score_completeness(actual_lines, node_id, metrics),
         _score_cost_efficiency(conn, platform_id, node_id, metrics),
@@ -146,7 +146,7 @@ def _read_output(output_path: str | None) -> str:
     return ""
 
 
-def _score_quality(content: str, metrics: dict) -> tuple[str, float, dict]:
+def _score_quality(content: str, metrics: dict, node_id: str = "") -> tuple[str, float, dict]:
     """Quality: Judge score if available, else heuristic (non-empty + no errors)."""
     meta: dict = {"method": "heuristic"}
 
@@ -160,6 +160,20 @@ def _score_quality(content: str, metrics: dict) -> tuple[str, float, dict]:
         except (TypeError, ValueError):
             pass
 
+    # Implement tasks don't produce output files — score by completion + tokens.
+    if not content.strip() and node_id.startswith("implement:"):
+        tokens_out = metrics.get("tokens_out") or 0
+        meta = {"method": "implement_heuristic"}
+        if tokens_out > 500:
+            meta["reason"] = "substantial_output_tokens"
+            return ("quality", 8.0, meta)
+        elif tokens_out > 0:
+            meta["reason"] = "completed_with_output"
+            return ("quality", 7.0, meta)
+        else:
+            meta["reason"] = "completed_no_token_data"
+            return ("quality", 6.0, meta)
+
     # Heuristic: start at 7.0, penalize for issues.
     score = 7.0
     if not content.strip():
@@ -170,7 +184,7 @@ def _score_quality(content: str, metrics: dict) -> tuple[str, float, dict]:
     # Check for error markers.
     error_count = 0
     for pattern in _ERROR_MARKERS:
-        error_count += len(re.findall(pattern, content, re.IGNORECASE))
+        error_count += len(re.findall(pattern, content, re.MULTILINE))
     if error_count > 0:
         penalty = min(4.0, error_count * 1.0)
         score -= penalty
@@ -182,12 +196,18 @@ def _score_quality(content: str, metrics: dict) -> tuple[str, float, dict]:
 def _score_adherence(content: str, node_id: str) -> tuple[str, float, dict]:
     """Adherence to spec: proportion of expected sections found in output."""
     # Normalize node_id for lookup (strip -post suffix from analyze-post).
+    # Strip implement:TXXX to just "implement" for lookup.
     lookup_id = node_id.replace("-post", "")
+    if lookup_id.startswith("implement:"):
+        lookup_id = "implement"
     expected = _NODE_EXPECTED_SECTIONS.get(lookup_id, [])
     meta: dict = {"method": "section_match"}
 
+    # Implement tasks don't produce output files — score by completion.
+    if node_id.startswith("implement:") and not content.strip():
+        return ("adherence_to_spec", 7.0, {"method": "implement_completed", "reason": "no_artifact_expectations"})
+
     if not expected:
-        # No expectations defined — neutral score.
         meta["reason"] = "no_expectations_defined"
         return ("adherence_to_spec", 5.0, meta)
 
@@ -213,6 +233,9 @@ def _score_completeness(actual_lines: int, node_id: str, metrics: dict) -> tuple
     # Use metrics.output_lines if provided, else actual_lines from file read.
     lines = metrics.get("output_lines", actual_lines)
     if lines is None or lines <= 0:
+        # Implement tasks: completion = 10.0 (only called on success).
+        if node_id.startswith("implement:"):
+            return ("completeness", 10.0, {"method": "implement_completion", "reason": "task_completed_successfully"})
         meta["reason"] = "no_output"
         return ("completeness", 0.0, meta)
 

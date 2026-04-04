@@ -78,7 +78,7 @@ def test_record_save_l1(setup_platform):
 
     # Import and patch REPO_ROOT + DB_PATH
     import post_save
-    import db as db_mod
+    import db_core as db_mod
 
     original_repo = post_save.REPO_ROOT
     original_db = db_mod.DB_PATH
@@ -128,7 +128,7 @@ def test_record_save_l2_epic(setup_platform):
     """Test L2 epic node save recording."""
     tmp_path, db_path = setup_platform
     import post_save
-    import db as db_mod
+    import db_core as db_mod
 
     original_repo = post_save.REPO_ROOT
     original_db = db_mod.DB_PATH
@@ -171,7 +171,7 @@ def test_reseed(setup_platform):
     """Test reseed functionality."""
     tmp_path, db_path = setup_platform
     import post_save
-    import db as db_mod
+    import db_core as db_mod
 
     original_repo = post_save.REPO_ROOT
     original_db = db_mod.DB_PATH
@@ -221,7 +221,7 @@ def test_ship_transition_sets_delivered_at(setup_platform):
     """When all required epic nodes complete, delivered_at is set in DB and pitch.md."""
     tmp_path, db_path = setup_platform
     import post_save
-    import db as db_mod
+    import db_core as db_mod
 
     original_repo = post_save.REPO_ROOT
     original_db = db_mod.DB_PATH
@@ -275,7 +275,7 @@ def test_partial_nodes_do_not_ship(setup_platform):
     """Epic with only some required nodes done stays in_progress, not shipped."""
     tmp_path, db_path = setup_platform
     import post_save
-    import db as db_mod
+    import db_core as db_mod
 
     original_repo = post_save.REPO_ROOT
     original_db = db_mod.DB_PATH
@@ -315,7 +315,7 @@ def test_reseed_missing_platform(setup_platform):
     """Test reseed with non-existent platform."""
     tmp_path, db_path = setup_platform
     import post_save
-    import db as db_mod
+    import db_core as db_mod
 
     original_repo = post_save.REPO_ROOT
     original_db = db_mod.DB_PATH
@@ -334,7 +334,7 @@ def test_epic_shipped_with_skipped_nodes(setup_platform):
     """Epic with required nodes done + optional skipped transitions to shipped."""
     tmp_path, db_path = setup_platform
     import post_save
-    import db as db_mod
+    import db_core as db_mod
 
     original_repo = post_save.REPO_ROOT
     original_db = db_mod.DB_PATH
@@ -399,7 +399,7 @@ def test_record_save_skips_when_hash_unchanged(setup_platform):
     """record_save should NOT overwrite completed_at when hash is unchanged."""
     tmp_path, db_path = setup_platform
     import post_save
-    import db as db_mod
+    import db_core as db_mod
 
     original_repo = post_save.REPO_ROOT
     original_db = db_mod.DB_PATH
@@ -449,7 +449,7 @@ def test_backfill_epic_predecessors(setup_platform):
     """Backfill fills missing nodes whose artifacts exist on disk."""
     tmp_path, db_path = setup_platform
     import post_save
-    import db as db_mod
+    import db_core as db_mod
 
     original_repo = post_save.REPO_ROOT
     original_db = db_mod.DB_PATH
@@ -504,7 +504,7 @@ def test_backfill_epic_predecessors(setup_platform):
 def test_compute_epic_status_never_regresses_shipped(setup_platform):
     """compute_epic_status never downgrades shipped to a lesser status."""
     tmp_path, db_path = setup_platform
-    import db as db_mod
+    import db_core as db_mod
 
     original_db = db_mod.DB_PATH
     db_mod.DB_PATH = db_path
@@ -534,7 +534,7 @@ def test_detect_from_path_disambiguates_shared_output(setup_platform):
     """
     tmp_path, db_path = setup_platform
     import post_save
-    import db as db_mod
+    import db_core as db_mod
 
     original_repo = post_save.REPO_ROOT
     original_db = db_mod.DB_PATH

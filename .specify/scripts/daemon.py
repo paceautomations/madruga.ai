@@ -65,6 +65,7 @@ class DaemonState:
 _daemon_state = DaemonState()
 _shutdown_event = asyncio.Event()
 _running_epics: set[str] = set()
+_platform_filter: str | None = None
 
 
 # --- Epic Polling ---
@@ -85,7 +86,7 @@ def poll_active_epics(conn, platform_id=None) -> list[dict]:
 # --- Coroutines ---
 
 
-async def dag_scheduler(conn, semaphore, shutdown_event, poll_interval=15):
+async def dag_scheduler(conn, semaphore, shutdown_event, poll_interval=15, platform_id=None):
     """Poll active epics and dispatch pipeline runs.
 
     INVARIANT: self-ref platforms execute epics sequentially.
@@ -98,7 +99,7 @@ async def dag_scheduler(conn, semaphore, shutdown_event, poll_interval=15):
                 await asyncio.sleep(poll_interval)
                 continue
 
-            epics = poll_active_epics(conn)
+            epics = poll_active_epics(conn, platform_id=platform_id)
             consecutive_errors = 0  # reset on successful poll
             for epic in epics:
                 epic_id = epic["epic_id"]
@@ -108,13 +109,30 @@ async def dag_scheduler(conn, semaphore, shutdown_event, poll_interval=15):
                 if epic_id in _running_epics:
                     continue
 
-                # Sequential constraint: only one epic at a time for self-ref
+                # Sequential constraint: only one epic at a time (global — all platforms)
                 if _running_epics:
                     logger.debug("sequential_constraint", running=list(_running_epics), skipped=epic_id)
                     break
 
                 _running_epics.add(epic_id)
                 logger.info("dispatching_epic", epic_id=epic_id, platform=platform_id)
+
+                # F3: Proactive branch checkout before dispatch
+                branch = epic.get("branch_name")
+                if branch:
+                    import subprocess as _sp
+
+                    from config import REPO_ROOT as _repo_root
+
+                    checkout = await asyncio.to_thread(
+                        _sp.run,
+                        ["git", "checkout", branch],
+                        cwd=str(_repo_root),
+                        capture_output=True,
+                        text=True,
+                    )
+                    if checkout.returncode != 0:
+                        logger.warning("branch_checkout_failed", branch=branch, stderr=checkout.stderr.strip())
 
                 try:
                     result = await run_pipeline_async(
@@ -309,7 +327,7 @@ async def lifespan(app: FastAPI):
     try:
         async with asyncio.TaskGroup() as tg:
             # Core: DAG scheduler
-            tg.create_task(dag_scheduler(conn, semaphore, _shutdown_event))
+            tg.create_task(dag_scheduler(conn, semaphore, _shutdown_event, platform_id=_platform_filter))
 
             # Health checker (with or without Telegram)
             tg.create_task(
@@ -518,7 +536,11 @@ def main():
     parser.add_argument("--host", default="127.0.0.1", help="Bind host (default: 127.0.0.1)")
     parser.add_argument("--port", type=int, default=8040, help="Bind port (default: 8040)")
     parser.add_argument("-v", "--verbose", action="store_true", help="Debug logging")
+    parser.add_argument("--platform", default=None, help="Only process epics for this platform")
     args = parser.parse_args()
+
+    global _platform_filter
+    _platform_filter = args.platform
 
     _configure_logging(args.verbose)
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")

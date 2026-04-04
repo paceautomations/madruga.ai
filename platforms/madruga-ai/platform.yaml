@@ -26,6 +26,10 @@ views:
       label: "Execution (zoom)"
     - id: intelligenceDetail
       label: "Intelligence (zoom)"
+    - id: integrationDetail
+      label: "Integration (zoom)"
+    - id: observabilityDetail
+      label: "Observability (zoom)"
   flows:
     - id: businessFlow
       label: "Spec-to-Code Pipeline"

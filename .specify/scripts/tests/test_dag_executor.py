@@ -110,7 +110,7 @@ async def test_retry_with_async_sleep():
     breaker = CircuitBreaker()
     call_count = 0
 
-    async def mock_dispatch(node, cwd, prompt, timeout=3000, guardrail=None, resume_session_id=None):
+    async def mock_dispatch(node, cwd, prompt, timeout=3000, guardrail=None, resume_session_id=None, platform_name=""):
         nonlocal call_count
         call_count += 1
         if call_count < 3:
@@ -135,7 +135,7 @@ async def test_circuit_breaker_with_async_dispatch():
 
     breaker = CircuitBreaker(max_failures=1)
 
-    async def mock_dispatch(node, cwd, prompt, timeout=3000, guardrail=None, resume_session_id=None):
+    async def mock_dispatch(node, cwd, prompt, timeout=3000, guardrail=None, resume_session_id=None, platform_name=""):
         return False, "permanent error", None
 
     with (
@@ -904,3 +904,548 @@ def test_compose_skill_prompt_no_report_graceful(tmp_path):
 
     assert "Upstream Report" not in prompt
     assert guardrail is not None  # guardrail is always generated for epic nodes
+
+
+# --- Tests for build_system_prompt ---
+
+
+def _setup_knowledge(tmp_path):
+    """Create minimal knowledge/contract files for build_system_prompt tests."""
+    knowledge = tmp_path / ".claude" / "knowledge"
+    knowledge.mkdir(parents=True)
+    (knowledge / "pipeline-contract-base.md").write_text("# Pipeline Contract — Base\nStep 0: Prerequisites\n")
+    (knowledge / "pipeline-contract-engineering.md").write_text(
+        "# Pipeline Contract — Engineering\nSimplicity first.\n"
+    )
+    (knowledge / "pipeline-contract-planning.md").write_text("# Pipeline Contract — Planning\nCut scope.\n")
+    (knowledge / "pipeline-contract-business.md").write_text("# Pipeline Contract — Business\nReduce scope.\n")
+
+    rules = tmp_path / ".claude" / "rules"
+    rules.mkdir(parents=True)
+    (rules / "python.md").write_text("# Python Conventions\nUse ruff.\n")
+
+    commands = tmp_path / ".claude" / "commands"
+    commands.mkdir(parents=True)
+    (commands / "speckit.specify.md").write_text("---\ndescription: Create spec\n---\n## Outline\nGenerate spec.\n")
+    (commands / "speckit.analyze.md").write_text("---\ndescription: Analyze\n---\n## Goal\nAnalyze artifacts.\n")
+    (commands / "speckit.implement.md").write_text("---\ndescription: Implement\n---\n## Outline\nExecute tasks.\n")
+
+    madruga = commands / "madruga"
+    madruga.mkdir()
+    (madruga / "vision.md").write_text("---\ndescription: Generate vision\n---\n## Instructions\nVision content.\n")
+    (madruga / "judge.md").write_text("---\ndescription: Run judge\n---\n## Instructions\nJudge content.\n")
+    (madruga / "reconcile.md").write_text("---\ndescription: Reconcile\n---\n## Instructions\nReconcile content.\n")
+    (madruga / "qa.md").write_text("---\ndescription: QA\n---\n## Instructions\nQA content.\n")
+
+    return tmp_path
+
+
+def test_build_system_prompt_includes_conventions_header(tmp_path):
+    """System prompt starts with conventions header."""
+    from dag_executor import build_system_prompt
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("specify", "speckit.specify")
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        result = build_system_prompt(node, "test-plat")
+
+    assert result.startswith("# Conventions")
+    assert "English" in result
+
+
+def test_build_system_prompt_includes_base_contract(tmp_path):
+    """System prompt always includes pipeline-contract-base.md."""
+    from dag_executor import build_system_prompt
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("specify", "speckit.specify")
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        result = build_system_prompt(node, "test-plat")
+
+    assert "Pipeline Contract — Base" in result
+    assert "Step 0: Prerequisites" in result
+
+
+def test_build_system_prompt_includes_layer_contract_engineering(tmp_path):
+    """Engineering layer nodes get engineering contract."""
+    from dag_executor import build_system_prompt
+
+    _setup_knowledge(tmp_path)
+    node = Node(
+        id="specify",
+        skill="speckit.specify",
+        outputs=[],
+        depends=[],
+        gate="human",
+        layer="engineering",
+        optional=False,
+        skip_condition=None,
+    )
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        result = build_system_prompt(node, "test-plat")
+
+    assert "Pipeline Contract — Engineering" in result
+    assert "Simplicity first" in result
+
+
+def test_build_system_prompt_includes_layer_contract_planning(tmp_path):
+    """Planning layer nodes get planning contract."""
+    from dag_executor import build_system_prompt
+
+    _setup_knowledge(tmp_path)
+    node = Node(
+        id="roadmap",
+        skill="madruga:roadmap",
+        outputs=[],
+        depends=[],
+        gate="human",
+        layer="planning",
+        optional=False,
+        skip_condition=None,
+    )
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        result = build_system_prompt(node, "test-plat")
+
+    assert "Pipeline Contract — Planning" in result
+    assert "Cut scope" in result
+
+
+def test_build_system_prompt_includes_layer_contract_business(tmp_path):
+    """Business layer nodes get business contract."""
+    from dag_executor import build_system_prompt
+
+    _setup_knowledge(tmp_path)
+    node = Node(
+        id="vision",
+        skill="madruga:vision",
+        outputs=[],
+        depends=[],
+        gate="human",
+        layer="business",
+        optional=False,
+        skip_condition=None,
+    )
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        result = build_system_prompt(node, "test-plat")
+
+    assert "Pipeline Contract — Business" in result
+    assert "Reduce scope" in result
+
+
+def test_build_system_prompt_no_layer_contract_for_unknown(tmp_path):
+    """Unknown layers do not get a layer contract section."""
+    from dag_executor import build_system_prompt
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("test-node", "test:skill")
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        result = build_system_prompt(node, "test-plat")
+
+    assert "Pipeline Contract — Engineering" not in result
+    assert "Pipeline Contract — Planning" not in result
+    assert "Pipeline Contract — Business" not in result
+
+
+def test_build_system_prompt_includes_skill_body(tmp_path):
+    """System prompt includes the full skill .md body."""
+    from dag_executor import build_system_prompt
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("specify", "speckit.specify")
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        result = build_system_prompt(node, "test-plat")
+
+    assert "# Skill Instructions" in result
+    assert "Generate spec" in result
+
+
+def test_build_system_prompt_implement_includes_python_rules(tmp_path):
+    """Implement nodes include Python rules."""
+    from dag_executor import build_system_prompt
+
+    _setup_knowledge(tmp_path)
+    node = Node(
+        id="implement",
+        skill="speckit.implement",
+        outputs=[],
+        depends=[],
+        gate="auto",
+        layer="engineering",
+        optional=False,
+        skip_condition=None,
+    )
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        result = build_system_prompt(node, "test-plat")
+
+    assert "Python Conventions" in result
+    assert "ruff" in result
+
+
+def test_build_system_prompt_non_implement_excludes_python_rules(tmp_path):
+    """Non-implement nodes do NOT include Python rules."""
+    from dag_executor import build_system_prompt
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("specify", "speckit.specify")
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        result = build_system_prompt(node, "test-plat")
+
+    assert "Python Conventions" not in result
+
+
+def test_build_system_prompt_implement_task_includes_python_rules(tmp_path):
+    """implement:T001 task nodes include Python rules."""
+    from dag_executor import build_system_prompt
+
+    _setup_knowledge(tmp_path)
+    node = Node(
+        id="implement:T001",
+        skill="speckit.implement",
+        outputs=[],
+        depends=[],
+        gate="auto",
+        layer="implementation",
+        optional=False,
+        skip_condition=None,
+    )
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        result = build_system_prompt(node, "test-plat")
+
+    assert "Python Conventions" in result
+
+
+def test_build_system_prompt_missing_skill_file_warns(tmp_path):
+    """Missing skill file logs a warning but still returns conventions+contract."""
+    from dag_executor import build_system_prompt
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("specify", "speckit.nonexistent")
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        result = build_system_prompt(node, "test-plat")
+
+    assert "# Conventions" in result
+    assert "Pipeline Contract — Base" in result
+    assert "# Skill Instructions" not in result
+
+
+def test_build_system_prompt_derives_path_for_madruga_skill(tmp_path):
+    """Skill path is derived from convention for madruga:* skills."""
+    from dag_executor import build_system_prompt
+
+    _setup_knowledge(tmp_path)
+    node = Node(
+        id="vision",
+        skill="madruga:vision",
+        outputs=[],
+        depends=[],
+        gate="human",
+        layer="business",
+        optional=False,
+        skip_condition=None,
+    )
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        result = build_system_prompt(node, "test-plat")
+
+    assert "Vision content" in result
+
+
+# --- Tests for build_dispatch_cmd ---
+
+
+def test_build_dispatch_cmd_has_bare_flag(tmp_path):
+    """Command includes --bare flag."""
+    from dag_executor import build_dispatch_cmd
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("specify", "speckit.specify")
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        cmd = build_dispatch_cmd(node, "test prompt", "test-plat")
+
+    assert "--bare" in cmd
+
+
+def test_build_dispatch_cmd_has_output_format_json(tmp_path):
+    """Command includes --output-format json."""
+    from dag_executor import build_dispatch_cmd
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("specify", "speckit.specify")
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        cmd = build_dispatch_cmd(node, "test prompt", "test-plat")
+
+    idx = cmd.index("--output-format")
+    assert cmd[idx + 1] == "json"
+
+
+def test_build_dispatch_cmd_has_system_prompt(tmp_path):
+    """Command includes --system-prompt with conventions content."""
+    from dag_executor import build_dispatch_cmd
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("specify", "speckit.specify")
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        cmd = build_dispatch_cmd(node, "test prompt", "test-plat")
+
+    idx = cmd.index("--system-prompt")
+    system_prompt = cmd[idx + 1]
+    assert "# Conventions" in system_prompt
+    assert "Pipeline Contract — Base" in system_prompt
+
+
+def test_build_dispatch_cmd_allowed_tools_for_analyze(tmp_path):
+    """Analyze nodes get read-only tools."""
+    from dag_executor import build_dispatch_cmd
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("analyze", "speckit.analyze")
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        cmd = build_dispatch_cmd(node, "test prompt", "test-plat")
+
+    idx = cmd.index("--allowedTools")
+    tools = cmd[idx + 1]
+    assert tools == "Bash,Read,Glob,Grep"
+    assert "Write" not in tools
+    assert "Edit" not in tools
+
+
+def test_build_dispatch_cmd_allowed_tools_for_implement(tmp_path):
+    """Implement nodes get full code tools."""
+    from dag_executor import build_dispatch_cmd
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("implement", "speckit.implement")
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        cmd = build_dispatch_cmd(node, "test prompt", "test-plat")
+
+    idx = cmd.index("--allowedTools")
+    tools = cmd[idx + 1]
+    assert "Bash" in tools
+    assert "Write" in tools
+    assert "Edit" in tools
+
+
+def test_build_dispatch_cmd_allowed_tools_for_judge(tmp_path):
+    """Judge nodes get Agent tool for parallel personas."""
+    from dag_executor import build_dispatch_cmd
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("judge", "madruga:judge")
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        cmd = build_dispatch_cmd(node, "test prompt", "test-plat")
+
+    idx = cmd.index("--allowedTools")
+    tools = cmd[idx + 1]
+    assert "Agent" in tools
+
+
+def test_build_dispatch_cmd_default_tools_for_unknown_node(tmp_path):
+    """Unknown nodes get DEFAULT_TOOLS."""
+    from dag_executor import DEFAULT_TOOLS, build_dispatch_cmd
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("unknown-node", "unknown:skill")
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        cmd = build_dispatch_cmd(node, "test prompt", "test-plat")
+
+    idx = cmd.index("--allowedTools")
+    assert cmd[idx + 1] == DEFAULT_TOOLS
+
+
+def test_build_dispatch_cmd_implement_task_tools(tmp_path):
+    """implement:T001 nodes get IMPLEMENT_TASK_TOOLS."""
+    from dag_executor import IMPLEMENT_TASK_TOOLS, build_dispatch_cmd
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("implement:T001", "speckit.implement")
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        cmd = build_dispatch_cmd(node, "test prompt", "test-plat")
+
+    idx = cmd.index("--allowedTools")
+    assert cmd[idx + 1] == IMPLEMENT_TASK_TOOLS
+
+
+def test_build_dispatch_cmd_effort_for_analyze(tmp_path):
+    """Analyze nodes get --effort medium."""
+    from dag_executor import build_dispatch_cmd
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("analyze", "speckit.analyze")
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        cmd = build_dispatch_cmd(node, "test prompt", "test-plat")
+
+    idx = cmd.index("--effort")
+    assert cmd[idx + 1] == "medium"
+
+
+def test_build_dispatch_cmd_effort_for_analyze_post(tmp_path):
+    """analyze-post nodes get --effort medium."""
+    from dag_executor import build_dispatch_cmd
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("analyze-post", "speckit.analyze")
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        cmd = build_dispatch_cmd(node, "test prompt", "test-plat")
+
+    idx = cmd.index("--effort")
+    assert cmd[idx + 1] == "medium"
+
+
+def test_build_dispatch_cmd_no_effort_for_specify(tmp_path):
+    """Specify nodes do NOT get --effort flag."""
+    from dag_executor import build_dispatch_cmd
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("specify", "speckit.specify")
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        cmd = build_dispatch_cmd(node, "test prompt", "test-plat")
+
+    assert "--effort" not in cmd
+
+
+def test_build_dispatch_cmd_guardrail_appended(tmp_path):
+    """Guardrail is added via --append-system-prompt."""
+    from dag_executor import build_dispatch_cmd
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("specify", "speckit.specify")
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        cmd = build_dispatch_cmd(node, "test prompt", "test-plat", guardrail="MANDATORY: stay on branch")
+
+    idx = cmd.index("--append-system-prompt")
+    assert cmd[idx + 1] == "MANDATORY: stay on branch"
+
+
+def test_build_dispatch_cmd_no_guardrail_when_none(tmp_path):
+    """No --append-system-prompt when guardrail is None."""
+    from dag_executor import build_dispatch_cmd
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("specify", "speckit.specify")
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        cmd = build_dispatch_cmd(node, "test prompt", "test-plat")
+
+    assert "--append-system-prompt" not in cmd
+
+
+def test_build_dispatch_cmd_resume_session(tmp_path):
+    """Resume session ID is passed via --resume."""
+    from dag_executor import build_dispatch_cmd
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("implement:T001", "speckit.implement")
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        cmd = build_dispatch_cmd(node, "test prompt", "test-plat", resume_session_id="abc123def")
+
+    idx = cmd.index("--resume")
+    assert cmd[idx + 1] == "abc123def"
+
+
+def test_build_dispatch_cmd_disallowed_tools_present(tmp_path):
+    """Defense-in-depth: --disallowedTools still present alongside --allowedTools."""
+    from dag_executor import DISALLOWED_TOOLS, build_dispatch_cmd
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("specify", "speckit.specify")
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        cmd = build_dispatch_cmd(node, "test prompt", "test-plat")
+
+    idx = cmd.index("--disallowedTools")
+    assert cmd[idx + 1] == DISALLOWED_TOOLS
+
+
+def test_build_dispatch_cmd_prompt_is_second_arg(tmp_path):
+    """Prompt is passed as the argument to -p."""
+    from dag_executor import build_dispatch_cmd
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("specify", "speckit.specify")
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        cmd = build_dispatch_cmd(node, "my test prompt here", "test-plat")
+
+    assert cmd[0] == "claude"
+    assert cmd[1] == "-p"
+    assert cmd[2] == "my test prompt here"
+
+
+# --- Integration test: full dispatch flow ---
+
+
+def test_full_dispatch_flow_integration(tmp_path):
+    """Integration: compose_skill_prompt + build_dispatch_cmd produce correct cmd."""
+    from dag_executor import build_dispatch_cmd, compose_skill_prompt
+
+    root = _setup_knowledge(tmp_path)
+
+    # Create platform structure
+    platform_dir = root / "platforms" / "test-plat"
+    epic_dir = platform_dir / "epics" / "001-test"
+    epic_dir.mkdir(parents=True)
+    (epic_dir / "pitch.md").write_text("# Pitch\nBuild a widget.")
+    (epic_dir / "spec.md").write_text("# Spec\nWidget requirements.")
+
+    node = Node(
+        id="specify",
+        skill="speckit.specify",
+        outputs=["{epic}/spec.md"],
+        depends=["epic-context"],
+        gate="human",
+        layer="engineering",
+        optional=False,
+        skip_condition=None,
+    )
+
+    with patch("dag_executor.REPO_ROOT", root):
+        prompt, guardrail = compose_skill_prompt("test-plat", node, platform_dir, "001-test")
+        cmd = build_dispatch_cmd(node, prompt, "test-plat", guardrail)
+
+    # Verify command structure
+    assert cmd[0] == "claude"
+    assert "--bare" in cmd
+    assert "--output-format" in cmd
+    assert "--system-prompt" in cmd
+    assert "--allowedTools" in cmd
+    assert "--disallowedTools" in cmd
+
+    # Verify system prompt contains skill body
+    sp_idx = cmd.index("--system-prompt")
+    system_prompt = cmd[sp_idx + 1]
+    assert "# Conventions" in system_prompt
+    assert "Pipeline Contract — Base" in system_prompt
+    assert "Pipeline Contract — Engineering" in system_prompt
+    assert "# Skill Instructions" in system_prompt
+    assert "Generate spec" in system_prompt
+
+    # Verify user prompt contains epic artifacts
+    assert "Pitch" in prompt or "pitch.md" in prompt
+    assert "Widget requirements" in prompt or "spec.md" in prompt
+
+    # Verify guardrail is appended
+    assert "--append-system-prompt" in cmd

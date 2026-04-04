@@ -134,6 +134,9 @@ graph TD
 | 5 | Does the Mermaid diagram render? | Fix |
 | 6 | Max 150 lines? | Condense |
 | 7 | Are all contexts from the domain model present? | Add missing ones |
+| 8 | Every BC has a matching `view <name>Detail of <name>` in views.likec4? | Flag — containers skill should have created them. If missing, add now. |
+| 9 | Every `<name>Detail` view registered in `platform.yaml` `views.structural`? | Flag and add entry |
+| 10 | DDD relationships use typed kinds (`-[acl]->`, `-[conformist]->`, etc.)? | Fix — no plain `->` for DDD |
 
 ## Error Handling
 

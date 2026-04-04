@@ -75,6 +75,22 @@ views {
     include claudeApi
   }
 
+  view integrationDetail of integration {
+    title 'Integration — Generic Domain'
+    description 'Adapters para sistemas externos: Telegram, GitHub, Claude API, Sentry'
+
+    include *
+    include claudeApi, telegramBot, githubApi, sentryCloud
+  }
+
+  view observabilityDetail of observability {
+    title 'Observability — Generic Domain'
+    description 'Dashboard, health checks, metricas SQLite, Sentry'
+
+    include *
+    include sqliteDb, sentryCloud
+  }
+
   // ══════════════════════════════════════
   //  FLUXO DE NEGOCIO (pipeline spec-to-code)
   // ══════════════════════════════════════

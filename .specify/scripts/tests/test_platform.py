@@ -1,6 +1,7 @@
 """Tests for platform_cli.py functions."""
 
 import importlib
+import logging
 import re
 import sys
 from pathlib import Path
@@ -39,6 +40,7 @@ def test_discover_platforms_empty(tmp_path):
 def test_discover_platforms_finds(tmp_path):
     old = plat.PLATFORMS_DIR
     plat.PLATFORMS_DIR = tmp_path
+    plat._discover_platforms.cache_clear()
 
     _create_platform(tmp_path, "alpha")
     _create_platform(tmp_path, "beta")
@@ -49,6 +51,7 @@ def test_discover_platforms_finds(tmp_path):
         assert result == ["alpha", "beta"]
     finally:
         plat.PLATFORMS_DIR = old
+        plat._discover_platforms.cache_clear()
 
 
 def test_lint_platform_valid(tmp_path, capsys):
@@ -107,34 +110,36 @@ def test_name_validation_regex():
 # ══════════════════════════════════════
 
 
-def test_cmd_use_sets_active(tmp_path, capsys):
+def test_cmd_use_sets_active(tmp_path, caplog):
     """cmd_use sets active_platform in DB."""
     old_platforms = plat.PLATFORMS_DIR
     plat.PLATFORMS_DIR = tmp_path
+    plat._discover_platforms.cache_clear()
 
     _create_platform(tmp_path, "alpha")
 
-    # Patch DB to use temp
+    # Patch DB to use temp — patch db_core where DB_PATH is defined
     from db import get_conn, migrate, get_active_platform
-    import db as db_mod
+    import db_core
 
     db_path = tmp_path / "test.db"
-    old_db = db_mod.DB_PATH
-    db_mod.DB_PATH = db_path
+    old_db = db_core.DB_PATH
+    db_core.DB_PATH = db_path
 
     try:
         with get_conn(db_path) as conn:
             migrate(conn)
 
-        plat.cmd_use("alpha")
-        captured = capsys.readouterr()
-        assert "Active platform set to: alpha" in captured.out
+        with caplog.at_level(logging.INFO, logger="platform_cli"):
+            plat.cmd_use("alpha")
+        assert "Active platform set to: alpha" in caplog.text
 
         with get_conn(db_path) as conn:
             assert get_active_platform(conn) == "alpha"
     finally:
         plat.PLATFORMS_DIR = old_platforms
-        db_mod.DB_PATH = old_db
+        db_core.DB_PATH = old_db
+        plat._discover_platforms.cache_clear()
 
 
 def test_cmd_use_invalid_platform(tmp_path):
@@ -155,11 +160,11 @@ def test_cmd_use_invalid_platform(tmp_path):
 def test_cmd_current_when_set(tmp_path, capsys):
     """cmd_current shows the active platform."""
     from db import get_conn, migrate, set_local_config
-    import db as db_mod
+    import db_core
 
     db_path = tmp_path / "test.db"
-    old_db = db_mod.DB_PATH
-    db_mod.DB_PATH = db_path
+    old_db = db_core.DB_PATH
+    db_core.DB_PATH = db_path
 
     try:
         with get_conn(db_path) as conn:
@@ -170,17 +175,17 @@ def test_cmd_current_when_set(tmp_path, capsys):
         captured = capsys.readouterr()
         assert "Active platform: fulano" in captured.out
     finally:
-        db_mod.DB_PATH = old_db
+        db_core.DB_PATH = old_db
 
 
 def test_cmd_current_when_unset(tmp_path, capsys):
     """cmd_current shows message when no active platform."""
     from db import get_conn, migrate
-    import db as db_mod
+    import db_core
 
     db_path = tmp_path / "test.db"
-    old_db = db_mod.DB_PATH
-    db_mod.DB_PATH = db_path
+    old_db = db_core.DB_PATH
+    db_core.DB_PATH = db_path
 
     try:
         with get_conn(db_path) as conn:
@@ -190,4 +195,4 @@ def test_cmd_current_when_unset(tmp_path, capsys):
         captured = capsys.readouterr()
         assert "No active platform set" in captured.out
     finally:
-        db_mod.DB_PATH = old_db
+        db_core.DB_PATH = old_db

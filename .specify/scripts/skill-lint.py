@@ -5,16 +5,24 @@ Usage:
     python3 .specify/scripts/skill-lint.py              # lint all skills
     python3 .specify/scripts/skill-lint.py --skill vision  # lint one skill
     python3 .specify/scripts/skill-lint.py --json          # JSON output
+    python3 .specify/scripts/skill-lint.py --impact-of pipeline-contract-base.md  # impact analysis
 """
 
 import argparse
+import json
+import logging
 import re
 import sys
 from pathlib import Path
 
+from errors import VALID_GATES
+
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 COMMANDS_DIR = REPO_ROOT / ".claude" / "commands" / "madruga"
 KNOWLEDGE_DIR = REPO_ROOT / ".claude" / "knowledge"
+PLATFORMS_DIR = REPO_ROOT / "platforms"
+
+log = logging.getLogger(__name__)
 
 # Archetype classification
 PIPELINE_SKILLS = {
@@ -35,7 +43,7 @@ PIPELINE_SKILLS = {
     "verify",
     "reconcile",
 }
-SPECIALIST_SKILLS = {"qa"}
+SPECIALIST_SKILLS = {"qa", "judge"}
 UTILITY_SKILLS = {"pipeline", "checkpoint", "getting-started", "skills-mgmt"}
 
 SEVERITY_ORDER = {"BLOCKER": 0, "WARNING": 1, "NIT": 2}
@@ -107,21 +115,26 @@ def lint_skill(name: str, path: Path) -> list[dict]:
     if "argument-hint" not in fm:
         add("NIT", "Missing 'argument-hint' in frontmatter")
 
-    # Handoffs required for pipeline and specialist
+    # Gate value validation
+    gate = fm.get("gate")
+    if gate is not None and gate not in VALID_GATES:
+        add("ERROR", f"Invalid gate value '{gate}'. Valid: {sorted(VALID_GATES)}")
+
+    # Handoffs check (all archetypes)
+    handoffs = fm.get("handoffs", [])
     if archetype in ("pipeline", "specialist"):
-        handoffs = fm.get("handoffs", [])
         if not handoffs:
             add("WARNING", "Missing 'handoffs' in frontmatter (required for pipeline/specialist)")
-        else:
-            for h in handoffs:
-                agent = h.get("agent", "")
-                target = resolve_handoff_target(agent)
-                if target is None:
-                    add("BLOCKER", f"Handoff target '{agent}' does not exist")
-                if not h.get("label"):
-                    add("NIT", f"Handoff to '{agent}' missing 'label'")
-                if not h.get("prompt"):
-                    add("NIT", f"Handoff to '{agent}' missing 'prompt'")
+    if handoffs:
+        for h in handoffs:
+            agent = h.get("agent", "")
+            target = resolve_handoff_target(agent)
+            if target is None:
+                add("BLOCKER", f"Handoff target '{agent}' does not exist")
+            if not h.get("label"):
+                add("NIT", f"Handoff to '{agent}' missing 'label'")
+            if not h.get("prompt"):
+                add("NIT", f"Handoff to '{agent}' missing 'prompt'")
 
     # --- Body checks ---
     body = text.split("---", 2)[-1] if text.startswith("---") else text
@@ -135,9 +148,13 @@ def lint_skill(name: str, path: Path) -> list[dict]:
         if "pipeline-contract-base" not in body:
             add("WARNING", "No reference to pipeline-contract-base.md (at least steps 0 and 5)")
 
+    # Output Directory check (all archetypes)
+    if "## Output Directory" not in body:
+        add("WARNING", "Missing '## Output Directory' section")
+
     # Required sections by archetype
     if archetype == "pipeline":
-        for section in ["Cardinal Rule", "Persona", "Usage", "Output Directory", "Error Handling"]:
+        for section in ["Cardinal Rule", "Persona", "Usage", "Error Handling"]:
             if section not in body:
                 add("WARNING", f"Missing required section: '{section}'")
         if "Auto-Review" not in body and "Auto-review" not in body:
@@ -263,11 +280,166 @@ def lint_handoff_chain() -> list[dict]:
     return findings
 
 
+def build_knowledge_graph() -> dict[str, set[str]]:
+    """Build reverse map: knowledge_filename -> set of skill names that reference it.
+
+    Scans all skill files in COMMANDS_DIR for knowledge file references.
+    Only files that are actually referenced appear as keys.
+    """
+    graph: dict[str, set[str]] = {}
+
+    if not KNOWLEDGE_DIR.exists() or not COMMANDS_DIR.exists():
+        return graph
+
+    knowledge_files = {kf.name for kf in KNOWLEDGE_DIR.glob("*.md")}
+
+    for skill_path in COMMANDS_DIR.glob("*.md"):
+        skill_name = skill_path.stem
+        try:
+            text = skill_path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            log.warning("UnicodeDecodeError reading %s, skipping", skill_path)
+            continue
+
+        for kf_name in knowledge_files:
+            if kf_name in text:
+                graph.setdefault(kf_name, set()).add(skill_name)
+
+    return graph
+
+
+def cmd_impact_of(filename: str) -> list[dict]:
+    """Return list of {skill, archetype} dicts for skills referencing filename."""
+    graph = build_knowledge_graph()
+    skill_names = graph.get(filename, set())
+    return [{"skill": name, "archetype": get_archetype(name)} for name in sorted(skill_names)]
+
+
+def _extract_pipeline_node_ids(data: dict) -> set[str]:
+    """Extract all pipeline node IDs from an already-parsed platform.yaml dict."""
+    node_ids: set[str] = set()
+    pipeline = data.get("pipeline") or {}
+    if not isinstance(pipeline, dict):
+        return node_ids
+    for node in pipeline.get("nodes") or []:
+        if isinstance(node, dict) and node.get("id"):
+            node_ids.add(node["id"])
+    epic_cycle = pipeline.get("epic_cycle") or {}
+    if isinstance(epic_cycle, dict):
+        for node in epic_cycle.get("nodes") or []:
+            if isinstance(node, dict) and node.get("id"):
+                node_ids.add(node["id"])
+    return node_ids
+
+
+def resolve_all_pipeline(yaml_path: Path) -> set[str]:
+    """Resolve 'all-pipeline' token to all node IDs from a platform.yaml file."""
+    try:
+        import yaml as _yaml
+
+        data = _yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
+    except Exception:
+        return set()
+    if not isinstance(data, dict):
+        return set()
+    return _extract_pipeline_node_ids(data)
+
+
+def lint_knowledge_declarations(yaml_path: Path) -> list[dict]:
+    """Check platform.yaml knowledge: section against actual skill references.
+
+    Returns list of finding dicts with keys: skill, severity, message.
+    """
+    import yaml as _yaml
+
+    findings: list[dict] = []
+
+    try:
+        data = _yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        findings.append({"skill": str(yaml_path), "severity": "WARNING", "message": f"Could not parse YAML: {exc}"})
+        return findings
+
+    if not isinstance(data, dict):
+        return findings
+
+    knowledge_section = data.get("knowledge") or []
+    if not isinstance(knowledge_section, list):
+        knowledge_section = []
+
+    all_pipeline_nodes = _extract_pipeline_node_ids(data)
+
+    # Build declared map: {filename -> set of declared consumer skill IDs}
+    declared: dict[str, set[str]] = {}
+    for entry in knowledge_section:
+        if not isinstance(entry, dict):
+            continue
+        fname = entry.get("file")
+        if not fname:
+            continue
+        consumers = entry.get("consumers", [])
+        if consumers == "all-pipeline" or consumers == ["all-pipeline"]:
+            declared[fname] = set(all_pipeline_nodes)
+        elif isinstance(consumers, list):
+            declared[fname] = set(consumers)
+        else:
+            declared[fname] = set()
+
+        # Check declared files exist on disk
+        if not (KNOWLEDGE_DIR / fname).exists():
+            findings.append(
+                {
+                    "skill": f"knowledge/{fname}",
+                    "severity": "WARNING",
+                    "message": f"Declared knowledge file '{fname}' does not exist in {KNOWLEDGE_DIR}",
+                }
+            )
+
+    # Build actual reference graph
+    graph = build_knowledge_graph()
+
+    # Check that every referenced knowledge file is declared
+    for kf_name, skill_names in graph.items():
+        if kf_name not in declared:
+            findings.append(
+                {
+                    "skill": f"knowledge/{kf_name}",
+                    "severity": "WARNING",
+                    "message": (
+                        f"Knowledge file '{kf_name}' is referenced by skills "
+                        f"({', '.join(sorted(skill_names))}) but not declared in platform.yaml knowledge:"
+                    ),
+                }
+            )
+
+    return findings
+
+
 def main():
     parser = argparse.ArgumentParser(description="Lint madruga.ai skills")
     parser.add_argument("--skill", help="Lint a single skill by name")
     parser.add_argument("--json", action="store_true", help="JSON output")
+    parser.add_argument(
+        "--impact-of", dest="impact_of", metavar="FILE", help="Show skills impacted by a knowledge file"
+    )
     args = parser.parse_args()
+
+    # --impact-of: short-circuit, print impact analysis and exit
+    if args.impact_of:
+        results = cmd_impact_of(args.impact_of)
+        if args.json:
+            print(json.dumps(results, indent=2))
+        else:
+            if not results:
+                print(f"No skills reference '{args.impact_of}'")
+            else:
+                print(f"\n## Impact of {args.impact_of}\n")
+                print("| Skill | Archetype |")
+                print("|-------|-----------|")
+                for r in results:
+                    print(f"| {r['skill']} | {r['archetype']} |")
+                print(f"\n{len(results)} skill(s) impacted.")
+        sys.exit(0)
 
     all_findings = []
 
@@ -290,8 +462,6 @@ def main():
     all_findings.sort(key=lambda f: SEVERITY_ORDER.get(f["severity"], 99))
 
     if args.json:
-        import json
-
         print(json.dumps(all_findings, indent=2))
     else:
         blockers = [f for f in all_findings if f["severity"] == "BLOCKER"]

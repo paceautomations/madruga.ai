@@ -1,0 +1,13 @@
+# CODEOWNERS — AI Infrastructure governance
+#
+# Changes to AI instruction files (skills, knowledge, rules, contracts)
+# require review from designated code owners before merging to main.
+# This prevents silent regressions from renamed or broken references
+# that could degrade the pipeline.
+#
+# Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+/.claude/                          @gabrielhamu-srna
+/CLAUDE.md                         @gabrielhamu-srna
+/platforms/*/CLAUDE.md             @gabrielhamu-srna
+/.specify/scripts/skill-lint.py    @gabrielhamu-srna

@@ -37,7 +37,8 @@ class TestStatusTable:
     def test_unknown_platform(self):
         result = run_status("nonexistent-xyz")
         assert result.returncode == 1
-        assert "not found" in result.stdout.lower() or "error" in result.stdout.lower()
+        combined = (result.stdout + result.stderr).lower()
+        assert "not found" in combined or "error" in combined
 
     def test_no_args_defaults_to_all(self):
         result = run_status()

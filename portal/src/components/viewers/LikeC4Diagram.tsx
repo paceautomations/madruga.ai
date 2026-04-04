@@ -78,9 +78,9 @@ export default function LikeC4Diagram({ viewId, platform, viewPaths }: Props) {
               zoomable
               fitView
               keepAspectRatio={false}
-              enableElementDetails
               enableRelationshipDetails
               enableNotations
+              showNavigationButtons
               onNavigateTo={(nextViewId: string) => {
                 const path = viewPathsRef.current[nextViewId];
                 if (path) {

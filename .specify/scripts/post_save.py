@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import re
 import sys
 from datetime import datetime, timezone
@@ -40,7 +41,39 @@ sys.path.insert(0, str(Path(__file__).parent))
 import yaml
 
 from config import REPO_ROOT  # noqa: F401
-from db import (  # noqa: F401 — compute_epic_status used in record_save
+
+log = logging.getLogger("post_save")
+
+
+# -- Structured logging (NDJSON) -- Duplicated by design — no shared util module in this scripts dir
+
+
+class _NDJSONFormatter(logging.Formatter):
+    """Emit one JSON object per line for CI consumption."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        return json.dumps(
+            {
+                "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
+                "level": record.levelname,
+                "message": record.getMessage(),
+                "logger": record.name,
+            }
+        )
+
+
+def _setup_logging(json_mode: bool) -> None:
+    """Configure root logger for human or NDJSON output."""
+    handler = logging.StreamHandler()
+    if json_mode:
+        handler.setFormatter(_NDJSONFormatter())
+    else:
+        handler.setFormatter(logging.Formatter("%(levelname)s %(name)s: %(message)s"))
+    logging.root.addHandler(handler)
+    logging.root.setLevel(logging.INFO)
+
+
+from db import (  # noqa: E402, F401 — compute_epic_status used in record_save
     compute_epic_status,
     compute_file_hash,
     get_conn,
@@ -462,27 +495,39 @@ def main():
         dest="detect_path",
         help="Auto-detect platform/node/skill from file path (used by hooks)",
     )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        dest="json_mode",
+        help="Emit structured NDJSON log output (for CI consumption)",
+    )
 
     args = parser.parse_args()
+
+    _setup_logging(args.json_mode)
 
     if args.detect_path:
         detected = detect_from_path(args.detect_path)
         if not detected:
             # Not a recognized pipeline artifact — silently exit
             return
+        log.info("Auto-detected: %s/%s → %s", detected["platform"], detected["node"], detected["artifact"])
         result = record_save(**detected)
         print(json.dumps(result))
         return
 
     if args.reseed_all:
+        log.info("Re-seeding all platforms from filesystem")
         results = reseed_all()
         for r in results:
+            log.info("Reseeded: %s", r.get("platform", "?"))
             print(json.dumps(r))
         return
 
     if args.reseed:
         if not args.platform:
             parser.error("--reseed requires --platform")
+        log.info("Re-seeding platform '%s' from filesystem", args.platform)
         result = reseed(args.platform)
         print(json.dumps(result))
         return
@@ -491,6 +536,7 @@ def main():
     if not all([args.platform, args.node, args.skill, args.artifact]):
         parser.error("--platform, --node, --skill, and --artifact are required")
 
+    log.info("Recording save: %s/%s → %s", args.platform, args.node, args.artifact)
     result = record_save(
         platform=args.platform,
         node=args.node,

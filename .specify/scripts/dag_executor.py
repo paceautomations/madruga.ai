@@ -41,6 +41,37 @@ from config import REPO_ROOT  # noqa: E402
 
 log = logging.getLogger(__name__)
 
+
+# -- Structured logging (NDJSON) -- Duplicated by design — no shared util module in this scripts dir
+
+
+class _NDJSONFormatter(logging.Formatter):
+    """Emit one JSON object per line for CI consumption."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        import datetime
+
+        return json.dumps(
+            {
+                "timestamp": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
+                "level": record.levelname,
+                "message": record.getMessage(),
+                "logger": record.name,
+            }
+        )
+
+
+def _setup_logging(json_mode: bool, verbose: bool = False) -> None:
+    """Configure root logger for human or NDJSON output."""
+    handler = logging.StreamHandler()
+    if json_mode:
+        handler.setFormatter(_NDJSONFormatter())
+    else:
+        handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s"))
+    logging.root.addHandler(handler)
+    logging.root.setLevel(logging.DEBUG if verbose else logging.INFO)
+
+
 DEFAULT_TIMEOUT = int(os.environ.get("MADRUGA_EXECUTOR_TIMEOUT", "3000"))
 RETRY_BACKOFFS = [5, 10, 20]
 CB_MAX_FAILURES = 5
@@ -55,6 +86,95 @@ REPORT_CONTEXT: dict[str, list[str]] = {
     "qa": ["analyze-post-report.md", "judge-report.md"],
     "reconcile": ["judge-report.md", "qa-report.md"],
 }
+
+# ── Bare-mode dispatch configuration ──────────────────────────────
+# Maps node.skill → skill .md file path (relative to REPO_ROOT)
+SKILL_FILE_MAP: dict[str, str] = {
+    # L1 — platform foundation
+    "madruga:platform-new": ".claude/commands/madruga/platform-new.md",
+    "madruga:vision": ".claude/commands/madruga/vision.md",
+    "madruga:solution-overview": ".claude/commands/madruga/solution-overview.md",
+    "madruga:business-process": ".claude/commands/madruga/business-process.md",
+    "madruga:tech-research": ".claude/commands/madruga/tech-research.md",
+    "madruga:codebase-map": ".claude/commands/madruga/codebase-map.md",
+    "madruga:adr": ".claude/commands/madruga/adr.md",
+    "madruga:blueprint": ".claude/commands/madruga/blueprint.md",
+    "madruga:domain-model": ".claude/commands/madruga/domain-model.md",
+    "madruga:containers": ".claude/commands/madruga/containers.md",
+    "madruga:context-map": ".claude/commands/madruga/context-map.md",
+    "madruga:epic-breakdown": ".claude/commands/madruga/epic-breakdown.md",
+    "madruga:roadmap": ".claude/commands/madruga/roadmap.md",
+    # L2 — epic cycle
+    "madruga:epic-context": ".claude/commands/madruga/epic-context.md",
+    "speckit.specify": ".claude/commands/speckit.specify.md",
+    "speckit.clarify": ".claude/commands/speckit.clarify.md",
+    "speckit.plan": ".claude/commands/speckit.plan.md",
+    "speckit.tasks": ".claude/commands/speckit.tasks.md",
+    "speckit.analyze": ".claude/commands/speckit.analyze.md",
+    "speckit.implement": ".claude/commands/speckit.implement.md",
+    "madruga:judge": ".claude/commands/madruga/judge.md",
+    "madruga:qa": ".claude/commands/madruga/qa.md",
+    "madruga:reconcile": ".claude/commands/madruga/reconcile.md",
+}
+
+# Maps node.layer → layer-specific contract file (relative to REPO_ROOT)
+LAYER_CONTRACT_MAP: dict[str, str] = {
+    "engineering": ".claude/knowledge/pipeline-contract-engineering.md",
+    "planning": ".claude/knowledge/pipeline-contract-planning.md",
+    "business": ".claude/knowledge/pipeline-contract-business.md",
+}
+
+# Allowed tools per node ID. Nodes not in map use DEFAULT_TOOLS.
+NODE_TOOLS: dict[str, str] = {
+    # L1 — business layer (read + write artifacts)
+    "platform-new": "Bash,Read,Write,Glob,Grep",
+    "vision": "Bash,Read,Write,Glob,Grep",
+    "solution-overview": "Bash,Read,Write,Glob,Grep",
+    "business-process": "Bash,Read,Write,Glob,Grep",
+    # L1 — research layer
+    "tech-research": "Bash,Read,Write,Glob,Grep,WebFetch,WebSearch",
+    "codebase-map": "Bash,Read,Write,Glob,Grep",
+    # L1 — engineering layer
+    "adr": "Bash,Read,Write,Glob,Grep",
+    "blueprint": "Bash,Read,Write,Glob,Grep",
+    "domain-model": "Bash,Read,Write,Glob,Grep",
+    "containers": "Bash,Read,Write,Glob,Grep",
+    "context-map": "Bash,Read,Write,Glob,Grep",
+    # L1 — planning layer
+    "epic-breakdown": "Bash,Read,Write,Glob,Grep",
+    "roadmap": "Bash,Read,Write,Glob,Grep",
+    # L2 — epic cycle
+    "epic-context": "Bash,Read,Write,Glob,Grep",
+    "specify": "Bash,Read,Write,Glob,Grep",
+    "clarify": "Read,Write,Glob,Grep",
+    "plan": "Bash,Read,Write,Glob,Grep",
+    "tasks": "Read,Write,Glob,Grep",
+    "analyze": "Bash,Read,Glob,Grep",
+    "implement": "Bash,Read,Write,Edit,Glob,Grep",
+    "analyze-post": "Bash,Read,Glob,Grep",
+    "judge": "Bash,Read,Glob,Grep,Agent",
+    "qa": "Bash,Read,Write,Edit,Glob,Grep,Agent",
+    "reconcile": "Bash,Read,Write,Edit,Glob,Grep",
+}
+DEFAULT_TOOLS = "Bash,Read,Write,Edit,Glob,Grep"
+IMPLEMENT_TASK_TOOLS = "Bash,Read,Write,Edit,Glob,Grep"
+
+# Effort level per node ID. Nodes not in map use default (high).
+NODE_EFFORT: dict[str, str] = {
+    "analyze": "medium",
+    "analyze-post": "medium",
+    "reconcile": "medium",
+}
+
+# Minimal CLAUDE.md essentials for --bare mode system prompt
+_CONVENTIONS_HEADER = (
+    "# Conventions\n"
+    "Docs, comments and code in English.\n"
+    "Commits with prefixes: feat:, fix:, chore:, merge:.\n"
+    "Python: stdlib + pyyaml. SQLite WAL mode. Ruff for lint/format.\n"
+    "Platforms at platforms/<name>/. Skills at .claude/commands/.\n"
+    "Scripts at .specify/scripts/. Portal at portal/.\n"
+)
 
 
 # ── Claude Output Parsing (Observability) ──────────────────────────
@@ -388,6 +508,8 @@ async def run_implement_tasks(
             breaker,
             guardrail,
             resume_session_id=resume_id,
+            platform_name=platform_name,
+            abort_check=_make_abort_check(conn, epic_slug),
         )
 
         if success:
@@ -446,6 +568,33 @@ async def run_implement_tasks(
     all_done = len(failed) == 0
     log.info("Implement tasks done: %s", summary)
     return all_done, None if all_done else summary, summary
+
+
+def _auto_commit_epic(cwd: str | Path, platform_name: str, epic_slug: str) -> bool:
+    """Commit all working tree changes to the epic branch after implement."""
+    try:
+        status = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True, cwd=str(cwd))
+        if not status.stdout.strip():
+            log.info("No changes to commit for %s/%s", platform_name, epic_slug)
+            return True
+
+        subprocess.run(["git", "add", "-A"], cwd=str(cwd), check=True, capture_output=True)
+        subprocess.run(
+            [
+                "git",
+                "commit",
+                "-m",
+                f"feat: epic {epic_slug} — implement tasks\n\nAuto-committed by daemon after implement phase.",
+            ],
+            cwd=str(cwd),
+            check=True,
+            capture_output=True,
+        )
+        log.info("Auto-committed implement changes for %s/%s", platform_name, epic_slug)
+        return True
+    except subprocess.CalledProcessError as exc:
+        log.warning("Auto-commit failed for %s/%s: %s", platform_name, epic_slug, exc.stderr)
+        return False
 
 
 # ── Data Structures ─────────────────────────────────────────────────
@@ -678,6 +827,7 @@ def dispatch_node(
     prompt: str,
     timeout: int = DEFAULT_TIMEOUT,
     guardrail: str | None = None,
+    platform_name: str = "",
 ) -> tuple[bool, str | None, str | None]:
     """Dispatch a skill via claude -p subprocess.
 
@@ -686,17 +836,7 @@ def dispatch_node(
     if not shutil.which("claude"):
         return False, "claude CLI not found in PATH", None
 
-    cmd = [
-        "claude",
-        "-p",
-        prompt,
-        "--output-format",
-        "json",
-        "--disallowedTools",
-        DISALLOWED_TOOLS,
-    ]
-    if guardrail:
-        cmd.extend(["--append-system-prompt", guardrail])
+    cmd = build_dispatch_cmd(node, prompt, platform_name, guardrail)
     log.info("Dispatching node '%s' (skill: %s, timeout: %ds)", node.id, node.skill, timeout)
     log.debug("Command: %s", " ".join(cmd[:4]) + " ...")
 
@@ -734,6 +874,7 @@ def dispatch_with_retry(
     timeout: int,
     breaker: CircuitBreaker,
     guardrail: str | None = None,
+    platform_name: str = "",
 ) -> tuple[bool, str | None, str | None]:
     """Dispatch with retry (3x exponential backoff) and circuit breaker.
 
@@ -749,7 +890,7 @@ def dispatch_with_retry(
             log.info("Retry %d/%d for node '%s' after %ds", attempt - 1, len(RETRY_BACKOFFS), node.id, backoff)
             time.sleep(backoff)
 
-        success, error, stdout = dispatch_node(node, cwd, prompt, timeout, guardrail)
+        success, error, stdout = dispatch_node(node, cwd, prompt, timeout, guardrail, platform_name)
         if success:
             breaker.record_success()
             return True, None, stdout
@@ -770,6 +911,7 @@ async def dispatch_node_async(
     timeout: int = DEFAULT_TIMEOUT,
     guardrail: str | None = None,
     resume_session_id: str | None = None,
+    platform_name: str = "",
 ) -> tuple[bool, str | None, str | None]:
     """Async version of dispatch_node using asyncio.create_subprocess_exec.
 
@@ -779,19 +921,7 @@ async def dispatch_node_async(
     if not shutil.which("claude"):
         return False, "claude CLI not found in PATH", None
 
-    cmd = [
-        "claude",
-        "-p",
-        prompt,
-        "--output-format",
-        "json",
-        "--disallowedTools",
-        DISALLOWED_TOOLS,
-    ]
-    if resume_session_id:
-        cmd.extend(["--resume", resume_session_id])
-    if guardrail:
-        cmd.extend(["--append-system-prompt", guardrail])
+    cmd = build_dispatch_cmd(node, prompt, platform_name, guardrail, resume_session_id)
     log.info(
         "Dispatching node '%s' async (skill: %s, timeout: %ds%s)",
         node.id,
@@ -822,6 +952,21 @@ async def dispatch_node_async(
         return False, error, None
 
 
+def _make_abort_check(conn, epic_slug: str | None):
+    """Create a callable that returns True if the epic is no longer in_progress."""
+    if not conn or not epic_slug:
+        return None
+
+    def check() -> bool:
+        try:
+            row = conn.execute("SELECT status FROM epics WHERE epic_id=?", (epic_slug,)).fetchone()
+            return row is not None and row[0] != "in_progress"
+        except Exception:
+            return False
+
+    return check
+
+
 async def dispatch_with_retry_async(
     node: Node,
     cwd: str | Path,
@@ -830,6 +975,8 @@ async def dispatch_with_retry_async(
     breaker: CircuitBreaker,
     guardrail: str | None = None,
     resume_session_id: str | None = None,
+    platform_name: str = "",
+    abort_check: "object | None" = None,
 ) -> tuple[bool, str | None, str | None]:
     """Async version of dispatch_with_retry using asyncio.sleep.
 
@@ -842,6 +989,10 @@ async def dispatch_with_retry_async(
     last_stdout = None
     for attempt, backoff in enumerate([0] + RETRY_BACKOFFS, 1):
         if backoff > 0:
+            # F2: Check if epic was cancelled/blocked before retrying
+            if abort_check and abort_check():
+                log.info("Aborting retries for '%s' — epic status changed", node.id)
+                return False, "epic_status_changed", None
             jittered = backoff + random.uniform(0, backoff * 0.3)
             log.info("Retry %d/%d for node '%s' after %.1fs", attempt - 1, len(RETRY_BACKOFFS), node.id, jittered)
             await asyncio.sleep(jittered)
@@ -855,6 +1006,7 @@ async def dispatch_with_retry_async(
             timeout,
             guardrail,
             resume_session_id,
+            platform_name,
         )
         if success:
             breaker.record_success()
@@ -1057,17 +1209,36 @@ async def run_pipeline_async(
             upsert_epic_node(conn, platform_name, epic_slug, node.id, status="done")
             completed_nodes.add(node.id)
             log.info("Node '%s' completed successfully (task-by-task)", node.id)
+            # F9: Auto-commit implement changes to epic branch
+            _auto_commit_epic(cwd, platform_name, epic_slug)
             continue
 
         else:
             prompt, guardrail = compose_skill_prompt(platform_name, node, platform_dir, epic_slug)
+            abort_fn = _make_abort_check(conn, epic_slug)
             if semaphore:
                 async with semaphore:
                     success, error, stdout = await dispatch_with_retry_async(
-                        node, cwd, prompt, timeout, breaker, guardrail
+                        node,
+                        cwd,
+                        prompt,
+                        timeout,
+                        breaker,
+                        guardrail,
+                        platform_name=platform_name,
+                        abort_check=abort_fn,
                     )
             else:
-                success, error, stdout = await dispatch_with_retry_async(node, cwd, prompt, timeout, breaker, guardrail)
+                success, error, stdout = await dispatch_with_retry_async(
+                    node,
+                    cwd,
+                    prompt,
+                    timeout,
+                    breaker,
+                    guardrail,
+                    platform_name=platform_name,
+                    abort_check=abort_fn,
+                )
 
         if not success:
             run_id = insert_run(conn, platform_name, node.id, epic_id=epic_slug, error=error, trace_id=trace_id)
@@ -1243,13 +1414,11 @@ def compose_skill_prompt(
 
     # L2 speckit.* or madruga:* epic skills — instruction + epic context + guardrail
     if epic_slug:
-        skill_name = skill.split(".", 1)[1] if skill.startswith("speckit.") else skill
-        skill_cmd = f"/speckit.{skill_name}" if skill.startswith("speckit.") else f"/{skill}"
         epic_dir = platform_dir / "epics" / epic_slug
         output_dir = f"platforms/{platform_name}/epics/{epic_slug}"
 
         parts = [
-            f"Execute {skill_cmd} for platform '{platform_name}', epic '{epic_slug}'.",
+            f"Follow the skill instructions in the system prompt for platform '{platform_name}', epic '{epic_slug}'.",
             "",
             "CRITICAL CONSTRAINTS:",
             f"- export SPECIFY_BASE_DIR={output_dir}/",
@@ -1288,7 +1457,7 @@ def compose_skill_prompt(
         return "\n".join(parts), guardrail
 
     # L1 madruga:* — instruction + dependency outputs as context
-    parts = [f"Execute /{skill} {platform_name}"]
+    parts = [f"Follow the skill instructions in the system prompt for platform '{platform_name}'."]
 
     # Read dependency outputs as context
     for dep_id in node.depends:
@@ -1304,6 +1473,109 @@ def compose_skill_prompt(
                 break
 
     return "\n\n---\n\n".join(parts), None
+
+
+# ── Bare-mode System Prompt & Command Builder ─────────────────────
+
+
+def build_system_prompt(node: Node, platform_name: str) -> str:
+    """Build a focused system prompt for --bare dispatch.
+
+    Assembles:
+    1. Trimmed CLAUDE.md essentials (conventions, not discovery)
+    2. pipeline-contract-base.md (full)
+    3. Layer-specific contract (engineering/planning/business)
+    4. Python rules (only for implement nodes)
+    5. Full skill .md body
+
+    Returns the concatenated system prompt string.
+    """
+    parts: list[str] = [_CONVENTIONS_HEADER]
+
+    # Base contract (always)
+    base_contract = REPO_ROOT / ".claude" / "knowledge" / "pipeline-contract-base.md"
+    if base_contract.exists():
+        parts.append(base_contract.read_text(encoding="utf-8"))
+
+    # Layer contract
+    layer_file = LAYER_CONTRACT_MAP.get(node.layer)
+    if layer_file:
+        layer_path = REPO_ROOT / layer_file
+        if layer_path.exists():
+            parts.append(layer_path.read_text(encoding="utf-8"))
+
+    # Python rules (implement nodes only — they write code)
+    if node.id == "implement" or node.id.startswith("implement:"):
+        python_rules = REPO_ROOT / ".claude" / "rules" / "python.md"
+        if python_rules.exists():
+            parts.append(python_rules.read_text(encoding="utf-8"))
+
+    # Skill body
+    skill_file = SKILL_FILE_MAP.get(node.skill)
+    if not skill_file:
+        # Derive from convention
+        if node.skill.startswith("speckit."):
+            skill_file = f".claude/commands/{node.skill}.md"
+        elif ":" in node.skill:
+            name = node.skill.split(":", 1)[1]
+            skill_file = f".claude/commands/madruga/{name}.md"
+    if skill_file:
+        skill_path = REPO_ROOT / skill_file
+        if skill_path.exists():
+            parts.append(f"# Skill Instructions\n\n{skill_path.read_text(encoding='utf-8')}")
+        else:
+            log.warning("Skill file not found: %s", skill_path)
+
+    return "\n\n---\n\n".join(parts)
+
+
+def build_dispatch_cmd(
+    node: Node,
+    prompt: str,
+    platform_name: str,
+    guardrail: str | None = None,
+    resume_session_id: str | None = None,
+) -> list[str]:
+    """Build the claude -p command array with --bare, --system-prompt, --allowedTools, --effort.
+
+    Centralizes command construction for both dispatch_node() and dispatch_node_async().
+    """
+    system_prompt = build_system_prompt(node, platform_name)
+
+    cmd = [
+        "claude",
+        "-p",
+        prompt,
+        "--bare",
+        "--output-format",
+        "json",
+        "--system-prompt",
+        system_prompt,
+    ]
+
+    # Tool restriction
+    tools = NODE_TOOLS.get(node.id, DEFAULT_TOOLS)
+    if node.id.startswith("implement:"):
+        tools = IMPLEMENT_TASK_TOOLS
+    cmd.extend(["--allowedTools", tools])
+
+    # Effort tuning
+    effort = NODE_EFFORT.get(node.id)
+    if effort:
+        cmd.extend(["--effort", effort])
+
+    # Resume session
+    if resume_session_id:
+        cmd.extend(["--resume", resume_session_id])
+
+    # Guardrail (append-system-prompt for hard constraints)
+    if guardrail:
+        cmd.extend(["--append-system-prompt", guardrail])
+
+    # Defense-in-depth: block dangerous git operations
+    cmd.extend(["--disallowedTools", DISALLOWED_TOOLS])
+
+    return cmd
 
 
 # ── Pipeline Orchestrator ────────────────────────────────────────────
@@ -1390,8 +1662,8 @@ def run_pipeline(
             pending = [g for g in pending if g.get("epic_id") == epic_slug]
         for gate in pending:
             if gate["node_id"] not in completed_nodes:
-                print(f"Gate pendente para '{gate['node_id']}'. Execute:")
-                print(f"  python3 .specify/scripts/platform_cli.py gate approve {gate['run_id']}")
+                log.info("Gate pendente para '%s'. Execute:", gate["node_id"])
+                log.info("  python3 .specify/scripts/platform_cli.py gate approve %s", gate["run_id"])
                 conn.close()
                 return 0
         log.info("Resume: %d nodes already completed", len(completed_nodes))
@@ -1447,9 +1719,9 @@ def run_pipeline(
                     (run_id,),
                 )
                 conn.commit()
-                print(f"\nAguardando aprovacao para '{node.id}' (gate: {node.gate}).")
-                print(f"Execute: python3 .specify/scripts/platform_cli.py gate approve {run_id}")
-                print("Apos aprovar, re-execute com --resume.\n")
+                log.info("Aguardando aprovacao para '%s' (gate: %s)", node.id, node.gate)
+                log.info("Execute: python3 .specify/scripts/platform_cli.py gate approve %s", run_id)
+                log.info("Apos aprovar, re-execute com --resume.")
                 conn.close()
                 return 0
 
@@ -1463,7 +1735,9 @@ def run_pipeline(
         prompt, guardrail = compose_skill_prompt(platform_name, node, platform_dir, epic_slug)
 
         # Dispatch with retry + circuit breaker
-        success, error, stdout = dispatch_with_retry(node, cwd, prompt, timeout, breaker, guardrail)
+        success, error, stdout = dispatch_with_retry(
+            node, cwd, prompt, timeout, breaker, guardrail, platform_name=platform_name
+        )
 
         if not success:
             run_id = insert_run(conn, platform_name, node.id, epic_id=epic_slug, error=error, trace_id=trace_id)
@@ -1614,10 +1888,10 @@ def main() -> None:
         help="Gate mode: manual (default, pause at gates), interactive (y/n prompt), auto (no pauses)",
     )
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose logging")
+    parser.add_argument("--json", action="store_true", dest="json_mode", help="Emit structured NDJSON log output")
     args = parser.parse_args()
 
-    level = logging.DEBUG if args.verbose else logging.INFO
-    logging.basicConfig(level=level, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+    _setup_logging(args.json_mode, verbose=args.verbose)
 
     # Use async path (supports task-by-task implement); sync only for dry-run
     if args.dry_run:

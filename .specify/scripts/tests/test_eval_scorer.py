@@ -497,3 +497,99 @@ def test_no_output_path_all_dimensions_score_low(tmp_db):
     # cost_efficiency is independent of output content
     ce = _find(scores, "cost_efficiency")
     assert ce["score"] == 5.0  # neutral (no cost data)
+
+
+# ── implement task scoring ───────────────────────────────────────────────
+
+
+def test_implement_task_no_output_path_uses_heuristic(tmp_db):
+    """implement:T001 with no output path scores via heuristic, not empty penalty."""
+    _seed_platform(tmp_db)
+    scores = score_node(tmp_db, "test-plat", "implement:T001", "r1", None, metrics={"tokens_out": 1000})
+
+    q = _find(scores, "quality")
+    meta = json.loads(q["metadata"])
+    assert meta["method"] == "implement_heuristic"
+    assert meta["reason"] == "substantial_output_tokens"
+    assert q["score"] == 8.0
+
+
+def test_implement_task_no_tokens_baseline(tmp_db):
+    """implement:T002 with no token data gets baseline score 6.0."""
+    _seed_platform(tmp_db)
+    scores = score_node(tmp_db, "test-plat", "implement:T002", "r1", None, metrics={})
+
+    q = _find(scores, "quality")
+    meta = json.loads(q["metadata"])
+    assert meta["method"] == "implement_heuristic"
+    assert meta["reason"] == "completed_no_token_data"
+    assert q["score"] == 6.0
+
+
+def test_implement_task_small_tokens(tmp_db):
+    """implement:T003 with small tokens_out (1-500) scores 7.0."""
+    _seed_platform(tmp_db)
+    scores = score_node(tmp_db, "test-plat", "implement:T003", "r1", None, metrics={"tokens_out": 100})
+
+    q = _find(scores, "quality")
+    assert q["score"] == 7.0
+
+
+def test_implement_task_completeness_is_10(tmp_db):
+    """implement:T* with no output file gets completeness 10.0 (task completed)."""
+    _seed_platform(tmp_db)
+    scores = score_node(tmp_db, "test-plat", "implement:T001", "r1", None, metrics={})
+
+    c = _find(scores, "completeness")
+    meta = json.loads(c["metadata"])
+    assert c["score"] == 10.0
+    assert meta["method"] == "implement_completion"
+
+
+def test_implement_task_adherence_neutral_positive(tmp_db):
+    """implement:T* with no output file gets adherence 7.0 (no artifact expectations)."""
+    _seed_platform(tmp_db)
+    scores = score_node(tmp_db, "test-plat", "implement:T001", "r1", None, metrics={})
+
+    a = _find(scores, "adherence_to_spec")
+    meta = json.loads(a["metadata"])
+    assert a["score"] == 7.0
+    assert meta["method"] == "implement_completed"
+
+
+def test_implement_task_judge_score_overrides_heuristic(tmp_db):
+    """If judge_score is provided, it overrides the implement heuristic."""
+    _seed_platform(tmp_db)
+    scores = score_node(tmp_db, "test-plat", "implement:T001", "r1", None, metrics={"judge_score": 90})
+
+    q = _find(scores, "quality")
+    meta = json.loads(q["metadata"])
+    assert meta["method"] == "judge"
+    assert q["score"] == 9.0
+
+
+def test_failed_not_matched_in_prose(tmp_db, tmp_path):
+    """'FAILED' in prose (not at line start) should NOT trigger error marker."""
+    _seed_platform(tmp_db)
+    content = "# Output\nThis approach FAILED to account for edge cases.\nBut we fixed it.\n"
+    path = _write_artifact(tmp_path, content)
+    scores = score_node(tmp_db, "test-plat", "vision", "r1", path)
+
+    q = _find(scores, "quality")
+    # Should not penalize — FAILED is not at line start
+    assert q["score"] == 7.0
+    meta = json.loads(q["metadata"])
+    assert "error_markers_found" not in meta
+
+
+def test_failed_at_line_start_triggers_marker(tmp_db, tmp_path):
+    """'FAILED' at line start triggers error marker penalty."""
+    _seed_platform(tmp_db)
+    content = "# Output\nFAILED: something went wrong\nMore text\n"
+    path = _write_artifact(tmp_path, content)
+    scores = score_node(tmp_db, "test-plat", "vision", "r1", path)
+
+    q = _find(scores, "quality")
+    assert q["score"] < 7.0
+    meta = json.loads(q["metadata"])
+    assert meta["error_markers_found"] >= 1
