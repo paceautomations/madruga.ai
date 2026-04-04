@@ -386,18 +386,45 @@ def detect_from_path(file_path: str) -> dict | None:
         epic = parts[2]
 
     # Try L2 epic cycle nodes first (if epic is set)
+    # When multiple nodes declare the same output file (e.g. tasks.md used by
+    # both 'tasks' and 'implement'), pick the first NOT-YET-DONE node in
+    # topological order to avoid marking downstream nodes as done prematurely.
     if epic:
+        matches = []
         for node_cfg in pipeline.get("epic_cycle", {}).get("nodes", []):
             for output_pattern in node_cfg.get("outputs", []):
                 expected = output_pattern.replace("{epic}", f"epics/{epic}")
                 if artifact == expected:
-                    return {
-                        "platform": platform,
-                        "epic": epic,
-                        "node": node_cfg["id"],
-                        "skill": node_cfg["skill"],
-                        "artifact": artifact,
+                    matches.append(node_cfg)
+
+        if matches:
+            if len(matches) > 1:
+                # Disambiguate: pick first unfinished node in DAG order
+                try:
+                    conn = get_conn()
+                    done_nodes = {
+                        n["node_id"] for n in get_epic_nodes(conn, platform, epic) if n["status"] in ("done", "skipped")
                     }
+                    conn.close()
+                    for m in matches:
+                        if m["id"] not in done_nodes:
+                            matches = [m]
+                            break
+                    else:
+                        # All matching nodes already done — use last (most downstream)
+                        matches = [matches[-1]]
+                except Exception:
+                    # DB unavailable — fall back to first match
+                    matches = [matches[0]]
+
+            node_cfg = matches[0]
+            return {
+                "platform": platform,
+                "epic": epic,
+                "node": node_cfg["id"],
+                "skill": node_cfg["skill"],
+                "artifact": artifact,
+            }
 
     # Try L1 pipeline nodes
     for node_cfg in pipeline.get("nodes", []):

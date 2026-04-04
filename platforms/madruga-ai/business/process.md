@@ -1,6 +1,6 @@
 ---
 title: "Business Process"
-updated: 2026-03-30
+updated: 2026-04-02
 ---
 # Madruga AI — Business Flows
 
@@ -36,8 +36,8 @@ flowchart TB
         F3A["Portal: Diagramas + Dashboard + Roadmap\n(sem skill — consumo passivo)"]
     end
 
-    subgraph F4["Flow 4: Daemon (futuro)"]
-        F4A["Execucao Autonoma do Epic Cycle\n(mesmas skills do Flow 2)"]
+    subgraph F4["Flow 4: Daemon (operacional)"]
+        F4A["Execucao Autonoma do Epic Cycle\n(mesmas skills do Flow 2, via MADRUGA_MODE)"]
     end
 
     F1I -->|"Para cada epic"| F2A
@@ -61,7 +61,7 @@ flowchart TB
 | 1 | **Documentar Nova Plataforma** | PM-Arquiteto | 1x por plataforma | Fundacao — sem isso nenhum epic pode comecar |
 | 2 | **Especificar e Entregar Epic** | PM-Arquiteto, Revisor | N vezes por plataforma | Core loop — onde valor e entregue |
 | 3 | **Consultar Arquitetura** | Consumidor do Portal, Revisor | Continua | Alinhamento — time consulta decisions e estado |
-| 4 | **Revisao e Aprovacao de Entrega** | Revisor, PM-Arquiteto | 1x por epic | Qualidade — gate antes de merge `[FUTURO]` |
+| 4 | **Execucao Autonoma via Daemon** | Daemon, PM-Arquiteto | Continua | Autonomia — daemon executa epic cycle, humano aprova gates criticos |
 
 ### Skill Map — Flow 1: Documentar Nova Plataforma (L1)
 
@@ -92,7 +92,7 @@ flowchart TB
 | 6 | Verificacao consistencia | Madruga AI | `/speckit.analyze` | relatorio | auto |
 | 7 | Implementar | Madruga AI | `/speckit.implement` | codigo | auto |
 | 8 | Verificacao pos | Madruga AI | `/speckit.analyze` | relatorio | auto |
-| 9 | Verificar aderencia | Madruga AI | `/verify` | relatorio | auto-escalate |
+| 9 | Review multi-perspectiva | Madruga AI | `/judge` | relatorio | auto-escalate |
 | 10 | QA | PM-Arquiteto | `/qa` | relatorio | human |
 | 11 | Reconciliar | PM-Arquiteto | `/reconcile` | docs atualizados | human |
 | 12 | PR + Merge | PM-Arquiteto | manual (git/gh) | PR | human |
@@ -101,9 +101,9 @@ flowchart TB
 
 > Sem skills de pipeline — consumo passivo via portal.
 
-### Skill Map — Flow 4: Daemon (futuro)
+### Skill Map — Flow 4: Daemon (operacional)
 
-> Mesmas skills do Flow 2, executadas autonomamente pelo agente. Ver tabela do Flow 2.
+> Mesmas skills do Flow 2, executadas autonomamente pelo daemon via DAG executor + MADRUGA_MODE. Ver tabela do Flow 2.
 
 ---
 
@@ -263,9 +263,9 @@ sequenceDiagram
     Plataforma->>Plataforma: Executar todas as tarefas (codigo)
     Plataforma->>Plataforma: Verificacao pos-implementacao (consistencia)
 
-    Plataforma->>Plataforma: Verificar aderencia (spec vs codigo)
-    alt Aderencia OK
-        Plataforma->>PM: Relatorio de verificacao limpo
+    Plataforma->>Plataforma: Review multi-perspectiva (judge — 4 personas + 1 juiz)
+    alt Review limpo
+        Plataforma->>PM: Relatorio de review limpo
     else Bloqueios encontrados
         Plataforma->>PM: Bloqueios que requerem decisao
         PM->>Plataforma: Decisao
@@ -401,11 +401,11 @@ sequenceDiagram
 
 ---
 
-## Deep Dive — Flow 4: Revisao e Aprovacao de Entrega (Visao Futura com Daemon)
+## Deep Dive — Flow 4: Execucao Autonoma via Daemon
 
-> Hoje o PM-Arquiteto executa todo o ciclo interativamente. Na visao futura, um agente autonomo (Daemon) executa o ciclo de epics, e o Revisor valida entregas em pontos criticos. Este fluxo mostra **como sera** quando o daemon estiver operacional.
+> O daemon (FastAPI + asyncio) executa o ciclo de epics autonomamente via DAG executor. O PM-Arquiteto aprova human gates via Telegram ou CLI. Tres modos de operacao (MADRUGA_MODE): manual (pausa em gates), interactive (prompt y/n), auto (execucao end-to-end).
 
-### Happy Path (Visao Futura)
+### Happy Path
 
 ```mermaid
 sequenceDiagram
@@ -447,7 +447,7 @@ sequenceDiagram
     end
 ```
 
-### Excecoes (Visao Futura)
+### Excecoes
 
 ```mermaid
 sequenceDiagram
@@ -472,9 +472,9 @@ sequenceDiagram
 
 **Premissas para este fluxo:**
 - Daemon usa as **mesmas skills** que o PM-Arquiteto usa interativamente — zero duplicacao
-- Decisoes 1-way door **sempre** escalam para humano, mesmo em modo autonomo
+- Decisoes 1-way door **sempre** escalam para humano, mesmo em modo autonomo (MADRUGA_MODE=auto nao bypassa 1-way-door)
 - Waves com subagents frescos mitigam context rot em execucoes longas
-- O daemon nao esta implementado hoje — este fluxo e a visao de produto `[FUTURO]`
+- Daemon implementado e operacional (epic 016). Modos configurados via MADRUGA_MODE env var
 
 ---
 
@@ -486,7 +486,7 @@ sequenceDiagram
 | 2 | Todo artefato salvo registra estado automaticamente no banco de estado | Confirmado |
 | 3 | Decisoes irreversiveis sempre requerem aprovacao explicita por item | Confirmado |
 | 4 | O reconcile fecha o loop — implementacao retroalimenta Business e Engineering | Confirmado |
-| 5 | Daemon operara com as mesmas skills do modo interativo | `[FUTURO]` |
+| 5 | Daemon opera com as mesmas skills do modo interativo | Confirmado |
 | 6 | Portal reflete estado atual — le diretamente dos artefatos versionados | Confirmado |
 | 7 | O epic cycle (Flow 2) e o fluxo mais executado — roda N vezes por plataforma | Confirmado |
 
@@ -499,7 +499,7 @@ sequenceDiagram
 | **PM-Arquiteto** | Engenheiro que documenta arquitetura, especifica features e opera o pipeline. Hoje: Gabriel Hamu. | 1, 2, 4 |
 | **Revisor** | Engenheiro senior que revisa PRs e aprova decisoes irreversiveis. | 2, 4 |
 | **Consumidor do Portal** | Qualquer membro do time que consulta documentacao e estado. | 3 |
-| **Daemon** | Agente autonomo que executa o epic cycle sem intervencao humana. | 4 `[FUTURO]` |
+| **Daemon** | Processo persistente (FastAPI + asyncio) que executa o epic cycle autonomamente. Modos: manual, interactive, auto (MADRUGA_MODE). | 4 |
 | **Madruga AI** | A plataforma como um todo — interface CLI + skills + banco de estado. | 1, 2 |
 | **Portal** | Interface visual que renderiza documentacao e dashboards. | 3 |
 | **Documentacao** | Artefatos versionados de Business e Engineering, atualizados pelo reconcile. | 2, 4 |

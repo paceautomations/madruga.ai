@@ -1,6 +1,6 @@
 ---
 title: "Blueprint"
-updated: 2026-03-30
+updated: 2026-04-02
 ---
 # Blueprint de Engenharia
 
@@ -23,7 +23,7 @@ Referencia tecnica consolidada da plataforma **Madruga AI — Architecture Docum
 | Modelos de arquitetura | LikeC4 (.likec4 files) | ADR-001 |
 | Template system | Copier (scaffolding de plataformas) | ADR-002 |
 | Decision gates | 1-way/2-way door classification | ADR-013 |
-| Debate engine | Subagent Paralelo + Judge Pattern (3 personas + 1 juiz) | ADR-019 |
+| Debate engine | Subagent Paralelo + Judge Pattern (4 personas + 1 juiz) | ADR-019 |
 | Circuit breaker | Suspende claude -p apos 5 falhas, recovery em 5min | ADR-011 |
 
 ---
@@ -73,8 +73,8 @@ N/A — sistema local, single-operator. Autenticacao delegada ao Claude Code (su
 | Tipo | Mecanismo | Exemplo |
 |------|-----------|---------|
 | Platform manifest | `platform.yaml` (YAML, versionado) | Nome, lifecycle, views, pipeline nodes, repo binding |
-| App config | `config.yaml` (YAML, versionado) | Repos, throttle, daemon slots, implement timeouts |
 | Env vars | `.env` (pydantic-settings, prefix MADRUGA_) | Paths, ports, log level, Telegram bot token, chat ID |
+| Gate mode | `MADRUGA_MODE` env var (manual\|interactive\|auto) | Modo de operacao dos gates: manual (pausa), interactive (y/n), auto (end-to-end) |
 | Pipeline DAG | `platform.yaml > pipeline.nodes` (YAML, versionado) | Node IDs, depends, gates, skills, outputs |
 
 ---
@@ -103,9 +103,9 @@ N/A — sistema local, single-operator. Autenticacao delegada ao Claude Code (su
 graph LR
     subgraph local["WSL2 Local"]
         portal["Portal\nAstro :4321"]
-        cli["Platform CLI\nPython"]
+        cli["Platform CLI\nplatform_cli.py"]
         daemon["Daemon\nFastAPI :8040"]
-        dag["DAG Executor\nPython"]
+        dag["DAG Executor\ndag_executor.py"]
         telegram_bot["Telegram Bot\naiogram"]
         sqlite["SQLite\nmadruga.db"]
         fs["Filesystem\n.md .likec4 .yaml"]
@@ -157,7 +157,7 @@ graph LR
 | Etapa | Ferramenta | Gate |
 |-------|------------|------|
 | Lint Python | ruff | Zero warnings |
-| Testes | pytest (135 testes) | 100% pass |
+| Testes | pytest (71 testes) | 100% pass |
 | Portal build | `npm run build` | Build sem erros |
 | Template tests | pytest (.specify/templates/) | 100% pass |
 | Platform lint | `platform_cli.py lint --all` | Estrutura valida |

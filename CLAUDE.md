@@ -1,18 +1,18 @@
 # CLAUDE.md — madruga.ai
 
-Docs and comments in Brazilian Portuguese. Code in English.
-Commits in PT-BR with prefixes: feat:, fix:, chore:, merge:.
+Docs, comments and code in English.
+Commits with prefixes: feat:, fix:, chore:, merge:.
 Number structured questions (1, 2, 3…) for reply by number.
 
 ## What it is
 
 Architectural documentation system for N digital platforms.
-Shared Copier template. First platform: Fulano (WhatsApp agent, Brazilian SMBs).
+Shared Copier template.
 24-skill pipeline (L1 platform + L2 per epic): @.claude/knowledge/pipeline-dag-knowledge.md
 
 ## Where to find things
 
-- Skills: `.claude/commands/madruga/` | Knowledge: `.claude/knowledge/`
+- Skills: `.claude/commands/` | Knowledge: `.claude/knowledge/`
 - Platforms: `platforms/<name>/` (business/, engineering/, decisions/, epics/, model/)
 - Scripts: `.specify/scripts/` | Portal: `portal/`
 
@@ -84,3 +84,10 @@ Subagent prompt: @.claude/rules/plan-review-prompt.md
 Edits to `.claude/commands/` and `.claude/knowledge/` MUST go through `/madruga:skills-mgmt`.
 Never edit these files directly — always use `/madruga:skills-mgmt edit <name>` (or create/lint/audit).
 Direct edits bypass validation (frontmatter, handoff chains, archetype compliance, dedup).
+
+## Active Technologies
+- Python 3.11+ (backend), TypeScript/React (portal) + sqlite3 (stdlib), structlog, FastAPI (daemon), React + @xyflow/react (portal existente), Astro Starlight (epic/madruga-ai/017-observability-tracing-evals)
+- SQLite WAL mode (`.pipeline/madruga.db`) — novas tabelas `traces` e `eval_scores`, coluna `trace_id` em `pipeline_runs` (epic/madruga-ai/017-observability-tracing-evals)
+
+## Recent Changes
+- epic/madruga-ai/017-observability-tracing-evals: Added Python 3.11+ (backend), TypeScript/React (portal) + sqlite3 (stdlib), structlog, FastAPI (daemon), React + @xyflow/react (portal existente), Astro Starlight

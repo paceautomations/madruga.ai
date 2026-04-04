@@ -13,11 +13,7 @@ graph LR
     subgraph madruga["Madruga AI"]
         daemon["Daemon"]
         dag["DAG Executor"]
-        orchestrator["Orchestrator"]
-        pipeline["Pipeline Phases"]
-        debate["Debate Engine"]
-        decisions["Decision System"]
-        bridge["SpeckitBridge"]
+        judge["Subagent Judge"]
         vision["Vision Build"]
         portal["Portal"]
         pcli["Platform CLI"]
@@ -48,18 +44,15 @@ graph LR
         git["Git"]
     end
 
-    pipeline --> claude_acl
-    debate --> claude_acl
-    bridge --> claude_acl
     dag --> claude_acl
+    judge --> claude_acl
     claude_acl --> claude
 
-    orchestrator --> github_acl
-    pipeline --> github_acl
+    dag --> github_acl
     github_acl --> github
 
     dag --> telegram_acl
-    decisions --> telegram_acl
+    daemon --> telegram_acl
     telegram_acl --> telegram
 
     vision --> likec4_acl
@@ -72,17 +65,14 @@ graph LR
     daemon --> sentry_acl
     sentry_acl --> sentry
 
-    orchestrator --> sqlite
-    pipeline --> sqlite
     dashboard --> sqlite
-    debate --> sqlite
     dag --> sqlite
+    daemon --> sqlite
 
     portal --> fs
     vision --> fs
     pcli --> fs
-    bridge --> fs
-    pipeline --> git
+    dag --> fs
 
     style acl fill:#FFF3E0
     style external fill:#FFEBEE
@@ -101,6 +91,7 @@ graph LR
 | 7 | **SQLite** | sqlite3 (Python stdlib) | Orchestrator/Pipeline/Dashboard/DAG Executor -> madruga.db | per-operation | Pipeline state, epics, decisions, memory, metrics | WAL mode para leituras concorrentes; write lock serializado |
 | 8 | **Filesystem** | OS read/write | Portal/Vision Build/Platform CLI/Bridge | per-operation | .likec4 files, markdown docs, YAML configs, JSON exports | Operacoes atomicas via write-to-temp + rename |
 | 9 | **Git** | Subprocess (`git`) | Pipeline -> repositorio | per-phase-completion | Commits de artefatos gerados, branch management | Se commit falha, artefatos ficam unstaged para retry manual |
+| 10 | **Daemon REST API (Observability)** | HTTP (FastAPI, localhost:8040) | Portal -> Daemon | polling 10s | Traces, spans, eval scores, stats, CSV export | Portal mostra "daemon offline"; dados cached no ultimo poll |
 <!-- /AUTO:integrations -->
 
 ## Detalhes de Implementacao

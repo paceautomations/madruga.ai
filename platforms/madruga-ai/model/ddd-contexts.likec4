@@ -56,22 +56,14 @@ model {
 
   execution = boundedContext 'Execution' {
     #supporting
-    description 'Dominio supporting: daemon asyncio, DAG executor, orchestrator slot-based, pipeline runner. Executa specs autonomamente.'
+    description 'Dominio supporting: daemon asyncio (FastAPI), DAG executor com 3 modos de operacao (MADRUGA_MODE). Executa specs autonomamente.'
 
     daemonProcess = module 'Daemon Process' {
-      description 'Processo asyncio 24/7 que gerencia lifecycle do sistema: startup, shutdown graceful, health checks, serve dashboard'
+      description 'Processo asyncio 24/7 (FastAPI + uvicorn): DAG scheduler, Telegram polling, health checks com degradation state machine, gate poller. Endpoints /health + /status'
     }
 
     dagExecutor = module 'DAG Executor' {
-      description 'Le pipeline DAG de platform.yaml, resolve dependencias via topological sort, despacha nodes via claude -p, gerencia human gates (pause/resume via SQLite + Telegram notify)'
-    }
-
-    orchestratorSlots = module 'Orchestrator Slots' {
-      description 'Scheduler slot-based que controla paralelismo (max N pipelines simultaneos) e gerencia filas de prioridade'
-    }
-
-    pipelineRunner = module 'Pipeline Runner' {
-      description 'Executa fases do pipeline em sequencia (specify -> clarify -> plan -> tasks -> implement -> reconcile)'
+      description 'Le pipeline DAG de platform.yaml, resolve dependencias via topological sort, despacha nodes via claude -p, gerencia human gates com 3 modos (MADRUGA_MODE: manual/interactive/auto), retry com circuit breaker'
     }
   }
 
@@ -80,7 +72,7 @@ model {
     description 'Dominio supporting: Subagent Judge (ADR-019), decision classifier (1-way/2-way door), stress test. Garante qualidade de specs via review automatizado.'
 
     subagentJudgeModule = module 'Subagent Judge' {
-      description 'Subagent Paralelo + Judge Pattern: 3 personas paralelas + 1 juiz que filtra noise por Accuracy/Actionability/Severity (ADR-019)'
+      description 'Subagent Paralelo + Judge Pattern: 4 personas paralelas (Architecture Reviewer, Bug Hunter, Simplifier, Stress Tester) + 1 juiz que filtra noise por Accuracy/Actionability/Severity (ADR-019)'
     }
 
     decisionModule = module 'Decision Module' {

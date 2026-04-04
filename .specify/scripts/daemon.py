@@ -11,6 +11,11 @@ FastAPI app with lifespan context manager composing:
 Endpoints:
   GET /health — liveness (always 200)
   GET /status — full daemon state JSON
+  GET /api/traces — list traces with pagination
+  GET /api/traces/{trace_id} — trace detail with spans and evals
+  GET /api/evals — eval scores with filters
+  GET /api/stats — aggregated stats by day
+  GET /api/export/csv — export traces/spans/evals as CSV
 
 Usage:
     python3 .specify/scripts/daemon.py
@@ -29,7 +34,9 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 
 import structlog
-from fastapi import FastAPI
+from fastapi import FastAPI, Query, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, Response
 
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -218,6 +225,19 @@ async def gate_reminder(conn, adapter, chat_id, shutdown_event, interval=3600):
             logger.exception("gate_reminder_error")
 
 
+async def retention_cleanup(conn, shutdown_event, interval=86400):
+    """Remove observability data older than 90 days. Runs once daily."""
+    from db import cleanup_old_data
+
+    while not shutdown_event.is_set():
+        await asyncio.sleep(interval)
+        try:
+            result = await asyncio.to_thread(cleanup_old_data, conn, days=90)
+            logger.info("retention_cleanup", **result)
+        except Exception:
+            logger.exception("retention_cleanup_error")
+
+
 # --- Lifespan ---
 
 
@@ -274,6 +294,7 @@ async def lifespan(app: FastAPI):
 
     conn = get_conn()
     migrate(conn)
+    app.state.db_conn = conn
 
     semaphore = asyncio.Semaphore(int(os.environ.get("MADRUGA_MAX_CONCURRENT", "3")))
 
@@ -300,6 +321,9 @@ async def lifespan(app: FastAPI):
                     chat_id=int(chat_id_str) if chat_id_str else None,
                 )
             )
+
+            # Retention cleanup (daily)
+            tg.create_task(retention_cleanup(conn, _shutdown_event))
 
             # Telegram tasks (if configured)
             if bot and dp and adapter:
@@ -344,6 +368,12 @@ async def lifespan(app: FastAPI):
 # --- FastAPI App ---
 
 app = FastAPI(lifespan=lifespan, title="Madruga AI Daemon", docs_url=None, redoc_url=None)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:4321", "http://localhost:3000"],
+    allow_methods=["GET"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/health")
@@ -360,6 +390,101 @@ async def status():
         "uptime_seconds": int(time.time() - _daemon_state.start_time),
         "pid": os.getpid(),
     }
+
+
+# --- Observability Endpoints ---
+
+
+@app.get("/api/traces")
+async def list_traces(
+    request: Request,
+    platform_id: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    status: str | None = Query(default=None),
+):
+    if not platform_id:
+        return JSONResponse(status_code=400, content={"error": "platform_id is required"})
+
+    from db import get_traces
+
+    traces, total = get_traces(request.app.state.db_conn, platform_id, limit, offset, status)
+    return {"traces": traces, "total": total, "limit": limit, "offset": offset}
+
+
+@app.get("/api/traces/{trace_id}")
+async def trace_detail(request: Request, trace_id: str):
+    from db import get_trace_detail
+
+    result = get_trace_detail(request.app.state.db_conn, trace_id)
+    if result is None:
+        return JSONResponse(status_code=404, content={"error": "trace not found"})
+    return result
+
+
+@app.get("/api/evals")
+async def list_evals(
+    request: Request,
+    platform_id: str | None = Query(default=None),
+    node_id: str | None = Query(default=None),
+    dimension: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
+):
+    if not platform_id:
+        return JSONResponse(status_code=400, content={"error": "platform_id is required"})
+
+    from db import get_eval_scores
+
+    scores, total = get_eval_scores(request.app.state.db_conn, platform_id, node_id, dimension, limit)
+    return {"scores": scores, "total": total}
+
+
+@app.get("/api/stats")
+async def stats(
+    request: Request,
+    platform_id: str | None = Query(default=None),
+    days: int = Query(default=30, ge=1, le=90),
+):
+    if not platform_id:
+        return JSONResponse(status_code=400, content={"error": "platform_id is required"})
+
+    from db import get_stats
+
+    result = get_stats(request.app.state.db_conn, platform_id, days)
+    return {
+        "stats": result["stats"],
+        "period_days": days,
+        "summary": result["summary"],
+        "top_nodes": result["top_nodes"],
+    }
+
+
+@app.get("/api/export/csv")
+async def export_csv_endpoint(
+    request: Request,
+    platform_id: str | None = Query(default=None),
+    entity: str | None = Query(default=None),
+    days: int = Query(default=90, ge=1, le=365),
+):
+    if not platform_id:
+        return JSONResponse(status_code=400, content={"error": "platform_id is required"})
+    if not entity:
+        return JSONResponse(status_code=400, content={"error": "entity is required"})
+
+    from observability_export import VALID_ENTITIES, export_csv
+
+    if entity not in VALID_ENTITIES:
+        return JSONResponse(status_code=400, content={"error": f"entity must be one of: {', '.join(VALID_ENTITIES)}"})
+
+    from datetime import date
+
+    csv_str = export_csv(request.app.state.db_conn, platform_id, entity, days)
+    filename = f"{entity}_{platform_id}_{date.today().isoformat()}.csv"
+    return Response(
+        content=csv_str,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 # --- CLI Entry Point ---

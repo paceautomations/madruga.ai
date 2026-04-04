@@ -1,6 +1,6 @@
 ---
 title: "Roadmap"
-updated: 2026-03-31
+updated: 2026-04-02
 ---
 # Madruga AI — Delivery Roadmap
 
@@ -46,6 +46,8 @@ gantt
     014 Telegram Notifications   :done, e014, 2026-04-01, 1d
     015 Subagent Judge           :done, e015, 2026-04-01, 1d
     016 Daemon 24/7              :done, e016, 2026-04-01, 1d
+    section Post-MVP
+    017 Observability & Evals    :done, e017, 2026-04-04, 1d
 ```
 
 | # | Epic | Descricao | Status | Concluido |
@@ -61,6 +63,7 @@ gantt
 | 014 | Telegram Notifications | Bot Telegram standalone (aiogram 3.x): notifica human gates pendentes, inline keyboard approve/reject, health check, backoff exponencial, offset persistence. Migration 008. 28 testes. | **shipped** | 2026-04-01 |
 | 015 | Subagent Judge + Decision Classifier | Tech-reviewers: 4 personas paralelas (Arch Reviewer, Bug Hunter, Simplifier, Stress Tester) + Judge pass. Decision Classifier (risk score). Substitui verify (L2) e Tier 3 (L1). YAML config extensivel. 47 testes. | **shipped** | 2026-04-01 |
 | 016 | Daemon 24/7 | FastAPI + asyncio daemon: dag_scheduler (poll epics, dispatch pipeline), Telegram integration (gate approvals via inline keyboard), health_checker (degradation state machine + systemd watchdog), ntfy.sh fallback, Sentry. Endpoints /health + /status. systemd unit file. 393 LOC daemon + ~200 LOC async dag_executor. 221 testes. | **shipped** | 2026-04-01 |
+| 017 | Observability, Tracing & Evals | Traces hierarquicos por pipeline run (trace → spans), eval scoring heuristico (4 dimensoes: quality, adherence, completeness, cost_efficiency), API REST (/api/traces, /api/stats, /api/evals, /api/export/csv), portal React (4 tabs: Runs, Traces, Evals, Cost), cleanup automatico 90 dias, context threading no DAG (analyze→judge→qa→reconcile), auto-escalate gate. Migration 010. eval_scorer.py + observability_export.py. 393 testes. | **shipped** | 2026-04-04 |
 
 ---
 
@@ -76,6 +79,8 @@ gantt
     014 Telegram Notifications   :done, e014, 2026-04-01, 1d
     015 Subagent Judge           :done, e015, 2026-04-01, 1d
     016 Daemon 24/7              :done, e016, 2026-04-01, 1d
+    section Post-MVP
+    017 Observability & Evals    :done, e017, 2026-04-04, 1d
 ```
 
 ### Sequencia e Justificativa
@@ -87,6 +92,7 @@ gantt
 | 3 | 014 Telegram Notifications | 2w (real: 1d) | Baixo | Depende da gate state machine de 013. aiogram e framework maduro — baixo risco tecnico. Appetite reduzido: scope claro + framework maduro. |
 | 3 | 015 Subagent Judge + Decision Classifier | 2w (real: 1d) | Medio→Baixo | Paralelo com 014. Agent tool ja provado. Knowledge files = maioria do deliverable. Calibracao validada com 7 ADRs reais. |
 | 4 | 016 Daemon 24/7 | 2w (real: 1d) | Baixo | Ultimo — monta em cima de tudo. Mecanico: asyncio event loop + health checks + systemd. Appetite reduzido: modulos existentes (dag_executor, telegram_bot) ja tinham 90% da logica. |
+| 5 | 017 Observability, Tracing & Evals | 2w (real: 1d) | Baixo | Primeiro post-MVP. Infraestrutura completa (daemon, db.py, portal). Heuristicas simples — sem ML. Appetite reduzido: reuso de patterns existentes (db CRUD, daemon endpoints, portal React). |
 
 > 014 e 015 podem rodar em paralelo apos 013. Gantt mostra sequencial por team size = 1.
 
@@ -101,12 +107,14 @@ graph LR
     E014["014 Telegram\nNotifications (2w)"]
     E015["015 Subagent Judge\n+ Decision Classifier (2w)"]
     E016["016 Daemon 24/7 (2w)"]
+    E017["017 Observability\nTracing & Evals (2w)"]
 
     E012 --> E013
     E013 --> E014
     E013 --> E015
     E014 --> E016
     E015 --> E016
+    E016 --> E017
 ```
 
 ---
@@ -117,21 +125,15 @@ graph LR
 |-----------|-------|---------------------|------------|
 | **Fulano Operacional** | 012 | `speckit.implement` executa em repo Fulano via worktree, PR criado com `gh` | Semana 2 | Tooling pronto (ensure_repo, worktree, implement_remote). Falta teste end-to-end com Fulano real. |
 | **Runtime Funcional** | 012, 013 | DAG executor processa 1 pipeline L1 completo via CLI, human gates pausam/resumem corretamente | Semana 8 | Tooling pronto (ensure_repo, worktree, dag_executor). Falta teste end-to-end com claude -p real. |
-| **Autonomia MVP** | 012-016 | 1 epic completo (pitch-to-PR) processado pelo daemon em repo Fulano, com Telegram notifications e Subagent Judge review | **Alcancado 2026-04-01** — todos os 5 epics MVP shipped. Falta validacao end-to-end com Fulano real. |
+| **Autonomia MVP** | 012-016 | 1 epic completo (pitch-to-PR) processado pelo daemon em repo Fulano, com Telegram notifications e Subagent Judge review | **Alcancado 2026-04-01** — todos os 5 epics MVP shipped. MADRUGA_MODE=auto habilita execucao end-to-end. Falta validacao end-to-end com Fulano real. |
 
 ---
 
 ## Proximos Epics (candidatos)
 
-Epics abaixo sao **candidatos identificados** para o MVP de autonomia. Cada um tem pitch.md com problema e appetite definidos. Spec, plan e tasks serao criados quando o epic entrar em L2 via `/epic-context`.
-
-| # | Epic (candidato) | Problema | Descricao | Appetite | Prioridade | Depende de |
-|---|------------------|----------|-----------|----------|------------|------------|
-| 012 | Multi-repo Implement | `speckit.implement` so opera no proprio repo. Fulano tem codigo em repo separado — ciclo L2 nao funciona. | git worktree para target repos. PRs criados no repo correto via `gh`. Repo binding de `platform.yaml` validado end-to-end. | 2w (Media) | **P1** | — |
-| 013 | DAG Executor + SpeckitBridge | Skills invocadas manualmente. Para autonomia, pipeline precisa de execucao data-driven com human gate pause/resume. | Custom DAG executor (~500-800 LOC, ADR-017): le YAML, topological sort, dispatch via `claude -p`, state machine por node. SpeckitBridge compoe prompts para modo autonomo. **Gate state machine completa** definida aqui: pause → persist SQLite → wait signal → resume. Metricas basicas (run counter, success/failure, duration). | 6w (Grande) | **P1** | 012 |
-| 014 | Telegram Notifications | Sem canal de notificacao, human gates travam pipeline autonomo. Operador nao sabe quando precisa aprovar algo. | TelegramAdapter (aiogram, long-polling, ADR-018): `send`, `ask_choice` (inline buttons approve/reject), `alert`. Health check periodico (`getMe`). Fallback log-only quando unreachable. Consome gate state machine de 013. | 2w (Media) | **P1** | 013 |
-| 015 | Subagent Judge + Decision Classifier | Specs geradas autonomamente nao tem quality gate multi-perspectiva. Decisoes 1-way-door nao sao classificadas automaticamente. | SubagentJudge: 3 personas paralelas (Architecture Reviewer, Bug Hunter, Simplifier) + 1 Judge pass filtra por Accuracy/Actionability/Severity (ADR-019). DecisionClassifier: classifica 1-way/2-way door, auto-gera ADR para 1-way. Integra com pipeline gates. | 2w (Media) | **P1** | 013 |
-| 016 | Daemon 24/7 | Runtime (013) e notificacoes (014) existem mas precisam ser iniciados manualmente. Precisa de processo persistente. | MadrugaDaemon asyncio (ADR-006): FastAPI lifespan + TaskGroup compoe dag_scheduler, Telegram polling, health_checker, gate_poller. Endpoints /health + /status. systemd Type=notify com watchdog. ntfy.sh fallback. Gate reminder 24h. Sentry auto-instrumentation. | 2w (real: 1d) | **P2** | 013, 014, 015 |
+| # | Epic (candidato) | Problema | Appetite | Prioridade | Depende de | Status |
+|---|------------------|----------|----------|------------|------------|--------|
+| — | (sem candidatos ativos) | — | — | — | — | — |
 
 ---
 
@@ -139,11 +141,13 @@ Epics abaixo sao **candidatos identificados** para o MVP de autonomia. Cada um t
 
 | Risco | Impacto | Probabilidade | Mitigacao |
 |-------|---------|---------------|-----------|
-| `claude -p` instavel com prompts longos (stream-json bug) | Pipeline trava em nodes de implement | Media | `--output-format json` (evita bug). Watchdog SIGKILL. Retry 3x com backoff. |
-| Gate state machine complexa demais para 013 | Atraso de 2-4w no epic mais critico | Media | Definir state machine minima (3 estados: running/paused/done). Iterar depois. |
-| Calibracao de personas do Subagent Judge | Reviews com muito noise (false positives) | Media | Comeca com 3 personas fixas. Judge filtra por Accuracy/Actionability/Severity. Iteracao rapida. |
-| aiogram breaking changes | TelegramAdapter quebra sem aviso | Baixa | Pin version. Health check detecta falha. Fallback log-only. |
-| Team size = 1 | Nenhum paralelismo real entre 014 e 015 | Alta | Aceitar sequencial. Gantt ja reflete isso. |
+| `claude -p` instavel com prompts longos (stream-json bug) | Pipeline trava em nodes de implement | Media | **Mitigado**: `--output-format json` + subprocess `cwd=` (fix do --cwd). Watchdog SIGKILL. Retry 3x com backoff. |
+| Gate state machine complexa demais para 013 | Atraso de 2-4w no epic mais critico | Media | **Nao ocorreu**: state machine implementada com 3 modos (MADRUGA_MODE) sem atrasos. |
+| Calibracao de personas do Subagent Judge | Reviews com muito noise (false positives) | Media | **Mitigado**: 4 personas fixas + Judge filtra por Accuracy/Actionability/Severity. Calibrado com 7 ADRs reais. |
+| aiogram breaking changes | TelegramAdapter quebra sem aviso | Baixa | Pin version. Health check detecta falha. Fallback log-only. Nao ocorreu ate agora. |
+| Team size = 1 | Nenhum paralelismo real entre 014 e 015 | Alta | **Materializado**: todos os epics foram sequenciais. Appetite real ~1d cada (vs 2w planejado). |
+| Documentation drift acumulado | Drift entre implementacao e docs cresce sem reconcile regular | Media | **Materializado**: 7/8 docs outdated neste reconcile. Mitigacao: rodar reconcile apos cada epic. |
+| stdlib shadowing (platform.py) | Import do modulo errado causa erros sutis | Media | **Mitigado**: renomeado para platform_cli.py + teste automatizado. |
 
 ---
 
@@ -169,7 +173,7 @@ Epics abaixo sao **candidatos identificados** para o MVP de autonomia. Cada um t
 handoff:
   from: roadmap
   to: epic-context
-  context: "L1 completo. Roadmap define sequencia 012→013→014/015→016. Proximo passo: iniciar L2 com epic-context para epic 012 (Multi-repo Implement)."
+  context: "MVP completo (012-016 shipped). Epic 017 (Observability) em progresso. Proximo passo: completar L2 do epic 017."
   blockers: []
   confidence: Alta
   kill_criteria: "Mudanca fundamental nos epics planejados ou reordenacao de prioridades"

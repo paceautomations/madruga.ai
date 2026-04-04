@@ -1,10 +1,11 @@
 ---
 id: 017
 title: "Observability, Tracing & Evals"
-status: in_progress
+status: shipped
 appetite: 2w
 priority: 4
 updated: 2026-04-02
+delivered_at: 2026-04-04
 ---
 # Observability, Tracing & Evals
 

@@ -163,7 +163,7 @@ O pipeline tem 24 nodes em 2 niveis (L1: 13, L2: 11 por epic). Cada node tem dep
 **Custom DAG Executor (YAML-driven):**
 - Pros: ~200 LOC, zero deps, YAML e source of truth direto, 80% ja construido (platform.yaml tem DAG, check-prerequisites.sh faz resolucao, post_save.py grava estado, db.py tem schema)
 - Cons: sem crash recovery automatico (SQLite checkpoints sao suficientes), sem web UI (portal dashboard ja existe)
-- Arquitetura: `dag_runner.py` le `platform.yaml` → topological sort → dispatch loop → `claude -p` por node → `post_save.py` grava → human gates pausam, Telegram notifica, resume quando aprovado
+- Arquitetura: `dag_executor.py` le `platform.yaml` → topological sort → dispatch loop → `claude -p` por node → `post_save.py` grava → human gates pausam, Telegram notifica, resume quando aprovado
 - Source: implementacao existente em `.specify/scripts/`
 
 **Prefect 3:**

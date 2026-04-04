@@ -1,6 +1,6 @@
 ---
 title: "Domain Model"
-updated: 2026-03-31
+updated: 2026-04-02
 ---
 # Modelo de Dominio + Schema
 
@@ -376,8 +376,8 @@ classDiagram
 - Migrations sao incrementais em `.pipeline/migrations/` e controladas pela tabela `_migrations`
 - `seed_from_filesystem()` popula BD a partir de `platform.yaml` e arquivos existentes
 - Status de pipeline node e derivado de file existence + content hash
-- Epic status: `proposed` → `in_progress` → `shipped` (transicoes unidirecionais)
-- Epic nodes seguem o ciclo L2: epic-context → specify → clarify → plan → tasks → analyze → implement → verify → qa → reconcile
+- Epic status: `proposed` → `drafted` → `in_progress` → `shipped` (transicoes unidirecionais). `drafted` = artefatos planejados em main sem branch
+- Epic nodes seguem o ciclo L2: epic-context → specify → clarify → plan → tasks → analyze → implement → analyze → judge → qa → reconcile
 - Toda mutacao gera um evento na tabela `events`
 
 ---
@@ -457,7 +457,7 @@ classDiagram
 
 ## Intelligence (Supporting) — Subagent Judge, Decision System, Stress Test
 
-Responsavel por garantir qualidade de specs e decisoes via review automatizado. Debate multi-persona substituido por Subagent Paralelo + Judge Pattern (ADR-019): 3 personas executam em paralelo via Claude Code Agent tool, 1 juiz filtra noise por Accuracy/Actionability/Severity. `[A SER IMPLEMENTADO — Epics 014-015]`
+Responsavel por garantir qualidade de specs e decisoes via review automatizado. Subagent Paralelo + Judge Pattern (ADR-019): 4 personas executam em paralelo via Claude Code Agent tool (Architecture Reviewer, Bug Hunter, Simplifier, Stress Tester), 1 juiz filtra noise por Accuracy/Actionability/Severity. Implementado nos epics 014-015.
 
 ### Modelo de Dominio
 
@@ -539,7 +539,7 @@ Intelligence nao possui storage proprio — consome artefatos de Specification e
 
 ### Invariantes
 
-- Subagent Judge **sempre** executa 3 personas em paralelo (Architecture Reviewer, Bug Hunter, Simplifier) — ADR-019
+- Subagent Judge **sempre** executa 4 personas em paralelo (Architecture Reviewer, Bug Hunter, Simplifier, Stress Tester) — ADR-019
 - Judge pass filtra por 3 criterios: Accuracy (factual?), Actionability (fixavel?), Severity (impacta producao?)
 - Toda decisao 1-way-door **deve** gerar ADR automaticamente (ADR-013)
 - Stress test **deve** cobrir pelo menos: scale 10x, failure modes, edge cases, security threats
@@ -630,14 +630,57 @@ Este contexto nao possui storage proprio. Todas as interacoes sao **passthrough*
 
 ---
 
-## Observability (Generic) — Portal Dashboard, CLI Status
+## Observability — Tracing, Evals & Dashboard
 
-Responsavel por visibilidade do pipeline: dashboard visual no portal Starlight e CLI `platform.py status`. Implementado no epic 010 (Pipeline Dashboard).
+Responsavel por visibilidade completa do pipeline: traces hierarquicos por run, eval scoring por node, metricas de custo/tokens, dashboard no portal e CLI status. Implementado nos epics 010 (Pipeline Dashboard) e 017 (Observability, Tracing & Evals).
 
 ### Modelo de Dominio
 
 ```mermaid
 classDiagram
+    class Trace {
+        +string trace_id PK
+        +string platform_id FK
+        +string epic_id
+        +string mode (l1|l2)
+        +string status (running|completed|failed|cancelled)
+        +int total_nodes
+        +int completed_nodes
+        +int total_tokens_in
+        +int total_tokens_out
+        +float total_cost_usd
+        +int total_duration_ms
+        +datetime started_at
+        +datetime completed_at
+    }
+
+    class PipelineRun {
+        +string run_id PK
+        +string trace_id FK
+        +string platform_id
+        +string epic_id
+        +string node_id
+        +string status
+        +int tokens_in
+        +int tokens_out
+        +float cost_usd
+        +int duration_ms
+        +int output_lines
+        +string gate_status
+    }
+
+    class EvalScore {
+        +string score_id PK
+        +string trace_id FK
+        +string platform_id FK
+        +string node_id
+        +string run_id FK
+        +string dimension (quality|adherence_to_spec|completeness|cost_efficiency)
+        +float score (0-10)
+        +string metadata JSON
+        +datetime evaluated_at
+    }
+
     class DashboardPage {
         +Platform[] platforms
         +render_pipeline_dag() Mermaid
@@ -645,52 +688,53 @@ classDiagram
         +filter_by_platform() void
     }
 
+    class ObservabilityDashboard {
+        +string activeTab (Runs|Traces|Evals|Cost)
+        +poll_interval_ms = 10000
+        +fetch_traces() void
+        +fetch_stats() void
+        +fetch_evals() void
+    }
+
+    class EvalScorer {
+        +score_node(conn, platform_id, node_id, run_id, output_path, metrics) list~dict~
+        +quality_heuristic(output, judge_score) float
+        +adherence_heuristic(output, node_id) float
+        +completeness_heuristic(output, expected_lines) float
+        +cost_efficiency_heuristic(cost, avg_budget) float
+    }
+
     class PipelineStatusExporter {
         +get_platform_status(name) StatusTable
         +get_all_status_json() JSON
-        +compute_l1_progress() Percentage
-        +compute_l2_progress(epic) Percentage
     }
 
-    class StatusTable {
-        +string platform_id
-        +PipelineNodeStatus[] l1_nodes
-        +EpicStatus[] epics
-        +float l1_progress_pct
-    }
-
-    class PipelineNodeStatus {
-        +string node_id
-        +string status
-        +string layer
-        +string gate
-    }
-
-    class EpicStatus {
-        +string epic_id
-        +string title
-        +string status
-        +EpicNodeStatus[] l2_nodes
-        +float l2_progress_pct
-    }
-
-    class EpicNodeStatus {
-        +string node_id
-        +string status
-        +string completed_at
-    }
-
+    Trace "1" --> "*" PipelineRun : groups as spans
+    PipelineRun "1" --> "4" EvalScore : scored on 4 dimensions
+    Trace "1" --> "*" EvalScore : contains
+    ObservabilityDashboard --> Trace : fetches via /api/traces
+    ObservabilityDashboard --> EvalScore : fetches via /api/evals
+    EvalScorer --> EvalScore : produces
     DashboardPage --> PipelineStatusExporter : reads data from
-    PipelineStatusExporter --> StatusTable : produces
-    StatusTable --> PipelineNodeStatus : contains L1
-    StatusTable --> EpicStatus : contains L2
-    EpicStatus --> EpicNodeStatus : contains nodes
 ```
+
+### API Endpoints (Daemon)
+
+| Endpoint | Metodo | Descricao |
+|----------|--------|-----------|
+| `/api/traces` | GET | Lista traces com filtros (platform_id, status, limit, offset) |
+| `/api/traces/{trace_id}` | GET | Detalhe do trace com spans e eval scores |
+| `/api/stats` | GET | Agregados por dia (runs, custo, tokens, duracao) |
+| `/api/evals` | GET | Eval scores com filtros (platform_id, node_id, dimension) |
+| `/api/export/csv` | GET | Export CSV de traces, spans ou evals |
 
 ### Invariantes
 
-- Dashboard consome `platform.py status --all --json` como data source
+- Trace agrupa PipelineRuns (spans) de uma execucao completa do pipeline
+- Um PipelineRun pertence a exatamente um Trace (FK trace_id)
+- Cada node completado recebe 4 eval scores heuristicos (best-effort, nunca bloqueia)
+- Eval scores clamped a [0, 10] — quality normaliza Judge score quando disponivel
+- Cleanup automatico remove registros > 90 dias (traces, runs, eval_scores)
+- Dashboard consome API REST do daemon (polling 10s) — nao mais dados estaticos
 - CLI `status` le diretamente do SQLite (read-only)
-- Dashboard mostra DAG visual (Mermaid) + tabela de epics + progresso L1/L2
-- Filtros por plataforma e status de epic
-- Zero backend adicional — dashboard e pagina Astro estatica com dados embutidos no build
+- Context threading: analyze-post → judge → qa → reconcile recebem reports upstream no prompt

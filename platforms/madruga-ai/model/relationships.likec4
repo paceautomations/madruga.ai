@@ -31,32 +31,16 @@ model {
     technology 'Python async'
   }
 
-  madrugaAi.dagExecutor -[sync]-> madrugaAi.speckitBridge 'Despacha nodes — monta e executa prompts' {
-    technology 'Python async'
+  madrugaAi.dagExecutor -[sync]-> madrugaAi.speckitSkills 'Le skills e compoe prompts (compose_skill_prompt)' {
+    technology 'Filesystem read'
   }
 
   madrugaAi.dagExecutor -[sync]-> madrugaAi.memoryStore 'Le/escreve estado do pipeline' {
     technology 'SQLite (checkpoint por node)'
   }
 
-  madrugaAi.runtimeDaemon -[sync]-> madrugaAi.orchestrator 'Delega execucao de epics' {
-    technology 'Python async'
-  }
-
-  madrugaAi.orchestrator -[sync]-> madrugaAi.speckitBridge 'Executa fases em sequencia' {
-    technology 'Python async'
-  }
-
-  madrugaAi.speckitBridge -[sync]-> madrugaAi.speckitSkills 'Le skills e templates' {
-    technology 'Filesystem read'
-  }
-
-  madrugaAi.speckitBridge -[sync]-> madrugaAi.subagentJudge 'Solicita review multi-perspectiva' {
+  madrugaAi.dagExecutor -[sync]-> madrugaAi.subagentJudge 'Solicita review multi-perspectiva' {
     technology 'Claude Code Agent tool'
-  }
-
-  madrugaAi.speckitBridge -[sync]-> madrugaAi.decisionSystem 'Classifica decisoes' {
-    technology 'Python async'
   }
 
   madrugaAi.runtimeDaemon -[sync]-> madrugaAi.memoryStore 'Persiste estado e metricas' {
@@ -76,27 +60,19 @@ model {
   }
 
   // ── External system relationships ──
-  madrugaAi.speckitBridge -[sync]-> claudeApi 'Executa prompts via claude -p' {
-    technology 'subprocess (claude -p)'
-  }
-
   madrugaAi.dagExecutor -[sync]-> claudeApi 'Despacha nodes via claude -p' {
     technology 'subprocess (claude -p)'
   }
 
-  madrugaAi.subagentJudge -[sync]-> claudeApi 'Review via 3 subagents paralelos + 1 judge' {
+  madrugaAi.subagentJudge -[sync]-> claudeApi 'Review via 4 subagents paralelos + 1 judge' {
     technology 'Claude Code Agent tool'
-  }
-
-  madrugaAi.decisionSystem -[sync]-> claudeApi 'Classifica decisoes via claude -p' {
-    technology 'subprocess (claude -p)'
   }
 
   madrugaAi.runtimeDaemon -[async]-> telegramBot 'Notificacoes e decisoes' {
     technology 'Telegram Bot API (HTTPS outbound)'
   }
 
-  madrugaAi.speckitBridge -[sync]-> githubApi 'Cria issues e PRs via gh CLI' {
+  madrugaAi.dagExecutor -[sync]-> githubApi 'Cria PRs via gh CLI' {
     technology 'gh CLI'
   }
 
@@ -113,7 +89,7 @@ model {
   }
 
   // ── Storage relationships ──
-  madrugaAi.speckitBridge -[sync]-> gitFs 'Le e escreve artefatos' {
+  madrugaAi.dagExecutor -[sync]-> gitFs 'Le e escreve artefatos' {
     technology 'Filesystem (git)'
   }
 
@@ -155,8 +131,8 @@ model {
     description 'Specification (customer) solicita classificacao de decisoes a Intelligence (supplier)'
   }
 
-  execution.pipelineRunner -[customerSupplier]-> specDomain.specifyPhase 'Customer-Supplier' {
-    description 'Execution (customer) invoca fases de Specification (supplier) em sequencia'
+  execution.dagExecutor -[customerSupplier]-> specDomain.specifyPhase 'Customer-Supplier' {
+    description 'Execution (customer) invoca fases de Specification (supplier) em sequencia via compose_skill_prompt'
   }
 
   execution.dagExecutor -[acl]-> integration.claudeClient 'ACL' {
@@ -164,8 +140,8 @@ model {
   }
 
   // ── Supporting-Generic ──
-  execution.pipelineRunner -[acl]-> integration.claudeClient 'ACL' {
-    description 'Execution usa ACL para isolar detalhes do Claude API (subprocess, retries) do pipeline runner'
+  execution.dagExecutor -[acl]-> integration.claudeClient 'ACL (dispatch)' {
+    description 'DAG Executor usa ACL para isolar detalhes do Claude API (subprocess, retries) do dispatch de nodes'
   }
 
   integration.githubOps -[conformist]-> githubApi 'Conformist' {
@@ -186,7 +162,7 @@ model {
 
   // ── Observability (Pub-Sub) ──
   execution.daemonProcess -[pubSub]-> observability.metricsCollector 'Pub-Sub'
-  execution.pipelineRunner -[pubSub]-> observability.metricsCollector 'Pub-Sub'
+  execution.dagExecutor -[pubSub]-> observability.metricsCollector 'Pub-Sub (executor)'
   execution.dagExecutor -[pubSub]-> observability.metricsCollector 'Pub-Sub'
   intelligence.subagentJudgeModule -[pubSub]-> observability.metricsCollector 'Pub-Sub'
   specDomain.specifyPhase -[pubSub]-> observability.metricsCollector 'Pub-Sub'

@@ -172,7 +172,7 @@ pipeline:
 
       - id: implement
         skill: "speckit.implement"
-        outputs: ["{epic}/tasks.md"]
+        outputs: ["{epic}/implement-report.md"]
         depends: ["analyze"]
         gate: auto
 
@@ -201,5 +201,3 @@ pipeline:
         outputs: ["{epic}/reconcile-report.md"]
         depends: ["qa"]
         gate: human
-        optional: true
-        skip_condition: "judge score >= 95% and zero drift"

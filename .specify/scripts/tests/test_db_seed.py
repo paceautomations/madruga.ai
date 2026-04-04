@@ -306,7 +306,7 @@ def test_seed_creates_epic_nodes(tmp_db, tmp_path):
     epic_dir = pdir / "epics" / "001-test"
     epic_dir.mkdir(parents=True)
     (epic_dir / "pitch.md").write_text('---\ntitle: "Test"\nstatus: in_progress\n---\n# Test\n')
-    (epic_dir / "spec.md").write_text("# Spec\nContent.")
+    (epic_dir / "spec.md").write_text("# Spec\n\nContent of the specification. Enough text to pass validation.\n")
     # plan.md does NOT exist — only specify should be seeded
 
     seed_from_filesystem(tmp_db, "plat-en", pdir)
@@ -345,8 +345,8 @@ def test_seed_epic_auto_ships(tmp_db, tmp_path):
     epic_dir.mkdir(parents=True)
     (epic_dir / "pitch.md").write_text('---\ntitle: "Ship Test"\nstatus: planned\n---\n# Ship\n')
     # All required outputs exist
-    (epic_dir / "spec.md").write_text("# Spec\nDone.")
-    (epic_dir / "tasks.md").write_text("# Tasks\nDone.")
+    (epic_dir / "spec.md").write_text("# Spec\n\nDone. This is a complete specification with enough content.\n")
+    (epic_dir / "tasks.md").write_text("# Tasks\n\nDone. All tasks are complete with sufficient content here.\n")
 
     seed_from_filesystem(tmp_db, "plat-ship", pdir)
     epics = get_epics(tmp_db, "plat-ship")

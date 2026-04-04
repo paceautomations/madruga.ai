@@ -9,7 +9,7 @@ model {
     }
 
     platformCli = api 'Platform CLI' {
-      technology 'Python 3.12+ (platform.py)'
+      technology 'Python 3.12+ (platform_cli.py)'
       description 'CLI para gestao de plataformas: new, lint, sync, register, status, import/export. Encapsula Copier e validacao estrutural'
     }
 
@@ -18,34 +18,19 @@ model {
       description 'Exporta LikeC4 JSON e popula tabelas markdown via AUTO markers em engineering docs'
     }
 
-    speckitBridge = worker 'SpeckitBridge' {
-      technology 'Python 3.12+'
-      description 'Compositor que le skills e templates, monta prompts contextuais com constitution + memory, e executa as 7 fases do pipeline (specify, clarify, plan, tasks, implement, reconcile, analyze) via claude -p'
-    }
-
     runtimeDaemon = worker 'Runtime Daemon' {
       technology 'Python 3.12+ asyncio + FastAPI :8040'
-      description 'Daemon 24/7: executa DAG do pipeline, gerencia human gates, health endpoints, serve dashboard'
+      description 'Daemon 24/7: executa DAG do pipeline, gerencia human gates via MADRUGA_MODE (manual/interactive/auto), health endpoints, serve dashboard'
     }
 
     dagExecutor = worker 'DAG Executor' {
-      technology 'Python 3.12+ (dag_runner.py)'
-      description 'Le pipeline DAG de platform.yaml, resolve dependencias via topological sort, despacha nodes via claude -p, gerencia human gates (pause/resume via SQLite)'
-    }
-
-    orchestrator = worker 'Orchestrator' {
-      technology 'Python 3.12+'
-      description 'Slot-based scheduler que controla paralelismo de pipelines, gerencia filas e prioridades'
+      technology 'Python 3.12+ (dag_executor.py)'
+      description 'Le pipeline DAG de platform.yaml, resolve dependencias via topological sort, despacha nodes via claude -p, gerencia human gates (3 modos via MADRUGA_MODE), retry com circuit breaker'
     }
 
     subagentJudge = worker 'Subagent Judge' {
       technology 'Python 3.12+ + Claude Code Agent tool'
-      description 'Subagent Paralelo + Judge Pattern: 3 personas (Architecture Reviewer, Bug Hunter, Simplifier) + 1 juiz que filtra por Accuracy/Actionability/Severity (ADR-019). Output: BLOCKER/WARNING/NIT'
-    }
-
-    decisionSystem = worker 'Decision System' {
-      technology 'Python 3.12+'
-      description 'Classificador 1-way/2-way door para decisoes arquiteturais, com registro automatico de ADRs'
+      description 'Subagent Paralelo + Judge Pattern: 4 personas (Architecture Reviewer, Bug Hunter, Simplifier, Stress Tester) + 1 juiz que filtra por Accuracy/Actionability/Severity (ADR-019). Output: BLOCKER/WARNING/NIT'
     }
 
     memoryStore = database 'State Store' {
@@ -59,8 +44,8 @@ model {
     }
 
     speckitSkills = worker 'SpecKit Skills' {
-      technology '20 .claude/commands/ (Markdown)'
-      description 'Skills do pipeline: 13 L1 (vision, adr, blueprint...) + 7 L2 (specify, plan, tasks, implement, verify, qa, reconcile) + utilities'
+      technology '24 .claude/commands/ (Markdown)'
+      description 'Skills do pipeline: 13 L1 (vision, adr, blueprint...) + 11 L2 (epic-context, specify, clarify, plan, tasks, analyze, implement, judge, qa, reconcile) + utilities'
     }
 
     copierTemplates = worker 'Copier Templates' {

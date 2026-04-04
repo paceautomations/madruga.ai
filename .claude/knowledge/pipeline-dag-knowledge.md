@@ -292,3 +292,5 @@ If parallel self-ref epics are ever needed, ALL L2 skills (not just implement) m
 - Browser testing: when Playwright MCP available + web features + app running
 
 **qa heal loop** may modify code, which is why reconcile runs AFTER qa.
+
+**reconcile is mandatory** — always runs after qa. Ensures zero documentation drift after every epic. Even if qa is skipped (optional), reconcile still executes because skipped nodes satisfy downstream dependencies.

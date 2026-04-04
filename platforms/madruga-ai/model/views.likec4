@@ -59,7 +59,7 @@ views {
 
   view executionDetail of execution {
     title 'Execution — Supporting Domain'
-    description 'Bounded context Execution: daemon, DAG executor, orchestrator, pipeline runner'
+    description 'Bounded context Execution: daemon (FastAPI), DAG executor (MADRUGA_MODE)'
 
     include *
     include integration.claudeClient, integration.telegramAdapter
@@ -89,22 +89,14 @@ views {
     //  FASE 1: TRIGGER (DAG Executor → Pipeline)
     // ════════════════════════════════════
 
-    execution.dagExecutor -> execution.orchestratorSlots 'Node pronto (deps satisfeitas)' {
+    execution.dagExecutor -> execution.daemonProcess 'Node pronto (deps satisfeitas)' {
       notes '''
         **DAG Executor trigger**
         - Le pipeline nodes de platform.yaml
         - Resolve dependencias via topological sort
         - Verifica status no SQLite (skip nodes ja concluidos)
-        - Despacha proximo node pronto para o orchestrator
-      '''
-    }
-
-    execution.orchestratorSlots -> execution.pipelineRunner 'Slot alocado, pipeline inicia' {
-      notes '''
-        **Pipeline Runner**
-        - Executa fases em sequencia
-        - Cada fase e um subagent fresco (anti-context-rot)
-        - Resultado de cada fase alimenta a proxima
+        - Despacha node via claude -p (3 modos: MADRUGA_MODE)
+        - Human gates: manual (DB wait), interactive (y/n), auto (skip)
       '''
     }
 
@@ -112,10 +104,10 @@ views {
     //  FASE 2: SPECIFY (pitch → spec.md)
     // ════════════════════════════════════
 
-    execution.pipelineRunner -> specDomain.specifyPhase 'Pitch + constitution' {
+    execution.dagExecutor -> specDomain.specifyPhase 'Pitch + constitution' {
       notes '''
         **Specify Phase**
-        - SpeckitBridge monta prompt com pitch + constitution + templates
+        - DAG Executor compoe prompt com pitch + constitution (compose_skill_prompt)
         - Claude gera spec.md estruturada
         - Artefato MECE: owner = specifyPhase, purpose = "o que construir"
       '''
@@ -142,7 +134,7 @@ views {
     specDomain.clarifyEngine -> intelligence.subagentJudgeModule 'spec.md clarificada' {
       notes '''
         **Subagent Judge (ADR-019)**
-        - 3 personas paralelas: Architecture Reviewer, Bug Hunter, Simplifier
+        - 4 personas paralelas: Architecture Reviewer, Bug Hunter, Simplifier, Stress Tester
         - 1 Judge pass filtra por Accuracy, Actionability, Severity
         - Output: BLOCKER / WARNING / NIT
         - BLOCKERs devem ser resolvidos antes de prosseguir
@@ -198,25 +190,24 @@ views {
     //  FASE 7: IMPLEMENT + RECONCILE
     // ════════════════════════════════════
 
-    specDomain.analyzeEngine -> execution.pipelineRunner 'tasks.md validado' {
+    specDomain.analyzeEngine -> execution.dagExecutor 'tasks.md validado' {
       notes '''
         **Implement Phase**
+        - DAG Executor despacha implement node via claude -p
         - Executa tasks em ordem de dependencia
-        - Cada task e um subagent fresco (wave)
         - Commit por task, PR ao final
       '''
     }
 
-    execution.pipelineRunner -> integration.githubOps 'Cria PR com implementacao' {
+    execution.dagExecutor -> integration.githubOps 'Cria PR com implementacao' {
       notes '''
         **GitHub Integration**
-        - Cria branch feature/NNN-slug
-        - Issues criados a partir de tasks.md
+        - Cria branch epic/<platform>/<NNN-slug>
         - PR com referencia ao epic e spec
       '''
     }
 
-    execution.pipelineRunner -> documentation.autoMarkers 'RECONCILE: atualiza Vision' {
+    execution.dagExecutor -> documentation.autoMarkers 'RECONCILE: atualiza Vision' {
       notes '''
         **Reconcile Phase**
         - Auto-update de Vision docs apos implementacao
@@ -247,7 +238,6 @@ views {
     // ════════════════════════════════════
 
     parallel {
-      execution.pipelineRunner -> observability.metricsCollector 'Trace pipeline execution'
       execution.dagExecutor -> observability.metricsCollector 'Trace DAG execution'
       intelligence.subagentJudgeModule -> observability.metricsCollector 'Trace review cycles'
       specDomain.specifyPhase -> observability.metricsCollector 'Trace spec generation'

@@ -1,6 +1,6 @@
 ---
 title: "Vision"
-updated: 2026-03-27
+updated: 2026-04-02
 ---
 # Madruga AI — Business Vision
 
@@ -71,11 +71,11 @@ Times de engenharia de software (1-20 engenheiros) que precisam manter documenta
 | Platform CLI (scaffold, lint, sync) | Funcional | Alta |
 | LikeC4 model + vision-build pipeline | Funcional | Alta |
 | Portal Starlight com auto-discovery | Funcional | Alta |
-| SpecKit pipeline (specify, plan, tasks) | Funcional (interativo) | Alta |
-| SpeckitBridge (autonomo) | Planejado — construcao nativa (sem migracao de general/) | Alta |
-| Daemon 24/7 + Orchestrator | Planejado — construcao nativa (sem migracao de general/) | Media |
-| Debate Engine | Planejado — Subagent Paralelo + Judge Pattern (ADR-019) | Media |
-| RECONCILE loop | Planejado | Media |
+| SpecKit pipeline (specify, plan, tasks) | Funcional (interativo + autonomo) | Alta |
+| DAG Executor + compose_skill_prompt | Funcional — execucao autonoma do pipeline via dag_executor.py | Alta |
+| Daemon 24/7 (FastAPI + asyncio) | Funcional — processo persistente, health checks, systemd | Alta |
+| Subagent Judge (4 personas + 1 juiz) | Funcional — review multi-perspectiva (ADR-019) | Media |
+| RECONCILE loop | Funcional — 9 categorias de drift, diffs concretos | Media |
 | Codebase Mapping (`speckit.map`) | Planejado | Media |
 
 ### Pricing (se aplicavel)
@@ -88,12 +88,12 @@ Uso interno — sem pricing externo. Custo operacional: consumo de API Claude (c
 
 | Metrica | Hoje | 6 meses | 12 meses |
 |---------|------|---------|----------|
-| Plataformas documentadas | 1 (Fulano) + 1 (Madruga AI) | 5+ | 10+ |
-| Epics processados autonomamente | 0% | 80% | 95% |
-| Architectural drift detection | Manual | Auto-detect | Auto-fix (drift < 0.3) |
-| Time-to-spec (pitch → spec.md) | ~4h manual | ~30min autonomo | ~15min autonomo |
-| Skills disponiveis | 13 (4 arq + 9 speckit) | 19 (+ map, verify, wave, checkpoint, discuss, reconcile) | 20+ |
-| Cobertura Vision (artefatos preenchidos) | ~60% (Fulano) | 95%+ por plataforma | 100% com auto-sync |
+| Plataformas documentadas | 2 (Fulano + Madruga AI) | 5+ | 10+ |
+| Epics processados autonomamente | 0% (tooling pronto, falta end-to-end com Fulano) | 80% | 95% |
+| Architectural drift detection | Auto-detect (reconcile 9 categorias) | Auto-fix (drift < 0.3) | Auto-fix continuo |
+| Time-to-spec (pitch → spec.md) | ~1h (semi-autonomo com skills) | ~30min autonomo | ~15min autonomo |
+| Skills disponiveis | 24 (13 L1 + 11 L2) | 26+ (+ observability, codebase map) | 30+ |
+| Cobertura Vision (artefatos preenchidos) | 100% Madruga AI, ~60% Fulano | 95%+ por plataforma | 100% com auto-sync |
 
 ---
 

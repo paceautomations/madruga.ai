@@ -43,13 +43,17 @@ def setup_platform(tmp_path):
 
     # Create an artifact
     (pdir / "business").mkdir()
-    (pdir / "business" / "vision.md").write_text("# Vision\nTest content here.")
+    (pdir / "business" / "vision.md").write_text(
+        "# Vision\n\nTest content here. This is the vision document for the test platform.\n"
+    )
 
     # Create epic structure
     epic_dir = pdir / "epics" / "001-test-epic"
     epic_dir.mkdir(parents=True)
     (epic_dir / "pitch.md").write_text("---\ntitle: Test Epic\n---\n# Test Epic\n")
-    (epic_dir / "spec.md").write_text("# Spec\nTest spec content.")
+    (epic_dir / "spec.md").write_text(
+        "# Spec\n\nTest spec content for the epic. This file has enough content to pass validation.\n"
+    )
 
     # Create migrations dir
     migrations_dir = tmp_path / ".pipeline" / "migrations"
@@ -462,11 +466,13 @@ def test_backfill_epic_predecessors(setup_platform):
 
         # Create plan.md on disk (specify's spec.md already exists from fixture)
         plan_path = tmp_path / "platforms" / "test-plat" / "epics" / "001-test-epic" / "plan.md"
-        plan_path.write_text("# Plan\nTest plan content.")
+        plan_path.write_text("# Plan\n\nTest plan content for the epic. This file validates backfill.\n")
 
         # Record only implement — backfill should fill specify + plan from disk
         code_path = tmp_path / "platforms" / "test-plat" / "epics" / "001-test-epic" / "code"
-        code_path.write_text("# Code\nImplementation.")
+        code_path.write_text(
+            "# Code\n\nImplementation of the feature. Contains enough content to pass validation check.\n"
+        )
         result = post_save.record_save(
             platform="test-plat",
             node="implement",
@@ -517,3 +523,84 @@ def test_compute_epic_status_never_regresses_shipped(setup_platform):
         conn.close()
     finally:
         db_mod.DB_PATH = original_db
+
+
+def test_detect_from_path_disambiguates_shared_output(setup_platform):
+    """detect_from_path picks first unfinished node when multiple match same file.
+
+    The fixture has both 'specify' and 'clarify' outputting {epic}/spec.md.
+    When specify is already done, detect_from_path should return 'clarify'.
+    When neither is done, it should return 'specify' (first in DAG order).
+    """
+    tmp_path, db_path = setup_platform
+    import post_save
+    import db as db_mod
+
+    original_repo = post_save.REPO_ROOT
+    original_db = db_mod.DB_PATH
+    post_save.REPO_ROOT = tmp_path
+    db_mod.DB_PATH = db_path
+
+    try:
+        spec_path = str(tmp_path / "platforms" / "test-plat" / "epics" / "001-test-epic" / "spec.md")
+
+        # Case 1: neither done — should return 'specify' (first in DAG order)
+        result = post_save.detect_from_path(spec_path)
+        assert result is not None
+        assert result["node"] == "specify", f"Expected 'specify' but got '{result['node']}'"
+
+        # Case 2: mark specify as done — should return 'clarify'
+        from db import get_conn as gc, upsert_epic, upsert_epic_node, upsert_platform
+
+        conn = gc(db_path)
+        upsert_platform(conn, "test-plat", name="test-plat", repo_path="platforms/test-plat")
+        upsert_epic(conn, "test-plat", "001-test-epic", title="Test Epic")
+        upsert_epic_node(conn, "test-plat", "001-test-epic", "specify", "done")
+        conn.close()
+
+        result2 = post_save.detect_from_path(spec_path)
+        assert result2 is not None
+        assert result2["node"] == "clarify", f"Expected 'clarify' but got '{result2['node']}'"
+    finally:
+        post_save.REPO_ROOT = original_repo
+        db_mod.DB_PATH = original_db
+
+
+def test_is_valid_output_rejects_raw_claude_json(tmp_path):
+    """_is_valid_output rejects raw claude -p --output-format json output."""
+    from db import _is_valid_output
+
+    # Raw claude JSON metadata — not real content
+    raw_json = tmp_path / "implement-report.md"
+    raw_json.write_text(
+        '{"type":"result","subtype":"success","is_error":false,"duration_ms":442636,'
+        '"result":"","stop_reason":"end_turn","session_id":"abc123"}'
+    )
+    assert _is_valid_output(raw_json) is False
+
+
+def test_is_valid_output_accepts_valid_markdown(tmp_path):
+    """_is_valid_output accepts a valid markdown file with heading."""
+    from db import _is_valid_output
+
+    valid_md = tmp_path / "spec.md"
+    valid_md.write_text("# Feature Specification\n\nThis is a valid spec file with content.\n")
+    assert _is_valid_output(valid_md) is True
+
+
+def test_is_valid_output_rejects_tiny_file(tmp_path):
+    """_is_valid_output rejects files under 50 bytes."""
+    from db import _is_valid_output
+
+    tiny = tmp_path / "tiny.md"
+    tiny.write_text("# Hi\n")
+    assert _is_valid_output(tiny) is False
+
+
+def test_is_valid_output_rejects_md_without_heading(tmp_path):
+    """_is_valid_output rejects .md files without any markdown heading."""
+    from db import _is_valid_output
+
+    no_heading = tmp_path / "bad.md"
+    no_heading.write_text("This is just plain text without any heading markers at all, long enough to pass size check.")
+    assert _is_valid_output(no_heading) is False

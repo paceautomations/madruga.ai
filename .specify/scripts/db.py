@@ -283,6 +283,25 @@ def migrate(conn: sqlite3.Connection | None = None, migrations_dir: Path | None 
                 )
         conn.commit()
         applied = {r[0] for r in conn.execute("SELECT name FROM _migrations").fetchall()}
+    # Repair: re-run ALTER TABLE ADD COLUMN from already-applied migrations.
+    # SQLite DDL is not transactional, so a partially-applied migration can
+    # leave the schema incomplete while _migrations marks it as done.
+    # The "duplicate column" handler below makes this safe and idempotent.
+    for sql_file in sorted(mdir.glob("*.sql")):
+        if sql_file.name in applied:
+            sql_text = sql_file.read_text()
+            if "ADD COLUMN" in sql_text.upper():
+                lines = [ln for ln in sql_text.split("\n") if not ln.strip().startswith("--")]
+                for stmt in _split_sql_statements("\n".join(lines)):
+                    if "ADD COLUMN" in stmt.upper():
+                        try:
+                            conn.execute(stmt)
+                        except sqlite3.OperationalError as e:
+                            if "duplicate column" in str(e):
+                                continue
+                            logger.warning("Repair failed for %s: %s", sql_file.name, e)
+                conn.commit()
+
     for sql_file in sorted(mdir.glob("*.sql")):
         if sql_file.name not in applied:
             # Skip FTS5 migrations when FTS5 is not available
@@ -305,7 +324,16 @@ def migrate(conn: sqlite3.Connection | None = None, migrations_dir: Path | None 
                 lines = [ln for ln in sql_text.split("\n") if not ln.strip().startswith("--")]
                 cleaned = "\n".join(lines)
                 for stmt in _split_sql_statements(cleaned):
-                    conn.execute(stmt)
+                    try:
+                        conn.execute(stmt)
+                    except sqlite3.OperationalError as e:
+                        # SQLite DDL is not transactional — ALTER TABLE ADD COLUMN
+                        # can't be rolled back. Treat "duplicate column" as idempotent
+                        # no-op so partially-applied migrations can be re-run safely.
+                        if "duplicate column" in str(e):
+                            logger.debug("Skipping (column already exists): %s", stmt[:80])
+                            continue
+                        raise
                 conn.execute(
                     "INSERT INTO _migrations (name, applied_at) VALUES (?, ?)",
                     (sql_file.name, _now()),
@@ -315,6 +343,8 @@ def migrate(conn: sqlite3.Connection | None = None, migrations_dir: Path | None 
                 conn.rollback()
                 logger.error("Migration failed: %s", sql_file.name)
                 raise
+    # DDL operations can reset PRAGMA foreign_keys — re-enable after migrate
+    conn.execute("PRAGMA foreign_keys=ON")
     if own_conn:
         conn.close()
 
@@ -1382,8 +1412,8 @@ def insert_run(conn: sqlite3.Connection, platform_id: str, node_id: str, **kwarg
     conn.execute(
         "INSERT INTO pipeline_runs "
         "(run_id, platform_id, epic_id, node_id, status, agent, "
-        "tokens_in, tokens_out, cost_usd, duration_ms, error, started_at) "
-        "VALUES (?, ?, ?, ?, 'running', ?, ?, ?, ?, ?, ?, ?)",
+        "tokens_in, tokens_out, cost_usd, duration_ms, error, trace_id, output_lines, started_at) "
+        "VALUES (?, ?, ?, ?, 'running', ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             run_id,
             platform_id,
@@ -1395,6 +1425,8 @@ def insert_run(conn: sqlite3.Connection, platform_id: str, node_id: str, **kwarg
             kwargs.get("cost_usd"),
             kwargs.get("duration_ms"),
             kwargs.get("error"),
+            kwargs.get("trace_id"),
+            kwargs.get("output_lines"),
             _now(),
         ),
     )
@@ -1402,7 +1434,7 @@ def insert_run(conn: sqlite3.Connection, platform_id: str, node_id: str, **kwarg
     return run_id
 
 
-_COMPLETE_RUN_FIELDS = frozenset({"tokens_in", "tokens_out", "cost_usd", "duration_ms", "error"})
+_COMPLETE_RUN_FIELDS = frozenset({"tokens_in", "tokens_out", "cost_usd", "duration_ms", "error", "output_lines"})
 
 
 def complete_run(conn: sqlite3.Connection, run_id: str, status: str = "completed", **kwargs) -> None:
@@ -1672,6 +1704,27 @@ def _resolve_epic_outputs(outputs: list[str], epic_id: str) -> list[str]:
     return [o.replace("{epic}", f"epics/{epic_id}") for o in outputs]
 
 
+def _is_valid_output(file_path: Path) -> bool:
+    """Check if output file has valid content (not raw claude JSON or empty).
+
+    Prevents seed from marking nodes as done when output files contain
+    garbage data (e.g., raw claude -p --output-format json metadata).
+    """
+    try:
+        content = file_path.read_text(encoding="utf-8")[:500]
+    except (OSError, UnicodeDecodeError):
+        return False
+    if len(content) < 50:
+        return False
+    # Raw claude -p --output-format json output — not real content
+    if content.lstrip().startswith('{"type":"result"'):
+        return False
+    # Markdown files should have at least one heading
+    if file_path.suffix == ".md" and "#" not in content:
+        return False
+    return True
+
+
 def seed_epic_nodes_from_disk(
     txn: sqlite3.Connection,
     platform_id: str,
@@ -1694,6 +1747,9 @@ def seed_epic_nodes_from_disk(
         if not exists:
             continue
         first_file = pdir / resolved[0]
+        if not _is_valid_output(first_file):
+            logger.debug("Skipping invalid output for %s: %s", nid, first_file)
+            continue
         en_existing = existing_epic_nodes.get(nid)
         en_completed_at = None
         if not (en_existing and en_existing.get("completed_at")):
@@ -1937,3 +1993,276 @@ def seed_from_filesystem(conn: sqlite3.Connection, platform_id: str, platform_di
 
     logger.info("Seeded %s: %d nodes, %d epics", platform_id, nodes_seeded, epics_seeded)
     return {"status": "ok", "nodes": nodes_seeded, "epics": epics_seeded}
+
+
+# ══════════════════════════════════════
+# Traces (Observability — Epic 017)
+# ══════════════════════════════════════
+
+
+def create_trace(
+    conn: sqlite3.Connection,
+    platform_id: str,
+    epic_id: str | None = None,
+    mode: str = "l1",
+    total_nodes: int = 0,
+) -> str:
+    """Create a new trace for a pipeline run. Returns trace_id."""
+    import uuid
+
+    trace_id = uuid.uuid4().hex
+    conn.execute(
+        "INSERT INTO traces (trace_id, platform_id, epic_id, mode, total_nodes, started_at) VALUES (?, ?, ?, ?, ?, ?)",
+        (trace_id, platform_id, epic_id, mode, total_nodes, _now()),
+    )
+    conn.commit()
+    logger.info("Created trace: %s (platform=%s, mode=%s)", trace_id, platform_id, mode)
+    return trace_id
+
+
+def complete_trace(conn: sqlite3.Connection, trace_id: str, status: str = "completed") -> None:
+    """Complete a trace, aggregating metrics from its spans (pipeline_runs)."""
+    row = conn.execute(
+        "SELECT "
+        "  COUNT(*) as span_count, "
+        "  SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) as completed_count, "
+        "  SUM(tokens_in) as total_tokens_in, "
+        "  SUM(tokens_out) as total_tokens_out, "
+        "  SUM(cost_usd) as total_cost_usd, "
+        "  SUM(duration_ms) as total_duration_ms "
+        "FROM pipeline_runs WHERE trace_id=?",
+        (trace_id,),
+    ).fetchone()
+    conn.execute(
+        "UPDATE traces SET status=?, completed_at=?, completed_nodes=?, "
+        "total_tokens_in=?, total_tokens_out=?, total_cost_usd=?, total_duration_ms=? "
+        "WHERE trace_id=?",
+        (
+            status,
+            _now(),
+            row["completed_count"] or 0,
+            row["total_tokens_in"],
+            row["total_tokens_out"],
+            row["total_cost_usd"],
+            row["total_duration_ms"],
+            trace_id,
+        ),
+    )
+    conn.commit()
+    logger.info("Completed trace: %s (status=%s)", trace_id, status)
+
+
+def get_traces(
+    conn: sqlite3.Connection,
+    platform_id: str,
+    limit: int = 50,
+    offset: int = 0,
+    status_filter: str | None = None,
+) -> tuple[list[dict], int]:
+    """List traces with pagination. Returns (traces, total_count)."""
+    where = "WHERE t.platform_id = ?"
+    params: list = [platform_id]
+    if status_filter:
+        where += " AND t.status = ?"
+        params.append(status_filter)
+
+    total = conn.execute(f"SELECT COUNT(*) FROM traces t {where}", params).fetchone()[0]
+
+    sql = (
+        f"SELECT t.*, "
+        f"  COUNT(pr.run_id) as span_count, "
+        f"  SUM(CASE WHEN pr.status='completed' THEN 1 ELSE 0 END) as completed_spans "
+        f"FROM traces t "
+        f"LEFT JOIN pipeline_runs pr ON pr.trace_id = t.trace_id "
+        f"{where} "
+        f"GROUP BY t.trace_id "
+        f"ORDER BY t.started_at DESC "
+        f"LIMIT ? OFFSET ?"
+    )
+    params.extend([limit, offset])
+    rows = conn.execute(sql, params).fetchall()
+    return [dict(r) for r in rows], total
+
+
+def get_trace_detail(conn: sqlite3.Connection, trace_id: str) -> dict | None:
+    """Get a trace with its spans and eval scores. Returns None if not found."""
+    trace_row = conn.execute("SELECT * FROM traces WHERE trace_id=?", (trace_id,)).fetchone()
+    if not trace_row:
+        return None
+
+    spans = conn.execute(
+        "SELECT run_id, node_id, status, tokens_in, tokens_out, cost_usd, "
+        "duration_ms, error, started_at, completed_at "
+        "FROM pipeline_runs WHERE trace_id=? ORDER BY started_at ASC",
+        (trace_id,),
+    ).fetchall()
+
+    evals = conn.execute(
+        "SELECT score_id, node_id, run_id, dimension, score, metadata, evaluated_at "
+        "FROM eval_scores WHERE trace_id=? ORDER BY evaluated_at ASC",
+        (trace_id,),
+    ).fetchall()
+
+    return {
+        "trace": dict(trace_row),
+        "spans": [dict(s) for s in spans],
+        "eval_scores": [dict(e) for e in evals],
+    }
+
+
+# ══════════════════════════════════════
+# Eval Scores (Observability — Epic 017)
+# ══════════════════════════════════════
+
+
+def insert_eval_score(
+    conn: sqlite3.Connection,
+    trace_id: str | None,
+    platform_id: str,
+    epic_id: str | None,
+    node_id: str,
+    run_id: str | None,
+    dimension: str,
+    score: float,
+    metadata: str | None = None,
+) -> str:
+    """Insert an eval score. Skips if duplicate (run_id, dimension). Returns score_id."""
+    import uuid
+
+    if run_id:
+        existing = conn.execute(
+            "SELECT score_id FROM eval_scores WHERE run_id=? AND dimension=?",
+            (run_id, dimension),
+        ).fetchone()
+        if existing:
+            logger.debug("Skipping duplicate eval score: run_id=%s, dimension=%s", run_id, dimension)
+            return existing[0]
+
+    score_id = uuid.uuid4().hex
+    conn.execute(
+        "INSERT INTO eval_scores "
+        "(score_id, trace_id, platform_id, epic_id, node_id, run_id, dimension, score, metadata, evaluated_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (score_id, trace_id, platform_id, epic_id, node_id, run_id, dimension, score, metadata, _now()),
+    )
+    conn.commit()
+    return score_id
+
+
+def get_eval_scores(
+    conn: sqlite3.Connection,
+    platform_id: str,
+    node_id: str | None = None,
+    dimension: str | None = None,
+    limit: int = 100,
+) -> tuple[list[dict], int]:
+    """Get eval scores with optional filters. Returns (scores, total_count)."""
+    where = "WHERE platform_id = ?"
+    params: list = [platform_id]
+    if node_id:
+        where += " AND node_id = ?"
+        params.append(node_id)
+    if dimension:
+        where += " AND dimension = ?"
+        params.append(dimension)
+
+    total = conn.execute(f"SELECT COUNT(*) FROM eval_scores {where}", params).fetchone()[0]
+
+    sql = f"SELECT * FROM eval_scores {where} ORDER BY evaluated_at DESC LIMIT ?"
+    params.append(limit)
+    rows = conn.execute(sql, params).fetchall()
+    return [dict(r) for r in rows], total
+
+
+# ══════════════════════════════════════
+# Stats & Cleanup (Observability — Epic 017)
+# ══════════════════════════════════════
+
+
+def get_stats(conn: sqlite3.Connection, platform_id: str, days: int = 30) -> dict:
+    """Aggregate stats by day for a platform. Returns {stats, summary}."""
+    days = min(days, 90)
+    day_offset = f"-{days} days"
+
+    stats_rows = conn.execute(
+        "SELECT "
+        "  date(t.started_at) as day, "
+        "  COUNT(*) as runs, "
+        "  SUM(t.total_cost_usd) as total_cost, "
+        "  SUM(t.total_tokens_in) as total_tokens_in, "
+        "  SUM(t.total_tokens_out) as total_tokens_out, "
+        "  AVG(t.total_duration_ms) as avg_duration_ms "
+        "FROM traces t "
+        "WHERE t.platform_id = ? AND t.started_at >= date('now', ?) "
+        "GROUP BY date(t.started_at) "
+        "ORDER BY day",
+        (platform_id, day_offset),
+    ).fetchall()
+
+    summary_row = conn.execute(
+        "SELECT "
+        "  COUNT(*) as total_runs, "
+        "  SUM(total_cost_usd) as total_cost, "
+        "  SUM(total_tokens_in) as total_tokens_in, "
+        "  SUM(total_tokens_out) as total_tokens_out, "
+        "  AVG(total_cost_usd) as avg_cost_per_run, "
+        "  SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed_runs "
+        "FROM traces "
+        "WHERE platform_id = ? AND started_at >= date('now', ?)",
+        (platform_id, day_offset),
+    ).fetchone()
+
+    top_nodes = conn.execute(
+        "SELECT pr.node_id, "
+        "  SUM(pr.cost_usd) as total_cost, "
+        "  COUNT(*) as run_count "
+        "FROM pipeline_runs pr "
+        "JOIN traces t ON t.trace_id = pr.trace_id "
+        "WHERE t.platform_id = ? AND t.started_at >= date('now', ?) "
+        "  AND pr.cost_usd > 0 "
+        "GROUP BY pr.node_id "
+        "ORDER BY total_cost DESC "
+        "LIMIT 5",
+        (platform_id, day_offset),
+    ).fetchall()
+
+    return {
+        "stats": [dict(r) for r in stats_rows],
+        "summary": dict(summary_row) if summary_row else {},
+        "top_nodes": [dict(r) for r in top_nodes],
+    }
+
+
+def cleanup_old_data(conn: sqlite3.Connection, days: int = 90) -> dict:
+    """Remove observability data older than `days`. Returns deleted counts."""
+    cutoff = f"-{days} days"
+
+    # Delete in dependency order: eval_scores, pipeline_runs (traced), traces
+    # Also clean pre-017 pipeline_runs with trace_id IS NULL (analysis finding I3)
+    r1 = conn.execute("DELETE FROM eval_scores WHERE evaluated_at < datetime('now', ?)", (cutoff,))
+    eval_count = r1.rowcount
+
+    r2 = conn.execute(
+        "DELETE FROM pipeline_runs WHERE trace_id IN "
+        "(SELECT trace_id FROM traces WHERE started_at < datetime('now', ?))",
+        (cutoff,),
+    )
+    runs_traced = r2.rowcount
+
+    r3 = conn.execute(
+        "DELETE FROM pipeline_runs WHERE trace_id IS NULL AND started_at < datetime('now', ?)",
+        (cutoff,),
+    )
+    runs_untraced = r3.rowcount
+
+    r4 = conn.execute("DELETE FROM traces WHERE started_at < datetime('now', ?)", (cutoff,))
+    trace_count = r4.rowcount
+
+    conn.commit()
+    result = {
+        "eval_scores": eval_count,
+        "pipeline_runs": runs_traced + runs_untraced,
+        "traces": trace_count,
+    }
+    logger.info("Cleanup: deleted %s", result)
+    return result

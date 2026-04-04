@@ -28,6 +28,12 @@ Tudo vive em um unico lugar, versionado, consultavel por qualquer membro do time
 | **Implementacao em repositorios externos** | Ciclos de implementacao operam diretamente no repositorio de codigo da plataforma-alvo, criando PRs automaticamente | Documentacao e codigo vivem conectados mesmo quando estao em lugares diferentes |
 | **Execucao autonoma do pipeline** | DAG executor processa pipeline L1/L2 automaticamente: topological sort, dispatch via claude -p, human gates com pause/resume, retry com circuit breaker. Operador executa via CLI | O arquiteto foca em decisoes estrategicas — pipeline executa sozinho entre gates |
 | **Notificacoes via Telegram** | Bot Telegram com inline keyboard para aprovar/rejeitar human gates do pipeline. Health check, backoff exponencial, offset persistence | Operador nunca perde uma decisao critica — notificacao chega em segundos |
+| **Revisao multi-perspectiva automatica** | Especificacoes revisadas por 4 personas paralelas (Architecture Reviewer, Bug Hunter, Simplifier, Stress Tester) + 1 juiz que filtra por Accuracy/Actionability/Severity | Pega problemas que uma unica perspectiva nao ve — sem overhead manual |
+| **Deteccao e correcao de divergencias** | Apos implementacao, o sistema compara codigo com documentacao em 9 categorias de drift e propoe correcoes concretas com diffs side-by-side | Documentacao nunca vira ficcao — o ciclo se fecha sozinho |
+| **Processamento continuo 24/7** | Daemon FastAPI + asyncio opera ininterruptamente: DAG scheduler, Telegram polling, health checks com degradation state machine, watchdog systemd | Trabalho nao para quando voce para — pipeline processa epics autonomamente |
+| **Governanca automatica de decisoes** | Sistema classifica decisoes em 1-way door (irreversivel, requer humano) e 2-way door (reversivel, auto-aprovavel). Gera ADRs automaticamente para decisoes 1-way | Decisoes criticas nunca passam sem revisao; divergencias detectadas automaticamente |
+| **Modos de operacao do pipeline** | Tres modos via MADRUGA_MODE: manual (pausa em gates, aprovacao via CLI/Telegram), interactive (prompt y/n no terminal), auto (aprova tudo, execucao end-to-end) | Flexibilidade — do controle total ao modo autonomo completo |
+| **Planejamento antecipado de epics** | Epic-context --draft cria artefatos de planejamento em main sem criar branch. Permite planejar multiplos epics enquanto outro executa | Planejamento nao bloqueia execucao — pensa no futuro enquanto entrega o presente |
 
 ---
 
@@ -35,18 +41,8 @@ Tudo vive em um unico lugar, versionado, consultavel por qualquer membro do time
 
 | Feature | Descricao | Por que é importante |
 |---------|-----------|---------------------|
-| **Revisao multi-perspectiva** | Especificacoes revisadas automaticamente por multiplas perspectivas (arquitetura, bugs, simplicidade) antes de implementar | Pega problemas que uma unica perspectiva nao ve |
-| **Deteccao e correcao de divergencias** | Apos implementacao, o sistema compara codigo com documentacao e corrige automaticamente | Documentacao nunca vira ficcao — o ciclo se fecha sozinho |
-
----
-
-## Later — Visao de longo prazo
-
-| Feature | Descricao | Por que é importante |
-|---------|-----------|---------------------|
-| **Processamento continuo 24/7** | Sistema funciona ininterruptamente processando ciclos aprovados enquanto o arquiteto dorme | Velocidade de entrega multiplicada — trabalho nao para quando voce para |
-| **Governanca automatica de decisoes** | Sistema classifica decisoes por reversibilidade e valida continuamente se o codigo respeita as decisoes tomadas | Decisoes criticas nunca passam sem revisao; divergencias detectadas automaticamente |
-| **Roadmap auto-atualizado** | Roadmap gerado automaticamente do estado real dos ciclos | Planejamento sempre reflete a realidade — nunca desatualizado |
+| **Roadmap auto-atualizado** | Roadmap gerado automaticamente do estado real dos ciclos, com drift score e status de milestones | Planejamento sempre reflete a realidade — nunca desatualizado |
+| **Observabilidade e tracing** | Traces hierarquicos por pipeline run, spans por node, metricas de custo/tokens, eval scoring no portal | Visibilidade total sobre custo, performance e qualidade de cada execucao |
 
 ---
 
