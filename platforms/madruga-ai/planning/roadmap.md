@@ -131,9 +131,28 @@ graph LR
 
 ## Proximos Epics (candidatos)
 
+> **Source**: `docs/madruga/madruga_next_evolution.md` — consolidacao de 9 docs de referencia + benchmarks (Claude Code CLI, RTK, GSD, BMAD, Gas Town, OpenClaw). Revisao por 6 personas.
+
+```mermaid
+graph LR
+    E018["018 Pipeline\nHardening (2w)"]
+    E019["019 AI Infra\nas Code (2w)"]
+    E020["020 Code Quality\n& DX (2w)"]
+    E021["021 Pipeline\nIntelligence (2w)"]
+    E017["017 Observability\n(shipped)"]
+
+    E018 --> E020
+    E017 --> E021
+```
+
 | # | Epic (candidato) | Problema | Appetite | Prioridade | Depende de | Status |
 |---|------------------|----------|----------|------------|------------|--------|
-| — | (sem candidatos ativos) | — | — | — | — | — |
+| 018 | Pipeline Hardening & Safety | Connection leaks, no input validation, gate typos bypass approval, no error hierarchy, no graceful shutdown | 2w | P1 | — | planned |
+| 019 | AI Infrastructure as Code | `.claude/` changes merge without review, no blast radius visibility, no security scan, missing governance files | 2w | P1 | — | planned |
+| 020 | Code Quality & DX | db.py 2,268 lines (6 responsibilities mixed), inconsistent logging, memory grows unbounded, skills drift from contract | 2w | P2 | 018 | planned |
+| 021 | Pipeline Intelligence | No cost visibility (columns exist but empty), no hallucination detection, 24-skill pipeline too heavy for bug fixes | 2w | P3 | 017 | planned |
+
+**Nota**: 018 e 019 podem rodar em paralelo (bounded contexts diferentes: runtime vs CI/governance). 020 depende de 018 (error hierarchy). 021 depende de 017 (observability tables).
 
 ---
 
@@ -159,6 +178,10 @@ graph LR
 | Developer Portal publico (Backstage-like) | Fora do scope — madruga-ai e ferramenta interna. Portal Starlight ja atende consumo interno. | Quando houver mais de 5 plataformas ativas ou usuarios externos. |
 | Migracao de codigo de general/ | Abandonada. Runtime sera construido do zero em madruga.ai, capturando aprendizados mas sem migracao de codigo. | Nunca — decisao permanente (ADR-017, ADR-018). |
 | Multi-tenant (N operadores) | Single-operator hoje (Gabriel). Multi-tenant adiciona autenticacao, isolamento, billing — complexidade injustificada. | Quando houver segundo operador com plataformas proprias. |
+| Supabase migration | SQLite funciona bem na escala atual. | Quando >5 plataformas ativas ou portal precisar de real-time. |
+| Wave-based parallel execution | Complexo (1-2d), valor especulativo. | Quando implementando epics grandes (6w+) com muitas tasks independentes. |
+| Portal pipeline dashboard (visual DAG) | Nice-to-have. Portal ja tem status via CLI e tab Runs. | Quando 3+ plataformas ativas. |
+| Pre-commit hooks (detect-secrets, shellcheck) | Overhead para solo dev. CI scan (epic 019) cobre o essencial. | Quando houver time >1 pessoa. |
 
 ---
 
