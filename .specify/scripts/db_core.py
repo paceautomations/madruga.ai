@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import re
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -26,6 +27,21 @@ from config import DB_PATH, MIGRATIONS_DIR
 
 logger = logging.getLogger(__name__)
 _FTS5_AVAILABLE: bool | None = None
+
+# SQL identifier safety: only allow lowercase letters, digits, underscores (start with letter)
+_IDENTIFIER_RE = re.compile(r"^[a-z][a-z0-9_]*$")
+
+
+def _validate_identifiers(*names: str) -> None:
+    """Raise ValueError if any name is not a safe SQL identifier.
+
+    Prevents SQL injection via dynamic column/table names.
+    All callers pass hardcoded whitelists, but this guard ensures
+    future changes don't accidentally introduce injection vectors.
+    """
+    for name in names:
+        if not _IDENTIFIER_RE.match(name):
+            raise ValueError(f"Unsafe SQL identifier: {name!r}")
 
 
 def _check_fts5() -> bool:
@@ -72,6 +88,9 @@ def _fts5_search(
         like_columns: Columns to search with LIKE when FTS5 is unavailable.
         filters: Column→value filters. None values are skipped.
     """
+    # Validate all identifiers that will be interpolated into SQL
+    _validate_identifiers(table, fts_table, *like_columns, *filters.keys())
+
     active_filters = {k: v for k, v in filters.items() if v is not None}
 
     def _like_fallback() -> list[dict]:
@@ -82,6 +101,7 @@ def _fts5_search(
         for col, val in active_filters.items():
             sql += f" AND {col}=?"
             params.append(val)
+        sql += " ORDER BY rowid DESC"
         return [dict(r) for r in conn.execute(sql, params).fetchall()]
 
     if not _check_fts5():

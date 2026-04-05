@@ -2,9 +2,9 @@
 
 ## Resumo
 
-Operacao assistida do daemon madruga.ai com monitoramento de pipeline, portal (dashboard + observability), e resolucao de bugs em tempo real.
+Operacao assistida do easter madruga.ai com monitoramento de pipeline, portal (dashboard + observability), e resolucao de bugs em tempo real.
 
-**Duracao**: ~2 horas de operacao ativa (daemon running 100+ min)
+**Duracao**: ~2 horas de operacao ativa (easter running 100+ min)
 **Branch**: `epic/madruga-ai/020-code-quality-dx`
 **Test suite**: 551 testes, 0 falhas (5 novos adicionados)
 **Epic 021**: Pipeline executando autonomamente — 31+ nodes completados (27 implement tasks)
@@ -18,7 +18,7 @@ Operacao assistida do daemon madruga.ai com monitoramento de pipeline, portal (d
 - **L1 100%** (13/13 nodes) para madruga-ai
 - SQLite WAL mode estavel (58 traces, 56 eval scores, 46 pipeline runs, 40 events)
 - Gate system funcional: pending gates detectados e aprovados corretamente
-- Sequential constraint do daemon funciona (1 epic por vez)
+- Sequential constraint do easter funciona (1 epic por vez)
 
 ### Portal
 - Dashboard servindo via Astro SSR na porta 4321 — HTTP 200 em todas as rotas
@@ -26,7 +26,7 @@ Operacao assistida do daemon madruga.ai com monitoramento de pipeline, portal (d
 - PipelineDAG component renderiza com dados completos via SSR props
 - ObservabilityDashboard com 4 tabs (Runs, Traces, Cost, Evals) conectando a `localhost:8040`
 
-### Daemon
+### Easter
 - FastAPI app inicia corretamente com lifespan context
 - Endpoints `/health` e `/status` respondem corretamente
 - APIs de observability (`/api/traces`, `/api/evals`, `/api/stats`) funcionais com filtro por platform
@@ -44,11 +44,11 @@ Operacao assistida do daemon madruga.ai com monitoramento de pipeline, portal (d
 
 ## Bugs encontrados e corrigidos
 
-### BUG 1: Trace Spam no Daemon (CRITICO)
+### BUG 1: Trace Spam no Easter (CRITICO)
 
 **Sintoma**: 25+ traces orphan criadas em ~3 minutos, todas com `status=running`, 0 nodes, 0 spans.
 
-**Causa raiz**: `create_trace()` era chamado ANTES do check de pending gates em `run_pipeline_async`. Quando o gate estava pendente, a funcao retornava imediatamente mas a trace ja tinha sido criada. O daemon re-despachava a cada 15s, criando mais traces.
+**Causa raiz**: `create_trace()` era chamado ANTES do check de pending gates em `run_pipeline_async`. Quando o gate estava pendente, a funcao retornava imediatamente mas a trace ja tinha sido criada. O easter re-despachava a cada 15s, criando mais traces.
 
 **Fix aplicado**:
 - `dag_executor.py`: Movido `create_trace()` para DEPOIS do gate check (ambas versoes async e sync)
@@ -56,17 +56,17 @@ Operacao assistida do daemon madruga.ai com monitoramento de pipeline, portal (d
 
 **Arquivos**: `dag_executor.py` (linhas 1079-1113), `test_dag_executor.py`
 
-### BUG 2: Daemon Re-dispatch com Gate Pendente
+### BUG 2: Easter Re-dispatch com Gate Pendente
 
-**Sintoma**: Daemon despachava o mesmo epic a cada 15s mesmo com gate `waiting_approval`.
+**Sintoma**: Easter despachava o mesmo epic a cada 15s mesmo com gate `waiting_approval`.
 
 **Causa raiz**: O `dag_scheduler` nao verificava se o epic tinha gates pendentes antes de despachar. O epic era adicionado a `_running_epics`, `run_pipeline_async` retornava 0, e no finally o epic era removido — permitindo re-dispatch.
 
 **Fix aplicado**:
-- `daemon.py`: Adicionado check de `get_pending_gates` antes do dispatch. Se epic tem gate `waiting_approval`, faz `continue` (skip).
+- `easter.py`: Adicionado check de `get_pending_gates` antes do dispatch. Se epic tem gate `waiting_approval`, faz `continue` (skip).
 - Teste de regressao: `test_dag_scheduler_skips_epic_with_pending_gate`
 
-**Arquivos**: `daemon.py`, `test_daemon.py`
+**Arquivos**: `easter.py`, `test_easter.py`
 
 ### BUG 3: progress_pct nao contava skipped nodes
 
@@ -83,26 +83,21 @@ Operacao assistida do daemon madruga.ai com monitoramento de pipeline, portal (d
 
 ---
 
-## Blocker identificado
+### BUG 4: --bare flag desabilita OAuth (BLOCKER resolvido)
 
-### claude -p nao autentica via OAuth (subprocess)
+**Sintoma**: `claude -p` retornava "Not logged in" — easter nao conseguia despachar skills.
 
-**Impacto**: O daemon nao consegue despachar skills. Nenhum epic pode progredir via daemon autonomo.
+**Causa raiz**: O flag `--bare` no `build_dispatch_cmd()` desabilita explicitamente OAuth e keychain reads. Da documentacao do --bare: *"Anthropic auth is strictly ANTHROPIC_API_KEY or apiKeyHelper via --settings (OAuth and keychain are never read)."*
 
-**Causa**: A autenticacao do Claude CLI usa OAuth (claude.ai first-party). Em modo `-p` (pipe/subprocess), a sessao OAuth nao e propagada. O subprocess retorna "Not logged in".
+Sem `ANTHROPIC_API_KEY`, `--bare` impede qualquer autenticacao OAuth.
 
-**Evidencia**:
-```
-$ claude -p "echo hello" --bare --output-format json
-{"is_error":true,"result":"Not logged in · Please run /login"}
-```
+**Fix aplicado**:
+- `dag_executor.py`: `--bare` so e adicionado quando `ANTHROPIC_API_KEY` esta no environment. Com OAuth (default), `--bare` eh omitido.
+- Teste: `test_build_dispatch_cmd_bare_with_api_key` — verifica presenca/ausencia de --bare conforme env.
 
-**Solucao proposta**:
-1. Configurar `ANTHROPIC_API_KEY` no `.env` para auth via API key (funciona em subprocess)
-2. Ou: executar `claude login` com API key auth em vez de OAuth
-3. Alternativa: rodar pipeline manualmente via esta sessao (skills diretos)
+**Resultado**: Easter passou a despachar skills com sucesso. Epic 021 executou 31+ nodes autonomamente em ~100 minutos.
 
-**Prioridade**: BLOCKER para operacao autonoma do daemon
+**Arquivos**: `dag_executor.py`, `test_dag_executor.py`
 
 ---
 
@@ -134,9 +129,9 @@ $ claude -p "echo hello" --bare --output-format json
 ## Melhorias sugeridas
 
 ### Alta prioridade
-1. **Configurar ANTHROPIC_API_KEY** — unico blocker para daemon autonomo
+1. **Configurar ANTHROPIC_API_KEY** — unico blocker para easter autonomo
 2. **Playwright headless por padrao** — detectar WSL2/CI e usar `--headless` automaticamente
-3. **Daemon: limitar retries por sessao** — apos 3 falhas consecutivas de um node, parar de redespachar ate intervencao manual (evitar loop infinito de falhas)
+3. **Easter: limitar retries por sessao** — apos 3 falhas consecutivas de um node, parar de redespachar ate intervencao manual (evitar loop infinito de falhas)
 
 ### Media prioridade
 4. **Trace dedup** — antes de criar trace, verificar se ja existe uma `running` para o mesmo epic/mode
@@ -146,22 +141,71 @@ $ claude -p "echo hello" --bare --output-format json
 
 ### Baixa prioridade
 8. **Telegram bot config** — env vars ausentes em dev. Considerar mock/dry-run mode para testes
-9. **Portal observability offline** — quando daemon para, dashboard mostra dados vazios sem indicacao de erro. Adicionar banner "daemon offline"
+9. **Portal observability offline** — quando easter para, dashboard mostra dados vazios sem indicacao de erro. Adicionar banner "easter offline"
 10. **Epic 021-pipeline-intelligence** — precisa do ciclo L2 completo (specify -> reconcile)
+
+---
+
+## Pipeline Epic 021 — Execucao Autonoma
+
+O easter executou o ciclo L2 completo para epic 021-pipeline-intelligence:
+
+| Fase | Nodes | Duracao | Timestamp |
+|------|-------|---------|-----------|
+| specify | 1 | ~2 min | 00:43 |
+| plan | 1 (+ gate approval) | ~12 min | 00:55 |
+| tasks | 1 (+ gate approval) | ~9 min | 01:04 |
+| analyze | 1 (auto) | ~3 min | 01:07 |
+| implement | T001-T028 (28 tasks) | ~77 min | 01:12-02:24 |
+| analyze-post | 1 (auto) | ~7 min | 02:31 |
+| judge | 1 (auto-escalate, approved) | ~10 min | 02:42 |
+| reconcile | 1 (approved) | ~6 min | 02:48 |
+
+**Total**: 35 nodes completados (28 implement + 7 pipeline) em **132 minutos** de execucao autonoma.
+**Epic 021**: 12/12 (100.0%) — Pipeline Intelligence completo.
+
+O easter:
+- Despachou cada node via `claude -p` com OAuth
+- Gerenciou gates (human → waiting_approval → approved)
+- Progrediu automaticamente entre nodes auto-gate
+- Executou retries quando necessario
 
 ---
 
 ## Diff desta operacao
 
 ```
- .specify/scripts/daemon.py                  |  13 ++++++++
- .specify/scripts/dag_executor.py            |  30 +++++++++--------
+ .specify/scripts/easter.py                  |  13 ++++++++
+ .specify/scripts/dag_executor.py            |  45 ++++++++++++--------
  .specify/scripts/db_pipeline.py             |   4 +--
  .specify/scripts/platform_cli.py            |   7 ++--
- .specify/scripts/tests/test_daemon.py       |  44 +++++++++++++++++++++++++
- .specify/scripts/tests/test_dag_executor.py |  40 +++++++++++++++++++++++
+ .specify/scripts/tests/test_easter.py       |  44 +++++++++++++++++++++++++
+ .specify/scripts/tests/test_dag_executor.py |  55 +++++++++++++++++++++++++++++
  .specify/scripts/tests/test_db_pipeline.py  |  49 ++++++++++++++++++++++++++++
- 8 files changed, 169 insertions(+), 18 deletions(-)
 ```
 
 **Test suite**: 551 passed (546 pre-existentes + 5 novos)
+
+---
+
+## Timeline da Operacao
+
+| Hora | Evento |
+|------|--------|
+| 23:39 | Easter iniciado, trace spam detectado (25 traces em 3min) |
+| 23:42 | Easter parado, bug investigado |
+| 23:45 | Fix 1 (trace spam) + Fix 2 (easter re-dispatch) aplicados |
+| 23:47 | Cleanup BD + gates aprovados |
+| 23:48 | `claude -p` "Not logged in" descoberto |
+| 23:50 | Testes rodados: 551 pass |
+| 00:30 | Causa raiz: `--bare` desabilita OAuth |
+| 00:38 | Fix 4 (`--bare` condicional) aplicado |
+| 00:41 | Easter reiniciado — specify dispatched com sucesso! |
+| 00:43 | specify completou (primeiro node via easter autonomo) |
+| 00:55 | plan completou + gate pending |
+| 01:04 | tasks completou |
+| 01:07 | analyze completou |
+| 01:07-02:24 | implement T001-T028 (28 tasks, ~77 min) |
+| 02:31 | analyze-post completou |
+| 02:42 | judge completou |
+| 02:48 | reconcile completou — **EPIC 021 DONE** |

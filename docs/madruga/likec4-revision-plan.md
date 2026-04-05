@@ -130,7 +130,7 @@ view contextMap {
 ```likec4
 // index view: clicking madrugaAi → containers
 view index {
-  include architect, daemon
+  include architect, easter
   include madrugaAi with {
     navigateTo containers
   }
@@ -150,7 +150,7 @@ view contextMap {
   include intelligence.*
   include integration, integration.*
   include observability, observability.*
-  include architect, daemon
+  include architect, easter
   include claudeApi, telegramBot, githubApi, likec4Cli, sentryCloud
   include sqliteDb, gitFs
 }

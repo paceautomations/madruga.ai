@@ -6,14 +6,14 @@ decision: We will enforce a MECE artifact model where each documentation artifac
   it answers), with no content duplication across artifacts.
 alternatives: Ad-hoc docs (cada dev escreve onde quiser), Wiki (Notion, Confluence),
   Shared docs (Google Docs)
-rationale: Cada artefato tem ownership claro — daemon sabe exatamente o que atualizar
+rationale: Cada artefato tem ownership claro — easter sabe exatamente o que atualizar
 ---
 # ADR-008: MECE Artifact Model para Documentacao
 **Status:** Accepted | **Data:** 2026-03-27
 
 ## Contexto
 
-Sistemas de documentacao tipicamente sofrem de: duplicacao (mesma info em 3 lugares), ownership ambiguo (quem atualiza o que?), e drift (docs desatualizados). Precisamos de um modelo onde cada artefato tem exatamente 1 owner (skill/pipeline que o gera) e 1 purpose (o que ele responde), garantindo Mutually Exclusive, Collectively Exhaustive (MECE). Isso e critico para o daemon autonomo, que precisa saber exatamente qual artefato atualizar.
+Sistemas de documentacao tipicamente sofrem de: duplicacao (mesma info em 3 lugares), ownership ambiguo (quem atualiza o que?), e drift (docs desatualizados). Precisamos de um modelo onde cada artefato tem exatamente 1 owner (skill/pipeline que o gera) e 1 purpose (o que ele responde), garantindo Mutually Exclusive, Collectively Exhaustive (MECE). Isso e critico para o easter autonomo, que precisa saber exatamente qual artefato atualizar.
 
 ## Decisao
 
@@ -35,7 +35,7 @@ We will enforce a MECE artifact model where each documentation artifact has exac
 
 ## Consequencias
 
-- [+] Cada artefato tem ownership claro — daemon sabe exatamente o que atualizar
+- [+] Cada artefato tem ownership claro — easter sabe exatamente o que atualizar
 - [+] Zero duplicacao — informacao vive em um lugar so
 - [+] Pipeline automatizado — vision-build.py popula AUTO markers sem ambiguidade
 - [+] Auditavel — git blame mostra quem/quando/por que cada artefato mudou

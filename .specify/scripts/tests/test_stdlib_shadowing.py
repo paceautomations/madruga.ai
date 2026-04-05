@@ -1,6 +1,6 @@
 """Test that no script file shadows a Python stdlib module.
 
-When scripts_dir is inserted into sys.path (as daemon.py and conftest.py do),
+When scripts_dir is inserted into sys.path (as easter.py and conftest.py do),
 a file named e.g. 'platform.py' would shadow stdlib 'platform', breaking
 transitive imports like structlog -> uuid -> platform.
 

@@ -1,10 +1,10 @@
 [Unit]
-Description=Madruga AI Daemon — Pipeline orchestrator 24/7
+Description=Madruga AI Easter — Pipeline orchestrator 24/7
 After=network.target
 
 [Service]
 Type=notify
-ExecStart=/usr/bin/python3 %h/repos/paceautomations/madruga.ai/.specify/scripts/daemon.py
+ExecStart=/usr/bin/python3 %h/repos/paceautomations/madruga.ai/.specify/scripts/easter.py
 WorkingDirectory=%h/repos/paceautomations/madruga.ai
 Restart=on-failure
 RestartSec=5

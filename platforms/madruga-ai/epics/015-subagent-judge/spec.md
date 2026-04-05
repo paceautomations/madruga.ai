@@ -142,7 +142,7 @@ O Judge, ao rodar no final do ciclo (posição do antigo verify), também revisa
 - O volume de reviews no início é baixo (~3 nodes 1-way-door por pipeline). Calibração do Judge será manual por observação, sem feedback loop automatizado neste epic.
 - A tabela de patterns do Decision Classifier (score de risco) cobre os cenários mais comuns. Patterns não cobertos defaultam para 2-way-door (safe failure mode — o Judge final serve como safety net).
 - O analyze (pre e post) continua inalterado — responsável por aderência documental. O Judge é complementar, responsável por qualidade funcional.
-- L1 continua no terminal Claude Code (interativo). Automação via Telegram/daemon é exclusiva do L2.
+- L1 continua no terminal Claude Code (interativo). Automação via Telegram/easter é exclusiva do L2.
 
 ---
 handoff:

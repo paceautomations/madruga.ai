@@ -16,7 +16,7 @@ Superseded by [ADR-018](ADR-018-telegram-bot-notifications.md) — 2026-03-31
 
 ## Contexto
 
-O daemon Madruga AI precisa notificar o operador sobre status de epics, decisoes pendentes (1-way-door), e erros criticos. O canal deve suportar comunicacao bidirecional: o daemon envia, o operador responde para aprovar/rejeitar decisoes.
+O easter Madruga AI precisa notificar o operador sobre status de epics, decisoes pendentes (1-way-door), e erros criticos. O canal deve suportar comunicacao bidirecional: o easter envia, o operador responde para aprovar/rejeitar decisoes.
 
 O operador (Gabriel) usa WhatsApp como app principal de comunicacao. Um gateway wpp-bridge ja existe e funciona em `general/services/madruga-ai/src/integrations/messaging/providers/whatsapp.py`.
 
@@ -28,20 +28,20 @@ O operador (Gabriel) usa WhatsApp como app principal de comunicacao. Um gateway 
 
 Manter WhatsApp como canal de notificacoes, usando wpp-bridge como gateway HTTP local. Migrar o codigo do provider e do bridge de `general/services/` para dentro do repo `madruga.ai` junto com o runtime engine.
 
-A interface `MessagingProvider` permanece abstrata com 3 metodos (send, ask_choice, alert). Isso torna a escolha de canal uma **2-way door**: trocar WhatsApp por Telegram ou ntfy.sh requer apenas implementar um novo provider, sem mudar daemon ou pipeline.
+A interface `MessagingProvider` permanece abstrata com 3 metodos (send, ask_choice, alert). Isso torna a escolha de canal uma **2-way door**: trocar WhatsApp por Telegram ou ntfy.sh requer apenas implementar um novo provider, sem mudar easter ou pipeline.
 
 **Plano de degradacao (wpp-bridge offline):**
 1. Health check periodico do bridge (HTTP GET /status a cada 60s)
-2. Se bridge offline por >3 checks: daemon muda para modo log-only (structlog WARNING, continua processando auto gates, pausa human gates)
+2. Se bridge offline por >3 checks: easter muda para modo log-only (structlog WARNING, continua processando auto gates, pausa human gates)
 3. Notificacao de fallback via ntfy.sh (HTTP POST, zero deps, config opcional em config.yaml)
-4. Operador reconecta wpp-bridge manualmente (QR code), daemon detecta e retoma WhatsApp
+4. Operador reconecta wpp-bridge manualmente (QR code), easter detecta e retoma WhatsApp
 
-**Nota sobre estabilidade:** wpp-bridge depende de WhatsApp Web protocol, que e nao-oficial e pode quebrar com atualizacoes do WhatsApp. Esse risco e aceito conscientemente — o plano de degradacao garante que o daemon nao para.
+**Nota sobre estabilidade:** wpp-bridge depende de WhatsApp Web protocol, que e nao-oficial e pode quebrar com atualizacoes do WhatsApp. Esse risco e aceito conscientemente — o plano de degradacao garante que o easter nao para.
 
 ## Alternativas Consideradas
 
 ### Alternativa A: WhatsApp via wpp-bridge (escolhida)
-- **Pros:** operador ja usa WhatsApp como app principal (zero fricao), bridge ja implementado e testado, poll-based bidirectional (ask_choice com timeout), alertas com emoji/levels, integracao existente com daemon (MessagingClient/WhatsAppProvider), funciona em WSL2 (bridge local HTTP)
+- **Pros:** operador ja usa WhatsApp como app principal (zero fricao), bridge ja implementado e testado, poll-based bidirectional (ask_choice com timeout), alertas com emoji/levels, integracao existente com easter (MessagingClient/WhatsAppProvider), funciona em WSL2 (bridge local HTTP)
 - **Cons:** wpp-bridge e servico separado que precisa rodar junto, WhatsApp Web session pode desconectar (reconexao manual), sem inline buttons (interacao via texto livre A/B/C), dependencia de WhatsApp Web protocol (pode quebrar)
 - **Fit:** Alto — o operador ja esta no WhatsApp, e o bridge ja funciona.
 
@@ -65,7 +65,7 @@ A interface `MessagingProvider` permanece abstrata com 3 metodos (send, ask_choi
 ### Positivas
 - Zero mudanca de habito para o operador — notificacoes chegam no WhatsApp
 - Codigo ja existe e esta testado — migracao e copy + adapt, nao rewrite
-- Interface abstrata (MessagingProvider) permite trocar provider sem mudar daemon
+- Interface abstrata (MessagingProvider) permite trocar provider sem mudar easter
 - Poll-based ask_choice funciona para decisoes 1-way-door com timeout configuravel
 
 ### Negativas

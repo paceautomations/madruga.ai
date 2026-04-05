@@ -22,7 +22,7 @@ drift_score: 89
 | model/*.likec4 | D3 | CURRENT | 0 (sem novos containers) |
 | decisions/ADR-019 | D5 | **OUTDATED** | 1 (3 personas → 4) |
 | planning/roadmap.md | D6 | **OUTDATED** | 2 (epic 015 não está na tabela shipped + appetite) |
-| epics/016-daemon-24-7/pitch.md | D7 | CURRENT | 0 (016 não assume nada sobre Judge) |
+| epics/016-easter-24-7/pitch.md | D7 | CURRENT | 0 (016 não assume nada sobre Judge) |
 | README.md | D9 | N/A | Plataforma não tem README |
 
 ---
@@ -115,7 +115,7 @@ drift_score: 89
 
 ### Dependências Descobertas
 
-Nenhuma nova dependência inter-epic descoberta. Epic 016 (Daemon 24/7) não assume nada sobre o Judge — depende apenas de 013 (executor) e 014 (Telegram).
+Nenhuma nova dependência inter-epic descoberta. Epic 016 (Easter 24/7) não assume nada sobre o Judge — depende apenas de 013 (executor) e 014 (Telegram).
 
 ### Status dos Riscos
 
@@ -130,7 +130,7 @@ Nenhuma nova dependência inter-epic descoberta. Epic 016 (Daemon 24/7) não ass
 
 | Epic | Assunção no Pitch | Como Afetado | Impacto | Ação Necessária |
 |------|------------------|-------------|---------|-----------------|
-| 016 Daemon 24/7 | "refatorar telegram_bot.py como coroutine" | telegram_bot.py agora tem funções adicionais (decision notifications) que o daemon também precisa integrar | Baixo | Nenhuma — novas funções seguem o mesmo pattern asyncio |
+| 016 Easter 24/7 | "refatorar telegram_bot.py como coroutine" | telegram_bot.py agora tem funções adicionais (decision notifications) que o easter também precisa integrar | Baixo | Nenhuma — novas funções seguem o mesmo pattern asyncio |
 
 Nenhum impacto significativo em epics futuros. 016 é o único candidato restante no roadmap.
 

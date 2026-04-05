@@ -1,7 +1,7 @@
-# Specification Quality Checklist: Daemon 24/7
+# Specification Quality Checklist: Pipeline Intelligence
 
 **Purpose**: Validate specification completeness and quality before proceeding to planning
-**Created**: 2026-04-01
+**Created**: 2026-04-05
 **Feature**: [spec.md](../spec.md)
 
 ## Content Quality
@@ -31,6 +31,7 @@
 
 ## Notes
 
-- Spec completa sem markers de clarificacao. Todas as decisoes de implementacao foram capturadas no context.md.
-- Edge cases cobrem: resume apos crash, epics concorrentes, subprocess hang, SQLite lock, graceful shutdown com subprocess ativo, callback de gate ja resolvido, env vars ausentes.
-- Validated 2026-04-01 — all items pass.
+- Spec references specific field names (`total_cost_usd`, `num_turns`) — these are from the research artifact (T001) and describe the domain (CLI output structure), not implementation. Acceptable.
+- Spec mentions `dag_executor.py` and `platform.yaml` in FR-007/FR-008 — these identify WHERE changes happen, not HOW. Borderline but acceptable since the system being specified IS the pipeline itself.
+- All 4 user stories have independent tests and acceptance scenarios.
+- No [NEEDS CLARIFICATION] markers — decisions resolved via pitch + research.

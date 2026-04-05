@@ -1,7 +1,7 @@
-# Implementation Plan: Daemon 24/7
+# Implementation Plan: Easter 24/7
 
-**Branch**: `epic/madruga-ai/016-daemon-24-7` | **Date**: 2026-04-01 | **Spec**: [spec.md](spec.md)
-**Input**: Feature specification from `platforms/madruga-ai/epics/016-daemon-24-7/spec.md`
+**Branch**: `epic/madruga-ai/016-easter-24-7` | **Date**: 2026-04-01 | **Spec**: [spec.md](spec.md)
+**Input**: Feature specification from `platforms/madruga-ai/epics/016-easter-24-7/spec.md`
 
 ## Summary
 
@@ -14,7 +14,7 @@ Processo persistente 24/7 que orquestra o pipeline Madruga AI automaticamente. C
 **Storage**: SQLite WAL mode (.pipeline/madruga.db) — state store, checkpoints, gate status
 **Testing**: pytest (make test)
 **Target Platform**: WSL2 Ubuntu, systemd service
-**Project Type**: daemon/service (long-running process)
+**Project Type**: easter/service (long-running process)
 **Performance Goals**: <10s startup, <5s shutdown, <30s epic detection, <5s gate notification
 **Constraints**: single instance, max 3 claude -p concorrentes, localhost only (127.0.0.1:8040), <200MB RAM
 **Scale/Scope**: 1 operador, 24 nodes no DAG (13 L1 + 11 L2), ~5-10 epics ativos
@@ -26,7 +26,7 @@ Processo persistente 24/7 que orquestra o pipeline Madruga AI automaticamente. C
 | Principio | Status | Notas |
 |-----------|--------|-------|
 | I. Pragmatism | PASS | Compoe modulos existentes em vez de reescrever. Refatora cirurgicamente (subprocess.run → create_subprocess_exec). |
-| II. Automate | PASS | Este epic E a automacao — daemon automatiza o pipeline inteiro. |
+| II. Automate | PASS | Este epic E a automacao — easter automatiza o pipeline inteiro. |
 | III. Structured Knowledge | PASS | context.md captura decisoes. Plan documenta approach. |
 | IV. Fast Action + TDD | PASS | Testes escritos junto com implementacao. Batch para modulos < 300 LOC. |
 | V. Alternatives + Trade-offs | PASS | 10 decisoes capturadas em context.md, todas com alternativas e pros/cons. |
@@ -42,7 +42,7 @@ Processo persistente 24/7 que orquestra o pipeline Madruga AI automaticamente. C
 ### Documentation (this feature)
 
 ```text
-platforms/madruga-ai/epics/016-daemon-24-7/
+platforms/madruga-ai/epics/016-easter-24-7/
 ├── pitch.md             # Shape Up pitch (existente)
 ├── context.md           # Implementation context (gerado)
 ├── spec.md              # Feature spec (gerado)
@@ -57,7 +57,7 @@ platforms/madruga-ai/epics/016-daemon-24-7/
 
 ```text
 .specify/scripts/
-├── daemon.py              # NEW — FastAPI entry point + lifespan + signal handling (~200 LOC)
+├── easter.py              # NEW — FastAPI entry point + lifespan + signal handling (~200 LOC)
 ├── dag_executor.py        # MODIFY — refatorar para async (subprocess.run → create_subprocess_exec)
 ├── telegram_bot.py        # MODIFY — extrair coroutines composáveis, remover entry point standalone
 ├── telegram_adapter.py    # KEEP — MessagingProvider ABC + TelegramAdapter (sem mudanças)
@@ -66,7 +66,7 @@ platforms/madruga-ai/epics/016-daemon-24-7/
 ├── config.py              # KEEP — REPO_ROOT e paths
 ├── post_save.py           # KEEP — registro de artefatos no SQLite
 └── tests/
-    ├── test_daemon.py          # NEW — testes do daemon (startup, shutdown, lifespan)
+    ├── test_easter.py          # NEW — testes do easter (startup, shutdown, lifespan)
     ├── test_dag_executor.py    # MODIFY — adicionar testes async
     ├── test_ntfy.py            # NEW — testes do ntfy fallback
     ├── test_sd_notify.py       # NEW — testes do sd_notify
@@ -74,10 +74,10 @@ platforms/madruga-ai/epics/016-daemon-24-7/
 
 etc/
 └── systemd/
-    └── madruga-daemon.service  # NEW — systemd unit file
+    └── madruga-easter.service  # NEW — systemd unit file
 ```
 
-**Structure Decision**: Modular — daemon.py como orquestrador fino que compoe modulos existentes. Sem novo diretorio — tudo em `.specify/scripts/` (convencao do projeto). Unit file em `etc/systemd/` (convencao Unix).
+**Structure Decision**: Modular — easter.py como orquestrador fino que compoe modulos existentes. Sem novo diretorio — tudo em `.specify/scripts/` (convencao do projeto). Unit file em `etc/systemd/` (convencao Unix).
 
 ## Design Decisions
 
@@ -89,15 +89,15 @@ etc/
 |--------|-------|--------|
 | `dispatch_node()` | `subprocess.run()` bloqueante | `asyncio.create_subprocess_exec()` non-blocking |
 | `dispatch_with_retry()` | `time.sleep(backoff)` | `asyncio.sleep(backoff)` |
-| `run_pipeline()` | `sys.exit(0)` em human gates | Gravar no SQLite + retornar (daemon continua) |
+| `run_pipeline()` | `sys.exit(0)` em human gates | Gravar no SQLite + retornar (easter continua) |
 | CLI entry point | `asyncio.run(run_pipeline(...))` | Mantém backward compat sincrono |
 
 **Semaforo**: `asyncio.Semaphore(max_slots)` wrappeia dispatch para limitar concorrencia.
 
-### D2: Composicao do daemon via lifespan
+### D2: Composicao do easter via lifespan
 
 ```
-daemon.py
+easter.py
   └── FastAPI app
        └── lifespan context manager
             └── asyncio.TaskGroup
@@ -146,14 +146,14 @@ sentry_sdk.init(
 )
 ```
 
-~10 LOC no startup do daemon. Auto-captura exceptions de rotas FastAPI e tasks asyncio.
+~10 LOC no startup do easter. Auto-captura exceptions de rotas FastAPI e tasks asyncio.
 
 ## Risk Analysis
 
 | Risco | Impacto | Probabilidade | Mitigacao |
 |-------|---------|---------------|-----------|
 | `create_subprocess_exec` nao funciona com claude CLI | Alto | Baixa | Testar primeiro. Se falhar, usar `asyncio.to_thread(subprocess.run, ...)` como fallback. |
-| SQLite lock contention com escritas concorrentes | Medio | Baixa | WAL mode + busy_timeout=5000ms. Daemon e unico writer na maioria dos cenarios. |
+| SQLite lock contention com escritas concorrentes | Medio | Baixa | WAL mode + busy_timeout=5000ms. Easter e unico writer na maioria dos cenarios. |
 | Memory leak em processo 24/7 | Medio | Media | SC-006 exige 72h sem leak. Monitorar com /status endpoint (RSS). |
 | Telegram long-polling interfere com graceful shutdown | Baixo | Media | aiogram Dispatcher.stop() cancela polling. Timeout de 5s no shutdown. |
 
@@ -161,12 +161,12 @@ sentry_sdk.init(
 
 | Componente | Base | Realista (1.5x) | Tipo |
 |------------|------|-----------------|------|
-| daemon.py | ~150 | ~225 | NEW |
+| easter.py | ~150 | ~225 | NEW |
 | dag_executor.py async refactor | ~130 delta | ~200 | MODIFY |
 | telegram_bot.py refactor | ~50 delta | ~75 | MODIFY |
 | ntfy.py | ~15 | ~25 | NEW |
-| madruga-daemon.service | ~20 | ~20 | NEW |
-| test_daemon.py | ~150 | ~225 | NEW |
+| madruga-easter.service | ~20 | ~20 | NEW |
+| test_easter.py | ~150 | ~225 | NEW |
 | test_dag_executor.py delta | ~80 | ~120 | MODIFY |
 | test_ntfy.py | ~40 | ~60 | NEW |
 | **Total** | **~635** | **~950** | — |

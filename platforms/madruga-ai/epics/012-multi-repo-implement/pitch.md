@@ -52,7 +52,7 @@ O pipeline so opera no proprio repo (madruga.ai). Para gerar valor real, precisa
 
 **Resposta:** Worktree. Mesmo padrao do general.
 
-**Racional:** Isolamento total (nao interfere em mudancas locais), crash recovery (worktree sobrevive), concorrencia futura (daemon pode ter N worktrees), overhead aceitavel (~2-3s criar).
+**Racional:** Isolamento total (nao interfere em mudancas locais), crash recovery (worktree sobrevive), concorrencia futura (easter pode ter N worktrees), overhead aceitavel (~2-3s criar).
 
 ### 3. Auto-clone: como saber org/repo/branch?
 
@@ -75,7 +75,7 @@ repo:
 
 **Resposta:** Duas camadas:
 1. **Interativo (humano invoca `/speckit.implement`):** A skill le tasks.md e implementa. Para multi-repo, o humano precisa estar no worktree correto ou usar o wrapper.
-2. **Autonomo (daemon invoca):** O script wrapper (`implement-remote.py` ou similar) orquestra: ensure_repo → create_worktree → compoe prompt (spec+plan+tasks+context) → `claude -p --cwd=worktree -p "prompt"`. O `claude -p` executa a implementacao no repo externo.
+2. **Autonomo (easter invoca):** O script wrapper (`implement-remote.py` ou similar) orquestra: ensure_repo → create_worktree → compoe prompt (spec+plan+tasks+context) → `claude -p --cwd=worktree -p "prompt"`. O `claude -p` executa a implementacao no repo externo.
 
 O wrapper NAO modifica speckit.implement.md — ele compoe o prompt e delega.
 
@@ -90,7 +90,7 @@ O wrapper NAO modifica speckit.implement.md — ele compoe o prompt e delega.
 | Constraint | Fonte | Impacto no Epic |
 |-----------|-------|-----------------|
 | Zero deps novas | blueprint (stdlib-only) | Script wrapper usa stdlib Python + subprocess git/gh |
-| claude -p max 3 concorrentes | ADR-010 | Semaforo no wrapper se daemon usar (futuro, epic 013) |
+| claude -p max 3 concorrentes | ADR-010 | Semaforo no wrapper se easter usar (futuro, epic 013) |
 | SQLite WAL mode | ADR-012 | post_save.py ja funciona — gravar estado apos implement |
 | Filesystem source of truth | ADR-004 | Docs em madruga.ai, codigo em repo externo |
 | repos_base_dir convention | general/config.py, db.py | Default `~/repos/`, configuravel via local_config |

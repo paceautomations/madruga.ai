@@ -189,3 +189,42 @@ def test_fts5_search_like_fallback(monkeypatch):
     assert len(results) == 1
     assert results[0]["name"] == "hello world"
     conn.close()
+
+
+class TestValidateIdentifiers:
+    """Tests for _validate_identifiers SQL injection guard."""
+
+    def test_accepts_valid_identifiers(self):
+        from db_core import _validate_identifiers
+
+        _validate_identifiers("tokens_in", "cost_usd", "platform_id", "name")
+
+    def test_rejects_sql_injection_attempt(self):
+        from db_core import _validate_identifiers
+
+        with pytest.raises(ValueError, match="Unsafe SQL identifier"):
+            _validate_identifiers("name; DROP TABLE users")
+
+    def test_rejects_uppercase(self):
+        from db_core import _validate_identifiers
+
+        with pytest.raises(ValueError, match="Unsafe SQL identifier"):
+            _validate_identifiers("Name")
+
+    def test_rejects_leading_digit(self):
+        from db_core import _validate_identifiers
+
+        with pytest.raises(ValueError, match="Unsafe SQL identifier"):
+            _validate_identifiers("1column")
+
+    def test_rejects_empty_string(self):
+        from db_core import _validate_identifiers
+
+        with pytest.raises(ValueError, match="Unsafe SQL identifier"):
+            _validate_identifiers("")
+
+    def test_rejects_hyphenated(self):
+        from db_core import _validate_identifiers
+
+        with pytest.raises(ValueError, match="Unsafe SQL identifier"):
+            _validate_identifiers("some-column")

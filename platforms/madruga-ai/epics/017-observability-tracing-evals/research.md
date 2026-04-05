@@ -115,14 +115,14 @@ O unico campo ausente e `trace_id` para agrupar spans em um trace.
 | Opcao | Pros | Cons |
 |-------|------|------|
 | **Polling 10s** (fetch periodico) | Trivial em React, sem infra extra, tolerante a falhas | Latencia de ate 10s, requests desnecessarios quando idle |
-| **SSE** (Server-Sent Events) | Real-time, eficiente em bandwidth | Requer streaming no daemon, Astro islands hydration complexa |
+| **SSE** (Server-Sent Events) | Real-time, eficiente em bandwidth | Requer streaming no easter, Astro islands hydration complexa |
 | **Static JSON** (pattern existente) | Consistente com dashboard.astro | Requer rebuild/re-export, nao e real-time, nao funciona para dados em progresso |
 
 **Decision**: Polling 10s via `fetch()` + `setInterval()` em React islands com `client:load`.
-**Rationale**: Latencia de 10s e aceitavel para monitoramento humano. Zero complexidade adicional no daemon (endpoints JSON simples). Consistente com decisao do pitch (decisao 5).
+**Rationale**: Latencia de 10s e aceitavel para monitoramento humano. Zero complexidade adicional no easter (endpoints JSON simples). Consistente com decisao do pitch (decisao 5).
 **Alternatives**: SSE para V2 se polling for insuficiente (improvavel para single-user).
 
-**Daemon URL**: O portal roda em `localhost:4321` (Astro dev) e o daemon em `localhost:8040`. Em dev, requests cross-origin requerem CORS headers no daemon. Adicionar `CORSMiddleware` ao FastAPI.
+**Easter URL**: O portal roda em `localhost:4321` (Astro dev) e o easter em `localhost:8040`. Em dev, requests cross-origin requerem CORS headers no easter. Adicionar `CORSMiddleware` ao FastAPI.
 
 ---
 
@@ -159,9 +159,9 @@ O unico campo ausente e `trace_id` para agrupar spans em um trace.
 
 ---
 
-## R8: CORS Configuration for Daemon
+## R8: CORS Configuration for Easter
 
-**Question**: Como permitir requests do portal (localhost:4321) ao daemon (localhost:8040)?
+**Question**: Como permitir requests do portal (localhost:4321) ao easter (localhost:8040)?
 
 **Finding**: FastAPI tem `CORSMiddleware` builtin via Starlette:
 
@@ -175,5 +175,5 @@ app.add_middleware(
 )
 ```
 
-**Decision**: Adicionar CORSMiddleware ao daemon com origins limitados a localhost. Sem wildcard.
+**Decision**: Adicionar CORSMiddleware ao easter com origins limitados a localhost. Sem wildcard.
 **Rationale**: Seguro (only localhost), necessario para fetch cross-origin. FastAPI middleware builtin, zero deps extras.

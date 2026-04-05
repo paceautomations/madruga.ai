@@ -44,7 +44,7 @@ madruga.ai is an **ambitious and well-structured** architecture documentation sy
 - **Coordinates 20-30 parallel AI coding agents** across multiple projects
 - **Three-tier persistence**: Beads (git-backed structured work items), Hooks (worktree storage surviving crashes), Seance (session discovery from JSONL event logs to query predecessor agent decisions)
 - **Refinery**: Per-project merge queue with Bors-style bisecting verification gates — failed merges isolated and re-dispatched
-- **Three-tier watchdog**: Daemon (3-min heartbeat), Boot (AI triage), Deacon (continuous patrol)
+- **Three-tier watchdog**: Easter (3-min heartbeat), Boot (AI triage), Deacon (continuous patrol)
 - **Structured escalation** with P0/P1/P2 severity routing
 
 ### OpenClaw — Local-First AI Assistant

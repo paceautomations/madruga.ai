@@ -8,7 +8,7 @@ views {
     title 'Madruga AI — System Landscape'
     description 'Visao geral: atores, plataforma, sistemas externos e infraestrutura'
 
-    include architect, daemon
+    include architect, easter
     include madrugaAi
     include claudeApi, telegramBot, githubApi, likec4Cli, sentryCloud
     include sqliteDb, gitFs
@@ -19,7 +19,7 @@ views {
     description 'Containers deployaveis, storage, sistemas externos e mapa completo de integracoes'
 
     include *
-    include architect, daemon
+    include architect, easter
     include claudeApi, telegramBot, githubApi, likec4Cli, sentryCloud
     include sqliteDb, gitFs
   }
@@ -34,7 +34,7 @@ views {
     include intelligence, intelligence.*
     include integration, integration.*
     include observability, observability.*
-    include architect, daemon
+    include architect, easter
     include claudeApi, telegramBot, githubApi, likec4Cli, sentryCloud
     include sqliteDb, gitFs
   }
@@ -59,7 +59,7 @@ views {
 
   view executionDetail of execution {
     title 'Execution — Supporting Domain'
-    description 'Bounded context Execution: daemon (FastAPI), DAG executor (MADRUGA_MODE)'
+    description 'Bounded context Execution: easter (FastAPI), DAG executor (MADRUGA_MODE)'
 
     include *
     include integration.claudeClient, integration.telegramAdapter
@@ -105,7 +105,7 @@ views {
     //  FASE 1: TRIGGER (DAG Executor → Pipeline)
     // ════════════════════════════════════
 
-    execution.dagExecutor -> execution.daemonProcess 'Node pronto (deps satisfeitas)' {
+    execution.dagExecutor -> execution.easterProcess 'Node pronto (deps satisfeitas)' {
       notes '''
         **DAG Executor trigger**
         - Le pipeline nodes de platform.yaml

@@ -13,7 +13,7 @@ rationale: Appetite explicito — forca decisao de budget antes de comecar (1-2 
 
 ## Contexto
 
-Precisamos de um formato para descrever unidades de trabalho (epics) que: (1) defina claramente o problema e appetite (budget de tempo), (2) identifique rabbit holes antes de comecar, (3) seja legivel por LLMs para execucao autonoma pelo daemon, e (4) forca priorizacao explicita (now/next/later). O formato deve ser compativel com o pipeline spec-to-code e mapeavel para bounded contexts e containers.
+Precisamos de um formato para descrever unidades de trabalho (epics) que: (1) defina claramente o problema e appetite (budget de tempo), (2) identifique rabbit holes antes de comecar, (3) seja legivel por LLMs para execucao autonoma pelo easter, e (4) forca priorizacao explicita (now/next/later). O formato deve ser compativel com o pipeline spec-to-code e mapeavel para bounded contexts e containers.
 
 ## Decisao
 
@@ -37,7 +37,7 @@ We will use Shape Up pitch format for all epics, stored as `platforms/<name>/epi
 
 - [+] Appetite explicito — forca decisao de budget antes de comecar (1-2 semanas ou 4-6 semanas)
 - [+] Rabbit holes documentados — evita time sinks conhecidos
-- [+] Frontmatter YAML permite pipeline automatizado (daemon le pitch e sabe quais contexts/containers sao afetados)
+- [+] Frontmatter YAML permite pipeline automatizado (easter le pitch e sabe quais contexts/containers sao afetados)
 - [+] Acceptance criteria como checklist — verificavel por automacao
 - [+] Formato padronizado — LLMs conseguem extrair e gerar pitches de forma confiavel
 - [-] Overhead para mudancas pequenas — nem tudo justifica um pitch completo

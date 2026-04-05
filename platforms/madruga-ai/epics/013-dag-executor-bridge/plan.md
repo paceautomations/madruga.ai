@@ -115,7 +115,7 @@ Para skill "speckit.implement", reutiliza compose_prompt() existente. Para outro
 
 ## Nao Implementar
 
-- Daemon/event loop (epic 016)
+- Easter/event loop (epic 016)
 - Telegram notifications (epic 014)
 - Subagent Judge (epic 015)
 - Concorrencia claude -p (epic 016)

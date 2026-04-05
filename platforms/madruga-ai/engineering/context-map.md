@@ -16,7 +16,7 @@ graph TB
     end
 
     subgraph supporting["Supporting Domains"]
-        exec["Execution<br/><i>Daemon, DAG Executor,<br/>MADRUGA_MODE</i>"]
+        exec["Execution<br/><i>Easter, DAG Executor,<br/>MADRUGA_MODE</i>"]
         intel["Intelligence<br/><i>Subagent Judge (ADR-019),<br/>Decision Classifier, Stress Test</i>"]
     end
 
@@ -47,7 +47,7 @@ graph TB
 |---|---------|------|---------|------------------|
 | 1 | **Documentation** | Core | Portal, Platform CLI, Vision Build, LikeC4 Models | Gerencia plataformas documentadas, portal SSG, modelos de arquitetura e populacao automatica de tabelas via AUTO markers |
 | 2 | **Specification** | Core | SpecKit Skills, Copier Templates | Pipeline de especificacao (specify -> plan -> tasks -> implement), composicao de prompts (via dag_executor), scaffolding de plataformas |
-| 3 | **Execution** | Supporting | Daemon, DAG Executor | Execucao autonoma: daemon asyncio (FastAPI), DAG executor le pipeline de platform.yaml, 3 modos de operacao (MADRUGA_MODE) |
+| 3 | **Execution** | Supporting | Easter, DAG Executor | Execucao autonoma: easter asyncio (FastAPI), DAG executor le pipeline de platform.yaml, 3 modos de operacao (MADRUGA_MODE) |
 | 4 | **Intelligence** | Supporting | Subagent Judge (ADR-019), Decision Classifier, Stress Test | Review multi-perspectiva via 4 personas + 1 juiz, classificacao 1-way/2-way door, gates de aprovacao, stress testing |
 | 5 | **Integration** | Generic | Telegram Adapter (aiogram), GitHub Client, Claude API Client, LikeC4 CLI, Sentry SDK | ACL para sistemas externos — isola contratos externos do dominio interno |
 | 6 | **Observability** | Generic | Dashboard, Health Checks, SQLite Metrics, Sentry SDK | Visibilidade operacional: dashboard FastAPI, health checks, metricas em SQLite, error tracking via Sentry |
@@ -89,4 +89,4 @@ Sistemas externos mudam seus contratos sem aviso. A Anti-Corruption Layer garant
 
 ### Por que Observability e fire-and-forget?
 
-O dashboard e metricas **nunca** devem bloquear a execucao do pipeline. Se o dashboard cair, o daemon continua operando normalmente. A relacao pub-sub garante desacoplamento total. Sentry opera como fire-and-forget — falha de envio nao afeta o daemon.
+O dashboard e metricas **nunca** devem bloquear a execucao do pipeline. Se o dashboard cair, o easter continua operando normalmente. A relacao pub-sub garante desacoplamento total. Sentry opera como fire-and-forget — falha de envio nao afeta o easter.

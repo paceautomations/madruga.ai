@@ -1,8 +1,8 @@
 # Specification Analysis Report (Post-Implementation)
 
 **Epic**: 017-observability-tracing-evals | **Date**: 2026-04-04 | **Phase**: Post-implementation
-**Artifacts analyzed**: spec.md, plan.md, tasks.md, data-model.md, contracts/daemon-api.md, 010_observability.sql
-**Implementation verified**: db.py, dag_executor.py, daemon.py, eval_scorer.py, observability_export.py, 5 portal components, 4 test files
+**Artifacts analyzed**: spec.md, plan.md, tasks.md, data-model.md, contracts/easter-api.md, 010_observability.sql
+**Implementation verified**: db.py, dag_executor.py, easter.py, eval_scorer.py, observability_export.py, 5 portal components, 4 test files
 
 ---
 
@@ -26,7 +26,7 @@
 | FR-002 (span per node) | Yes | T003, T004 | pipeline_runs reused as spans with trace_id FK |
 | FR-003 (capture tokens/cost) | Yes | T004 | parse_claude_output in dag_executor |
 | FR-004 (eval scores 4 dims) | Yes | T015, T016, T017 | eval_scorer.py + db insert + executor integration |
-| FR-005 (API endpoints) | Yes | T007, T012, T018, T025 | 5 endpoints in daemon.py |
+| FR-005 (API endpoints) | Yes | T007, T012, T018, T025 | 5 endpoints in easter.py |
 | FR-006 (portal 4 sections) | Yes | T002, T008, T009, T013, T019, T022 | observability.astro + 5 React components |
 | FR-007 (10s auto-update) | Yes | T008 | useEffect + setInterval(10000) in ObservabilityDashboard |
 | FR-008 (90d retention) | Yes | T023, T026 | cleanup_old_data + retention_cleanup periodic task |
@@ -62,7 +62,7 @@
 | VI. Brutal Honesty | PASS | V1 limits clearly documented (node-level only, heuristic evals, polling). |
 | VII. TDD | PASS | 4 test files, 121 tests covering all backend modules. |
 | VIII. Collaborative Decision | PASS | 8 decisions captured in pitch.md with explicit rationale. |
-| IX. Observability & Logging | PASS | This epic implements observability. structlog integrated in daemon. |
+| IX. Observability & Logging | PASS | This epic implements observability. structlog integrated in easter. |
 
 ---
 
@@ -96,7 +96,7 @@
 | test_db_observability.py | 47 | PASS |
 | test_eval_scorer.py | 34 | PASS |
 | test_observability_export.py | 13 | PASS |
-| test_daemon_observability.py | 27 | PASS |
+| test_easter_observability.py | 27 | PASS |
 
 ---
 
@@ -109,7 +109,7 @@
 | dag_executor.py (changes) | 150 | ~150 | 0 |
 | eval_scorer.py | 225 | 268 | +43 |
 | observability_export.py | 120 | 114 | -6 |
-| daemon.py (new endpoints) | 180 | ~160 | -20 |
+| easter.py (new endpoints) | 180 | ~160 | -20 |
 | Portal (6 components) | 460 | 6 files | — |
 | Tests (4 files) | 300 | 4 files | — |
 

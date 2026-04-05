@@ -293,7 +293,7 @@ Nenhuma nova dependencia inter-epic descoberta durante implementacao. A dependen
 
 | Risco | Impacto | Probabilidade | Mitigacao |
 |-------|---------|---------------|-----------|
-| SIGINT handler no modulo scope pode causar `sys.exit(130)` em imports de teste/daemon | Testes ou daemon podem sair inesperadamente ao receber SIGINT | Baixa (handler so afeta se SIGINT enviado durante import) | Mover `signal.signal()` para `main()` (Proposta #5) |
+| SIGINT handler no modulo scope pode causar `sys.exit(130)` em imports de teste/easter | Testes ou easter podem sair inesperadamente ao receber SIGINT | Baixa (handler so afeta se SIGINT enviado durante import) | Mover `signal.signal()` para `main()` (Proposta #5) |
 
 ---
 

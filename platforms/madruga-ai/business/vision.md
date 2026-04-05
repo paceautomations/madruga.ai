@@ -8,11 +8,11 @@ updated: 2026-04-02
 
 Documentacao de arquitetura, especificacao de features e implementacao vivem dispersas em repos, skills e scripts sem contexto compartilhado. O resultado e previsivel: architectural drift, specs sem contexto macro, e documentacao que vira ficcao em semanas.
 
-**Madruga AI** e um repositorio dedicado que funciona como pipeline unico onde arquitetura alimenta especificacoes, implementacao fecha o loop, e um daemon executa autonomamente. A plataforma transforma o ciclo `pitch -> spec -> plan -> tasks -> implement -> reconcile` em um processo determinístico, rastreavel e progressivamente autonomo.
+**Madruga AI** e um repositorio dedicado que funciona como pipeline unico onde arquitetura alimenta especificacoes, implementacao fecha o loop, e um easter executa autonomamente. A plataforma transforma o ciclo `pitch -> spec -> plan -> tasks -> implement -> reconcile` em um processo determinístico, rastreavel e progressivamente autonomo.
 
 **North Star Metric:** Percentual de epics processados autonomamente (pitch-to-PR sem intervencao humana). Hoje: 0%. Meta 6 meses: 80%.
 
-**Diferencial estrutural:** Nenhuma ferramenta existente conecta documentacao arquitetural, especificacao de features e execucao autonoma em um unico pipeline git-versionado. Madruga AI e o unico sistema onde o modelo de arquitetura (LikeC4) alimenta diretamente o pipeline de especificacao (SpecKit), que alimenta execucao autonoma (Daemon), que retroalimenta a arquitetura (RECONCILE).
+**Diferencial estrutural:** Nenhuma ferramenta existente conecta documentacao arquitetural, especificacao de features e execucao autonoma em um unico pipeline git-versionado. Madruga AI e o unico sistema onde o modelo de arquitetura (LikeC4) alimenta diretamente o pipeline de especificacao (SpecKit), que alimenta execucao autonoma (Easter), que retroalimenta a arquitetura (RECONCILE).
 
 ---
 
@@ -59,7 +59,7 @@ Times de engenharia de software (1-20 engenheiros) que precisam manter documenta
 ### Moat estrutural
 
 1. **LikeC4-first pipeline:** O modelo de arquitetura (`.likec4`) e a source of truth. Markdown e view layer. Isso garante que diagramas, tabelas e documentacao nunca divergem — sao gerados do mesmo modelo.
-2. **Skills reutilizaveis:** As mesmas skills (`speckit.*` e `madruga/*`) funcionam tanto interativamente (humano invoca) quanto autonomamente (daemon invoca via `SpeckitBridge`). Zero reescrita.
+2. **Skills reutilizaveis:** As mesmas skills (`speckit.*` e `madruga/*`) funcionam tanto interativamente (humano invoca) quanto autonomamente (easter invoca via `SpeckitBridge`). Zero reescrita.
 3. **File-based + git-versionado:** Todo estado vive em arquivos git. Sem banco externo para documentacao, sem SaaS para specs. Diff, blame, revert — tudo funciona nativamente.
 4. **RECONCILE loop:** Apos implementacao, o sistema compara o diff do PR com a arquitetura e auto-atualiza quando o drift e baixo. Nenhuma ferramenta existente fecha esse loop.
 5. **Template system (Copier):** Novas plataformas herdam a mesma estrutura, e `copier update` sincroniza mudancas estruturais. Escala sem overhead.
@@ -73,7 +73,7 @@ Times de engenharia de software (1-20 engenheiros) que precisam manter documenta
 | Portal Starlight com auto-discovery | Funcional | Alta |
 | SpecKit pipeline (specify, plan, tasks) | Funcional (interativo + autonomo) | Alta |
 | DAG Executor + compose_skill_prompt | Funcional — execucao autonoma do pipeline via dag_executor.py | Alta |
-| Daemon 24/7 (FastAPI + asyncio) | Funcional — processo persistente, health checks, systemd | Alta |
+| Easter 24/7 (FastAPI + asyncio) | Funcional — processo persistente, health checks, systemd | Alta |
 | Subagent Judge (4 personas + 1 juiz) | Funcional — review multi-perspectiva (ADR-019) | Media |
 | RECONCILE loop | Funcional — 9 categorias de drift, diffs concretos | Media |
 | Codebase Mapping (`speckit.map`) | Planejado | Media |
@@ -115,7 +115,7 @@ Uso interno — sem pricing externo. Custo operacional: consumo de API Claude (c
 |---|-------|---------|-----------|
 | 1 | Context rot em execucao autonoma — context window cheia degrada qualidade | Alto — specs geradas ficam incompletas ou inconsistentes | Execucao em waves com subagents frescos (`speckit.execute-wave`). Cada wave recebe contexto limpo. |
 | 2 | Drift entre arquitetura e codigo — implementacao diverge do modelo | Alto — documentacao vira ficcao, perde confianca | RECONCILE loop: compara diff vs arquitetura, auto-update se drift < 0.3, escala humano se drift >= 0.3 |
-| 3 | Over-engineering do daemon — complexidade desnecessaria no runtime | Medio — atrasa entrega, aumenta manutencao | Principio de pragmatismo. Ship imperfect. Testes cobrindo fluxo critico (51 testes existentes). |
+| 3 | Over-engineering do easter — complexidade desnecessaria no runtime | Medio — atrasa entrega, aumenta manutencao | Principio de pragmatismo. Ship imperfect. Testes cobrindo fluxo critico (51 testes existentes). |
 | 4 | Dependencia de Claude API — rate limits, mudancas de pricing, downtime | Alto — pipeline autonomo para completamente | Circuit breaker + retry com backoff exponencial. Fallback para modo interativo. Throttle configuravel. |
 | 5 | Complexidade do template Copier — sync quebra ao evoluir estrutura | Medio — plataformas existentes divergem da nova estrutura | `_skip_if_exists` para arquivos editaveis. Testes de template (`pytest`). `copier update` nao sobrescreve conteudo. |
 | 6 | Single-operator risk — dependencia de 1 pessoa (Gabriel) | Alto — todo conhecimento esta em 1 cabeca | Madruga AI e, por definicao, a mitigacao: documentacao versionada, skills reproduziveis, pipeline determinístico. |
@@ -149,9 +149,9 @@ Uso interno — sem pricing externo. Custo operacional: consumo de API Claude (c
 | **RECONCILE** | Loop que compara diff de implementacao vs arquitetura e auto-atualiza Vision se drift < threshold. | Runtime |
 | **AUTO marker** | Marcador `<!-- AUTO:name -->` em markdown que delimita conteudo auto-gerado por `vision-build.py`. | Pipeline |
 | **Drift score** | Metrica (0.0–1.0) que mede divergencia entre implementacao e arquitetura. < 0.3 = auto-fix, >= 0.3 = escala humano. | Runtime |
-| **Wave** | Unidade de execucao do daemon. Cada wave processa N tasks com subagent fresco para evitar context rot. | Runtime |
+| **Wave** | Unidade de execucao do easter. Cada wave processa N tasks com subagent fresco para evitar context rot. | Runtime |
 | **1-way door** | Decisao irreversivel que requer aprovacao humana (ex: mudanca de schema, API publica). | Decisions |
-| **2-way door** | Decisao reversivel que o daemon pode tomar autonomamente (ex: escolha de lib interna). | Decisions |
+| **2-way door** | Decisao reversivel que o easter pode tomar autonomamente (ex: escolha de lib interna). | Decisions |
 | **Constitution** | Documento (`.specify/memory/constitution.md`) com regras que governam todos os artefatos gerados. | Governance |
 | **Platform manifest** | Arquivo `platform.yaml` que declara nome, lifecycle, views e comandos de build de uma plataforma. | Core |
 | **Copier template** | Template Jinja2 (`.specify/templates/platform/`) para scaffolding padronizado de novas plataformas. | Tooling |

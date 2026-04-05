@@ -34,7 +34,7 @@ Nenhum blocker identificado.
 
 | # | Persona | Finding | Localização | Sugestão |
 |---|---------|---------|-------------|----------|
-| N1 | arch-reviewer | Divergência de padrão de logging: scripts CLI usam stdlib `_NDJSONFormatter`, daemon/bot usam structlog — duas abordagens paralelas no mesmo repo | platform_cli.py, dag_executor.py, post_save.py vs daemon.py | Documentar a divergência em ADR addendum (já justificada no pitch: "stdlib logging only") |
+| N1 | arch-reviewer | Divergência de padrão de logging: scripts CLI usam stdlib `_NDJSONFormatter`, easter/bot usam structlog — duas abordagens paralelas no mesmo repo | platform_cli.py, dag_executor.py, post_save.py vs easter.py | Documentar a divergência em ADR addendum (já justificada no pitch: "stdlib logging only") |
 | N2 | arch-reviewer | `_NDJSONFormatter` no dag_executor.py usa `import datetime` local dentro de `format()`, enquanto os outros 2 scripts usam import de módulo | dag_executor.py:52 vs platform_cli.py:53 vs post_save.py:57 | Alinhar pattern de import datetime nas 3 cópias |
 | N3 | simplifier | `seed_from_filesystem()` tem 216 linhas com 5 níveis de nesting — faz 3 jobs distintos (seed nodes, DAG backfill, seed epics) | db_pipeline.py:697-912 | Extrair helpers: `_seed_pipeline_nodes()`, `_backfill_dag_deps()`, `_seed_epics()` |
 | N4 | simplifier | `_NDJSONFormatter` + `_setup_logging()` duplicado 3x (~15 LOC cada) com comment "by design" — mas scripts já compartilham db_core.py, config.py, errors.py | platform_cli.py:47-73, dag_executor.py:48-76, post_save.py:51-75 | Criar `_logging.py` (~20 LOC) ou adicionar a `errors.py` |

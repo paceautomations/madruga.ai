@@ -95,7 +95,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: 'cost', label: 'Cost' },
 ];
 
-const DAEMON_BASE = 'http://localhost:8040';
+const EASTER_BASE = 'http://localhost:8040';
 const POLL_INTERVAL = 10_000;
 
 // ── Helpers ──
@@ -132,26 +132,26 @@ export default function ObservabilityDashboard({ platform }: ObservabilityDashbo
     try {
       if (activeTab === 'runs' || activeTab === 'traces') {
         const data = await fetchJSON<{ traces: Trace[] }>(
-          `${DAEMON_BASE}/api/traces?platform_id=${encodeURIComponent(platform)}&limit=50`,
+          `${EASTER_BASE}/api/traces?platform_id=${encodeURIComponent(platform)}&limit=50`,
         );
         if (data) setTraces(data.traces);
       }
 
       if (activeTab === 'evals') {
         const data = await fetchJSON<{ scores: EvalScore[] }>(
-          `${DAEMON_BASE}/api/evals?platform_id=${encodeURIComponent(platform)}&limit=100`,
+          `${EASTER_BASE}/api/evals?platform_id=${encodeURIComponent(platform)}&limit=100`,
         );
         if (data) setEvalScores(data.scores);
       }
 
       if (activeTab === 'cost') {
         const data = await fetchJSON<StatsData>(
-          `${DAEMON_BASE}/api/stats?platform_id=${encodeURIComponent(platform)}&days=30`,
+          `${EASTER_BASE}/api/stats?platform_id=${encodeURIComponent(platform)}&days=30`,
         );
         if (data) setStats(data);
       }
     } catch {
-      setError('Failed to connect to daemon');
+      setError('Failed to connect to easter');
     } finally {
       setLoading(false);
     }
@@ -168,7 +168,7 @@ export default function ObservabilityDashboard({ platform }: ObservabilityDashbo
   }, [fetchData]);
 
   const fetchTraceDetail = useCallback(async (traceId: string) => {
-    const data = await fetchJSON<TraceDetail>(`${DAEMON_BASE}/api/traces/${traceId}`);
+    const data = await fetchJSON<TraceDetail>(`${EASTER_BASE}/api/traces/${traceId}`);
     if (data) setSelectedTrace(data);
   }, []);
 

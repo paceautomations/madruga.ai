@@ -45,32 +45,7 @@ from config import REPO_ROOT  # noqa: F401
 log = logging.getLogger("post_save")
 
 
-# -- Structured logging (NDJSON) -- Duplicated by design — no shared util module in this scripts dir
-
-
-class _NDJSONFormatter(logging.Formatter):
-    """Emit one JSON object per line for CI consumption."""
-
-    def format(self, record: logging.LogRecord) -> str:
-        return json.dumps(
-            {
-                "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
-                "level": record.levelname,
-                "message": record.getMessage(),
-                "logger": record.name,
-            }
-        )
-
-
-def _setup_logging(json_mode: bool) -> None:
-    """Configure root logger for human or NDJSON output."""
-    handler = logging.StreamHandler()
-    if json_mode:
-        handler.setFormatter(_NDJSONFormatter())
-    else:
-        handler.setFormatter(logging.Formatter("%(levelname)s %(name)s: %(message)s"))
-    logging.root.addHandler(handler)
-    logging.root.setLevel(logging.INFO)
+from log_utils import setup_logging as _setup_logging  # noqa: E402
 
 
 from db import (  # noqa: E402, F401 — compute_epic_status used in record_save

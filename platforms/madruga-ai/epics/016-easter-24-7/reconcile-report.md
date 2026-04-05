@@ -1,9 +1,9 @@
 ---
-title: "Reconcile Report — Epic 016 Daemon 24/7"
+title: "Reconcile Report — Epic 016 Easter 24/7"
 drift_score: 89
 updated: 2026-04-01
 ---
-# Reconcile Report — Epic 016 Daemon 24/7
+# Reconcile Report — Epic 016 Easter 24/7
 
 ## Drift Score: 89% (8/9 categorias sem drift)
 
@@ -12,9 +12,9 @@ updated: 2026-04-01
 | Doc | Categorias | Status | Drift Items |
 |-----|-----------|--------|-------------|
 | business/solution-overview.md | D1 | CURRENT | 0 |
-| engineering/blueprint.md | D2 | CURRENT | 0 (blueprint ja referencia daemon, FastAPI, Sentry) |
+| engineering/blueprint.md | D2 | CURRENT | 0 (blueprint ja referencia easter, FastAPI, Sentry) |
 | model/*.likec4 | D3 | CURRENT | 0 |
-| engineering/domain-model.md | D4 | CURRENT | 0 (daemon e infra, nao dominio) |
+| engineering/domain-model.md | D4 | CURRENT | 0 (easter e infra, nao dominio) |
 | decisions/ADR-006 | D5 | OUTDATED → AMENDED | 1 (Obsidian → SQLite polling) |
 | planning/roadmap.md | D6 | OUTDATED → UPDATED | 3 (016 shipped, milestone, candidato) |
 | epics/*/pitch.md (futuros) | D7 | N/A | 0 (nenhum epic futuro) |
@@ -25,7 +25,7 @@ updated: 2026-04-01
 
 | Area Alterada | Docs Afetados | Esforco |
 |--------------|---------------|---------|
-| Daemon 24/7 (novo componente) | roadmap.md, ADR-006 | S |
+| Easter 24/7 (novo componente) | roadmap.md, ADR-006 | S |
 | Async dag_executor | Nenhum (blueprint ja referencia) | — |
 | ntfy.py, sd_notify.py | Nenhum (utilities stdlib) | — |
 
@@ -51,7 +51,7 @@ updated: 2026-04-01
 
 ### Milestone "Autonomia MVP"
 
-Todos os 5 epics MVP (012-016) estao shipped. Tooling completo. Falta validacao end-to-end: rodar daemon contra Fulano real com epic completo (pitch-to-PR).
+Todos os 5 epics MVP (012-016) estao shipped. Tooling completo. Falta validacao end-to-end: rodar easter contra Fulano real com epic completo (pitch-to-PR).
 
 ### Dependencias Descobertas
 

@@ -1,4 +1,4 @@
-# API Contract: Daemon Observability Endpoints
+# API Contract: Easter Observability Endpoints
 
 **Date**: 2026-04-02 | **Epic**: 017-observability-tracing-evals
 **Base URL**: `http://localhost:8040`

@@ -46,11 +46,11 @@ git worktree prune
 
 **Decision**: `fcntl.flock()` (stdlib) em arquivo lock por repo (`{repo_path}.lock`).
 
-**Racional**: Previne corrupcao se daemon (epic 016) tentar clonar o mesmo repo simultaneamente. `fcntl.flock()` e stdlib, funciona em Linux/macOS. Lockfile adjacente ao repo: `{repos_base_dir}/{org}/{name}.lock`.
+**Racional**: Previne corrupcao se easter (epic 016) tentar clonar o mesmo repo simultaneamente. `fcntl.flock()` e stdlib, funciona em Linux/macOS. Lockfile adjacente ao repo: `{repos_base_dir}/{org}/{name}.lock`.
 
 **Alternativas consideradas**:
 - `filelock` package → dependencia externa, viola NFR-001
-- Sem lock → risco de clone concorrente corrompido (edge case baixo agora, real no daemon)
+- Sem lock → risco de clone concorrente corrompido (edge case baixo agora, real no easter)
 - PID file → mais complexo, precisa cleanup manual se crash
 
 **Nota**: `fcntl` nao existe no Windows. Aceitavel — target e Linux/macOS (WSL conta como Linux).

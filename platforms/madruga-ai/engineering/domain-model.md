@@ -625,7 +625,7 @@ Este contexto nao possui storage proprio. Todas as interacoes sao **passthrough*
 - Claude API e invocado via `claude -p` como subprocess (nao via SDK direto — ADR-010)
 - Telegram Bot usa outbound HTTPS only — sem porta inbound, sem exposicao de rede (ADR-018)
 - Telegram notifications sao **fire-and-forget** (sem confirmacao de leitura)
-- Sentry opera como fire-and-forget — falha de envio nao afeta o daemon (ADR-016)
+- Sentry opera como fire-and-forget — falha de envio nao afeta o easter (ADR-016)
 - GitHub operations **devem** respeitar rate limits (backoff exponencial em 429)
 
 ---
@@ -718,7 +718,7 @@ classDiagram
     DashboardPage --> PipelineStatusExporter : reads data from
 ```
 
-### API Endpoints (Daemon)
+### API Endpoints (Easter)
 
 | Endpoint | Metodo | Descricao |
 |----------|--------|-----------|
@@ -735,6 +735,6 @@ classDiagram
 - Cada node completado recebe 4 eval scores heuristicos (best-effort, nunca bloqueia)
 - Eval scores clamped a [0, 10] — quality normaliza Judge score quando disponivel
 - Cleanup automatico remove registros > 90 dias (traces, runs, eval_scores)
-- Dashboard consome API REST do daemon (polling 10s) — nao mais dados estaticos
+- Dashboard consome API REST do easter (polling 10s) — nao mais dados estaticos
 - CLI `status` le diretamente do SQLite (read-only)
 - Context threading: analyze-post → judge → qa → reconcile recebem reports upstream no prompt

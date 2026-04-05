@@ -1,4 +1,4 @@
-# Research: Daemon 24/7
+# Research: Easter 24/7
 
 **Date**: 2026-04-01 | **Spec**: [spec.md](spec.md)
 
@@ -104,7 +104,7 @@ def sd_notify(state: str) -> bool:
 
 **Uso**:
 ```python
-sd_notify("READY=1")           # daemon pronto
+sd_notify("READY=1")           # easter pronto
 sd_notify("WATCHDOG=1")        # keepalive ping
 sd_notify("STOPPING=1")       # shutdown iniciando
 sd_notify("STATUS=running 3 epics")  # status text

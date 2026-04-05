@@ -11,7 +11,7 @@ Mapa completo de integracoes do Madruga AI com sistemas externos e entre contain
 ```mermaid
 graph LR
     subgraph madruga["Madruga AI"]
-        daemon["Daemon"]
+        easter["Easter"]
         dag["DAG Executor"]
         judge["Subagent Judge"]
         vision["Vision Build"]
@@ -52,7 +52,7 @@ graph LR
     github_acl --> github
 
     dag --> telegram_acl
-    daemon --> telegram_acl
+    easter --> telegram_acl
     telegram_acl --> telegram
 
     vision --> likec4_acl
@@ -62,12 +62,12 @@ graph LR
     pcli --> copier_acl
     copier_acl --> copier
 
-    daemon --> sentry_acl
+    easter --> sentry_acl
     sentry_acl --> sentry
 
     dashboard --> sqlite
     dag --> sqlite
-    daemon --> sqlite
+    easter --> sqlite
 
     portal --> fs
     vision --> fs
@@ -87,11 +87,11 @@ graph LR
 | 3 | **Telegram** | HTTPS (Telegram Bot API, aiogram) | DAG Executor/Decision System -> Telegram | per-human-gate / per-critical-decision | Notificacoes de status, decisoes (ask_choice com inline buttons), alertas criticos | Health check cada 60s (getMe); se unreachable: modo log-only; fallback ntfy.sh (opcional) |
 | 4 | **LikeC4 CLI** | Subprocess (`likec4`) | Vision Build / Portal -> LikeC4 | per-build | JSON export, PNG export, compilacao de modelos | Falha de compilacao aborta o build com erro descritivo |
 | 5 | **Copier CLI** | Subprocess (`copier`) | Platform CLI -> Copier | per-command | Scaffolding (copy), sync (update), answers YAML | Falha aborta operacao; rollback manual |
-| 6 | **Sentry** | HTTPS (sentry-sdk) | Daemon -> Sentry Cloud | per-error / per-request | Error events, stack traces, breadcrumbs, performance traces | Fire-and-forget; falha de envio nao afeta daemon |
+| 6 | **Sentry** | HTTPS (sentry-sdk) | Easter -> Sentry Cloud | per-error / per-request | Error events, stack traces, breadcrumbs, performance traces | Fire-and-forget; falha de envio nao afeta easter |
 | 7 | **SQLite** | sqlite3 (Python stdlib) | Orchestrator/Pipeline/Dashboard/DAG Executor -> madruga.db | per-operation | Pipeline state, epics, decisions, memory, metrics | WAL mode para leituras concorrentes; write lock serializado |
 | 8 | **Filesystem** | OS read/write | Portal/Vision Build/Platform CLI/Bridge | per-operation | .likec4 files, markdown docs, YAML configs, JSON exports | Operacoes atomicas via write-to-temp + rename |
 | 9 | **Git** | Subprocess (`git`) | Pipeline -> repositorio | per-phase-completion | Commits de artefatos gerados, branch management | Se commit falha, artefatos ficam unstaged para retry manual |
-| 10 | **Daemon REST API (Observability)** | HTTP (FastAPI, localhost:8040) | Portal -> Daemon | polling 10s | Traces, spans, eval scores, stats, CSV export | Portal mostra "daemon offline"; dados cached no ultimo poll |
+| 10 | **Easter REST API (Observability)** | HTTP (FastAPI, localhost:8040) | Portal -> Easter | polling 10s | Traces, spans, eval scores, stats, CSV export | Portal mostra "easter offline"; dados cached no ultimo poll |
 <!-- /AUTO:integrations -->
 
 ## Detalhes de Implementacao
@@ -130,7 +130,7 @@ Telegram Bot (aiogram, long-polling) para notificacoes bidirecionais. Tres opera
 1. Health check cada 60s (HTTPS `getMe`)
 2. 3 falhas consecutivas → modo log-only (human gates pausam)
 3. Fallback ntfy.sh (HTTP POST, zero deps, opcional)
-4. Quando Telegram volta, daemon detecta e retoma notificacoes
+4. Quando Telegram volta, easter detecta e retoma notificacoes
 
 **Volume esperado**: < 20 notificacoes por dia.
 
@@ -152,7 +152,7 @@ import sentry_sdk
 sentry_sdk.init(dsn=settings.sentry_dsn, traces_sample_rate=0.5)
 ```
 
-Free tier: 5K erros/mes, 10M transactions/mes. Fire-and-forget — falha nao afeta daemon.
+Free tier: 5K erros/mes, 10M transactions/mes. Fire-and-forget — falha nao afeta easter.
 
 ### SQLite — Configuracao
 

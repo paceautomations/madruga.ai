@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-daemon.py — Madruga AI Daemon: 24/7 pipeline orchestrator.
+easter.py — Madruga AI Easter: 24/7 pipeline orchestrator.
 
 FastAPI app with lifespan context manager composing:
   - dag_scheduler: polls active epics, dispatches pipeline
@@ -10,7 +10,7 @@ FastAPI app with lifespan context manager composing:
 
 Endpoints:
   GET /health — liveness (always 200)
-  GET /status — full daemon state JSON
+  GET /status — full easter state JSON
   GET /api/traces — list traces with pagination
   GET /api/traces/{trace_id} — trace detail with spans and evals
   GET /api/evals — eval scores with filters
@@ -18,8 +18,8 @@ Endpoints:
   GET /api/export/csv — export traces/spans/evals as CSV
 
 Usage:
-    python3 .specify/scripts/daemon.py
-    # Or via systemd: systemctl --user start madruga-daemon
+    python3 .specify/scripts/easter.py
+    # Or via systemd: systemctl --user start madruga-easter
 """
 
 from __future__ import annotations
@@ -46,23 +46,23 @@ from sd_notify import sd_notify  # noqa: E402
 
 logger = structlog.get_logger(__name__)
 
-# --- Daemon State ---
+# --- Easter State ---
 
 DEGRADATION_THRESHOLD = 3
 
 
 @dataclass
-class DaemonState:
-    """Mutable daemon state shared across coroutines."""
+class EasterState:
+    """Mutable easter state shared across coroutines."""
 
-    daemon_state: str = "starting"  # starting, running, degraded, shutting_down
+    easter_state: str = "starting"  # starting, running, degraded, shutting_down
     telegram_status: str = "disconnected"  # connected, degraded, disconnected
     telegram_fail_count: int = 0
     start_time: float = field(default_factory=time.time)
 
 
 # Module-level state
-_daemon_state = DaemonState()
+_easter_state = EasterState()
 _shutdown_event = asyncio.Event()
 _running_epics: set[str] = set()
 _platform_filter: str | None = None
@@ -103,7 +103,7 @@ async def dag_scheduler(conn, semaphore, shutdown_event, poll_interval=15, platf
             consecutive_errors = 0  # reset on successful poll
             for epic in epics:
                 epic_id = epic["epic_id"]
-                platform_id = epic["platform_id"]
+                epic_platform_id = epic["platform_id"]
 
                 # Skip already-running epics
                 if epic_id in _running_epics:
@@ -117,7 +117,7 @@ async def dag_scheduler(conn, semaphore, shutdown_event, poll_interval=15, platf
                 # Check if epic has a pending gate — skip dispatch to avoid busy-loop
                 from db import get_pending_gates
 
-                pending = get_pending_gates(conn, platform_id)
+                pending = get_pending_gates(conn, epic_platform_id)
                 epic_pending = [
                     g for g in pending if g.get("epic_id") == epic_id and g.get("gate_status") == "waiting_approval"
                 ]
@@ -126,7 +126,7 @@ async def dag_scheduler(conn, semaphore, shutdown_event, poll_interval=15, platf
                     continue
 
                 _running_epics.add(epic_id)
-                logger.info("dispatching_epic", epic_id=epic_id, platform=platform_id)
+                logger.info("dispatching_epic", epic_id=epic_id, platform=epic_platform_id)
 
                 # F3: Proactive branch checkout before dispatch
                 branch = epic.get("branch_name")
@@ -147,7 +147,7 @@ async def dag_scheduler(conn, semaphore, shutdown_event, poll_interval=15, platf
 
                 try:
                     result = await run_pipeline_async(
-                        platform_name=platform_id,
+                        platform_name=epic_platform_id,
                         epic_slug=epic_id,
                         resume=True,
                         semaphore=semaphore,
@@ -188,13 +188,13 @@ async def health_checker(bot, shutdown_event, interval=60, conn=None, adapter=No
 
         try:
             me = await bot.get_me()
-            if _daemon_state.telegram_fail_count > 0:
+            if _easter_state.telegram_fail_count > 0:
                 logger.info(
-                    "telegram_recovered", username=me.username, after_failures=_daemon_state.telegram_fail_count
+                    "telegram_recovered", username=me.username, after_failures=_easter_state.telegram_fail_count
                 )
-                if _daemon_state.daemon_state == "degraded":
-                    _daemon_state.daemon_state = "running"
-                    _daemon_state.telegram_status = "connected"
+                if _easter_state.easter_state == "degraded":
+                    _easter_state.easter_state = "running"
+                    _easter_state.telegram_status = "connected"
                     # C4: send summary of accumulated pending gates on recovery
                     if conn and adapter and chat_id:
                         pending = poll_pending_gates(conn)
@@ -203,23 +203,23 @@ async def health_checker(bot, shutdown_event, interval=60, conn=None, adapter=No
                                 chat_id,
                                 f"<b>Telegram recovered</b> — {len(pending)} gate(s) pendente(s) acumulados.",
                             )
-            _daemon_state.telegram_fail_count = 0
-            _daemon_state.telegram_status = "connected"
+            _easter_state.telegram_fail_count = 0
+            _easter_state.telegram_status = "connected"
         except Exception:
-            _daemon_state.telegram_fail_count += 1
-            logger.warning("health_check_failed", fail_count=_daemon_state.telegram_fail_count)
+            _easter_state.telegram_fail_count += 1
+            logger.warning("health_check_failed", fail_count=_easter_state.telegram_fail_count)
 
-            if _daemon_state.telegram_fail_count >= DEGRADATION_THRESHOLD and _daemon_state.daemon_state != "degraded":
-                _daemon_state.daemon_state = "degraded"
-                _daemon_state.telegram_status = "degraded"
-                logger.warning("entering_degraded_mode", fail_count=_daemon_state.telegram_fail_count)
+            if _easter_state.telegram_fail_count >= DEGRADATION_THRESHOLD and _easter_state.easter_state != "degraded":
+                _easter_state.easter_state = "degraded"
+                _easter_state.telegram_status = "degraded"
+                logger.warning("entering_degraded_mode", fail_count=_easter_state.telegram_fail_count)
 
                 topic = os.environ.get("MADRUGA_NTFY_TOPIC")
                 if topic:
                     await asyncio.to_thread(
                         ntfy_alert,
                         topic,
-                        f"Daemon degraded: Telegram unreachable after {_daemon_state.telegram_fail_count} failures",
+                        f"Easter degraded: Telegram unreachable after {_easter_state.telegram_fail_count} failures",
                     )
 
 
@@ -230,7 +230,7 @@ async def gate_reminder(conn, adapter, chat_id, shutdown_event, interval=3600):
     """C1: Remind operator about gates pending for more than 24 hours."""
     while not shutdown_event.is_set():
         await asyncio.sleep(interval)
-        if _daemon_state.telegram_status != "connected" or adapter is None:
+        if _easter_state.telegram_status != "connected" or adapter is None:
             continue
         try:
             rows = conn.execute(
@@ -273,8 +273,8 @@ async def retention_cleanup(conn, shutdown_event, interval=86400):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """FastAPI lifespan: start background tasks, handle shutdown."""
-    _daemon_state.daemon_state = "running"
-    _daemon_state.start_time = time.time()
+    _easter_state.easter_state = "running"
+    _easter_state.start_time = time.time()
 
     # Sentry (optional)
     dsn = os.environ.get("MADRUGA_SENTRY_DSN")
@@ -309,11 +309,11 @@ async def lifespan(app: FastAPI):
             dp = Dispatcher()
             adapter = TelegramAdapter(bot)
             chat_id = int(chat_id_str)
-            _daemon_state.telegram_status = "connected"
+            _easter_state.telegram_status = "connected"
             logger.info("telegram_configured", chat_id=chat_id)
         except Exception:
             logger.exception("telegram_init_failed")
-            _daemon_state.telegram_status = "disconnected"
+            _easter_state.telegram_status = "disconnected"
             bot = None
     else:
         logger.warning("telegram_not_configured", reason="missing env vars")
@@ -333,7 +333,7 @@ async def lifespan(app: FastAPI):
         loop.add_signal_handler(sig, lambda: _shutdown_event.set())
 
     sd_notify("READY=1")
-    logger.info("daemon_started", pid=os.getpid())
+    logger.info("easter_started", pid=os.getpid())
 
     try:
         async with asyncio.TaskGroup() as tg:
@@ -383,7 +383,7 @@ async def lifespan(app: FastAPI):
             yield  # FastAPI serves requests here
 
             # Shutdown
-            _daemon_state.daemon_state = "shutting_down"
+            _easter_state.easter_state = "shutting_down"
             _shutdown_event.set()
             sd_notify("STOPPING=1")
     except* Exception as eg:
@@ -391,12 +391,12 @@ async def lifespan(app: FastAPI):
             logger.exception("taskgroup_error", error=str(exc))
     finally:
         conn.close()
-        logger.info("daemon_stopped", uptime_s=int(time.time() - _daemon_state.start_time))
+        logger.info("easter_stopped", uptime_s=int(time.time() - _easter_state.start_time))
 
 
 # --- FastAPI App ---
 
-app = FastAPI(lifespan=lifespan, title="Madruga AI Daemon", docs_url=None, redoc_url=None)
+app = FastAPI(lifespan=lifespan, title="Madruga AI Easter", docs_url=None, redoc_url=None)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:4321", "http://localhost:3000"],
@@ -407,16 +407,25 @@ app.add_middleware(
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "daemon_state": _daemon_state.daemon_state}
+    db_ok = True
+    try:
+        from db import get_conn
+
+        with get_conn() as conn:
+            conn.execute("SELECT 1")
+    except Exception:
+        db_ok = False
+    status = "ok" if db_ok else "degraded"
+    return {"status": status, "easter_state": _easter_state.easter_state, "db": db_ok}
 
 
 @app.get("/status")
 async def status():
     return {
-        "daemon_state": _daemon_state.daemon_state,
-        "telegram_status": _daemon_state.telegram_status,
+        "easter_state": _easter_state.easter_state,
+        "telegram_status": _easter_state.telegram_status,
         "running_epics": list(_running_epics),
-        "uptime_seconds": int(time.time() - _daemon_state.start_time),
+        "uptime_seconds": int(time.time() - _easter_state.start_time),
         "pid": os.getpid(),
     }
 
@@ -543,7 +552,7 @@ def main():
 
     import uvicorn
 
-    parser = argparse.ArgumentParser(description="Madruga AI Daemon")
+    parser = argparse.ArgumentParser(description="Madruga AI Easter")
     parser.add_argument("--host", default="127.0.0.1", help="Bind host (default: 127.0.0.1)")
     parser.add_argument("--port", type=int, default=8040, help="Bind port (default: 8040)")
     parser.add_argument("-v", "--verbose", action="store_true", help="Debug logging")

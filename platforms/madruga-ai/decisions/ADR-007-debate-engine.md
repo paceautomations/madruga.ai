@@ -16,7 +16,7 @@ rationale: Multiplas perspectivas encontram classes diferentes de problemas (sec
 
 ## Contexto
 
-Specs geradas por LLM em single-pass tendem a ter blind spots: edge cases ignorados, over-engineering, assuncoes nao validadas. Precisamos de um mecanismo que simule review por multiplas perspectivas (arquiteto, dev senior, PM, security) para encontrar falhas antes da implementacao. O mecanismo deve ser automatizado e executavel tanto interativamente quanto pelo daemon.
+Specs geradas por LLM em single-pass tendem a ter blind spots: edge cases ignorados, over-engineering, assuncoes nao validadas. Precisamos de um mecanismo que simule review por multiplas perspectivas (arquiteto, dev senior, PM, security) para encontrar falhas antes da implementacao. O mecanismo deve ser automatizado e executavel tanto interativamente quanto pelo easter.
 
 ## Decisao
 
@@ -30,7 +30,7 @@ We will use a multi-persona debate engine where 3-5 synthetic reviewers with dis
 
 ### Human review only
 - Pros: qualidade maxima, contexto de negocio real, julgamento nuancado
-- Cons: bottleneck humano (horas/dias de latencia), nao escala para N plataformas, nao funciona para daemon autonomo, fadiga de review
+- Cons: bottleneck humano (horas/dias de latencia), nao escala para N plataformas, nao funciona para easter autonomo, fadiga de review
 
 ## Consequencias
 

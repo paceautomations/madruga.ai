@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextvars
 import json
 import logging
 import os
@@ -42,34 +43,7 @@ from config import REPO_ROOT  # noqa: E402
 log = logging.getLogger(__name__)
 
 
-# -- Structured logging (NDJSON) -- Duplicated by design — no shared util module in this scripts dir
-
-
-class _NDJSONFormatter(logging.Formatter):
-    """Emit one JSON object per line for CI consumption."""
-
-    def format(self, record: logging.LogRecord) -> str:
-        import datetime
-
-        return json.dumps(
-            {
-                "timestamp": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
-                "level": record.levelname,
-                "message": record.getMessage(),
-                "logger": record.name,
-            }
-        )
-
-
-def _setup_logging(json_mode: bool, verbose: bool = False) -> None:
-    """Configure root logger for human or NDJSON output."""
-    handler = logging.StreamHandler()
-    if json_mode:
-        handler.setFormatter(_NDJSONFormatter())
-    else:
-        handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s"))
-    logging.root.addHandler(handler)
-    logging.root.setLevel(logging.DEBUG if verbose else logging.INFO)
+from log_utils import setup_logging as _setup_logging  # noqa: E402
 
 
 DEFAULT_TIMEOUT = int(os.environ.get("MADRUGA_EXECUTOR_TIMEOUT", "3000"))
@@ -80,9 +54,11 @@ HUMAN_GATES = frozenset({"human", "1-way-door"})
 VALID_GATE_MODES = frozenset({"manual", "interactive", "auto"})
 DEFAULT_GATE_MODE = os.environ.get("MADRUGA_MODE", "manual")
 DISALLOWED_TOOLS = "Bash(git checkout:*) Bash(git branch -:*) Bash(git switch:*)"
-# Module-level quick mode flag — set by run_pipeline/run_pipeline_async when --quick is active.
+# Quick mode flag — set by run_pipeline/run_pipeline_async when --quick is active.
 # Checked by build_dispatch_cmd to inject quick-fix context into system prompt.
-_quick_mode_active: bool = False
+# Uses contextvars for async safety (avoids shared mutable state between coroutines).
+
+_quick_mode_ctx: contextvars.ContextVar[bool] = contextvars.ContextVar("_quick_mode", default=False)
 # Upstream reports injected into downstream node prompts (context threading)
 REPORT_CONTEXT: dict[str, list[str]] = {
     "judge": ["analyze-post-report.md"],
@@ -210,19 +186,17 @@ def parse_claude_output(stdout: str) -> dict:
     return result
 
 
-# Sonnet pricing per token (USD). Used only as fallback when total_cost_usd is absent.
-_SONNET_INPUT_PRICE = 0.003 / 1000  # $3 per 1M input tokens
-_SONNET_OUTPUT_PRICE = 0.015 / 1000  # $15 per 1M output tokens
-
-
 def _estimate_cost_usd(tokens_in: int | None, tokens_out: int | None) -> float | None:
-    """Estimate cost from token counts using Sonnet pricing.
+    """Estimate cost from token counts using Sonnet pricing (from config).
 
     Returns None if both token counts are missing (cannot estimate).
+    Pricing is configurable via MADRUGA_INPUT_PRICE_PER_TOKEN / MADRUGA_OUTPUT_PRICE_PER_TOKEN env vars.
     """
+    from config import SONNET_INPUT_PRICE, SONNET_OUTPUT_PRICE
+
     if tokens_in is None and tokens_out is None:
         return None
-    cost = (tokens_in or 0) * _SONNET_INPUT_PRICE + (tokens_out or 0) * _SONNET_OUTPUT_PRICE
+    cost = (tokens_in or 0) * SONNET_INPUT_PRICE + (tokens_out or 0) * SONNET_OUTPUT_PRICE
     return round(cost, 8)
 
 
@@ -618,21 +592,51 @@ async def run_implement_tasks(
     return all_done, None if all_done else summary, summary
 
 
+_SENSITIVE_PATTERNS = frozenset({".env", "credentials", ".key", ".pem", "id_rsa", ".secret", ".password"})
+
+
+def _is_sensitive_path(filepath: str) -> bool:
+    """Return True if filepath matches a sensitive pattern (case-insensitive)."""
+    lower = filepath.lower()
+    return any(pat in lower for pat in _SENSITIVE_PATTERNS)
+
+
 def _auto_commit_epic(cwd: str | Path, platform_name: str, epic_slug: str) -> bool:
-    """Commit all working tree changes to the epic branch after implement."""
+    """Commit working tree changes to the epic branch after implement.
+
+    Filters out files matching sensitive patterns (e.g. .env, .key, .pem)
+    to prevent accidental credential exposure in easter auto-commits.
+    """
     try:
         status = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True, cwd=str(cwd))
         if not status.stdout.strip():
             log.info("No changes to commit for %s/%s", platform_name, epic_slug)
             return True
 
-        subprocess.run(["git", "add", "-A"], cwd=str(cwd), check=True, capture_output=True)
+        safe_files = []
+        for line in status.stdout.splitlines():
+            if not line or len(line) < 4:
+                continue
+            # git status --porcelain format: XY <path> or XY <orig> -> <path>
+            filepath = line[3:].strip().strip('"')
+            if " -> " in filepath:
+                filepath = filepath.split(" -> ", 1)[1].strip('"')
+            if _is_sensitive_path(filepath):
+                log.warning("Skipping sensitive file from auto-commit: %s", filepath)
+                continue
+            safe_files.append(filepath)
+
+        if not safe_files:
+            log.info("No safe files to commit for %s/%s (all filtered)", platform_name, epic_slug)
+            return True
+
+        subprocess.run(["git", "add", "--"] + safe_files, cwd=str(cwd), check=True, capture_output=True)
         subprocess.run(
             [
                 "git",
                 "commit",
                 "-m",
-                f"feat: epic {epic_slug} — implement tasks\n\nAuto-committed by daemon after implement phase.",
+                f"feat: epic {epic_slug} — implement tasks\n\nAuto-committed by easter after implement phase.",
             ],
             cwd=str(cwd),
             check=True,
@@ -955,7 +959,7 @@ def dispatch_with_retry(
     return False, last_error, last_stdout
 
 
-# ── Async Dispatch (for daemon integration) ─────────────────────────
+# ── Async Dispatch (for easter integration) ─────────────────────────
 
 
 async def dispatch_node_async(
@@ -1072,7 +1076,7 @@ async def dispatch_with_retry_async(
     return False, last_error, last_stdout
 
 
-# ── Async Pipeline (for daemon) ─────────────────────────────────────
+# ── Async Pipeline (for easter) ─────────────────────────────────────
 
 
 async def run_pipeline_async(
@@ -1085,18 +1089,17 @@ async def run_pipeline_async(
     gate_mode: str | None = None,
     quick: bool = False,
 ) -> int:
-    """Async version of run_pipeline for daemon integration.
+    """Async version of run_pipeline for easter integration.
 
     gate_mode: 'manual' (default) — pause at human gates, wait for CLI/Telegram approval.
                'interactive' — print summary, wait for y/n on stdin.
                'auto' — auto-approve all human gates, run pipeline end-to-end.
 
     Returns exit code: 0=success or paused at gate, 1=failure.
-    Human gates are written to DB and the function returns (daemon continues).
+    Human gates are written to DB and the function returns (easter continues).
     If conn is provided, it is reused (not closed). Otherwise a new one is created.
     """
-    global _quick_mode_active
-    _quick_mode_active = quick
+    _quick_mode_ctx.set(quick)
 
     gmode = gate_mode or DEFAULT_GATE_MODE
     if gmode not in VALID_GATE_MODES:
@@ -1148,6 +1151,22 @@ async def run_pipeline_async(
                 "WHERE platform_id=? AND epic_id IS NULL AND status='running'",
                 (platform_name,),
             )
+        # Cancel stale running traces from previous resume cycles (best-effort)
+        try:
+            if epic_slug:
+                conn.execute(
+                    "UPDATE traces SET status='cancelled', completed_at=datetime('now') "
+                    "WHERE platform_id=? AND epic_id=? AND status='running'",
+                    (platform_name, epic_slug),
+                )
+            else:
+                conn.execute(
+                    "UPDATE traces SET status='cancelled', completed_at=datetime('now') "
+                    "WHERE platform_id=? AND epic_id IS NULL AND status='running'",
+                    (platform_name,),
+                )
+        except Exception:
+            log.debug("Traces table not available — skipping stale trace cleanup")
         conn.commit()
 
         completed_nodes = get_resumable_nodes(conn, platform_name, epic_slug)
@@ -1156,7 +1175,7 @@ async def run_pipeline_async(
             pending = [g for g in pending if g.get("epic_id") == epic_slug]
         for gate in pending:
             if gate["node_id"] not in completed_nodes:
-                log.info("Gate pendente para '%s' — daemon aguardara aprovacao", gate["node_id"])
+                log.info("Gate pendente para '%s' — easter aguardara aprovacao", gate["node_id"])
                 if owns_conn:
                     conn.close()
                 return 0
@@ -1423,6 +1442,32 @@ async def run_pipeline_async(
 
     log.info("Pipeline async %s complete — %d nodes executed", mode.upper(), len(completed_nodes))
 
+    # Transition epic status (in_progress → shipped) if all required nodes done
+    if epic_slug:
+        try:
+            from db import compute_epic_status, get_epics, upsert_epic
+            from post_save import _get_required_epic_nodes
+
+            pipeline_data = yaml.safe_load(yaml_path.read_text(encoding="utf-8")).get("pipeline", {})
+            required_nodes = _get_required_epic_nodes(platform_name, pipeline_data)
+            existing = [e for e in get_epics(conn, platform_name) if e["epic_id"] == epic_slug]
+            if existing:
+                new_status, delivered_at = compute_epic_status(
+                    conn, platform_name, epic_slug, required_nodes, existing[0]["status"]
+                )
+                if new_status != existing[0]["status"]:
+                    upsert_epic(
+                        conn,
+                        platform_name,
+                        epic_slug,
+                        title=existing[0]["title"],
+                        status=new_status,
+                        delivered_at=delivered_at,
+                    )
+                    log.info("Epic '%s' transitioned: %s → %s", epic_slug, existing[0]["status"], new_status)
+        except Exception:
+            log.debug("Failed to compute epic status — non-blocking")
+
     # Refresh portal dashboard JSON (best-effort)
     try:
         from post_save import _refresh_portal_status
@@ -1627,7 +1672,7 @@ def build_dispatch_cmd(
 
     Centralizes command construction for both dispatch_node() and dispatch_node_async().
     """
-    system_prompt = build_system_prompt(node, platform_name, quick_mode=quick_mode or _quick_mode_active)
+    system_prompt = build_system_prompt(node, platform_name, quick_mode=quick_mode or _quick_mode_ctx.get())
 
     cmd = [
         "claude",
@@ -1696,8 +1741,7 @@ def run_pipeline(
     isolation). Self-ref platforms share working dir, DB, and skills —
     see pipeline-dag-knowledge.md "Parallel Epics Constraint".
     """
-    global _quick_mode_active
-    _quick_mode_active = quick
+    _quick_mode_ctx.set(quick)
 
     gmode = gate_mode or DEFAULT_GATE_MODE
     if gmode not in VALID_GATE_MODES:
@@ -1747,6 +1791,24 @@ def run_pipeline(
     completed_nodes: set[str] = set()
 
     if resume:
+        # Cancel stale running traces from previous resume cycles (best-effort)
+        try:
+            if epic_slug:
+                conn.execute(
+                    "UPDATE traces SET status='cancelled', completed_at=datetime('now') "
+                    "WHERE platform_id=? AND epic_id=? AND status='running'",
+                    (platform_name, epic_slug),
+                )
+            else:
+                conn.execute(
+                    "UPDATE traces SET status='cancelled', completed_at=datetime('now') "
+                    "WHERE platform_id=? AND epic_id IS NULL AND status='running'",
+                    (platform_name,),
+                )
+            conn.commit()
+        except Exception:
+            log.debug("Traces table not available — skipping stale trace cleanup")
+
         completed_nodes = get_resumable_nodes(conn, platform_name, epic_slug)
         # Check for pending (unapproved) gates
         pending = get_pending_gates(conn, platform_name)
@@ -1829,7 +1891,7 @@ def run_pipeline(
         # Task-by-task dispatch for speckit.implement (sync falls back to monolithic)
         if node.skill == "speckit.implement" and epic_slug:
             log.warning(
-                "Sync run_pipeline does not support task-by-task dispatch. Use async (daemon/--mode interactive)."
+                "Sync run_pipeline does not support task-by-task dispatch. Use async (easter/--mode interactive)."
             )
 
         # Compose prompt
@@ -1961,6 +2023,32 @@ def run_pipeline(
         log.debug("Failed to complete trace at pipeline end")
 
     print(f"\nPipeline {mode.upper()} complete — {len(completed_nodes)} nodes executed.")
+
+    # Transition epic status (in_progress → shipped) if all required nodes done
+    if epic_slug:
+        try:
+            from db import compute_epic_status, get_epics, upsert_epic
+            from post_save import _get_required_epic_nodes
+
+            pipeline_data = yaml.safe_load(yaml_path.read_text(encoding="utf-8")).get("pipeline", {})
+            required_nodes = _get_required_epic_nodes(platform_name, pipeline_data)
+            existing = [e for e in get_epics(conn, platform_name) if e["epic_id"] == epic_slug]
+            if existing:
+                new_status, delivered_at = compute_epic_status(
+                    conn, platform_name, epic_slug, required_nodes, existing[0]["status"]
+                )
+                if new_status != existing[0]["status"]:
+                    upsert_epic(
+                        conn,
+                        platform_name,
+                        epic_slug,
+                        title=existing[0]["title"],
+                        status=new_status,
+                        delivered_at=delivered_at,
+                    )
+                    log.info("Epic '%s' transitioned: %s → %s", epic_slug, existing[0]["status"], new_status)
+        except Exception:
+            log.debug("Failed to compute epic status — non-blocking")
 
     # Refresh portal dashboard JSON (best-effort)
     try:

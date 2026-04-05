@@ -16,7 +16,7 @@ from pathlib import Path
 import yaml
 
 from config import REPO_ROOT
-from db_core import _file_mtime_iso, _now, compute_file_hash, transaction
+from db_core import _file_mtime_iso, _now, _validate_identifiers, compute_file_hash, transaction
 
 logger = logging.getLogger(__name__)
 
@@ -38,8 +38,9 @@ _EPIC_STATUS_MAP = {
     "canceled": "cancelled",
 }
 
-# Fields allowed in complete_run() updates
+# Fields allowed in complete_run() updates — validated at import time to prevent SQL injection
 _COMPLETE_RUN_FIELDS = frozenset({"tokens_in", "tokens_out", "cost_usd", "duration_ms", "error", "output_lines"})
+_validate_identifiers(*_COMPLETE_RUN_FIELDS)
 
 
 # ══════════════════════════════════════

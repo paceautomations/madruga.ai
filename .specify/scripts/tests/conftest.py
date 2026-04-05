@@ -1,5 +1,6 @@
 """Shared fixtures for db.py tests."""
 
+import gc
 from pathlib import Path
 
 import pytest
@@ -7,6 +8,25 @@ import sys
 
 # Add scripts dir to path so we can import db
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+# Eagerly import modules that use `from db import get_conn` at module level.
+# Without this, test_hallucination_guard patches db.get_conn then triggers
+# `from post_save import _get_required_epic_nodes` inside run_pipeline(),
+# causing post_save.get_conn to be bound to the mock permanently.
+import post_save  # noqa: F401, E402
+
+
+@pytest.fixture(autouse=True)
+def _gc_collect_after_test():
+    """Force garbage collection after every test.
+
+    MagicMock objects create reference cycles (parent ↔ child) that bypass
+    Python's refcount collector. Without explicit gc.collect(), cycles from
+    73+ tests accumulate faster than the generational GC can reclaim them,
+    leading to 18-23 GB RSS and OOM kills on WSL.
+    """
+    yield
+    gc.collect()
 
 
 @pytest.fixture

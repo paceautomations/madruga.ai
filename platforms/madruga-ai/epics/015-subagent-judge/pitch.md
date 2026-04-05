@@ -41,7 +41,7 @@ Implementar um sistema de review multi-perspectiva extensível (**tech-reviewers
 | 7 | Detecção 1-way-door | **Inline** (patterns/heurística no contrato) + Judge como **safety net** (flagga 1-way-doors que escaparam como BLOCKER) | ADR-013 |
 | 8 | Notificação Telegram | **Estender telegram_adapter existente** para suportar notificação de decisões 1-way-door. Reutiliza inline keyboard approve/reject | ADR-018 |
 | 9 | Report | Judge gera report com **score numérico** (100 - blockers×20 - warnings×5 - nits×1). Score permite threshold para auto-escalate | Novo |
-| 10 | L1 vs L2 | L1 continua no terminal Claude Code. Automação (daemon/Telegram) é apenas L2 | Escopo |
+| 10 | L1 vs L2 | L1 continua no terminal Claude Code. Automação (easter/Telegram) é apenas L2 | Escopo |
 | 11 | Nome do time | `tech-reviewers` (não "judge" — o judge é o filtro, o time são os revisores) | Novo |
 
 ## Resolved Gray Areas

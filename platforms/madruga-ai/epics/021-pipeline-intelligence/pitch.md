@@ -1,12 +1,13 @@
 ---
 id: 021
 title: "Pipeline Intelligence"
-status: planned
+status: shipped
 appetite: 2w
 priority: P3
 depends_on: [017]
 blocks: []
 updated: 2026-04-04
+delivered_at: 2026-04-05
 ---
 # Epic 021: Pipeline Intelligence
 

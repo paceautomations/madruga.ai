@@ -150,7 +150,7 @@ The pipeline includes multiple circuit-breaker mechanisms:
 - **Gate pauses**: `human` and `1-way-door` gates halt execution until the operator explicitly approves
 - **Auto-escalate gates**: Skills like `judge` automatically escalate to the operator when blockers are found
 - **Prerequisite checks**: Each skill validates its input artifacts exist before executing — missing prerequisites halt the pipeline with a clear error
-- **Timeout**: The daemon enforces a configurable execution timeout per skill invocation
+- **Timeout**: The easter enforces a configurable execution timeout per skill invocation
 
 ---
 

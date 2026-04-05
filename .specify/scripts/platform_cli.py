@@ -25,7 +25,6 @@ Usage:
 
 from __future__ import annotations
 
-import datetime
 import json
 import logging
 import re
@@ -37,36 +36,9 @@ from pathlib import Path
 import yaml
 
 from config import PLATFORMS_DIR, PORTAL_DIR, REPO_ROOT, TEMPLATE_DIR  # noqa: F401
+from log_utils import setup_logging as _setup_logging
 
 log = logging.getLogger("platform_cli")
-
-
-# -- Structured logging (NDJSON) -- Duplicated by design — no shared util module in this scripts dir
-
-
-class _NDJSONFormatter(logging.Formatter):
-    """Emit one JSON object per line for CI consumption."""
-
-    def format(self, record: logging.LogRecord) -> str:
-        return json.dumps(
-            {
-                "timestamp": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
-                "level": record.levelname,
-                "message": record.getMessage(),
-                "logger": record.name,
-            }
-        )
-
-
-def _setup_logging(json_mode: bool) -> None:
-    """Configure root logger for human or NDJSON output."""
-    handler = logging.StreamHandler()
-    if json_mode:
-        handler.setFormatter(_NDJSONFormatter())
-    else:
-        handler.setFormatter(logging.Formatter("%(levelname)s %(name)s: %(message)s"))
-    logging.root.addHandler(handler)
-    logging.root.setLevel(logging.INFO)
 
 
 CANONICAL_SPEC = TEMPLATE_DIR / "template" / "model" / "spec.likec4"

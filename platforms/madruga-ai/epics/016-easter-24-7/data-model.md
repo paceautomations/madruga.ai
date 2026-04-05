@@ -1,14 +1,14 @@
-# Data Model: Daemon 24/7
+# Data Model: Easter 24/7
 
 **Date**: 2026-04-01 | **Spec**: [spec.md](spec.md)
 
 ## Entities
 
-Este epic nao introduz novas entidades no banco de dados. O daemon **consome** entidades existentes (definidas nos epics 006, 009, 014) e adiciona campos/queries necessarios para operacao continua.
+Este epic nao introduz novas entidades no banco de dados. O easter **consome** entidades existentes (definidas nos epics 006, 009, 014) e adiciona campos/queries necessarios para operacao continua.
 
 ### Entidades consumidas (read)
 
-| Entidade | Tabela | Campos usados pelo daemon | Definida em |
+| Entidade | Tabela | Campos usados pelo easter | Definida em |
 |----------|--------|---------------------------|-------------|
 | Epic | `epics` | epic_id, platform_id, status, priority, branch_name | Epic 006 |
 | EpicNode | `epic_nodes` | platform_id, epic_id, node_id, status | Epic 006 |
@@ -19,28 +19,28 @@ Este epic nao introduz novas entidades no banco de dados. O daemon **consome** e
 
 ### Entidades consumidas (write)
 
-| Entidade | Tabela | Operacoes do daemon |
+| Entidade | Tabela | Operacoes do easter |
 |----------|--------|---------------------|
 | PipelineRun | `pipeline_runs` | INSERT (inicio de node), UPDATE gate_status/gate_notified_at/telegram_message_id |
 | EpicNode | `epic_nodes` | UPDATE status (pending→running→done/failed/skipped) |
 | PipelineNode | `pipeline_nodes` | UPDATE status |
-| Event | `events` | INSERT (gate_notified, gate_resolved, decision_notified, decision_resolved, daemon_started, daemon_stopped, telegram_degraded, telegram_recovered) |
+| Event | `events` | INSERT (gate_notified, gate_resolved, decision_notified, decision_resolved, easter_started, easter_stopped, telegram_degraded, telegram_recovered) |
 | LocalConfig | `local_config` | UPDATE telegram_last_update_id |
 
-### Novos eventos do daemon
+### Novos eventos do easter
 
 | Evento | entity_type | action | payload |
 |--------|-------------|--------|---------|
-| Daemon iniciou | daemon | daemon_started | `{"version": "1.0", "pid": N}` |
-| Daemon parou | daemon | daemon_stopped | `{"reason": "signal/error", "uptime_s": N}` |
-| Telegram degradado | daemon | telegram_degraded | `{"failed_checks": N}` |
-| Telegram recuperado | daemon | telegram_recovered | `{"downtime_s": N}` |
+| Easter iniciou | easter | easter_started | `{"version": "1.0", "pid": N}` |
+| Easter parou | easter | easter_stopped | `{"reason": "signal/error", "uptime_s": N}` |
+| Telegram degradado | easter | telegram_degraded | `{"failed_checks": N}` |
+| Telegram recuperado | easter | telegram_recovered | `{"downtime_s": N}` |
 | Epic dispatch iniciado | epic | epic_dispatch_started | `{"epic_id": "...", "node_count": N}` |
 | Epic dispatch completo | epic | epic_dispatch_completed | `{"epic_id": "...", "nodes_executed": N}` |
-| Circuit breaker abriu | daemon | circuit_breaker_opened | `{"failures": N}` |
-| Circuit breaker fechou | daemon | circuit_breaker_closed | `{"recovery_time_s": N}` |
+| Circuit breaker abriu | easter | circuit_breaker_opened | `{"failures": N}` |
+| Circuit breaker fechou | easter | circuit_breaker_closed | `{"recovery_time_s": N}` |
 
-### State Machine: Daemon
+### State Machine: Easter
 
 ```
 starting → running → degraded → shutting_down → stopped
@@ -56,7 +56,7 @@ starting → running → degraded → shutting_down → stopped
 | shutting_down | Recebeu SIGTERM/SIGINT | N/A | Cancelando | N/A |
 | stopped | Processo encerrado | N/A | N/A | N/A |
 
-### State Machine: Epic (transicoes relevantes para o daemon)
+### State Machine: Epic (transicoes relevantes para o easter)
 
 ```
 proposed → in_progress → shipped
@@ -65,9 +65,9 @@ proposed → in_progress → shipped
               └→ waiting_approval (human gate)
 ```
 
-O daemon monitora a transicao `proposed → in_progress` (trigger manual via CLI/Telegram) e gerencia as demais automaticamente.
+O easter monitora a transicao `proposed → in_progress` (trigger manual via CLI/Telegram) e gerencia as demais automaticamente.
 
-## Queries criticas do daemon
+## Queries criticas do easter
 
 ### Poll epics prontos
 ```sql
@@ -93,4 +93,4 @@ WHERE platform_id = ? AND epic_id = ? AND status = 'done'
 
 ## Nao ha novas tabelas ou migrations
 
-O daemon opera 100% sobre o schema existente. Os eventos novos (daemon_started, etc.) usam a tabela `events` generica ja existente.
+O easter opera 100% sobre o schema existente. Os eventos novos (easter_started, etc.) usam a tabela `events` generica ja existente.

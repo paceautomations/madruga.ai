@@ -20,7 +20,7 @@ Human gates no pipeline requerem aprovacao humana, mas nao ha mecanismo de notif
 ## Dependencies
 
 - Depends on: 013 (gate state machine)
-- Blocks: 016 (daemon precisa de notificacoes para operar autonomamente)
+- Blocks: 016 (easter precisa de notificacoes para operar autonomamente)
 
 
 
@@ -30,7 +30,7 @@ Human gates no pipeline requerem aprovacao humana, mas nao ha mecanismo de notif
 |---|------|---------|------------------------|
 | 1 | Stack | aiogram 3.x + long-polling (nao webhook) | ADR-018 |
 | 2 | Interface | `MessagingProvider` abstrato com 3 metodos (`send`, `ask_choice`, `alert`) + `TelegramAdapter` como implementacao | ADR-018, Blueprint 0.0 |
-| 3 | Deploy model | Script standalone (`telegram_bot.py`) com polling loop proprio. Daemon 016 refatora para asyncio composavel | ADR-006, pitch 016 |
+| 3 | Deploy model | Script standalone (`telegram_bot.py`) com polling loop proprio. Easter 016 refatora para asyncio composavel | ADR-006, pitch 016 |
 | 4 | Integracao | Desacoplado via DB — dag_executor grava evento, telegram_bot poll tabela `pipeline_runs` e notifica | ADR-017 (YAML-driven, desacoplado) |
 | 5 | Config | `.env` com `MADRUGA_TELEGRAM_BOT_TOKEN` e `MADRUGA_TELEGRAM_CHAT_ID`. `.env.example` com placeholders | Blueprint 1.5 (config), seguranca |
 | 6 | Formatacao | HTML mode (nao MarkdownV2) — mais confiavel, sem escaping excessivo | Padrao openclaw/openclaw |
@@ -41,9 +41,9 @@ Human gates no pipeline requerem aprovacao humana, mas nao ha mecanismo de notif
 
 ## Resolved Gray Areas
 
-### 1. Scope do epic vs daemon (016)
+### 1. Scope do epic vs easter (016)
 **Pergunta:** O 014 implementa o polling loop completo ou apenas o adapter?
-**Resposta:** Implementa script standalone completo (`telegram_bot.py`) que: faz long-polling, recebe callbacks de approve/reject, atualiza `pipeline_runs` via `approve_gate()`/`reject_gate()`, poll tabela para novos gates pendentes e envia notificacao. **Nao** implementa integracao com daemon asyncio (016).
+**Resposta:** Implementa script standalone completo (`telegram_bot.py`) que: faz long-polling, recebe callbacks de approve/reject, atualiza `pipeline_runs` via `approve_gate()`/`reject_gate()`, poll tabela para novos gates pendentes e envia notificacao. **Nao** implementa integracao com easter asyncio (016).
 
 ### 2. Modelo de notificacao (push vs pull)
 **Pergunta:** dag_executor chama send() diretamente ou desacoplado via DB?

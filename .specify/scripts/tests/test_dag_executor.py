@@ -50,6 +50,96 @@ async def test_run_pipeline_async_no_trace_when_gate_pending(tmp_path):
         mock_create_trace.assert_not_called()  # NO trace created
 
 
+@pytest.mark.asyncio
+async def test_run_pipeline_async_transitions_epic_to_shipped(tmp_path):
+    """run_pipeline_async must call compute_epic_status and transition epic to shipped."""
+    plat_dir = tmp_path / "platforms" / "test-plat"
+    plat_dir.mkdir(parents=True)
+    (plat_dir / "platform.yaml").write_text(
+        "title: Test\npipeline:\n  epic_cycle:\n    nodes:\n      - id: specify\n        optional: false\n"
+    )
+
+    mock_conn = MagicMock()
+    mock_conn.execute.return_value.fetchall.return_value = []
+    mock_conn.execute.return_value.fetchone.return_value = None
+
+    node = _make_node("specify", "speckit.specify")
+
+    # Use a real in-memory DB to test the full flow end-to-end
+    import sqlite3
+
+    real_conn = sqlite3.connect(":memory:")
+    real_conn.row_factory = sqlite3.Row
+
+    # Bootstrap schema
+    from db import migrate
+    from db_pipeline import upsert_platform, upsert_epic, upsert_epic_node
+
+    migrate(real_conn)
+    upsert_platform(real_conn, "test-plat", name="Test", repo_path="platforms/test-plat")
+    upsert_epic(real_conn, "test-plat", "021-test", title="Test", status="in_progress")
+    upsert_epic_node(real_conn, "test-plat", "021-test", "specify", "done")
+
+    try:
+        with (
+            patch("dag_executor.REPO_ROOT", tmp_path),
+            patch("dag_executor.parse_dag", return_value=[node]),
+            patch("dag_executor.topological_sort", return_value=[node]),
+            patch("post_save._refresh_portal_status"),
+        ):
+            from dag_executor import run_pipeline_async
+
+            result = await run_pipeline_async("test-plat", epic_slug="021-test", resume=True, conn=real_conn)
+
+            assert result == 0
+            # Verify epic transitioned to shipped
+            row = real_conn.execute("SELECT status, delivered_at FROM epics WHERE epic_id='021-test'").fetchone()
+            assert row["status"] == "shipped"
+            assert row["delivered_at"] is not None
+    finally:
+        real_conn.close()
+
+
+@pytest.mark.asyncio
+async def test_run_pipeline_async_resume_cancels_stale_traces(tmp_path):
+    """resume=True must cancel stale running traces from previous cycles."""
+    plat_dir = tmp_path / "platforms" / "test-plat"
+    plat_dir.mkdir(parents=True)
+    (plat_dir / "platform.yaml").write_text("title: Test\n")
+
+    mock_conn = MagicMock()
+    mock_conn.execute.return_value.fetchall.return_value = []
+    mock_conn.execute.return_value.fetchone.return_value = None
+
+    # Track SQL calls to verify traces cleanup
+    sql_calls = []
+    original_execute = mock_conn.execute
+
+    def tracking_execute(sql, params=None):
+        sql_calls.append((sql, params))
+        return original_execute(sql, params)
+
+    mock_conn.execute = tracking_execute
+
+    with (
+        patch("dag_executor.REPO_ROOT", tmp_path),
+        patch("dag_executor.parse_dag", return_value=[_make_node("specify", "speckit.specify")]),
+        patch("dag_executor.topological_sort", return_value=[_make_node("specify", "speckit.specify")]),
+        patch("db.get_resumable_nodes", return_value=set()),
+        patch(
+            "db.get_pending_gates",
+            return_value=[{"node_id": "specify", "epic_id": "021-test", "gate_status": "waiting_approval"}],
+        ),
+    ):
+        from dag_executor import run_pipeline_async
+
+        await run_pipeline_async("test-plat", epic_slug="021-test", resume=True, conn=mock_conn)
+
+    # Verify that traces cleanup SQL was executed
+    trace_cleanup = [s for s, p in sql_calls if "traces" in s and "cancelled" in s]
+    assert len(trace_cleanup) >= 1, f"Expected trace cleanup SQL, got: {[s for s, _ in sql_calls]}"
+
+
 # --- Helpers ---
 
 
@@ -237,15 +327,23 @@ def test_resumable_nodes_excludes_approved_gates():
         "VALUES ('r1', 'plat', 'e1', 'specify', 'running', 'approved', '2026-01-01')"
     )
 
-    result = get_resumable_nodes(conn, "plat", "e1")
-    assert "epic-context" in result
-    assert "specify" not in result, "approved gate should NOT count as resumable"
+    try:
+        result = get_resumable_nodes(conn, "plat", "e1")
+        assert "epic-context" in result
+        assert "specify" not in result, "approved gate should NOT count as resumable"
+    finally:
+        conn.close()
 
 
 @pytest.mark.asyncio
-async def test_gate_approved_triggers_dispatch():
+async def test_gate_approved_triggers_dispatch(tmp_path):
     """After gate approval, run_pipeline_async dispatches the node instead of pausing."""
     import sqlite3
+
+    # Create real platform dir so yaml.safe_load doesn't hit a MagicMock stream
+    plat_dir = tmp_path / "platforms" / "test-plat"
+    plat_dir.mkdir(parents=True)
+    (plat_dir / "platform.yaml").write_text("title: Test\n")
 
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
@@ -299,24 +397,32 @@ async def test_gate_approved_triggers_dispatch():
     mock_branch = MagicMock()
     mock_branch.stdout = "epic/test-plat/e1\n"
 
-    with (
-        patch("dag_executor.parse_dag", return_value=nodes),
-        patch("dag_executor.topological_sort", return_value=nodes),
-        patch("dag_executor.dispatch_with_retry_async", side_effect=mock_dispatch),
-        patch("dag_executor.verify_outputs", return_value=(True, None)),
-        patch("dag_executor.compose_skill_prompt", return_value=("test prompt", "guardrail")),
-        patch("dag_executor.subprocess.run", return_value=mock_branch),
-        patch("dag_executor.REPO_ROOT", MagicMock()),
-    ):
-        await run_pipeline_async("test-plat", epic_slug="e1", resume=True, conn=conn)
+    try:
+        with (
+            patch("dag_executor.parse_dag", return_value=nodes),
+            patch("dag_executor.topological_sort", return_value=nodes),
+            patch("dag_executor.dispatch_with_retry_async", side_effect=mock_dispatch),
+            patch("dag_executor.verify_outputs", return_value=(True, None)),
+            patch("dag_executor.compose_skill_prompt", return_value=("test prompt", "guardrail")),
+            patch("dag_executor.subprocess.run", return_value=mock_branch),
+            patch("dag_executor.REPO_ROOT", tmp_path),
+        ):
+            await run_pipeline_async("test-plat", epic_slug="e1", resume=True, conn=conn)
 
-    assert dispatch_called, "specify should have been dispatched after gate approval"
+        assert dispatch_called, "specify should have been dispatched after gate approval"
+    finally:
+        conn.close()
 
 
 @pytest.mark.asyncio
-async def test_auto_mode_skips_gate_approval():
+async def test_auto_mode_skips_gate_approval(tmp_path):
     """In auto mode, human gates are auto-approved without DB interaction."""
     import sqlite3
+
+    # Create real platform dir so yaml.safe_load doesn't hit a MagicMock stream
+    plat_dir = tmp_path / "platforms" / "p"
+    plat_dir.mkdir(parents=True)
+    (plat_dir / "platform.yaml").write_text("title: Test\n")
 
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
@@ -354,21 +460,24 @@ async def test_auto_mode_skips_gate_approval():
     mock_branch = MagicMock()
     mock_branch.stdout = "epic/p/e1\n"
 
-    with (
-        patch("dag_executor.parse_dag", return_value=nodes),
-        patch("dag_executor.topological_sort", return_value=nodes),
-        patch("dag_executor.dispatch_with_retry_async", side_effect=mock_dispatch),
-        patch("dag_executor.verify_outputs", return_value=(True, None)),
-        patch("dag_executor.compose_skill_prompt", return_value=("test", "guardrail")),
-        patch("dag_executor.subprocess.run", return_value=mock_branch),
-        patch("dag_executor.REPO_ROOT", MagicMock()),
-    ):
-        await run_pipeline_async("p", epic_slug="e1", resume=True, conn=conn, gate_mode="auto")
+    try:
+        with (
+            patch("dag_executor.parse_dag", return_value=nodes),
+            patch("dag_executor.topological_sort", return_value=nodes),
+            patch("dag_executor.dispatch_with_retry_async", side_effect=mock_dispatch),
+            patch("dag_executor.verify_outputs", return_value=(True, None)),
+            patch("dag_executor.compose_skill_prompt", return_value=("test", "guardrail")),
+            patch("dag_executor.subprocess.run", return_value=mock_branch),
+            patch("dag_executor.REPO_ROOT", tmp_path),
+        ):
+            await run_pipeline_async("p", epic_slug="e1", resume=True, conn=conn, gate_mode="auto")
 
-    assert "specify" in dispatched, "auto mode should dispatch without pausing"
-    # No waiting_approval runs should exist
-    gates = conn.execute("SELECT * FROM pipeline_runs WHERE gate_status='waiting_approval'").fetchall()
-    assert len(gates) == 0, "auto mode should not create waiting_approval gates"
+        assert "specify" in dispatched, "auto mode should dispatch without pausing"
+        # No waiting_approval runs should exist
+        gates = conn.execute("SELECT * FROM pipeline_runs WHERE gate_status='waiting_approval'").fetchall()
+        assert len(gates) == 0, "auto mode should not create waiting_approval gates"
+    finally:
+        conn.close()
 
 
 # --- Tests for task-by-task implement ---
@@ -438,11 +547,11 @@ def test_compose_task_prompt(tmp_path):
 
     task = TaskItem(
         id="T005",
-        description="Add CORS to `daemon.py`",
+        description="Add CORS to `easter.py`",
         checked=False,
         phase="Phase 2",
         parallel=True,
-        files=["daemon.py"],
+        files=["easter.py"],
         line_number=10,
     )
 
@@ -450,7 +559,7 @@ def test_compose_task_prompt(tmp_path):
 
     assert "T005" in prompt
     assert "ONLY implement this specific task" in prompt
-    assert "daemon.py" in prompt
+    assert "easter.py" in prompt
     assert "Plan" in prompt
     assert "Spec" in prompt
     assert "epic/test-plat/001-test" in prompt
@@ -529,7 +638,7 @@ def test_append_implement_context(tmp_path):
         checked=True,
         phase="Phase 1",
         parallel=False,
-        files=["daemon.py"],
+        files=["easter.py"],
         line_number=2,
     )
 
@@ -541,7 +650,7 @@ def test_append_implement_context(tmp_path):
     assert "db.py, models.py" in ctx
     assert "1000/500" in ctx
     assert "T002 — DONE" in ctx
-    assert "daemon.py" in ctx
+    assert "easter.py" in ctx
 
 
 def test_implement_context_deleted_at_cycle_start(tmp_path):

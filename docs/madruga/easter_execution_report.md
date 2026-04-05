@@ -1,7 +1,7 @@
-# Daemon Execution Report — Assisted Monitoring Session
+# Easter Execution Report — Assisted Monitoring Session
 
 > **Date**: 2026-04-04 | **Duration**: ~4h active monitoring (2 sessions)
-> **Daemon PID (current)**: 1152814 | **Port**: 8040 | **Mode**: MADRUGA_MODE=manual
+> **Easter PID (current)**: 1152814 | **Port**: 8040 | **Mode**: MADRUGA_MODE=manual
 > **Queue**: 4 epics (018→019→020→021)
 
 ---
@@ -13,7 +13,7 @@
 | Commit epics + roadmap to main | OK | instant | `b9827f8`, 6 files, 1,308 insertions |
 | Register 4 epics in DB | OK | instant | status=in_progress, priority 1-4 |
 | Create 4 branches from main | OK | instant | `git branch epic/madruga-ai/018..021 main` |
-| Start daemon | OK | ~3s | FastAPI + uvicorn on :8040 |
+| Start easter | OK | ~3s | FastAPI + uvicorn on :8040 |
 | First epic dispatch | OK | 15s | poll detected 018, dispatched epic-context |
 
 **Total setup time: ~2 minutes** (manual commands, no automation script).
@@ -42,7 +42,7 @@
 
 ### Actual Code Implemented
 
-O daemon via `claude -p` gerou **codigo real** — nao apenas artefatos de documentacao:
+O easter via `claude -p` gerou **codigo real** — nao apenas artefatos de documentacao:
 
 | File | Action | LOC changed |
 |------|--------|-------------|
@@ -147,15 +147,15 @@ When 020's implement phase ran (db.py split scope), it rewrote `skill-lint.py` a
 
 ### DB Crash Incident (020 session)
 
-During T005 (db.py facade creation), the new `db_core.py` enabled `PRAGMA foreign_keys=ON`. The running daemon had the old `db.py` module cached in memory, which did NOT have FK constraints. When T005 completed and the daemon tried to insert a `pipeline_runs` row with an orphan `trace_id` reference, FK constraint failed, crash corrupted the SQLite WAL.
+During T005 (db.py facade creation), the new `db_core.py` enabled `PRAGMA foreign_keys=ON`. The running easter had the old `db.py` module cached in memory, which did NOT have FK constraints. When T005 completed and the easter tried to insert a `pipeline_runs` row with an orphan `trace_id` reference, FK constraint failed, crash corrupted the SQLite WAL.
 
 **Recovery steps**:
-1. Kill daemon
+1. Kill easter
 2. Backup and delete corrupted `.pipeline/madruga.db`
 3. `make seed` — recreates fresh DB from filesystem
 4. Manually restore epic statuses (018/019=shipped, 020/021=in_progress)
 5. Manually insert `epic_nodes` for 020's completed planning nodes (epic-context/specify/clarify/plan/tasks/analyze)
-6. Restart daemon — resumes from implement:T006
+6. Restart easter — resumes from implement:T006
 
 **Fix applied**: `test_post_save.py` was patching `db.DB_PATH` instead of `db_core.DB_PATH` (the actual source after the facade split). Fixed all 9 test functions to `import db_core as db_mod`. 517 tests now passing.
 
@@ -204,7 +204,7 @@ The eval scorer (`eval_scorer.py`) was giving terrible scores to all `implement:
 | 020 Code Quality & DX | **running** (implement T006+) | P2 | DB crash + recovery, 019 scope overlap fixed |
 | 021 Pipeline Intelligence | waiting | P3 | epic-context done, rest pending |
 
-**Current daemon**: PID 1152814, running since 21:38 UTC, dispatching T006+.
+**Current easter**: PID 1152814, running since 21:38 UTC, dispatching T006+.
 
 ---
 
@@ -212,20 +212,20 @@ The eval scorer (`eval_scorer.py`) was giving terrible scores to all `implement:
 
 | # | Finding | Evidence |
 |---|---------|----------|
-| W1 | **Daemon starts cleanly** | FastAPI + uvicorn in ~3s, structured JSON logs via structlog |
+| W1 | **Easter starts cleanly** | FastAPI + uvicorn in ~3s, structured JSON logs via structlog |
 | W2 | **Sequential constraint works** | `_running_epics` set prevents parallel self-ref epics |
 | W3 | **Auto-gate approval works** | `MADRUGA_MODE=auto` correctly auto-approves human and 1-way-door gates |
 | W4 | **Trace creation and completion** | Trace created at start, completed at end with status |
 | W5 | **Clarify skip logic works** | Correctly skipped when spec has 0 `[NEEDS CLARIFICATION]` markers |
-| W6 | **Graceful degradation without Telegram** | Warning logged, no crash, daemon continues without notifications |
+| W6 | **Graceful degradation without Telegram** | Warning logged, no crash, easter continues without notifications |
 | W7 | **Epic node status tracking** | Each completed node immediately recorded as `done` in DB |
 | W8 | **Resume with session reuse** | Tasks within same User Story reuse `claude -p` session (token savings) |
 | W9 | **Health + observability endpoints** | `/status`, `/api/traces`, `/api/evals`, `/api/stats` all responsive |
 | W10 | **End-to-end pitch-to-shipped** | Epics 018 and 019 shipped with zero human intervention |
 | W11 | **Code quality maintained** | `make test` and `make ruff` passed as verification tasks |
-| W12 | **Automatic epic transition** | After shipping, daemon picks up next in_progress epic in next poll cycle |
+| W12 | **Automatic epic transition** | After shipping, easter picks up next in_progress epic in next poll cycle |
 | W13 | **Branch correction works** | Layer 4 branch verification catches and reverts incorrect branch |
-| W14 | **Task-level resume** | `[X]` marks in tasks.md preserve which implement tasks are done across daemon restarts |
+| W14 | **Task-level resume** | `[X]` marks in tasks.md preserve which implement tasks are done across easter restarts |
 
 ---
 
@@ -234,14 +234,14 @@ The eval scorer (`eval_scorer.py`) was giving terrible scores to all `implement:
 ### F1. Cross-platform queue contamination (Priority: MEDIUM — FIXED)
 **Problem**: `poll_active_epics()` returns ALL in_progress epics across ALL platforms. `fulano/001-channel-pipeline` blocked the madruga-ai queue.
 
-**Fix applied**: Added `--platform` CLI arg to daemon.py. `dag_scheduler()` now accepts `platform_id` and passes it to `poll_active_epics(conn, platform_id=...)`. Usage: `python3 daemon.py --platform madruga-ai`.
+**Fix applied**: Added `--platform` CLI arg to easter.py. `dag_scheduler()` now accepts `platform_id` and passes it to `poll_active_epics(conn, platform_id=...)`. Usage: `python3 easter.py --platform madruga-ai`.
 
-### F2. Daemon doesn't cancel in-flight dispatch when DB status changes (Priority: HIGH — FIXED)
-**Problem**: After manually changing fulano to `shipped`, daemon continued running its `claude -p`. Retries didn't re-check DB status.
+### F2. Easter doesn't cancel in-flight dispatch when DB status changes (Priority: HIGH — FIXED)
+**Problem**: After manually changing fulano to `shipped`, easter continued running its `claude -p`. Retries didn't re-check DB status.
 
 **Fix applied**: Added `_make_abort_check(conn, epic_slug)` callback and `abort_check` parameter to `dispatch_with_retry_async()`. Before each retry, checks `SELECT status FROM epics WHERE epic_id=?` — aborts with `"epic_status_changed"` if no longer `in_progress`. Applied to all 3 dispatch call sites.
 
-### F3. Daemon doesn't proactively checkout epic branch (Priority: HIGH — FIXED)
+### F3. Easter doesn't proactively checkout epic branch (Priority: HIGH — FIXED)
 **Problem**: Layer 4 branch correction is reactive. First dispatch of a new epic temporarily runs on the previous epic's branch.
 
 **Fix applied**: `dag_scheduler()` now runs `git checkout {branch_name}` via `asyncio.to_thread` before `run_pipeline_async()`. The `branch_name` field was already in the poll query but never used.
@@ -252,9 +252,9 @@ The eval scorer (`eval_scorer.py`) was giving terrible scores to all `implement:
 **Status**: OPEN (deferred — low risk for internal tool).
 
 ### F5. DB module caching causes FK crash on hot reload (Priority: LOW — mitigated)
-**Problem**: When 020-T005 replaced `db.py` with a facade that enabled `PRAGMA foreign_keys=ON`, the daemon's cached module crashed on FK violation and corrupted WAL.
+**Problem**: When 020-T005 replaced `db.py` with a facade that enabled `PRAGMA foreign_keys=ON`, the easter's cached module crashed on FK violation and corrupted WAL.
 
-**Status**: MITIGATED. The db.py split (020) is complete, so no further schema-touching epics expected. Risk is residual and low. Workaround: restart daemon after schema-touching epics.
+**Status**: MITIGATED. The db.py split (020) is complete, so no further schema-touching epics expected. Risk is residual and low. Workaround: restart easter after schema-touching epics.
 
 ### F6. Epic scope overlap overwrites sibling epic's work (Priority: MEDIUM)
 **Problem**: Epic 020's implement tasks rewrote `skill-lint.py`, removing 019's additions.
@@ -271,8 +271,8 @@ The eval scorer (`eval_scorer.py`) was giving terrible scores to all `implement:
 
 **Fix applied**: Implement-aware scoring branches in quality (6-8.0 via tokens_out heuristic), completeness (10.0 for completed tasks), adherence (7.0 for no-artifact tasks). Error marker `FAILED` anchored to line start. All 46 eval tests passing.
 
-### F9. Daemon doesn't commit code changes to branch (Priority: HIGH — FIXED)
-**Problem**: `claude -p` writes files to working tree but daemon never commits them. Implementation exists only as uncommitted changes.
+### F9. Easter doesn't commit code changes to branch (Priority: HIGH — FIXED)
+**Problem**: `claude -p` writes files to working tree but easter never commits them. Implementation exists only as uncommitted changes.
 
 **Fix applied**: Added `_auto_commit_epic(cwd, platform_name, epic_slug)` in `dag_executor.py`. After implement node completes successfully, runs `git add -A` + `git commit -m "feat: epic {slug} — implement tasks"`. Gracefully handles no-changes and commit failures.
 
@@ -280,11 +280,11 @@ The eval scorer (`eval_scorer.py`) was giving terrible scores to all `implement:
 
 ## 9. Operational Runbook (derived from this session)
 
-### Starting the daemon for epic processing
+### Starting the easter for epic processing
 
 ```bash
-# 1. Ensure only one daemon is running
-pkill -f daemon.py; sleep 2
+# 1. Ensure only one easter is running
+pkill -f easter.py; sleep 2
 
 # 2. Verify DB state
 python3 -c "
@@ -295,12 +295,12 @@ print(conn.execute('SELECT epic_id, status FROM epics WHERE status=\'in_progress
 conn.close()
 "
 
-# 3. Start daemon
-python3 .specify/scripts/daemon.py -v > /tmp/madruga-daemon.log 2>&1 &
+# 3. Start easter
+python3 .specify/scripts/easter.py -v > /tmp/madruga-easter.log 2>&1 &
 echo "PID: $!"
 
 # 4. Monitor
-tail -f /tmp/madruga-daemon.log
+tail -f /tmp/madruga-easter.log
 ```
 
 ### Cross-platform queue contamination workaround
@@ -319,7 +319,7 @@ conn.commit(); conn.close()
 ### Recovering from DB corruption (WAL crash)
 
 ```bash
-pkill -f daemon.py
+pkill -f easter.py
 cp .pipeline/madruga.db .pipeline/madruga.db.bak
 rm .pipeline/madruga.db .pipeline/madruga.db-wal .pipeline/madruga.db-shm 2>/dev/null
 make seed
@@ -338,8 +338,8 @@ conn.commit(); conn.close()
 
 ```bash
 # Epic nodes already completed are tracked in epic_nodes table
-# Daemon with resume=True skips completed nodes automatically
-python3 .specify/scripts/daemon.py -v  # restarts, picks up where left off
+# Easter with resume=True skips completed nodes automatically
+python3 .specify/scripts/easter.py -v  # restarts, picks up where left off
 ```
 
 ---

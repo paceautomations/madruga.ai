@@ -7,14 +7,14 @@
 - Python 3.11+
 - Node.js 20+ (para portal)
 - SQLite 3.35+ (para window functions)
-- Daemon dependencies: `pip install fastapi uvicorn structlog pyyaml`
+- Easter dependencies: `pip install fastapi uvicorn structlog pyyaml`
 - Portal dependencies: `cd portal && npm install`
 
 ## Setup Rapido
 
 ### 1. Aplicar migration
 
-A migration 010 e aplicada automaticamente pelo `migrate()` em db.py quando o daemon ou qualquer script inicia. Para verificar manualmente:
+A migration 010 e aplicada automaticamente pelo `migrate()` em db.py quando o easter ou qualquer script inicia. Para verificar manualmente:
 
 ```bash
 python3 -c "
@@ -29,11 +29,11 @@ conn.close()
 "
 ```
 
-### 2. Iniciar daemon com endpoints de observabilidade
+### 2. Iniciar easter com endpoints de observabilidade
 
 ```bash
-# Terminal 1: daemon
-python3 .specify/scripts/daemon.py
+# Terminal 1: easter
+python3 .specify/scripts/easter.py
 
 # Verificar endpoints
 curl http://localhost:8040/health
@@ -55,7 +55,7 @@ cd portal && npm run dev
 # Executar um pipeline run (gera trace + spans + evals)
 python3 .specify/scripts/dag_executor.py --platform madruga-ai --epic 017-observability-tracing-evals --mode auto
 
-# Ou via daemon (ja rodando)
+# Ou via easter (ja rodando)
 # Basta ter epic com status='in_progress' no DB
 ```
 
@@ -68,7 +68,7 @@ make test
 # Testes especificos de observabilidade
 python3 -m pytest .specify/scripts/tests/test_db_observability.py -v
 python3 -m pytest .specify/scripts/tests/test_eval_scorer.py -v
-python3 -m pytest .specify/scripts/tests/test_daemon_observability.py -v
+python3 -m pytest .specify/scripts/tests/test_easter_observability.py -v
 python3 -m pytest .specify/scripts/tests/test_observability_export.py -v
 ```
 
@@ -118,8 +118,8 @@ head -5 traces.csv
 
 | Problema | Causa | Solucao |
 |----------|-------|---------|
-| `traces` table not found | Migration nao aplicada | Restart daemon ou rodar `migrate()` manualmente |
+| `traces` table not found | Migration nao aplicada | Restart easter ou rodar `migrate()` manualmente |
 | Tokens/cost sempre NULL | Claude CLI nao retornou JSON | Verificar `--output-format json` no dispatch. Verificar versao do Claude CLI. |
-| CORS error no portal | Daemon sem CORSMiddleware | Verificar que daemon.py tem CORSMiddleware configurado |
+| CORS error no portal | Easter sem CORSMiddleware | Verificar que easter.py tem CORSMiddleware configurado |
 | Dashboard vazio | Nenhum trace no DB | Executar pipeline run para gerar dados |
 | Eval scores nao gerados | Node falhou (so nodes completed geram evals) | Verificar status dos nodes no trace |

@@ -41,7 +41,7 @@ make test
 **Key constraint**: `db.py` becomes a 10-line re-export facade. Every `from db import X` in existing scripts must continue to work.
 
 **Verify callers** (these scripts import from db — none should need changes):
-- `daemon.py` — imports `cleanup_old_data`, `get_conn`, `migrate`, `get_traces`, etc.
+- `easter.py` — imports `cleanup_old_data`, `get_conn`, `migrate`, `get_traces`, etc.
 - `dag_executor.py` — imports `insert_eval_score`, `complete_run`, `insert_run`, etc.
 - `platform_cli.py` — imports `get_active_platform`, `get_conn`, etc.
 - `ensure_repo.py` — imports `get_conn`, `get_local_config`

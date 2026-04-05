@@ -12,7 +12,7 @@ rationale: Fail-fast quando API esta com problemas (0ms check local)
 
 ## Contexto
 
-O daemon executa autonomamente 24/7 e faz multiplas chamadas ao Claude API por pipeline. Se o API estiver com problemas (rate limit, downtime), chamadas consecutivas desperdicam tempo e podem piorar a situacao. Precisamos de um mecanismo para suspender chamadas automaticamente quando detectamos falhas consecutivas, e retomar quando o servico se recuperar.
+O easter executa autonomamente 24/7 e faz multiplas chamadas ao Claude API por pipeline. Se o API estiver com problemas (rate limit, downtime), chamadas consecutivas desperdicam tempo e podem piorar a situacao. Precisamos de um mecanismo para suspender chamadas automaticamente quando detectamos falhas consecutivas, e retomar quando o servico se recuperar.
 
 ## Decisao
 

@@ -1,4 +1,4 @@
-"""Tests for daemon.py — FastAPI daemon, lifespan, scheduler, degradation, endpoints."""
+"""Tests for easter.py — FastAPI easter, lifespan, scheduler, degradation, endpoints."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from httpx import ASGITransport, AsyncClient
 
 def _make_app():
     """Import and return the FastAPI app."""
-    from daemon import app
+    from easter import app
 
     return app
 
@@ -24,25 +24,27 @@ def _make_app():
 
 @pytest.mark.asyncio
 async def test_health_endpoint_returns_200():
-    """GET /health returns 200 with status ok."""
-    from daemon import app
+    """GET /health returns 200 with status and db fields."""
+    from easter import app
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.get("/health")
     assert resp.status_code == 200
-    assert resp.json()["status"] == "ok"
+    data = resp.json()
+    assert data["status"] in ("ok", "degraded")
+    assert "db" in data
 
 
 @pytest.mark.asyncio
 async def test_status_endpoint_returns_json():
     """GET /status returns JSON with expected keys."""
-    from daemon import app
+    from easter import app
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.get("/status")
     assert resp.status_code == 200
     data = resp.json()
-    assert "daemon_state" in data
+    assert "easter_state" in data
     assert "pid" in data
     assert "uptime_seconds" in data
 
@@ -50,7 +52,7 @@ async def test_status_endpoint_returns_json():
 @pytest.mark.asyncio
 async def test_graceful_shutdown_sets_event():
     """Shutdown event is set after lifespan exit."""
-    from daemon import _shutdown_event
+    from easter import _shutdown_event
 
     # _shutdown_event is module-level; test that it exists and is an asyncio.Event
     assert isinstance(_shutdown_event, asyncio.Event)
@@ -58,8 +60,8 @@ async def test_graceful_shutdown_sets_event():
 
 @pytest.mark.asyncio
 async def test_startup_without_telegram_env_vars_logs_warning():
-    """Daemon starts without Telegram env vars (degraded but functional)."""
-    from daemon import app
+    """Easter starts without Telegram env vars (degraded but functional)."""
+    from easter import app
 
     with patch.dict("os.environ", {}, clear=True):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -73,18 +75,18 @@ async def test_startup_without_telegram_env_vars_logs_warning():
 @pytest.mark.asyncio
 async def test_dag_scheduler_detects_active_epic():
     """dag_scheduler calls poll_active_epics and dispatches."""
-    from daemon import dag_scheduler
+    from easter import dag_scheduler
 
     shutdown = asyncio.Event()
     mock_conn = MagicMock()
 
     with (
         patch(
-            "daemon.poll_active_epics",
+            "easter.poll_active_epics",
             return_value=[{"epic_id": "016", "platform_id": "test", "branch_name": "epic/test/016"}],
         ),
-        patch("daemon.run_pipeline_async", new_callable=AsyncMock, return_value=0) as mock_run,
-        patch("daemon._running_epics", set()),
+        patch("easter.run_pipeline_async", new_callable=AsyncMock, return_value=0) as mock_run,
+        patch("easter._running_epics", set()),
     ):
         # Run one iteration then stop
         async def _stop_after_poll(*args, **kwargs):
@@ -100,22 +102,22 @@ async def test_dag_scheduler_detects_active_epic():
 @pytest.mark.asyncio
 async def test_dag_scheduler_respects_sequential_constraint():
     """dag_scheduler does not dispatch a second epic if one is already running."""
-    from daemon import dag_scheduler
+    from easter import dag_scheduler
 
     shutdown = asyncio.Event()
     mock_conn = MagicMock()
 
     with (
         patch(
-            "daemon.poll_active_epics",
+            "easter.poll_active_epics",
             return_value=[
                 {"epic_id": "016", "platform_id": "test", "branch_name": "epic/test/016"},
                 {"epic_id": "017", "platform_id": "test", "branch_name": "epic/test/017"},
             ],
         ),
-        patch("daemon.run_pipeline_async", new_callable=AsyncMock) as mock_run,
-        patch("daemon._running_epics", {"016"}),
-        patch("daemon.asyncio.sleep", new_callable=AsyncMock, side_effect=lambda _: shutdown.set()),
+        patch("easter.run_pipeline_async", new_callable=AsyncMock) as mock_run,
+        patch("easter._running_epics", {"016"}),
+        patch("easter.asyncio.sleep", new_callable=AsyncMock, side_effect=lambda _: shutdown.set()),
     ):
         await dag_scheduler(mock_conn, asyncio.Semaphore(3), shutdown, poll_interval=0.01)
 
@@ -126,21 +128,21 @@ async def test_dag_scheduler_respects_sequential_constraint():
 @pytest.mark.asyncio
 async def test_dag_scheduler_skips_already_running_epic():
     """dag_scheduler does not re-dispatch an epic that is already running."""
-    from daemon import dag_scheduler
+    from easter import dag_scheduler
 
     shutdown = asyncio.Event()
     mock_conn = MagicMock()
 
     with (
         patch(
-            "daemon.poll_active_epics",
+            "easter.poll_active_epics",
             return_value=[
                 {"epic_id": "016", "platform_id": "test", "branch_name": "epic/test/016"},
             ],
         ),
-        patch("daemon.run_pipeline_async", new_callable=AsyncMock) as mock_run,
-        patch("daemon._running_epics", {"016"}),
-        patch("daemon.asyncio.sleep", new_callable=AsyncMock, side_effect=lambda _: shutdown.set()),
+        patch("easter.run_pipeline_async", new_callable=AsyncMock) as mock_run,
+        patch("easter._running_epics", {"016"}),
+        patch("easter.asyncio.sleep", new_callable=AsyncMock, side_effect=lambda _: shutdown.set()),
     ):
         await dag_scheduler(mock_conn, asyncio.Semaphore(3), shutdown, poll_interval=0.01)
 
@@ -150,7 +152,7 @@ async def test_dag_scheduler_skips_already_running_epic():
 @pytest.mark.asyncio
 async def test_dag_scheduler_poll_interval():
     """dag_scheduler respects poll_interval between iterations."""
-    from daemon import dag_scheduler
+    from easter import dag_scheduler
 
     shutdown = asyncio.Event()
     mock_conn = MagicMock()
@@ -164,8 +166,8 @@ async def test_dag_scheduler_poll_interval():
         return []
 
     with (
-        patch("daemon.poll_active_epics", side_effect=_count_and_stop),
-        patch("daemon.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+        patch("easter.poll_active_epics", side_effect=_count_and_stop),
+        patch("easter.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
     ):
         await dag_scheduler(mock_conn, asyncio.Semaphore(3), shutdown, poll_interval=15)
 
@@ -176,7 +178,7 @@ async def test_dag_scheduler_poll_interval():
 @pytest.mark.asyncio
 async def test_poll_active_epics_ignores_drafted():
     """poll_active_epics only returns in_progress, not drafted epics."""
-    from daemon import poll_active_epics
+    from easter import poll_active_epics
 
     mock_conn = MagicMock()
     mock_conn.execute.return_value.fetchall.return_value = []
@@ -196,7 +198,7 @@ async def test_poll_active_epics_ignores_drafted():
 async def test_telegram_coroutines_start_in_taskgroup():
     """When Telegram env vars are set, Telegram coroutines are scheduled."""
     # We test this indirectly by checking the /status endpoint reports telegram state
-    from daemon import app
+    from easter import app
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.get("/status")
@@ -207,7 +209,7 @@ async def test_telegram_coroutines_start_in_taskgroup():
 @pytest.mark.asyncio
 async def test_gate_approval_resumes_pipeline():
     """When a gate is approved, dag_scheduler detects it on next poll."""
-    from daemon import dag_scheduler
+    from easter import dag_scheduler
 
     shutdown = asyncio.Event()
     mock_conn = MagicMock()
@@ -224,10 +226,10 @@ async def test_gate_approval_resumes_pipeline():
         return []
 
     with (
-        patch("daemon.poll_active_epics", side_effect=mock_poll),
-        patch("daemon.run_pipeline_async", new_callable=AsyncMock, return_value=0) as mock_run,
-        patch("daemon._running_epics", set()),
-        patch("daemon.asyncio.sleep", new_callable=AsyncMock),
+        patch("easter.poll_active_epics", side_effect=mock_poll),
+        patch("easter.run_pipeline_async", new_callable=AsyncMock, return_value=0) as mock_run,
+        patch("easter._running_epics", set()),
+        patch("easter.asyncio.sleep", new_callable=AsyncMock),
     ):
         await dag_scheduler(mock_conn, asyncio.Semaphore(3), shutdown, poll_interval=0.01)
 
@@ -239,20 +241,20 @@ async def test_gate_approval_resumes_pipeline():
 
 @pytest.mark.asyncio
 async def test_telegram_degradation_after_3_failures():
-    """Daemon enters degraded mode after 3 consecutive health check failures."""
-    import daemon
-    from daemon import health_checker
+    """Easter enters degraded mode after 3 consecutive health check failures."""
+    import easter
+    from easter import health_checker
 
     # Reset module-level state
-    daemon._daemon_state.daemon_state = "running"
-    daemon._daemon_state.telegram_fail_count = 0
-    daemon._daemon_state.telegram_status = "connected"
+    easter._easter_state.easter_state = "running"
+    easter._easter_state.telegram_fail_count = 0
+    easter._easter_state.telegram_status = "connected"
 
     shutdown = asyncio.Event()
     mock_bot = AsyncMock()
     mock_bot.get_me.side_effect = Exception("connection failed")
 
-    with patch("daemon.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+    with patch("easter.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
         # Run 3 iterations
         call_count = 0
 
@@ -269,26 +271,26 @@ async def test_telegram_degradation_after_3_failures():
         except asyncio.CancelledError:
             pass
 
-    assert daemon._daemon_state.daemon_state == "degraded"
+    assert easter._easter_state.easter_state == "degraded"
 
 
 @pytest.mark.asyncio
 async def test_telegram_recovery_resumes_normal():
-    """Daemon recovers from degraded mode when Telegram comes back."""
-    import daemon
-    from daemon import health_checker
+    """Easter recovers from degraded mode when Telegram comes back."""
+    import easter
+    from easter import health_checker
 
     # Reset module-level state to degraded
-    daemon._daemon_state.daemon_state = "degraded"
-    daemon._daemon_state.telegram_status = "degraded"
-    daemon._daemon_state.telegram_fail_count = 3
+    easter._easter_state.easter_state = "degraded"
+    easter._easter_state.telegram_status = "degraded"
+    easter._easter_state.telegram_fail_count = 3
 
     shutdown = asyncio.Event()
 
     mock_bot = AsyncMock()
     mock_bot.get_me.return_value = MagicMock(username="test_bot")
 
-    with patch("daemon.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+    with patch("easter.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
         call_count = 0
 
         async def counted_sleep(t):
@@ -304,20 +306,20 @@ async def test_telegram_recovery_resumes_normal():
         except asyncio.CancelledError:
             pass
 
-    assert daemon._daemon_state.daemon_state == "running"
-    assert daemon._daemon_state.telegram_status == "connected"
+    assert easter._easter_state.easter_state == "running"
+    assert easter._easter_state.telegram_status == "connected"
 
 
 @pytest.mark.asyncio
 async def test_ntfy_fallback_on_degradation():
     """ntfy_alert is called when transitioning to degraded mode."""
-    import daemon
-    from daemon import health_checker
+    import easter
+    from easter import health_checker
 
     # Reset module-level state: 2 failures already, next triggers degradation
-    daemon._daemon_state.daemon_state = "running"
-    daemon._daemon_state.telegram_fail_count = 2
-    daemon._daemon_state.telegram_status = "connected"
+    easter._easter_state.easter_state = "running"
+    easter._easter_state.telegram_fail_count = 2
+    easter._easter_state.telegram_status = "connected"
 
     shutdown = asyncio.Event()
 
@@ -325,8 +327,8 @@ async def test_ntfy_fallback_on_degradation():
     mock_bot.get_me.side_effect = Exception("down")
 
     with (
-        patch("daemon.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
-        patch("daemon.ntfy_alert", return_value=True) as mock_ntfy,
+        patch("easter.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+        patch("easter.ntfy_alert", return_value=True) as mock_ntfy,
         patch.dict("os.environ", {"MADRUGA_NTFY_TOPIC": "test-topic"}),
     ):
         call_count = 0
@@ -350,23 +352,23 @@ async def test_ntfy_fallback_on_degradation():
 
 @pytest.mark.asyncio
 async def test_auto_gates_continue_in_degraded_mode():
-    """Auto gates continue processing when daemon is in degraded mode."""
-    from daemon import DaemonState, dag_scheduler
+    """Auto gates continue processing when easter is in degraded mode."""
+    from easter import EasterState, dag_scheduler
 
-    state = DaemonState()
-    state.daemon_state = "degraded"
+    state = EasterState()
+    state.easter_state = "degraded"
     shutdown = asyncio.Event()
     mock_conn = MagicMock()
 
     with (
         patch(
-            "daemon.poll_active_epics",
+            "easter.poll_active_epics",
             return_value=[
                 {"epic_id": "016", "platform_id": "test", "branch_name": "epic/test/016"},
             ],
         ),
-        patch("daemon.run_pipeline_async", new_callable=AsyncMock, return_value=0) as mock_run,
-        patch("daemon._running_epics", set()),
+        patch("easter.run_pipeline_async", new_callable=AsyncMock, return_value=0) as mock_run,
+        patch("easter._running_epics", set()),
     ):
 
         async def _stop(*args, **kwargs):
@@ -385,7 +387,7 @@ async def test_auto_gates_continue_in_degraded_mode():
 @pytest.mark.asyncio
 async def test_status_includes_telegram_state():
     """GET /status includes telegram_status field."""
-    from daemon import app
+    from easter import app
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.get("/status")
@@ -396,7 +398,7 @@ async def test_status_includes_telegram_state():
 @pytest.mark.asyncio
 async def test_status_includes_running_epics():
     """GET /status includes running_epics list."""
-    from daemon import app
+    from easter import app
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.get("/status")
@@ -408,7 +410,7 @@ async def test_status_includes_running_epics():
 @pytest.mark.asyncio
 async def test_status_includes_uptime():
     """GET /status includes uptime_seconds."""
-    from daemon import app
+    from easter import app
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.get("/status")
@@ -418,17 +420,17 @@ async def test_status_includes_uptime():
 
 @pytest.mark.asyncio
 async def test_health_returns_200_even_when_degraded():
-    """GET /health returns 200 even when daemon is in degraded mode."""
-    from daemon import _daemon_state, app
+    """GET /health returns 200 even when easter is in degraded mode."""
+    from easter import _easter_state, app
 
-    original = _daemon_state.daemon_state
-    _daemon_state.daemon_state = "degraded"
+    original = _easter_state.easter_state
+    _easter_state.easter_state = "degraded"
     try:
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             resp = await client.get("/health")
         assert resp.status_code == 200
     finally:
-        _daemon_state.daemon_state = original
+        _easter_state.easter_state = original
 
 
 # --- C1: Gate reminder tests ---
@@ -439,7 +441,7 @@ async def test_gate_reminder_sends_for_old_gates():
     """gate_reminder sends Telegram message for gates older than 24h."""
     import sqlite3
 
-    from daemon import gate_reminder
+    from easter import gate_reminder
 
     shutdown = asyncio.Event()
     conn = sqlite3.connect(":memory:")
@@ -460,12 +462,12 @@ async def test_gate_reminder_sends_for_old_gates():
     mock_adapter = AsyncMock()
     mock_adapter.send.return_value = 1
 
-    from daemon import _daemon_state
+    from easter import _easter_state
 
-    original = _daemon_state.telegram_status
-    _daemon_state.telegram_status = "connected"
+    original = _easter_state.telegram_status
+    _easter_state.telegram_status = "connected"
     try:
-        with patch("daemon.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+        with patch("easter.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
 
             async def stop_after_one(t):
                 shutdown.set()
@@ -476,7 +478,7 @@ async def test_gate_reminder_sends_for_old_gates():
         mock_adapter.send.assert_called_once()
         assert "vision" in mock_adapter.send.call_args[0][1]
     finally:
-        _daemon_state.telegram_status = original
+        _easter_state.telegram_status = original
     conn.close()
 
 
@@ -485,7 +487,7 @@ async def test_gate_reminder_skips_recent_gates():
     """gate_reminder does not send for gates notified less than 24h ago."""
     import sqlite3
 
-    from daemon import gate_reminder
+    from easter import gate_reminder
 
     shutdown = asyncio.Event()
     conn = sqlite3.connect(":memory:")
@@ -504,7 +506,7 @@ async def test_gate_reminder_skips_recent_gates():
 
     mock_adapter = AsyncMock()
 
-    with patch("daemon.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+    with patch("easter.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
 
         async def stop_after_one(t):
             shutdown.set()
@@ -522,19 +524,19 @@ async def test_gate_reminder_skips_recent_gates():
 @pytest.mark.asyncio
 async def test_dag_scheduler_ntfy_on_pipeline_failure():
     """dag_scheduler sends ntfy alert when pipeline run fails."""
-    from daemon import dag_scheduler
+    from easter import dag_scheduler
 
     shutdown = asyncio.Event()
     mock_conn = MagicMock()
 
     with (
         patch(
-            "daemon.poll_active_epics",
+            "easter.poll_active_epics",
             return_value=[{"epic_id": "016", "platform_id": "test", "branch_name": "epic/test/016"}],
         ),
-        patch("daemon.run_pipeline_async", new_callable=AsyncMock, return_value=1) as mock_run,
-        patch("daemon._running_epics", set()),
-        patch("daemon.ntfy_alert", return_value=True) as mock_ntfy,
+        patch("easter.run_pipeline_async", new_callable=AsyncMock, return_value=1) as mock_run,
+        patch("easter._running_epics", set()),
+        patch("easter.ntfy_alert", return_value=True) as mock_ntfy,
         patch.dict("os.environ", {"MADRUGA_NTFY_TOPIC": "test-topic"}),
     ):
 
@@ -577,13 +579,13 @@ def test_async_main_deprecation_warning():
 @pytest.mark.asyncio
 async def test_health_checker_sends_pending_summary_on_recovery():
     """health_checker sends pending gates summary when recovering from degraded."""
-    import daemon
-    from daemon import health_checker
+    import easter
+    from easter import health_checker
 
     # Reset module-level state to degraded
-    daemon._daemon_state.daemon_state = "degraded"
-    daemon._daemon_state.telegram_status = "degraded"
-    daemon._daemon_state.telegram_fail_count = 3
+    easter._easter_state.easter_state = "degraded"
+    easter._easter_state.telegram_status = "degraded"
+    easter._easter_state.telegram_fail_count = 3
 
     shutdown = asyncio.Event()
 
@@ -596,7 +598,7 @@ async def test_health_checker_sends_pending_summary_on_recovery():
     call_count = 0
 
     with (
-        patch("daemon.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+        patch("easter.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
         patch("telegram_bot.poll_pending_gates", return_value=[{"run_id": "r1"}, {"run_id": "r2"}]),
     ):
 
@@ -614,18 +616,18 @@ async def test_health_checker_sends_pending_summary_on_recovery():
         except asyncio.CancelledError:
             pass
 
-    assert daemon._daemon_state.daemon_state == "running"
+    assert easter._easter_state.easter_state == "running"
     mock_adapter.send.assert_called_once()
     assert "2" in mock_adapter.send.call_args[0][1]
 
 
-# --- Daemon reliability fixes (F1, F2, F3, F9) ---
+# --- Easter reliability fixes (F1, F2, F3, F9) ---
 
 
 @pytest.mark.asyncio
 async def test_dag_scheduler_proactive_branch_checkout():
     """F3: dag_scheduler runs git checkout before dispatching epic."""
-    from daemon import dag_scheduler
+    from easter import dag_scheduler
 
     shutdown = asyncio.Event()
     mock_conn = MagicMock()
@@ -642,11 +644,11 @@ async def test_dag_scheduler_proactive_branch_checkout():
 
     with (
         patch(
-            "daemon.poll_active_epics",
+            "easter.poll_active_epics",
             return_value=[{"epic_id": "020", "platform_id": "test", "branch_name": "epic/test/020"}],
         ),
-        patch("daemon.run_pipeline_async", new_callable=AsyncMock, return_value=0) as mock_run,
-        patch("daemon._running_epics", set()),
+        patch("easter.run_pipeline_async", new_callable=AsyncMock, return_value=0) as mock_run,
+        patch("easter._running_epics", set()),
         patch("subprocess.run", side_effect=mock_subprocess_run),
     ):
 
@@ -663,7 +665,7 @@ async def test_dag_scheduler_proactive_branch_checkout():
 @pytest.mark.asyncio
 async def test_dag_scheduler_platform_filter():
     """F1: dag_scheduler passes platform_id to poll_active_epics."""
-    from daemon import dag_scheduler
+    from easter import dag_scheduler
 
     shutdown = asyncio.Event()
     mock_conn = MagicMock()
@@ -674,7 +676,7 @@ async def test_dag_scheduler_platform_filter():
         shutdown.set()
         return []
 
-    with patch("daemon.poll_active_epics", side_effect=mock_poll):
+    with patch("easter.poll_active_epics", side_effect=mock_poll):
         await dag_scheduler(mock_conn, asyncio.Semaphore(3), shutdown, poll_interval=0.01, platform_id="madruga-ai")
 
     assert poll_calls == ["madruga-ai"]
@@ -782,9 +784,10 @@ def test_auto_commit_epic_with_changes(tmp_path):
     call_log = []
 
     def mock_run(cmd, **kwargs):
-        call_log.append(cmd[:3])
+        call_log.append(cmd)
         result = MagicMock()
-        result.stdout = "M file.py\n" if cmd[1] == "status" else ""
+        # git status --porcelain: XY format (2 chars status + space + path)
+        result.stdout = " M file.py\n" if cmd[1] == "status" else ""
         result.returncode = 0
         return result
 
@@ -792,28 +795,62 @@ def test_auto_commit_epic_with_changes(tmp_path):
         result = _auto_commit_epic(tmp_path, "test-plat", "001-epic")
 
     assert result is True
-    assert ["git", "status", "--porcelain"] in call_log
-    assert ["git", "add", "-A"] in call_log
-    assert ["git", "commit", "-m"] in call_log
+    # Should use selective git add with -- separator (not -A)
+    add_cmd = [c for c in call_log if len(c) > 1 and c[1] == "add"]
+    assert len(add_cmd) == 1
+    assert "--" in add_cmd[0]
+    # After XY(2) + space(1) = line[3:], "file.py" should be in staged files
+    staged = add_cmd[0][add_cmd[0].index("--") + 1 :]
+    assert any("file.py" in f for f in staged)
 
 
-# --- Fix: daemon must skip re-dispatch when epic has pending gate ---
+def test_auto_commit_epic_skips_sensitive_files(tmp_path):
+    """_auto_commit_epic must filter out sensitive files from staging."""
+    from dag_executor import _auto_commit_epic
+
+    call_log = []
+
+    def mock_run(cmd, **kwargs):
+        call_log.append(cmd)
+        result = MagicMock()
+        if cmd[1] == "status":
+            # git status --porcelain: XY(2 chars) + space + path
+            result.stdout = " M safe.py\n?? .env\n?? secrets.key\n M src/main.py\n"
+        result.returncode = 0
+        return result
+
+    with patch("dag_executor.subprocess.run", side_effect=mock_run):
+        result = _auto_commit_epic(tmp_path, "test-plat", "001-epic")
+
+    assert result is True
+    add_cmd = [c for c in call_log if len(c) > 1 and c[1] == "add"]
+    assert len(add_cmd) == 1
+    staged_files = add_cmd[0][add_cmd[0].index("--") + 1 :]
+    # safe.py and src/main.py should be staged
+    assert any("safe.py" in f for f in staged_files)
+    assert any("src/main.py" in f for f in staged_files)
+    # .env and secrets.key should NOT be staged
+    assert not any(".env" in f for f in staged_files)
+    assert not any("secrets.key" in f for f in staged_files)
+
+
+# --- Fix: easter must skip re-dispatch when epic has pending gate ---
 
 
 @pytest.mark.asyncio
 async def test_dag_scheduler_skips_epic_with_pending_gate():
     """dag_scheduler must not dispatch an epic that has a waiting_approval gate.
 
-    Regression test: prior to fix, the daemon re-dispatched every 15s when a gate
+    Regression test: prior to fix, the easter re-dispatched every 15s when a gate
     was pending, creating orphan traces and wasting resources.
     """
-    import daemon
+    import easter
 
     # Save originals and reset module state
-    orig_running = daemon._running_epics.copy()
-    orig_filter = daemon._platform_filter
-    daemon._running_epics.clear()
-    daemon._platform_filter = None
+    orig_running = easter._running_epics.copy()
+    orig_filter = easter._platform_filter
+    easter._running_epics.clear()
+    easter._platform_filter = None
 
     shutdown = asyncio.Event()
     mock_conn = MagicMock()
@@ -821,19 +858,19 @@ async def test_dag_scheduler_skips_epic_with_pending_gate():
     mock_epic = {"epic_id": "021-test", "platform_id": "madruga-ai", "priority": 1, "branch_name": None}
 
     with (
-        patch("daemon.poll_active_epics", return_value=[mock_epic]),
+        patch("easter.poll_active_epics", return_value=[mock_epic]),
         patch(
             "db.get_pending_gates",
             return_value=[{"node_id": "specify", "epic_id": "021-test", "gate_status": "waiting_approval"}],
         ),
-        patch("daemon.run_pipeline_async") as mock_dispatch,
+        patch("easter.run_pipeline_async") as mock_dispatch,
     ):
         asyncio.get_event_loop().call_later(0.1, shutdown.set)
-        await daemon.dag_scheduler(mock_conn, asyncio.Semaphore(1), shutdown, poll_interval=0.05)
+        await easter.dag_scheduler(mock_conn, asyncio.Semaphore(1), shutdown, poll_interval=0.05)
 
         # Dispatch must NOT have been called (gate is pending)
         mock_dispatch.assert_not_called()
 
     # Restore
-    daemon._running_epics = orig_running
-    daemon._platform_filter = orig_filter
+    easter._running_epics = orig_running
+    easter._platform_filter = orig_filter

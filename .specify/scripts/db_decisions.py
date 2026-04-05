@@ -555,6 +555,9 @@ def get_memories(
 
 def update_memory(conn: sqlite3.Connection, memory_id: str, **kwargs) -> None:
     allowed = {"name", "description", "content", "type", "platform_id", "source", "file_path", "content_hash"}
+    from db_core import _validate_identifiers
+
+    _validate_identifiers(*allowed)  # guard against future changes adding unsafe column names
     sets = ["updated_at=?"]
     vals: list = [_now()]
     for k, v in kwargs.items():

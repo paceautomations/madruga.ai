@@ -21,13 +21,13 @@ model {
     technology 'HTTPS (browser)'
   }
 
-  // ── Daemon interactions ──
-  daemon -> madrugaAi.runtimeDaemon 'Processo principal' {
+  // ── Easter interactions ──
+  easter -> madrugaAi.runtimeEaster 'Processo principal' {
     technology 'systemd / supervisord'
   }
 
   // ── Internal container relationships ──
-  madrugaAi.runtimeDaemon -[sync]-> madrugaAi.dagExecutor 'Inicia execucao do DAG' {
+  madrugaAi.runtimeEaster -[sync]-> madrugaAi.dagExecutor 'Inicia execucao do DAG' {
     technology 'Python async'
   }
 
@@ -43,7 +43,7 @@ model {
     technology 'Claude Code Agent tool'
   }
 
-  madrugaAi.runtimeDaemon -[sync]-> madrugaAi.memoryStore 'Persiste estado e metricas' {
+  madrugaAi.runtimeEaster -[sync]-> madrugaAi.memoryStore 'Persiste estado e metricas' {
     technology 'SQLite (aiosqlite)'
   }
 
@@ -68,7 +68,7 @@ model {
     technology 'Claude Code Agent tool'
   }
 
-  madrugaAi.runtimeDaemon -[async]-> telegramBot 'Notificacoes e decisoes' {
+  madrugaAi.runtimeEaster -[async]-> telegramBot 'Notificacoes e decisoes' {
     technology 'Telegram Bot API (HTTPS outbound)'
   }
 
@@ -84,7 +84,7 @@ model {
     technology 'LikeC4VitePlugin'
   }
 
-  madrugaAi.runtimeDaemon -[async]-> sentryCloud 'Error tracking e performance traces' {
+  madrugaAi.runtimeEaster -[async]-> sentryCloud 'Error tracking e performance traces' {
     technology 'sentry-sdk (HTTPS)'
   }
 
@@ -101,7 +101,7 @@ model {
     technology 'Filesystem (git)'
   }
 
-  madrugaAi.runtimeDaemon -[sync]-> sqliteDb 'Estado operacional' {
+  madrugaAi.runtimeEaster -[sync]-> sqliteDb 'Estado operacional' {
     technology 'aiosqlite'
   }
 
@@ -161,7 +161,7 @@ model {
   }
 
   // ── Observability (Pub-Sub) ──
-  execution.daemonProcess -[pubSub]-> observability.metricsCollector 'Pub-Sub'
+  execution.easterProcess -[pubSub]-> observability.metricsCollector 'Pub-Sub'
   execution.dagExecutor -[pubSub]-> observability.metricsCollector 'Pub-Sub (executor)'
   execution.dagExecutor -[pubSub]-> observability.metricsCollector 'Pub-Sub'
   intelligence.subagentJudgeModule -[pubSub]-> observability.metricsCollector 'Pub-Sub'

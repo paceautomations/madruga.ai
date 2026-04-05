@@ -1,4 +1,4 @@
-"""Tests for daemon.py observability endpoints (Epic 017, T010/T012)."""
+"""Tests for easter.py observability endpoints (Epic 017, T010/T012)."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from httpx import ASGITransport, AsyncClient
 
 
 def _get_app():
-    from daemon import app
+    from easter import app
 
     return app
 
@@ -26,7 +26,7 @@ def _make_test_db(tmp_path: Path) -> sqlite3.Connection:
 
     from db import get_conn, migrate
 
-    db_path = tmp_path / "test_daemon_obs.db"
+    db_path = tmp_path / "test_easter_obs.db"
     migrations_dir = Path(__file__).parent.parent.parent.parent / ".pipeline" / "migrations"
     conn = get_conn(db_path)
     migrate(conn, migrations_dir)

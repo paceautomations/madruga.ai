@@ -125,7 +125,7 @@ Apply at entry points:
 **Note**: The pitch allows platform names starting with a digit (`^[a-z0-9]`), while the existing `cmd_new()` regex requires starting with a letter (`^[a-z]`). We align with the existing stricter pattern: `^[a-z][a-z0-9-]*$` — starting with a letter. This avoids introducing platform names that `cmd_new` would reject.
 
 **Alternatives considered**:
-1. Validate only at `cmd_new` — insufficient; other entry points (CLI, daemon) bypass `cmd_new`
+1. Validate only at `cmd_new` — insufficient; other entry points (CLI, easter) bypass `cmd_new`
 2. Allow Unicode in names — out of scope per spec assumptions
 3. Block at filesystem level only — insufficient; doesn't catch injection in Git URLs
 

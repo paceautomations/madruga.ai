@@ -245,13 +245,13 @@ After L1 completes (roadmap done), the pipeline continues into L2. Each epic fro
 `/epic-context --draft <platform> <epic>` creates context artifacts on main WITHOUT creating a branch.
 This enables planning multiple epics ahead while another epic is executing on its branch.
 
-- **Status**: `drafted` (DB status — daemon ignores, branch guard blocks other L2 skills)
+- **Status**: `drafted` (DB status — easter ignores, branch guard blocks other L2 skills)
 - **Artifacts created on main**: `epics/<NNN>/pitch.md` (possibly research.md, data-model.md)
 - **Promotion**: Running `/epic-context <platform> <epic>` on a drafted epic performs a delta review (what changed since draft?), revises decisions, creates the branch, and transitions status to `in_progress`
 - **Gate**: Draft mode uses auto gate (no human approval — approval happens at promotion)
 
 Safety: drafted epics cannot accidentally enter the L2 cycle because:
-1. Daemon only polls `status='in_progress'` (daemon.py poll_active_epics)
+1. Easter only polls `status='in_progress'` (easter.py poll_active_epics)
 2. All other L2 skills check `current_branch starts with epic/` (pipeline-contract-base.md Step 0)
 3. `compute_epic_status()` in db.py does not auto-promote `drafted` epics
 

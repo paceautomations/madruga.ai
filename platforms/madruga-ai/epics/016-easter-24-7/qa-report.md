@@ -1,8 +1,8 @@
 ---
 type: qa-report
 date: 2026-04-01
-feature: "Epic 016 — Daemon 24/7"
-branch: "epic/madruga-ai/016-daemon-24-7"
+feature: "Epic 016 — Easter 24/7"
+branch: "epic/madruga-ai/016-easter-24-7"
 layers_executed: ["L1", "L2", "L3", "L4"]
 layers_skipped: ["L5", "L6"]
 findings_total: 6
@@ -10,9 +10,9 @@ pass_rate: "100%"
 healed: 3
 unresolved: 0
 ---
-# QA Report — Epic 016 Daemon 24/7
+# QA Report — Epic 016 Easter 24/7
 
-**Data:** 01/04/2026 | **Branch:** epic/madruga-ai/016-daemon-24-7 | **Arquivos alterados:** 10 (codigo)
+**Data:** 01/04/2026 | **Branch:** epic/madruga-ai/016-easter-24-7 | **Arquivos alterados:** 10 (codigo)
 **Layers executadas:** L1, L2, L3, L4 | **Layers ignoradas:** L5 (sem servidor), L6 (sem Playwright)
 
 ## Resumo
@@ -39,7 +39,7 @@ unresolved: 0
 | pytest | 221 | 0 | 0 |
 
 Todos os 221 testes passam, incluindo:
-- test_daemon.py (30 testes): startup, shutdown, degradacao, recovery, scheduler, endpoints
+- test_easter.py (30 testes): startup, shutdown, degradacao, recovery, scheduler, endpoints
 - test_dag_executor.py (8 testes): async dispatch, retry, circuit breaker
 - test_ntfy.py (3 testes): success, failure, timeout
 - test_sd_notify.py (2 testes): socket, no-socket
@@ -48,10 +48,10 @@ Todos os 221 testes passam, incluindo:
 
 | Arquivo | Finding | Severidade | Status |
 |---------|---------|------------|--------|
-| sd_notify.py:16 | OSError nao tratado em sock.connect() — crash no daemon se NOTIFY_SOCKET invalido | S2 | HEALED |
-| daemon.py (varias linhas) | Conexao SQLite unica compartilhada entre coroutines async | S3 | WARN — risco baixo em asyncio single-threaded com fetchall(). Documentado. |
+| sd_notify.py:16 | OSError nao tratado em sock.connect() — crash no easter se NOTIFY_SOCKET invalido | S2 | HEALED |
+| easter.py (varias linhas) | Conexao SQLite unica compartilhada entre coroutines async | S3 | WARN — risco baixo em asyncio single-threaded com fetchall(). Documentado. |
 | telegram_bot.py:368 | gate_poller sem check de shutdown_event | S3 | WARN — TaskGroup cancellation trata via CancelledError. Pre-existente. |
-| daemon.py:261 | chat_id re-parseado (redundante com linha 248) | S4 | WARN — funciona, nao e bug. |
+| easter.py:261 | chat_id re-parseado (redundante com linha 248) | S4 | WARN — funciona, nao e bug. |
 
 ## L4: Build Verification
 
@@ -78,6 +78,6 @@ Todos os 221 testes passam, incluindo:
 
 ## Licoes Aprendidas
 
-1. **sd_notify sem error handling** — Funções que tocam sockets/filesystem devem sempre ter except para OSError. O daemon chamava sd_notify("READY=1") sem protecao — se NOTIFY_SOCKET apontasse para path invalido, o daemon crashava no startup.
+1. **sd_notify sem error handling** — Funções que tocam sockets/filesystem devem sempre ter except para OSError. O easter chamava sd_notify("READY=1") sem protecao — se NOTIFY_SOCKET apontasse para path invalido, o easter crashava no startup.
 2. **Conexao SQLite compartilhada** — Aceito como risco baixo para MVP (asyncio single-threaded + fetchall). Para hardening futuro, considerar conn-per-operation ou asyncio.Lock.
 3. **Ruff errors pre-existentes** — Variaveis unused (nodes_before, result2) acumularam de epics anteriores. Limpar no QA evita acumulo.

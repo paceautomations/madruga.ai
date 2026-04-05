@@ -22,7 +22,7 @@ Dashboard visual no portal Starlight para acompanhar o pipeline L1+L2 de todas a
 
 | # | Área | Decisão | Alternativa Rejeitada | Referência |
 |---|------|---------|----------------------|------------|
-| 1 | Portal framework | Dashboard como página no Starlight existente, não app separada | FastAPI dashboard (:8080) é para daemon ops, não pipeline visibility | ADR-003 |
+| 1 | Portal framework | Dashboard como página no Starlight existente, não app separada | FastAPI dashboard (:8080) é para easter ops, não pipeline visibility | ADR-003 |
 | 2 | Data source | SQLite → JSON export build-time (SSG), sem API runtime | SSR/API endpoint — pipeline muda ~1-2x/dia, não justifica live data | ADR-004, ADR-012 |
 | 3 | Python deps | stdlib only (`sqlite3`, `json`, `pathlib`) para CLI export | Nenhuma lib externa considerada — padrão do repo | Blueprint §3.1 |
 | 4 | Heatmap render | `@xyflow/react` — DAG interativo com nós clicáveis, status colorido | HTML table puro (descartado: queremos a versão robusta desde o início) | ADR-003 (React islands) |
