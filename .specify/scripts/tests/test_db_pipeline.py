@@ -408,3 +408,52 @@ def test_compute_epic_status_does_not_promote_drafted(tmp_db):
         tmp_db, "p1", "017-test", required_node_ids={"epic-context"}, current_status="drafted"
     )
     assert new_status == "drafted"
+
+
+# --- Fix: progress_pct must include skipped nodes ---
+
+
+def test_get_epic_status_progress_includes_skipped(tmp_db):
+    """progress_pct counts done+skipped as completed (fix: trace spam operation)."""
+    from db_pipeline import get_epic_status, upsert_epic, upsert_epic_node, upsert_platform
+
+    upsert_platform(tmp_db, "p1", name="P1", repo_path="platforms/p1")
+    upsert_epic(tmp_db, "p1", "020-test", title="Test", status="in_progress")
+    upsert_epic_node(tmp_db, "p1", "020-test", "specify", "done")
+    upsert_epic_node(tmp_db, "p1", "020-test", "plan", "done")
+    upsert_epic_node(tmp_db, "p1", "020-test", "qa", "skipped")
+
+    status = get_epic_status(tmp_db, "p1", "020-test")
+    assert status["done"] == 2
+    assert status["skipped"] == 1
+    assert status["total_nodes"] == 3
+    # progress must be 100% (2 done + 1 skipped = 3/3)
+    assert status["progress_pct"] == 100.0
+
+
+def test_get_platform_status_progress_includes_skipped(tmp_db):
+    """L1 progress_pct also counts skipped nodes as completed."""
+    from db_pipeline import get_platform_status, upsert_pipeline_node, upsert_platform
+
+    upsert_platform(tmp_db, "p1", name="P1", repo_path="platforms/p1")
+    upsert_pipeline_node(tmp_db, "p1", "vision", "done")
+    upsert_pipeline_node(tmp_db, "p1", "codebase-map", "skipped")
+
+    status = get_platform_status(tmp_db, "p1")
+    assert status["done"] == 1
+    assert status["skipped"] == 1
+    assert status["total_nodes"] == 2
+    assert status["progress_pct"] == 100.0
+
+
+def test_progress_pct_zero_skipped_unchanged(tmp_db):
+    """When no skipped nodes, progress_pct works as before."""
+    from db_pipeline import get_epic_status, upsert_epic, upsert_epic_node, upsert_platform
+
+    upsert_platform(tmp_db, "p1", name="P1", repo_path="platforms/p1")
+    upsert_epic(tmp_db, "p1", "021-test", title="Test", status="in_progress")
+    upsert_epic_node(tmp_db, "p1", "021-test", "specify", "done")
+    upsert_epic_node(tmp_db, "p1", "021-test", "plan", "pending")
+
+    status = get_epic_status(tmp_db, "p1", "021-test")
+    assert status["progress_pct"] == 50.0

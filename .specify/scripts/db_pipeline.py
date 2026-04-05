@@ -575,7 +575,7 @@ def get_platform_status(conn: sqlite3.Connection, platform_id: str) -> dict:
         "platform_id": platform_id,
         "total_nodes": total,
         **counts,
-        "progress_pct": round(counts["done"] / total * 100, 1) if total else 0,
+        "progress_pct": round((counts["done"] + counts["skipped"]) / total * 100, 1) if total else 0,
     }
 
 
@@ -586,7 +586,7 @@ def get_epic_status(conn: sqlite3.Connection, platform_id: str, epic_id: str) ->
         "epic_id": epic_id,
         "total_nodes": total,
         **counts,
-        "progress_pct": round(counts["done"] / total * 100, 1) if total else 0,
+        "progress_pct": round((counts["done"] + counts["skipped"]) / total * 100, 1) if total else 0,
     }
 
 

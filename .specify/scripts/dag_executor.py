@@ -80,6 +80,9 @@ HUMAN_GATES = frozenset({"human", "1-way-door"})
 VALID_GATE_MODES = frozenset({"manual", "interactive", "auto"})
 DEFAULT_GATE_MODE = os.environ.get("MADRUGA_MODE", "manual")
 DISALLOWED_TOOLS = "Bash(git checkout:*) Bash(git branch -:*) Bash(git switch:*)"
+# Module-level quick mode flag — set by run_pipeline/run_pipeline_async when --quick is active.
+# Checked by build_dispatch_cmd to inject quick-fix context into system prompt.
+_quick_mode_active: bool = False
 # Upstream reports injected into downstream node prompts (context threading)
 REPORT_CONTEXT: dict[str, list[str]] = {
     "judge": ["analyze-post-report.md"],
@@ -185,6 +188,9 @@ def parse_claude_output(stdout: str) -> dict:
 
     Returns dict with keys: tokens_in, tokens_out, cost_usd, duration_ms.
     All values default to None on parse failure (best-effort, FR-011).
+
+    If total_cost_usd is missing but token counts are available, estimates
+    cost using Sonnet pricing as fallback (see _estimate_cost_usd).
     """
     result: dict = {"tokens_in": None, "tokens_out": None, "cost_usd": None, "duration_ms": None}
     if not stdout:
@@ -194,11 +200,53 @@ def parse_claude_output(stdout: str) -> dict:
         usage = data.get("usage", {})
         result["tokens_in"] = usage.get("input_tokens")
         result["tokens_out"] = usage.get("output_tokens")
-        result["cost_usd"] = data.get("cost_usd")
+        result["cost_usd"] = data.get("total_cost_usd")
         result["duration_ms"] = data.get("duration_ms")
+        # Fallback: estimate cost from token counts if claude didn't provide it
+        if result["cost_usd"] is None:
+            result["cost_usd"] = _estimate_cost_usd(result["tokens_in"], result["tokens_out"])
     except (ValueError, TypeError, AttributeError):
         log.debug("Failed to parse claude output as JSON")
     return result
+
+
+# Sonnet pricing per token (USD). Used only as fallback when total_cost_usd is absent.
+_SONNET_INPUT_PRICE = 0.003 / 1000  # $3 per 1M input tokens
+_SONNET_OUTPUT_PRICE = 0.015 / 1000  # $15 per 1M output tokens
+
+
+def _estimate_cost_usd(tokens_in: int | None, tokens_out: int | None) -> float | None:
+    """Estimate cost from token counts using Sonnet pricing.
+
+    Returns None if both token counts are missing (cannot estimate).
+    """
+    if tokens_in is None and tokens_out is None:
+        return None
+    cost = (tokens_in or 0) * _SONNET_INPUT_PRICE + (tokens_out or 0) * _SONNET_OUTPUT_PRICE
+    return round(cost, 8)
+
+
+def _check_hallucination(stdout: str) -> bool:
+    """Detect likely hallucinated output (zero tool calls heuristic).
+
+    Returns True if the dispatch likely fabricated output without using tools.
+    Heuristic: num_turns <= 2 means no tool was invoked (1 user + 1 assistant).
+    Error runs (is_error=True) are excluded — they fail for other reasons.
+
+    Fails safe: returns False on malformed JSON, missing fields, or empty input.
+    """
+    if not stdout:
+        return False
+    try:
+        data = json.loads(stdout)
+        if not isinstance(data, dict):
+            return False
+        num_turns = data.get("num_turns")
+        if num_turns is None or not isinstance(num_turns, (int, float)):
+            return False
+        return num_turns <= 2 and not data.get("is_error", False)
+    except (ValueError, TypeError):
+        return False
 
 
 def parse_session_id(stdout: str) -> str | None:
@@ -616,8 +664,9 @@ def parse_dag(platform_yaml: Path, mode: str = "l1", epic: str | None = None) ->
 
     Args:
         platform_yaml: Path to platform.yaml
-        mode: 'l1' for platform pipeline, 'l2' for epic cycle
-        epic: Epic slug (required for l2 mode, used to resolve {epic} templates)
+        mode: 'l1' for platform pipeline, 'l2' for epic cycle,
+              'quick' for fast lane (specify → implement → judge)
+        epic: Epic slug (required for l2/quick mode, used to resolve {epic} templates)
 
     Returns:
         List of Node namedtuples.
@@ -625,7 +674,12 @@ def parse_dag(platform_yaml: Path, mode: str = "l1", epic: str | None = None) ->
     data = yaml.safe_load(platform_yaml.read_text())
     pipeline = data.get("pipeline", {})
 
-    if mode == "l2":
+    if mode == "quick":
+        cycle = pipeline.get("quick_cycle", {})
+        raw_nodes = cycle.get("nodes", [])
+        if not raw_nodes:
+            raise SystemExit("ERROR: No quick_cycle.nodes section in platform.yaml")
+    elif mode == "l2":
         cycle = pipeline.get("epic_cycle", {})
         raw_nodes = cycle.get("nodes", [])
         if not raw_nodes:
@@ -1029,6 +1083,7 @@ async def run_pipeline_async(
     semaphore: "asyncio.Semaphore | None" = None,
     conn: object | None = None,
     gate_mode: str | None = None,
+    quick: bool = False,
 ) -> int:
     """Async version of run_pipeline for daemon integration.
 
@@ -1040,6 +1095,9 @@ async def run_pipeline_async(
     Human gates are written to DB and the function returns (daemon continues).
     If conn is provided, it is reused (not closed). Otherwise a new one is created.
     """
+    global _quick_mode_active
+    _quick_mode_active = quick
+
     gmode = gate_mode or DEFAULT_GATE_MODE
     if gmode not in VALID_GATE_MODES:
         log.error("Invalid gate_mode '%s'. Valid: %s", gmode, VALID_GATE_MODES)
@@ -1053,7 +1111,7 @@ async def run_pipeline_async(
         log.error("platform.yaml not found: %s", yaml_path)
         return 1
 
-    mode = "l2" if epic_slug else "l1"
+    mode = "quick" if quick else ("l2" if epic_slug else "l1")
     nodes = parse_dag(yaml_path, mode=mode, epic=epic_slug)
     ordered = topological_sort(nodes)
 
@@ -1075,13 +1133,6 @@ async def run_pipeline_async(
     if owns_conn:
         conn = get_conn()
     completed_nodes: set[str] = set()
-
-    # Create trace for this pipeline run (best-effort)
-    trace_id = None
-    try:
-        trace_id = create_trace(conn, platform_name, epic_id=epic_slug, mode=mode, total_nodes=len(ordered))
-    except Exception:
-        log.debug("Failed to create trace — continuing without tracing")
 
     if resume:
         # Cleanup stale 'running' runs from previous crashes/failures
@@ -1110,6 +1161,14 @@ async def run_pipeline_async(
                     conn.close()
                 return 0
         log.info("Resume async: %d nodes already completed", len(completed_nodes))
+
+    # Create trace for this pipeline run (best-effort)
+    # Placed AFTER gate check to avoid orphan traces when returning early
+    trace_id = None
+    try:
+        trace_id = create_trace(conn, platform_name, epic_id=epic_slug, mode=mode, total_nodes=len(ordered))
+    except Exception:
+        log.debug("Failed to create trace — continuing without tracing")
 
     breaker = CircuitBreaker()
     cwd = REPO_ROOT
@@ -1299,6 +1358,13 @@ async def run_pipeline_async(
 
         # Parse metrics from claude JSON output (best-effort)
         metrics = parse_claude_output(stdout) if stdout else {}
+
+        # Hallucination guard: warn if dispatch used zero tool calls (US2)
+        if stdout and _check_hallucination(stdout):
+            log.warning(
+                "Hallucination guard: node '%s' completed with zero tool calls — output may be fabricated", node.id
+            )
+
         # Resolve output artifact for eval scoring and output_lines (FR-012/U2)
         eval_output = None
         if node.outputs:
@@ -1478,7 +1544,19 @@ def compose_skill_prompt(
 # ── Bare-mode System Prompt & Command Builder ─────────────────────
 
 
-def build_system_prompt(node: Node, platform_name: str) -> str:
+_QUICK_FIX_CONTEXT = (
+    "# Quick-Fix Mode (Fast Lane)\n\n"
+    "You are running in QUICK-FIX mode — a compressed L2 cycle: specify → implement → judge.\n"
+    "This mode skips plan, tasks, analyze, clarify, qa, and reconcile.\n\n"
+    "CONSTRAINTS:\n"
+    "- Scope is restricted to bug fixes and small changes (max 3 files, ~100 LOC)\n"
+    "- Do NOT create plan.md or tasks.md — they are not part of the quick cycle\n"
+    "- Generate a minimal spec.md (problem + fix + acceptance criteria)\n"
+    "- Focus on shipping the fix fast with quality (judge review follows)\n"
+)
+
+
+def build_system_prompt(node: Node, platform_name: str, quick_mode: bool = False) -> str:
     """Build a focused system prompt for --bare dispatch.
 
     Assembles:
@@ -1487,6 +1565,7 @@ def build_system_prompt(node: Node, platform_name: str) -> str:
     3. Layer-specific contract (engineering/planning/business)
     4. Python rules (only for implement nodes)
     5. Full skill .md body
+    6. Quick-fix context (only when quick_mode=True)
 
     Returns the concatenated system prompt string.
     """
@@ -1526,6 +1605,10 @@ def build_system_prompt(node: Node, platform_name: str) -> str:
         else:
             log.warning("Skill file not found: %s", skill_path)
 
+    # Quick-fix mode context
+    if quick_mode:
+        parts.append(_QUICK_FIX_CONTEXT)
+
     return "\n\n---\n\n".join(parts)
 
 
@@ -1535,23 +1618,35 @@ def build_dispatch_cmd(
     platform_name: str,
     guardrail: str | None = None,
     resume_session_id: str | None = None,
+    quick_mode: bool = False,
 ) -> list[str]:
-    """Build the claude -p command array with --bare, --system-prompt, --allowedTools, --effort.
+    """Build the claude -p command array with --system-prompt, --allowedTools, --effort.
+
+    Uses --bare only when ANTHROPIC_API_KEY is set (API key auth).
+    With OAuth (claude.ai), --bare is skipped because it disables OAuth/keychain reads.
 
     Centralizes command construction for both dispatch_node() and dispatch_node_async().
     """
-    system_prompt = build_system_prompt(node, platform_name)
+    system_prompt = build_system_prompt(node, platform_name, quick_mode=quick_mode or _quick_mode_active)
 
     cmd = [
         "claude",
         "-p",
         prompt,
-        "--bare",
-        "--output-format",
-        "json",
-        "--system-prompt",
-        system_prompt,
     ]
+
+    # --bare disables OAuth/keychain — only use with API key auth
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        cmd.append("--bare")
+
+    cmd.extend(
+        [
+            "--output-format",
+            "json",
+            "--system-prompt",
+            system_prompt,
+        ]
+    )
 
     # Tool restriction
     tools = NODE_TOOLS.get(node.id, DEFAULT_TOOLS)
@@ -1588,6 +1683,7 @@ def run_pipeline(
     dry_run: bool = False,
     timeout: int = DEFAULT_TIMEOUT,
     gate_mode: str | None = None,
+    quick: bool = False,
 ) -> int:
     """Execute the pipeline DAG.
 
@@ -1600,6 +1696,9 @@ def run_pipeline(
     isolation). Self-ref platforms share working dir, DB, and skills —
     see pipeline-dag-knowledge.md "Parallel Epics Constraint".
     """
+    global _quick_mode_active
+    _quick_mode_active = quick
+
     gmode = gate_mode or DEFAULT_GATE_MODE
     if gmode not in VALID_GATE_MODES:
         log.error("Invalid gate_mode '%s'. Valid: %s", gmode, VALID_GATE_MODES)
@@ -1612,7 +1711,7 @@ def run_pipeline(
         log.error("platform.yaml not found: %s", yaml_path)
         return 1
 
-    mode = "l2" if epic_slug else "l1"
+    mode = "quick" if quick else ("l2" if epic_slug else "l1")
     nodes = parse_dag(yaml_path, mode=mode, epic=epic_slug)
     ordered = topological_sort(nodes)
 
@@ -1647,13 +1746,6 @@ def run_pipeline(
     conn = get_conn()
     completed_nodes: set[str] = set()
 
-    # Create trace for this pipeline run (best-effort)
-    trace_id = None
-    try:
-        trace_id = create_trace(conn, platform_name, epic_id=epic_slug, mode=mode, total_nodes=len(ordered))
-    except Exception:
-        log.debug("Failed to create trace — continuing without tracing")
-
     if resume:
         completed_nodes = get_resumable_nodes(conn, platform_name, epic_slug)
         # Check for pending (unapproved) gates
@@ -1666,6 +1758,15 @@ def run_pipeline(
                 log.info("  python3 .specify/scripts/platform_cli.py gate approve %s", gate["run_id"])
                 conn.close()
                 return 0
+
+    # Create trace for this pipeline run (best-effort)
+    # Placed AFTER gate check to avoid orphan traces when returning early
+    trace_id = None
+    try:
+        trace_id = create_trace(conn, platform_name, epic_id=epic_slug, mode=mode, total_nodes=len(ordered))
+    except Exception:
+        log.debug("Failed to create trace — continuing without tracing")
+    if resume:
         log.info("Resume: %d nodes already completed", len(completed_nodes))
 
     breaker = CircuitBreaker()
@@ -1797,6 +1898,13 @@ def run_pipeline(
 
         # Parse metrics from claude JSON output (best-effort)
         metrics = parse_claude_output(stdout) if stdout else {}
+
+        # Hallucination guard: warn if dispatch used zero tool calls (US2)
+        if stdout and _check_hallucination(stdout):
+            log.warning(
+                "Hallucination guard: node '%s' completed with zero tool calls — output may be fabricated", node.id
+            )
+
         # Resolve output artifact for eval scoring and output_lines (FR-012/U2)
         eval_output = None
         if node.outputs:
@@ -1887,9 +1995,17 @@ def main() -> None:
         default=None,
         help="Gate mode: manual (default, pause at gates), interactive (y/n prompt), auto (no pauses)",
     )
+    parser.add_argument(
+        "--quick",
+        action="store_true",
+        help="Fast lane: use quick_cycle (specify → implement → judge) instead of full epic_cycle",
+    )
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose logging")
     parser.add_argument("--json", action="store_true", dest="json_mode", help="Emit structured NDJSON log output")
     args = parser.parse_args()
+
+    if args.quick and not args.epic:
+        parser.error("--quick requires --epic")
 
     _setup_logging(args.json_mode, verbose=args.verbose)
 
@@ -1903,6 +2019,7 @@ def main() -> None:
                 dry_run=True,
                 timeout=args.timeout,
                 gate_mode=args.mode,
+                quick=args.quick,
             )
         )
     else:
@@ -1914,6 +2031,7 @@ def main() -> None:
                     resume=args.resume,
                     timeout=args.timeout,
                     gate_mode=args.mode,
+                    quick=args.quick,
                 )
             )
         )

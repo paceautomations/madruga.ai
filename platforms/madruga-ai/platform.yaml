@@ -205,3 +205,34 @@ pipeline:
         outputs: ["{epic}/reconcile-report.md"]
         depends: ["qa"]
         gate: human
+
+      - id: roadmap-reassess
+        skill: "madruga:roadmap"
+        outputs: ["{epic}/roadmap-reassess-report.md"]
+        depends: ["reconcile"]
+        gate: auto
+        optional: true
+        skip_condition: "epic.appetite <= '2w'"
+
+  quick_cycle:
+    nodes:
+      - id: specify
+        skill: "speckit.specify"
+        outputs: ["{epic}/spec.md"]
+        depends: []
+        gate: human
+        layer: business
+
+      - id: implement
+        skill: "speckit.implement"
+        outputs: ["{epic}/implement-context.md"]
+        depends: ["specify"]
+        gate: auto
+        layer: engineering
+
+      - id: judge
+        skill: "madruga:judge"
+        outputs: ["{epic}/judge-report.md"]
+        depends: ["implement"]
+        gate: auto-escalate
+        layer: engineering

@@ -795,3 +795,45 @@ def test_auto_commit_epic_with_changes(tmp_path):
     assert ["git", "status", "--porcelain"] in call_log
     assert ["git", "add", "-A"] in call_log
     assert ["git", "commit", "-m"] in call_log
+
+
+# --- Fix: daemon must skip re-dispatch when epic has pending gate ---
+
+
+@pytest.mark.asyncio
+async def test_dag_scheduler_skips_epic_with_pending_gate():
+    """dag_scheduler must not dispatch an epic that has a waiting_approval gate.
+
+    Regression test: prior to fix, the daemon re-dispatched every 15s when a gate
+    was pending, creating orphan traces and wasting resources.
+    """
+    import daemon
+
+    # Save originals and reset module state
+    orig_running = daemon._running_epics.copy()
+    orig_filter = daemon._platform_filter
+    daemon._running_epics.clear()
+    daemon._platform_filter = None
+
+    shutdown = asyncio.Event()
+    mock_conn = MagicMock()
+
+    mock_epic = {"epic_id": "021-test", "platform_id": "madruga-ai", "priority": 1, "branch_name": None}
+
+    with (
+        patch("daemon.poll_active_epics", return_value=[mock_epic]),
+        patch(
+            "db.get_pending_gates",
+            return_value=[{"node_id": "specify", "epic_id": "021-test", "gate_status": "waiting_approval"}],
+        ),
+        patch("daemon.run_pipeline_async") as mock_dispatch,
+    ):
+        asyncio.get_event_loop().call_later(0.1, shutdown.set)
+        await daemon.dag_scheduler(mock_conn, asyncio.Semaphore(1), shutdown, poll_interval=0.05)
+
+        # Dispatch must NOT have been called (gate is pending)
+        mock_dispatch.assert_not_called()
+
+    # Restore
+    daemon._running_epics = orig_running
+    daemon._platform_filter = orig_filter

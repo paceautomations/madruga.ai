@@ -114,6 +114,17 @@ async def dag_scheduler(conn, semaphore, shutdown_event, poll_interval=15, platf
                     logger.debug("sequential_constraint", running=list(_running_epics), skipped=epic_id)
                     break
 
+                # Check if epic has a pending gate — skip dispatch to avoid busy-loop
+                from db import get_pending_gates
+
+                pending = get_pending_gates(conn, platform_id)
+                epic_pending = [
+                    g for g in pending if g.get("epic_id") == epic_id and g.get("gate_status") == "waiting_approval"
+                ]
+                if epic_pending:
+                    logger.debug("gate_pending_skip", epic_id=epic_id, gate=epic_pending[0]["node_id"])
+                    continue
+
                 _running_epics.add(epic_id)
                 logger.info("dispatching_epic", epic_id=epic_id, platform=platform_id)
 

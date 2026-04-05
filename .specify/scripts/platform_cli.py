@@ -648,6 +648,7 @@ def cmd_status(name: str | None, show_all: bool, as_json: bool, output_file: str
                         "status": epic.get("status", "proposed"),
                         "total": epic_status.get("total_nodes", 0),
                         "done": epic_status.get("done", 0),
+                        "skipped": epic_status.get("skipped", 0),
                         "pending": epic_status.get("pending", 0),
                         "progress_pct": epic_status.get("progress_pct", 0),
                         "nodes": enodes,
@@ -685,7 +686,8 @@ def cmd_status(name: str | None, show_all: bool, as_json: bool, output_file: str
             for p in result["platforms"]:
                 print(f"\n{'=' * 60}")
                 print(f"  {p['title']}  ({p['lifecycle']})")
-                print(f"  L1 Progress: {p['l1']['done']}/{p['l1']['total']} ({p['l1']['progress_pct']}%)")
+                completed = p["l1"]["done"] + p["l1"].get("skipped", 0)
+                print(f"  L1 Progress: {completed}/{p['l1']['total']} ({p['l1']['progress_pct']}%)")
                 print(f"{'=' * 60}")
                 print(f"  {'Node':<25} {'Status':<10} {'Layer':<15} {'Gate'}")
                 print(f"  {'-' * 55}")
@@ -695,7 +697,8 @@ def cmd_status(name: str | None, show_all: bool, as_json: bool, output_file: str
                 if p["l2"]["epics"]:
                     print("\n  L2 Epics:")
                     for e in p["l2"]["epics"]:
-                        print(f"    {e['id']}: {e['title']} — {e['done']}/{e['total']} ({e['progress_pct']}%)")
+                        epic_completed = e["done"] + e.get("skipped", 0)
+                        print(f"    {e['id']}: {e['title']} — {epic_completed}/{e['total']} ({e['progress_pct']}%)")
 
 
 def _build_parser():  # -> argparse.ArgumentParser
