@@ -75,7 +75,7 @@ Integrado via instrução no `pipeline-contract-base.md` (step 5), não por muda
 ## Rabbit Holes
 
 - **NÃO** reescrever skills inteiras — apenas extrair boilerplate para knowledge files e ajustar referências
-- **NÃO** implementar daemon/automation — checkpoint automático é trigger, não daemon
+- **NÃO** implementar easter/automation — checkpoint automático é trigger, não easter
 - **NÃO** criar novo CLI/tooling — db.py já existe e é suficiente
 - **NÃO** mudar gate types das skills — calibração é decisão separada
 

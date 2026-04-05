@@ -23,7 +23,7 @@ Epic 014 implementou notificacoes Telegram com bot standalone (telegram_bot.py +
 | engineering/domain-model.md | D4 | CURRENT | 0 — TelegramAdapter ja presente |
 | decisions/ADR-018 | D5 | **OUTDATED** | 1 — "3 metodos" agora sao 4 (edit_message adicionado) |
 | planning/roadmap.md | D6 | **OUTDATED** | 1 — Epic 014 precisa ser marcado shipped |
-| epics/016-daemon-24-7/pitch.md | D7 | CURRENT | 0 — Ja menciona refatorar telegram_bot.py |
+| epics/016-easter-24-7/pitch.md | D7 | CURRENT | 0 — Ja menciona refatorar telegram_bot.py |
 | engineering/context-map.md | D8 | CURRENT | 0 — Telegram Bot API ja documentado |
 | README.md | D9 | N/A | Plataforma nao tem README.md |
 
@@ -141,8 +141,8 @@ Adicionar na tabela "Implementado":
 
 5. Atualizar milestone "Runtime Funcional" e "Autonomia MVP":
 ```diff
-- | **Autonomia MVP** | 012-016 | 1 epic completo (pitch-to-PR) processado pelo daemon em repo Fulano, com Telegram notifications e Subagent Judge review | Semana 14 |
-+ | **Autonomia MVP** | 012-016 | 1 epic completo (pitch-to-PR) processado pelo daemon em repo Fulano, com Telegram notifications e Subagent Judge review | Semana 14 | Telegram notifications entregue (014). Falta: 015 (Subagent Judge) + 016 (Daemon). |
+- | **Autonomia MVP** | 012-016 | 1 epic completo (pitch-to-PR) processado pelo easter em repo Fulano, com Telegram notifications e Subagent Judge review | Semana 14 |
++ | **Autonomia MVP** | 012-016 | 1 epic completo (pitch-to-PR) processado pelo easter em repo Fulano, com Telegram notifications e Subagent Judge review | Semana 14 | Telegram notifications entregue (014). Falta: 015 (Subagent Judge) + 016 (Easter). |
 ```
 
 ---
@@ -185,7 +185,7 @@ Nenhuma nova dependencia inter-epic descoberta. 016 ja referencia corretamente q
 
 | Epic | Premissa do Pitch | Como Afetado | Impacto | Acao Necessaria |
 |------|-------------------|-------------|---------|-----------------|
-| 016 Daemon 24/7 | "telegram_bot.py como script standalone, refatorar para coroutine" | **Confirmado** — implementacao e de fato standalone com asyncio.TaskGroup | Baixo | Nenhuma — pitch ja antecipa corretamente |
+| 016 Easter 24/7 | "telegram_bot.py como script standalone, refatorar para coroutine" | **Confirmado** — implementacao e de fato standalone com asyncio.TaskGroup | Baixo | Nenhuma — pitch ja antecipa corretamente |
 
 Nenhum impacto negativo em epics futuros detectado. 016 ja antecipa a integracao.
 

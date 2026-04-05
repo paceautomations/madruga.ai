@@ -6,9 +6,9 @@ updated: 2026-03-30
 
 ## Resumo Executivo
 
-A plataforma Madruga AI esta em transicao de sistema de documentacao arquitetural para pipeline autonomo de spec-to-code. O runtime engine (daemon, orchestrator, debate engine, SpeckitBridge) sera construido nativamente neste repositorio, capturando aprendizados de `general/services/madruga-ai` mas sem migracao de codigo. As 4 decisoes tecnologicas abaixo definem como o runtime se comunica com Claude, notifica o operador, observa sua propria saude, e automatiza a execucao do pipeline.
+A plataforma Madruga AI esta em transicao de sistema de documentacao arquitetural para pipeline autonomo de spec-to-code. O runtime engine (easter, orchestrator, debate engine, SpeckitBridge) sera construido nativamente neste repositorio, capturando aprendizados de `general/services/madruga-ai` mas sem migracao de codigo. As 4 decisoes tecnologicas abaixo definem como o runtime se comunica com Claude, notifica o operador, observa sua propria saude, e automatiza a execucao do pipeline.
 
-Contexto: daemon Python 3.12 asyncio rodando em WSL2 local. Subscription Claude Code (sem API key separada). Stack existente: SQLite WAL, structlog, FastAPI, Astro portal.
+Contexto: easter Python 3.12 asyncio rodando em WSL2 local. Subscription Claude Code (sem API key separada). Stack existente: SQLite WAL, structlog, FastAPI, Astro portal.
 
 ---
 
@@ -51,11 +51,11 @@ O runtime engine precisa invocar Claude programaticamente para executar skills (
 
 ---
 
-## Decisao 2: Canal de Notificacoes do Daemon
+## Decisao 2: Canal de Notificacoes do Easter
 
 ### Contexto
 
-O daemon precisa notificar o operador sobre status de epics, decisoes pendentes, e erros. O canal sera Telegram Bot API via aiogram (ADR-018 supersedeu ADR-015). A implementacao sera construida nativamente em `madruga.ai`.
+O easter precisa notificar o operador sobre status de epics, decisoes pendentes, e erros. O canal sera Telegram Bot API via aiogram (ADR-018 supersedeu ADR-015). A implementacao sera construida nativamente em `madruga.ai`.
 
 ### Matriz de Alternativas
 
@@ -72,7 +72,7 @@ O daemon precisa notificar o operador sobre status de epics, decisoes pendentes,
 ### Analise Detalhada
 
 **WhatsApp (wpp-bridge):**
-- Pros: operador ja usa WhatsApp como app principal, bridge ja implementado e testado, poll-based (ask_choice com timeout), alertas com emoji/levels, integracao existente com daemon (MessagingClient/WhatsAppProvider)
+- Pros: operador ja usa WhatsApp como app principal, bridge ja implementado e testado, poll-based (ask_choice com timeout), alertas com emoji/levels, integracao existente com easter (MessagingClient/WhatsAppProvider)
 - Cons: wpp-bridge e servico separado que precisa rodar junto, WhatsApp Web session pode desconectar, sem inline buttons (interacao via texto livre A/B/C)
 - Source: implementacao existente em `general/services/madruga-ai/src/integrations/messaging/providers/whatsapp.py`
 
@@ -89,11 +89,11 @@ O daemon precisa notificar o operador sobre status de epics, decisoes pendentes,
 
 ---
 
-## Decisao 3: Observability do Daemon
+## Decisao 3: Observability do Easter
 
 ### Contexto
 
-O daemon atualmente usa structlog para logging. Nao ha metricas, traces, ou error tracking estruturado. Precisa de visibilidade sobre saude, performance, e erros.
+O easter atualmente usa structlog para logging. Nao ha metricas, traces, ou error tracking estruturado. Precisa de visibilidade sobre saude, performance, e erros.
 
 ### Matriz de Alternativas
 
@@ -124,7 +124,7 @@ O daemon atualmente usa structlog para logging. Nao ha metricas, traces, ou erro
 
 **OTel + Grafana:**
 - Pros: observability completa (metricas + traces + logs), dashboards ricos
-- Cons: ~1 GB RAM, 5 containers Docker, manutencao alta — overkill para daemon unico
+- Cons: ~1 GB RAM, 5 containers Docker, manutencao alta — overkill para easter unico
 - Source: [OpenTelemetry Python](https://opentelemetry.io/docs/languages/python/)
 
 **PostHog self-hosted:**
@@ -202,7 +202,7 @@ O pipeline tem 24 nodes em 2 niveis (L1: 13, L2: 11 por epic). Cada node tem dep
 
 1. Subscription Claude Code Max se mantem ativa e sem restricoes adicionais em `claude -p` [VALIDAR periodicamente]
 2. ~~wpp-bridge continua funcional e mantenivel apos migracao~~ [INVALIDADA — ver ADR-018, substituido por Telegram Bot API]
-3. Sentry free tier (5K erros/mes) e suficiente para daemon single-user [VALIDAR em producao]
+3. Sentry free tier (5K erros/mes) e suficiente para easter single-user [VALIDAR em producao]
 4. 24 nodes e escala suficiente para custom executor vs framework [VALIDAR se pipeline crescer para 50+]
 
 ### Riscos Tecnologicos
@@ -213,7 +213,7 @@ O pipeline tem 24 nodes em 2 niveis (L1: 13, L2: 11 por epic). Cada node tem dep
 | ~~wpp-bridge WhatsApp Web session desconecta frequentemente~~ | ~~Media~~ | ~~Medio~~ | [ELIMINADO — ver ADR-018, substituido por Telegram Bot API] |
 | Sentry free tier descontinuado ou limites reduzidos | Baixa | Baixo | structlog+SQLite cobre 80% — Sentry e complementar |
 | Custom DAG executor nao escala para pipelines complexos | Baixa | Medio | Migracao para Temporal quando necessario (YAML fica igual) |
-| Bug de hang em `claude -p` stream-json bloqueia daemon | Media | Medio | Usar --output-format json, watchdog timer com SIGKILL |
+| Bug de hang em `claude -p` stream-json bloqueia easter | Media | Medio | Usar --output-format json, watchdog timer com SIGKILL |
 
 ---
 

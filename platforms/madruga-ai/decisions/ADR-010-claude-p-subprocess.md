@@ -17,7 +17,7 @@ Accepted — 2026-03-30 (atualizado; supersede versao de 2026-03-27)
 
 ## Contexto
 
-O runtime engine do Madruga AI precisa invocar Claude programaticamente para executar skills do pipeline (specify, plan, tasks, implement, review). O daemon roda em Python 3.12 asyncio sobre WSL2. O operador tem subscription Claude Code Max e NAO quer billing separado de API.
+O runtime engine do Madruga AI precisa invocar Claude programaticamente para executar skills do pipeline (specify, plan, tasks, implement, review). O easter roda em Python 3.12 asyncio sobre WSL2. O operador tem subscription Claude Code Max e NAO quer billing separado de API.
 
 Tres opcoes foram avaliadas: `claude -p` (CLI headless), Claude Agent SDK, e Anthropic Python SDK direto.
 
@@ -42,7 +42,7 @@ Mitigacoes obrigatorias:
 ### Alternativa A: `claude -p` subprocess (escolhida)
 - **Pros:** $0 extra (usa subscription existente), acesso completo a MCP servers configurados, --resume para manter estado, --allowedTools para controle de seguranca, tools do Claude Code (Read, Write, Edit, Bash, Grep, Glob)
 - **Cons:** overhead de startup 2-5s por invocacao, bug conhecido de hang em stream-json ([#25629](https://github.com/anthropics/claude-code/issues/25629)), concorrencia instavel acima de 5 sessions ([#24990](https://github.com/anthropics/claude-code/issues/24990)), error handling manual (exit codes + stderr)
-- **Fit:** Unica opcao viavel dado o constraint de billing. O overhead de startup e aceitavel para um daemon que processa epics de minutos/horas.
+- **Fit:** Unica opcao viavel dado o constraint de billing. O overhead de startup e aceitavel para um easter que processa epics de minutos/horas.
 
 ### Alternativa B: Claude Agent SDK (`claude_agent_sdk`)
 - **Pros:** startup sub-segundo, native Python exceptions, async iterators, controle programatico total, custom tools

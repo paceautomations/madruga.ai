@@ -57,9 +57,8 @@ def _resolve_repos_base() -> Path:
         sys.path.insert(0, str(Path(__file__).resolve().parent))
         from db import get_conn, get_local_config
 
-        conn = get_conn()
-        val = get_local_config(conn, "repos_base_dir")
-        conn.close()
+        with get_conn() as conn:
+            val = get_local_config(conn, "repos_base_dir")
         if val:
             return Path(val).expanduser()
     except Exception:

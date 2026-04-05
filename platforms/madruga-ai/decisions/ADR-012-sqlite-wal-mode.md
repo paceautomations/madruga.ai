@@ -12,7 +12,7 @@ rationale: Leituras concorrentes sem bloqueio (dashboard funciona durante pipeli
 
 ## Contexto
 
-O Madruga AI usa SQLite para persistencia operacional (epics, usage_log, debates, decisions, patterns, learning, persona_accuracy). O daemon (writer) e o dashboard (reader) acessam o banco concorrentemente. SQLite em modo default (journal mode DELETE) serializa todas as operacoes, causando bloqueios quando o dashboard tenta ler durante uma escrita do pipeline.
+O Madruga AI usa SQLite para persistencia operacional (epics, usage_log, debates, decisions, patterns, learning, persona_accuracy). O easter (writer) e o dashboard (reader) acessam o banco concorrentemente. SQLite em modo default (journal mode DELETE) serializa todas as operacoes, causando bloqueios quando o dashboard tenta ler durante uma escrita do pipeline.
 
 ## Decisao
 

@@ -9,13 +9,13 @@
 - Tokens in/out: 6/1286
 
 ### T025 — DONE
-- [US5] Add GET `/api/export/csv` endpoint to `.specify/scripts/daemon.py` per contracts/daemon-api.md. Requires `platform_id` and `entity` (traces|spans|evals), optional `days` (default 90). Returns te
-- Files: .specify/scripts/daemon.py
+- [US5] Add GET `/api/export/csv` endpoint to `.specify/scripts/easter.py` per contracts/easter-api.md. Requires `platform_id` and `entity` (traces|spans|evals), optional `days` (default 90). Returns te
+- Files: .specify/scripts/easter.py
 - Tokens in/out: 9/1355
 
 ### T026 — DONE
-- [US5] Add retention cleanup periodic task to `.specify/scripts/daemon.py` — `retention_cleanup(conn, shutdown_event, interval=86400)` in daemon TaskGroup. Calls db.cleanup_old_data(conn, days=90). Log
-- Files: .specify/scripts/daemon.py
+- [US5] Add retention cleanup periodic task to `.specify/scripts/easter.py` — `retention_cleanup(conn, shutdown_event, interval=86400)` in easter TaskGroup. Calls db.cleanup_old_data(conn, days=90). Log
+- Files: .specify/scripts/easter.py
 - Tokens in/out: 9/1057
 
 ### T027 — DONE
@@ -33,6 +33,6 @@
 - Tokens in/out: 23/7980
 
 ### T030 — DONE
-- Run quickstart.md end-to-end validation: apply migration, start daemon, start portal, execute pipeline run, verify trace/spans/evals in DB and portal, export CSV, verify CORS
+- Run quickstart.md end-to-end validation: apply migration, start easter, start portal, execute pipeline run, verify trace/spans/evals in DB and portal, export CSV, verify CORS
 - Tokens in/out: 21/8869
 

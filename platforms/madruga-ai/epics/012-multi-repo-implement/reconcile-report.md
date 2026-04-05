@@ -192,7 +192,7 @@ Nenhuma nova. Epic 013 continua dependendo de 012 conforme planejado.
 | 013 DAG Executor | "Depends on: 012 (multi-repo funcional)" | Sim (positivo) | Desbloqueado — ensure_repo, worktree, implement_remote disponíveis | Nenhuma — pitch correto |
 | 014 Telegram | Nenhuma premissa sobre 012 | Nao | — | — |
 | 015 Subagent Judge | Nenhuma premissa sobre 012 | Nao | — | — |
-| 016 Daemon | "Daemon pode ter N worktrees" | Sim (positivo) | worktree.py ja suporta N worktrees concorrentes | Nenhuma — design compativel |
+| 016 Easter | "Easter pode ter N worktrees" | Sim (positivo) | worktree.py ja suporta N worktrees concorrentes | Nenhuma — design compativel |
 
 Nenhum impacto negativo em epics futuros detectado.
 

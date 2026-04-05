@@ -164,13 +164,25 @@ def run_implement(
         print(prompt)
         return 0
 
-    # Invoke claude -p
+    # Invoke claude -p with --bare mode for token efficiency
+    from dag_executor import Node, build_dispatch_cmd
+
+    impl_node = Node(
+        id="implement",
+        skill="speckit.implement",
+        outputs=[],
+        depends=[],
+        gate="auto",
+        layer="engineering",
+        optional=False,
+        skip_condition=None,
+    )
+    cmd = build_dispatch_cmd(impl_node, prompt, platform_name)
+    cmd.extend(["--cwd", str(work_dir)])
+
     log.info("Invoking claude -p in %s (timeout: %ds)", work_dir, timeout)
     try:
-        result = subprocess.run(
-            ["claude", "-p", prompt, "--cwd", str(work_dir)],
-            timeout=timeout,
-        )
+        result = subprocess.run(cmd, timeout=timeout)
     except subprocess.TimeoutExpired:
         log.error("claude -p timed out after %ds", timeout)
         return 3

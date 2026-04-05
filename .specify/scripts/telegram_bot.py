@@ -425,10 +425,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 async def async_main(args: argparse.Namespace) -> None:
-    """Standalone entry point. Deprecated — use daemon.py lifespan instead."""
+    """Standalone entry point. Deprecated — use easter.py lifespan instead."""
     import warnings
 
-    warnings.warn("async_main is deprecated, use daemon.py", DeprecationWarning, stacklevel=2)
+    warnings.warn("async_main is deprecated, use easter.py", DeprecationWarning, stacklevel=2)
     token = os.environ.get("MADRUGA_TELEGRAM_BOT_TOKEN")
     chat_id_str = os.environ.get("MADRUGA_TELEGRAM_CHAT_ID")
 

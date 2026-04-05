@@ -40,9 +40,9 @@ updated: 2026-03-31
 | **Execucao autonoma do pipeline** | DAG executor processa pipeline L1/L2 automaticamente: topological sort, dispatch via claude -p, human gates com pause/resume, retry com circuit breaker. Operador executa via CLI | O arquiteto foca em decisoes estrategicas — pipeline executa sozinho entre gates |
 ```
 
-E na secao "Next", substituir por versao reduzida focando no que falta (daemon 24/7):
+E na secao "Next", substituir por versao reduzida focando no que falta (easter 24/7):
 ```markdown
-| **Processamento continuo 24/7** | Daemon persistente que executa pipeline automaticamente, com polling de gates e notificacoes | Pipeline roda sem intervencao manual entre aprovacoes |
+| **Processamento continuo 24/7** | Easter persistente que executa pipeline automaticamente, com polling de gates e notificacoes | Pipeline roda sem intervencao manual entre aprovacoes |
 ```
 
 ---
@@ -176,7 +176,7 @@ Nenhum.
 |------|-------------------|----------|---------|------|
 | 014 Telegram | "Consome gate state machine de 013" | Sim (positivo) | Desbloqueado — gate_status em pipeline_runs, approve/reject/list via CLI | Nenhuma |
 | 015 Subagent Judge | "Dispatch necessario para subagent judge" | Sim (positivo) | Desbloqueado — compose_skill_prompt + dispatch_node reutilizaveis | Nenhuma |
-| 016 Daemon | "Monta em cima de tudo" | Sim (positivo) | dag_executor.run_pipeline() pode ser chamado por asyncio event loop | Nenhuma |
+| 016 Easter | "Monta em cima de tudo" | Sim (positivo) | dag_executor.run_pipeline() pode ser chamado por asyncio event loop | Nenhuma |
 
 Nenhum impacto negativo detectado.
 

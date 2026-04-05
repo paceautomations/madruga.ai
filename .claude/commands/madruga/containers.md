@@ -77,6 +77,26 @@ Wait for answers BEFORE generating.
 - Views for the interactive portal
 - Main container view + zoom views per bounded context
 
+**MANDATORY: For EVERY `boundedContext` in `ddd-contexts.likec4`, generate:**
+
+1. A scoped view in `views.likec4`:
+```likec4
+view <name>Detail of <name> {
+  title '<DisplayName> — <DDD Classification (Core/Supporting/Generic) Domain>'
+  description '<What this bounded context does>'
+  include *
+  include <relevant externals from externals.likec4 and infrastructure.likec4>
+}
+```
+
+2. An entry in `platform.yaml` under `views.structural`:
+```yaml
+- id: <name>Detail
+  label: "<DisplayName> (zoom)"
+```
+
+**Why**: LikeC4 auto-generates `navigateTo` for bounded contexts when a scoped `view X of Y` exists. The portal generates navigation URLs only from `platform.yaml` `views.structural`. Missing either one breaks portal navigation.
+
 ### Auto-Review Additions
 
 | # | Check | Action on Failure |
@@ -87,6 +107,10 @@ Wait for answers BEFORE generating.
 | 4 | Are NFRs measurable per container? | Add targets |
 | 5 | Is LikeC4 syntax valid? | Fix |
 | 6 | Are views defined for all bounded contexts? | Add zoom views |
+| 7 | Every BC from ddd-contexts.likec4 has `view <name>Detail of <name>` in views.likec4? | Add missing views |
+| 8 | Every `<name>Detail` view registered in `platform.yaml` `views.structural`? | Add entry |
+| 9 | `autoLayout` ONLY in `dynamic view`, not in structural views? | Remove |
+| 10 | `likec4 build` passes without errors? | Fix syntax errors |
 
 ### LikeC4 Validation
 

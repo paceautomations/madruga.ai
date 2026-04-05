@@ -6,7 +6,7 @@ updated: 2026-04-02
 
 ## Visao End-to-End
 
-> O ciclo de vida completo de uma plataforma: documentar (1x), entregar epics (Nx), consultar (continuo), e no futuro, autonomia via daemon. O reconcile fecha o loop retroalimentando a documentacao.
+> O ciclo de vida completo de uma plataforma: documentar (1x), entregar epics (Nx), consultar (continuo), e no futuro, autonomia via easter. O reconcile fecha o loop retroalimentando a documentacao.
 
 ```mermaid
 flowchart TB
@@ -36,7 +36,7 @@ flowchart TB
         F3A["Portal: Diagramas + Dashboard + Roadmap\n(sem skill — consumo passivo)"]
     end
 
-    subgraph F4["Flow 4: Daemon (operacional)"]
+    subgraph F4["Flow 4: Easter (operacional)"]
         F4A["Execucao Autonoma do Epic Cycle\n(mesmas skills do Flow 2, via MADRUGA_MODE)"]
     end
 
@@ -61,7 +61,7 @@ flowchart TB
 | 1 | **Documentar Nova Plataforma** | PM-Arquiteto | 1x por plataforma | Fundacao — sem isso nenhum epic pode comecar |
 | 2 | **Especificar e Entregar Epic** | PM-Arquiteto, Revisor | N vezes por plataforma | Core loop — onde valor e entregue |
 | 3 | **Consultar Arquitetura** | Consumidor do Portal, Revisor | Continua | Alinhamento — time consulta decisions e estado |
-| 4 | **Execucao Autonoma via Daemon** | Daemon, PM-Arquiteto | Continua | Autonomia — daemon executa epic cycle, humano aprova gates criticos |
+| 4 | **Execucao Autonoma via Easter** | Easter, PM-Arquiteto | Continua | Autonomia — easter executa epic cycle, humano aprova gates criticos |
 
 ### Skill Map — Flow 1: Documentar Nova Plataforma (L1)
 
@@ -101,9 +101,9 @@ flowchart TB
 
 > Sem skills de pipeline — consumo passivo via portal.
 
-### Skill Map — Flow 4: Daemon (operacional)
+### Skill Map — Flow 4: Easter (operacional)
 
-> Mesmas skills do Flow 2, executadas autonomamente pelo daemon via DAG executor + MADRUGA_MODE. Ver tabela do Flow 2.
+> Mesmas skills do Flow 2, executadas autonomamente pelo easter via DAG executor + MADRUGA_MODE. Ver tabela do Flow 2.
 
 ---
 
@@ -401,9 +401,9 @@ sequenceDiagram
 
 ---
 
-## Deep Dive — Flow 4: Execucao Autonoma via Daemon
+## Deep Dive — Flow 4: Execucao Autonoma via Easter
 
-> O daemon (FastAPI + asyncio) executa o ciclo de epics autonomamente via DAG executor. O PM-Arquiteto aprova human gates via Telegram ou CLI. Tres modos de operacao (MADRUGA_MODE): manual (pausa em gates), interactive (prompt y/n), auto (execucao end-to-end).
+> O easter (FastAPI + asyncio) executa o ciclo de epics autonomamente via DAG executor. O PM-Arquiteto aprova human gates via Telegram ou CLI. Tres modos de operacao (MADRUGA_MODE): manual (pausa em gates), interactive (prompt y/n), auto (execucao end-to-end).
 
 ### Happy Path
 
@@ -411,39 +411,39 @@ sequenceDiagram
 sequenceDiagram
     actor PM as PM-Arquiteto
     actor Rev as Revisor
-    participant Daemon as Daemon (Agente Autonomo)
+    participant Easter as Easter (Agente Autonomo)
     participant Plataforma as Madruga AI
     participant Docs as Documentacao<br/>(Business + Engineering)
 
-    PM->>Daemon: Aprovar epic N para execucao autonoma
+    PM->>Easter: Aprovar epic N para execucao autonoma
 
     rect rgb(230, 245, 255)
-    note over Daemon, Plataforma: Execucao Autonoma
-    Daemon->>Plataforma: Criar branch + capturar contexto
-    Daemon->>Plataforma: Especificar (usando mesmas skills)
-    Daemon->>Plataforma: Planejar + quebrar em tarefas
-    Daemon->>Plataforma: Implementar (tarefas em waves com contexto limpo)
-    Daemon->>Plataforma: Verificar + QA + Reconciliar
-    Daemon->>Docs: Atualizar Business + Engineering docs
+    note over Easter, Plataforma: Execucao Autonoma
+    Easter->>Plataforma: Criar branch + capturar contexto
+    Easter->>Plataforma: Especificar (usando mesmas skills)
+    Easter->>Plataforma: Planejar + quebrar em tarefas
+    Easter->>Plataforma: Implementar (tarefas em waves com contexto limpo)
+    Easter->>Plataforma: Verificar + QA + Reconciliar
+    Easter->>Docs: Atualizar Business + Engineering docs
     end
 
     alt Decisao reversivel (2-way door)
-        Daemon->>Daemon: Tomar decisao autonomamente
+        Easter->>Easter: Tomar decisao autonomamente
     else Decisao irreversivel (1-way door)
-        Daemon->>PM: Escalar para aprovacao humana
+        Easter->>PM: Escalar para aprovacao humana
         note right of PM: Ex: mudanca de schema, API publica, ADR novo
-        PM->>Daemon: Aprovacao (ou rejeicao com direcao)
+        PM->>Easter: Aprovacao (ou rejeicao com direcao)
     end
 
-    Daemon->>Rev: PR pronto para revisao
+    Easter->>Rev: PR pronto para revisao
     Rev->>Rev: Validar codigo, docs, rastreabilidade spec→codigo
     alt Aprovado
         Rev->>Plataforma: Merge
-        note over Daemon, Plataforma: ↩ Daemon inicia proximo epic automaticamente
+        note over Easter, Plataforma: ↩ Easter inicia proximo epic automaticamente
     else Ajustes necessarios
-        Rev->>Daemon: Feedback com pedidos de ajuste
-        Daemon->>Daemon: Aplicar ajustes (novo ciclo heal)
-        Daemon->>Rev: PR atualizado
+        Rev->>Easter: Feedback com pedidos de ajuste
+        Easter->>Easter: Aplicar ajustes (novo ciclo heal)
+        Easter->>Rev: PR atualizado
     end
 ```
 
@@ -452,29 +452,29 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     actor PM as PM-Arquiteto
-    participant Daemon as Daemon (Agente Autonomo)
+    participant Easter as Easter (Agente Autonomo)
 
-    Daemon->>Daemon: Executando epic
+    Easter->>Easter: Executando epic
     alt Context rot (qualidade degrada)
-        Daemon->>Daemon: Iniciar nova wave com contexto limpo
+        Easter->>Easter: Iniciar nova wave com contexto limpo
     else Drift score alto apos reconcile
-        Daemon->>PM: Escalar — drift >= 0.3 requer revisao humana
-        PM->>Daemon: Direcao para correcao
+        Easter->>PM: Escalar — drift >= 0.3 requer revisao humana
+        PM->>Easter: Direcao para correcao
     else Falha de API (rate limit, timeout)
-        Daemon->>Daemon: Retry com backoff exponencial
+        Easter->>Easter: Retry com backoff exponencial
         alt Falha persistente
-            Daemon->>PM: Notificar — fallback para modo interativo
+            Easter->>PM: Notificar — fallback para modo interativo
         end
     else Bloqueio em verificacao
-        Daemon->>PM: Tasks marcadas done mas sem codigo — requer decisao
+        Easter->>PM: Tasks marcadas done mas sem codigo — requer decisao
     end
 ```
 
 **Premissas para este fluxo:**
-- Daemon usa as **mesmas skills** que o PM-Arquiteto usa interativamente — zero duplicacao
+- Easter usa as **mesmas skills** que o PM-Arquiteto usa interativamente — zero duplicacao
 - Decisoes 1-way door **sempre** escalam para humano, mesmo em modo autonomo (MADRUGA_MODE=auto nao bypassa 1-way-door)
 - Waves com subagents frescos mitigam context rot em execucoes longas
-- Daemon implementado e operacional (epic 016). Modos configurados via MADRUGA_MODE env var
+- Easter implementado e operacional (epic 016). Modos configurados via MADRUGA_MODE env var
 
 ---
 
@@ -486,7 +486,7 @@ sequenceDiagram
 | 2 | Todo artefato salvo registra estado automaticamente no banco de estado | Confirmado |
 | 3 | Decisoes irreversiveis sempre requerem aprovacao explicita por item | Confirmado |
 | 4 | O reconcile fecha o loop — implementacao retroalimenta Business e Engineering | Confirmado |
-| 5 | Daemon opera com as mesmas skills do modo interativo | Confirmado |
+| 5 | Easter opera com as mesmas skills do modo interativo | Confirmado |
 | 6 | Portal reflete estado atual — le diretamente dos artefatos versionados | Confirmado |
 | 7 | O epic cycle (Flow 2) e o fluxo mais executado — roda N vezes por plataforma | Confirmado |
 
@@ -499,7 +499,7 @@ sequenceDiagram
 | **PM-Arquiteto** | Engenheiro que documenta arquitetura, especifica features e opera o pipeline. Hoje: Gabriel Hamu. | 1, 2, 4 |
 | **Revisor** | Engenheiro senior que revisa PRs e aprova decisoes irreversiveis. | 2, 4 |
 | **Consumidor do Portal** | Qualquer membro do time que consulta documentacao e estado. | 3 |
-| **Daemon** | Processo persistente (FastAPI + asyncio) que executa o epic cycle autonomamente. Modos: manual, interactive, auto (MADRUGA_MODE). | 4 |
+| **Easter** | Processo persistente (FastAPI + asyncio) que executa o epic cycle autonomamente. Modos: manual, interactive, auto (MADRUGA_MODE). | 4 |
 | **Madruga AI** | A plataforma como um todo — interface CLI + skills + banco de estado. | 1, 2 |
 | **Portal** | Interface visual que renderiza documentacao e dashboards. | 3 |
 | **Documentacao** | Artefatos versionados de Business e Engineering, atualizados pelo reconcile. | 2, 4 |

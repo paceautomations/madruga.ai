@@ -12,7 +12,7 @@ Documentacao de arquitetura, especificacao de features e implementacao estavam d
 
 ## Resultado Esperado
 
-Repositorio dedicado `paceautomations/madruga.ai` — pipeline unico onde arquitetura alimenta specs, implementacao fecha o loop, e um daemon executa autonomamente:
+Repositorio dedicado `paceautomations/madruga.ai` — pipeline unico onde arquitetura alimenta specs, implementacao fecha o loop, e um easter executa autonomamente:
 - Plataformas como unidade central: `platforms/<name>/` contem Vision (arquitetura macro) + epicos autocontidos (pitch + spec + plan + tasks)
 - Cada epico implementado atualiza automaticamente a Vision (RECONCILE)
 - LikeC4-first: `.likec4` files como source of truth, markdown como view layer
@@ -20,8 +20,8 @@ Repositorio dedicado `paceautomations/madruga.ai` — pipeline unico onde arquit
 - Artifact Model MECE: cada artefato tem 1 dono (skill) e 1 proposito, progressao linear pitch → spec → plan → tasks → implement
 - Portal Starlight com diagramas LikeC4 interativos e auto-discovery de plataformas
 - Copier template system para scaffolding padronizado de novas plataformas
-- Runtime engine Python (10K LOC) com daemon 24/7, debate engine, decision gates, learning loop
-- Mesmas skills e templates usadas tanto pelo humano (interativo) quanto pelo daemon (autonomo via `SpeckitBridge`)
+- Runtime engine Python (10K LOC) com easter 24/7, debate engine, decision gates, learning loop
+- Mesmas skills e templates usadas tanto pelo humano (interativo) quanto pelo easter (autonomo via `SpeckitBridge`)
 
 ---
 
@@ -30,11 +30,11 @@ Repositorio dedicado `paceautomations/madruga.ai` — pipeline unico onde arquit
 ```
 FLUXO COMPLETO:
 
-  [HUMANO + SKILLS]                         [DAEMON AUTONOMO]
+  [HUMANO + SKILLS]                         [EASTER AUTONOMO]
   (interativo, on-demand)                   (24/7, services/madruga-ai)
   -----------------------                   ---------------------------
   /madruga/platform-new fulano
-    -> Copier scaffolding                    MadrugaDaemon (asyncio)
+    -> Copier scaffolding                    MadrugaEaster (asyncio)
     -> platforms/fulano/ criado              |
     -> Portal registrado                     kanban_poll.py (60s)
                                              |
@@ -80,7 +80,7 @@ FLUXO COMPLETO:
     -> CRITICAL/WARNING/NIT
 ```
 
-Os dois lados usam as **mesmas skills e templates** — a diferenca e que o lado esquerdo e interativo (humano invoca) e o direito e autonomo (daemon invoca via `claude -p` com `SpeckitBridge`).
+Os dois lados usam as **mesmas skills e templates** — a diferenca e que o lado esquerdo e interativo (humano invoca) e o direito e autonomo (easter invoca via `claude -p` com `SpeckitBridge`).
 
 ---
 
@@ -137,7 +137,7 @@ paceautomations/madruga.ai/
 │   ├── speckit/                       # SpeckitBridge (compositor — le de .claude/ e .specify/)
 │   ├── stress/                        # Arch fitness, spec compliance
 │   ├── dashboard/                     # FastAPI web dashboard
-│   └── daemon.py, orchestrator.py, kanban_poll.py, cli.py, config.py
+│   └── easter.py, orchestrator.py, kanban_poll.py, cli.py, config.py
 ├── tests/                             # 51 testes (10K LOC)
 ├── .claude/
 │   └── prompts/                       # 22 system prompts para claude -p (debate, review)
@@ -145,7 +145,7 @@ paceautomations/madruga.ai/
 │       ├── specialists/               # DDD, performance, security, devops, cost
 │       ├── code_critics/              # code-reviewer, perf-profiler, security-scanner, spec-compliance
 │       └── reviewers/                 # integration, regression, UX
-├── config.yaml                        # Config principal (repos, throttle, daemon, personas)
+├── config.yaml                        # Config principal (repos, throttle, easter, personas)
 ├── deploy/                            # systemd service + logrotate
 └── server.py                          # FastAPI entry point
 ```
@@ -477,13 +477,13 @@ build:
 
 ## Runtime Engine (services/madruga-ai)
 
-O engine Python que executa o pipeline autonomamente ja esta construido em `paceautomations/general/services/madruga-ai`. Sao **10K LOC + 10K LOC de testes + 22 prompts + SQLite + daemon systemd**. Este codigo e a continuidade natural do sistema — transforma as skills e templates em execucao autonoma.
+O engine Python que executa o pipeline autonomamente ja esta construido em `paceautomations/general/services/madruga-ai`. Sao **10K LOC + 10K LOC de testes + 22 prompts + SQLite + easter systemd**. Este codigo e a continuidade natural do sistema — transforma as skills e templates em execucao autonoma.
 
 ### Inventario do Engine
 
 | Camada | Modulos | O que faz |
 |--------|---------|-----------|
-| **Core Engine** | `daemon.py`, `orchestrator.py`, `kanban_poll.py`, `pipeline.py`, `cli.py`, `config.py` | Daemon 24/7 asyncio que monitora Obsidian kanban e auto-executa pipeline |
+| **Core Engine** | `easter.py`, `orchestrator.py`, `kanban_poll.py`, `pipeline.py`, `cli.py`, `config.py` | Easter 24/7 asyncio que monitora Obsidian kanban e auto-executa pipeline |
 | **7 Phases** | `specify.py`, `plan.py`, `tasks.py`, `implement.py`, `persona_interview.py`, `review.py`, `vision.py` | Pipeline completo spec-to-code com review de personas |
 | **AI Layer** | `api/client.py`, `circuit_breaker.py`, `retry.py` | Wrapper `claude -p` com circuit breaker e retry |
 | **Debate Engine** | `debate/runner.py`, `convergence.py`, `models.py` | Multi-persona debate com convergencia automatica |
@@ -607,7 +607,7 @@ Apos validacao, marcar `services/madruga-ai/` no general como deprecated com REA
 - `services/doc-api/` — permanece
 - `services/vibe-reporting-service/` — permanece
 - `services/content_gen/` — permanece
-- `obsidian-vault/` — permanece (daemon le via path configuravel)
+- `obsidian-vault/` — permanece (easter le via path configuravel)
 
 ---
 
@@ -712,9 +712,9 @@ Roadmap.md gerado automaticamente do frontmatter dos epicos (status, phase, prio
 - Template tests (`pytest .specify/templates/platform/tests/`)
 - Platform lint (`python3 .specify/scripts/platform.py lint --all`)
 
-### Daemon (ja construido, falta migrar)
+### Easter (ja construido, falta migrar)
 
-O daemon **ja existe** em `services/madruga-ai/` — nao e conceito futuro. `MadrugaDaemon` roda 24/7 como systemd service, monitora Obsidian kanban, e auto-executa o pipeline. Apos a consolidacao (Etapa 1-6 acima), o daemon opera diretamente no madruga.ai.
+O easter **ja existe** em `services/madruga-ai/` — nao e conceito futuro. `MadrugaEaster` roda 24/7 como systemd service, monitora Obsidian kanban, e auto-executa o pipeline. Apos a consolidacao (Etapa 1-6 acima), o easter opera diretamente no madruga.ai.
 
 Capacidades existentes:
 - Poll Obsidian kanban a cada 60s (`kanban_poll.py`)
@@ -769,8 +769,8 @@ python3 -m src.cli epic register --platform fulano
 # 11. Pipeline autonomo (single epic)
 python3 -m src.cli pipeline --epic 001-channel-pipeline
 
-# 12. Daemon 24/7
-python3 -m src.cli daemon start  # ou: systemctl start madruga-ai
+# 12. Easter 24/7
+python3 -m src.cli easter start  # ou: systemctl start madruga-ai
 
 # 13. Dashboard
 # http://localhost:8080 — status em tempo real

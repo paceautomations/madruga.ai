@@ -28,10 +28,10 @@ O pipeline hoje e invocado manualmente skill por skill. Nao existe runtime que e
 
 | # | Area | Decision | Referencia Arquitetural |
 |---|------|---------|------------------------|
-| 1 | Runtime mode | **Standalone CLI** (`dag_executor.py --platform <name>`) — sem daemon/FastAPI neste epic. Daemon vem no epic 016. Executor roda como processo unico, sync subprocess. | ADR-017 (custom DAG executor), blueprint §3.1 (topologia) |
-| 2 | Human gates | **CLI-only** — operador executa `platform.py gate approve <run-id>` manualmente. Pipeline bloqueia ate aprovacao (SQLite polling nao necessario agora). Telegram (014) e daemon polling (016) integram depois. | ADR-017 (human gate pause/resume), blueprint §1.4 (human gate timeout) |
+| 1 | Runtime mode | **Standalone CLI** (`dag_executor.py --platform <name>`) — sem easter/FastAPI neste epic. Easter vem no epic 016. Executor roda como processo unico, sync subprocess. | ADR-017 (custom DAG executor), blueprint §3.1 (topologia) |
+| 2 | Human gates | **CLI-only** — operador executa `platform.py gate approve <run-id>` manualmente. Pipeline bloqueia ate aprovacao (SQLite polling nao necessario agora). Telegram (014) e easter polling (016) integram depois. | ADR-017 (human gate pause/resume), blueprint §1.4 (human gate timeout) |
 | 3 | SpeckitBridge | **Reutilizar `compose_prompt()` do `implement_remote.py`** (epic 012) como base. Generalizar para todas as skills: cada skill type tem um template de prompt. Nao criar modulo separado — estender o existente. | Epic 012 (implement_remote.py:20), ADR-010 (claude -p subprocess) |
-| 4 | Concorrencia | **Single executor = 1 claude -p por vez.** Sem semaforo file-based. Concorrencia (max 3 paralelos) fica para epic 016 (daemon asyncio com semaforo). | Blueprint Q9 (max 3 concorrentes), ADR-017 |
+| 4 | Concorrencia | **Single executor = 1 claude -p por vez.** Sem semaforo file-based. Concorrencia (max 3 paralelos) fica para epic 016 (easter asyncio com semaforo). | Blueprint Q9 (max 3 concorrentes), ADR-017 |
 | 5 | Schema SQLite | **Adicionar campos na tabela `pipeline_runs` existente**: `gate_status` (TEXT: waiting_approval/approved/rejected/null), `gate_notified_at` (TEXT ISO), `gate_resolved_at` (TEXT ISO). Nova migration. Sem tabela nova. | ADR-012 (SQLite WAL), db.py pipeline_runs |
 | 6 | Appetite | **Foco em alta qualidade, consistencia e performance.** ADR-017 estima 500-800 LOC. Infraestrutura existente (db.py, platform.yaml, implement_remote.py) reduz risco. Entrega rapida com cobertura de testes completa. | ADR-017 (estimativa LOC), epic 012 (precedente: 2w→1d) |
 
@@ -62,7 +62,7 @@ O pipeline hoje e invocado manualmente skill por skill. Nao existe runtime que e
 2. **Operador aprova** → `platform.py gate approve <run-id>` → grava `gate_status=approved` + `gate_resolved_at` no DB.
 3. **Operador re-executa** → `dag_executor.py --platform <name> --resume` → executor le DB, pula nodes completos, retoma do proximo node pronto.
 
-**Racional:** Executor stateless entre runs. SQLite e o unico estado. Sem processo bloqueado esperando — operador re-invoca quando quiser. Compativel com daemon futuro (016) que fara polling automatico.
+**Racional:** Executor stateless entre runs. SQLite e o unico estado. Sem processo bloqueado esperando — operador re-invoca quando quiser. Compativel com easter futuro (016) que fara polling automatico.
 
 ### 4. DAG traversal: topological sort ou priority queue?
 
@@ -131,7 +131,7 @@ T10: Polish, ruff, docs
 
 ### O que NAO esta no scope
 
-- Daemon/FastAPI (epic 016)
+- Easter/FastAPI (epic 016)
 - Telegram notifications (epic 014)
 - Subagent Judge (epic 015)
 - Concorrencia de claude -p (epic 016)

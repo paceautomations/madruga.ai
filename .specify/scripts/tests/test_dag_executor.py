@@ -3,11 +3,142 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from dag_executor import CircuitBreaker, Node
+
+
+# --- Fix: trace creation must happen AFTER gate check ---
+
+
+@pytest.mark.asyncio
+async def test_run_pipeline_async_no_trace_when_gate_pending(tmp_path):
+    """run_pipeline_async must NOT create a trace when returning early due to pending gate.
+
+    Regression test: prior to fix, a new trace was created every poll cycle (~15s)
+    when a gate was pending, producing orphan traces with 0 completed nodes.
+    """
+    # Create minimal platform.yaml so file-existence check passes
+    plat_dir = tmp_path / "platforms" / "test-plat"
+    plat_dir.mkdir(parents=True)
+    (plat_dir / "platform.yaml").write_text("title: Test\n")
+
+    mock_conn = MagicMock()
+    mock_conn.execute.return_value.fetchall.return_value = []
+    mock_conn.execute.return_value.fetchone.return_value = None
+
+    with (
+        patch("dag_executor.REPO_ROOT", tmp_path),
+        patch("dag_executor.parse_dag") as mock_parse,
+        patch("dag_executor.topological_sort") as mock_topo,
+        patch("db.get_resumable_nodes", return_value=set()),
+        patch("db.get_pending_gates") as mock_gates,
+        patch("db.create_trace") as mock_create_trace,
+    ):
+        mock_parse.return_value = [_make_node("specify", "speckit.specify")]
+        mock_topo.return_value = [_make_node("specify", "speckit.specify")]
+        mock_gates.return_value = [{"node_id": "specify", "epic_id": "021-test", "gate_status": "waiting_approval"}]
+
+        from dag_executor import run_pipeline_async
+
+        result = await run_pipeline_async("test-plat", epic_slug="021-test", resume=True, conn=mock_conn)
+
+        assert result == 0  # returns 0 (paused at gate)
+        mock_create_trace.assert_not_called()  # NO trace created
+
+
+@pytest.mark.asyncio
+async def test_run_pipeline_async_transitions_epic_to_shipped(tmp_path):
+    """run_pipeline_async must call compute_epic_status and transition epic to shipped."""
+    plat_dir = tmp_path / "platforms" / "test-plat"
+    plat_dir.mkdir(parents=True)
+    (plat_dir / "platform.yaml").write_text(
+        "title: Test\npipeline:\n  epic_cycle:\n    nodes:\n      - id: specify\n        optional: false\n"
+    )
+
+    mock_conn = MagicMock()
+    mock_conn.execute.return_value.fetchall.return_value = []
+    mock_conn.execute.return_value.fetchone.return_value = None
+
+    node = _make_node("specify", "speckit.specify")
+
+    # Use a real in-memory DB to test the full flow end-to-end
+    import sqlite3
+
+    real_conn = sqlite3.connect(":memory:")
+    real_conn.row_factory = sqlite3.Row
+
+    # Bootstrap schema
+    from db import migrate
+    from db_pipeline import upsert_platform, upsert_epic, upsert_epic_node
+
+    migrate(real_conn)
+    upsert_platform(real_conn, "test-plat", name="Test", repo_path="platforms/test-plat")
+    upsert_epic(real_conn, "test-plat", "021-test", title="Test", status="in_progress")
+    upsert_epic_node(real_conn, "test-plat", "021-test", "specify", "done")
+
+    try:
+        with (
+            patch("dag_executor.REPO_ROOT", tmp_path),
+            patch("dag_executor.parse_dag", return_value=[node]),
+            patch("dag_executor.topological_sort", return_value=[node]),
+            patch("post_save._refresh_portal_status"),
+        ):
+            from dag_executor import run_pipeline_async
+
+            result = await run_pipeline_async("test-plat", epic_slug="021-test", resume=True, conn=real_conn)
+
+            assert result == 0
+            # Verify epic transitioned to shipped
+            row = real_conn.execute("SELECT status, delivered_at FROM epics WHERE epic_id='021-test'").fetchone()
+            assert row["status"] == "shipped"
+            assert row["delivered_at"] is not None
+    finally:
+        real_conn.close()
+
+
+@pytest.mark.asyncio
+async def test_run_pipeline_async_resume_cancels_stale_traces(tmp_path):
+    """resume=True must cancel stale running traces from previous cycles."""
+    plat_dir = tmp_path / "platforms" / "test-plat"
+    plat_dir.mkdir(parents=True)
+    (plat_dir / "platform.yaml").write_text("title: Test\n")
+
+    mock_conn = MagicMock()
+    mock_conn.execute.return_value.fetchall.return_value = []
+    mock_conn.execute.return_value.fetchone.return_value = None
+
+    # Track SQL calls to verify traces cleanup
+    sql_calls = []
+    original_execute = mock_conn.execute
+
+    def tracking_execute(sql, params=None):
+        sql_calls.append((sql, params))
+        return original_execute(sql, params)
+
+    mock_conn.execute = tracking_execute
+
+    with (
+        patch("dag_executor.REPO_ROOT", tmp_path),
+        patch("dag_executor.parse_dag", return_value=[_make_node("specify", "speckit.specify")]),
+        patch("dag_executor.topological_sort", return_value=[_make_node("specify", "speckit.specify")]),
+        patch("db.get_resumable_nodes", return_value=set()),
+        patch(
+            "db.get_pending_gates",
+            return_value=[{"node_id": "specify", "epic_id": "021-test", "gate_status": "waiting_approval"}],
+        ),
+    ):
+        from dag_executor import run_pipeline_async
+
+        await run_pipeline_async("test-plat", epic_slug="021-test", resume=True, conn=mock_conn)
+
+    # Verify that traces cleanup SQL was executed
+    trace_cleanup = [s for s, p in sql_calls if "traces" in s and "cancelled" in s]
+    assert len(trace_cleanup) >= 1, f"Expected trace cleanup SQL, got: {[s for s, _ in sql_calls]}"
+
 
 # --- Helpers ---
 
@@ -110,7 +241,7 @@ async def test_retry_with_async_sleep():
     breaker = CircuitBreaker()
     call_count = 0
 
-    async def mock_dispatch(node, cwd, prompt, timeout=3000, guardrail=None, resume_session_id=None):
+    async def mock_dispatch(node, cwd, prompt, timeout=3000, guardrail=None, resume_session_id=None, platform_name=""):
         nonlocal call_count
         call_count += 1
         if call_count < 3:
@@ -135,7 +266,7 @@ async def test_circuit_breaker_with_async_dispatch():
 
     breaker = CircuitBreaker(max_failures=1)
 
-    async def mock_dispatch(node, cwd, prompt, timeout=3000, guardrail=None, resume_session_id=None):
+    async def mock_dispatch(node, cwd, prompt, timeout=3000, guardrail=None, resume_session_id=None, platform_name=""):
         return False, "permanent error", None
 
     with (
@@ -196,15 +327,23 @@ def test_resumable_nodes_excludes_approved_gates():
         "VALUES ('r1', 'plat', 'e1', 'specify', 'running', 'approved', '2026-01-01')"
     )
 
-    result = get_resumable_nodes(conn, "plat", "e1")
-    assert "epic-context" in result
-    assert "specify" not in result, "approved gate should NOT count as resumable"
+    try:
+        result = get_resumable_nodes(conn, "plat", "e1")
+        assert "epic-context" in result
+        assert "specify" not in result, "approved gate should NOT count as resumable"
+    finally:
+        conn.close()
 
 
 @pytest.mark.asyncio
-async def test_gate_approved_triggers_dispatch():
+async def test_gate_approved_triggers_dispatch(tmp_path):
     """After gate approval, run_pipeline_async dispatches the node instead of pausing."""
     import sqlite3
+
+    # Create real platform dir so yaml.safe_load doesn't hit a MagicMock stream
+    plat_dir = tmp_path / "platforms" / "test-plat"
+    plat_dir.mkdir(parents=True)
+    (plat_dir / "platform.yaml").write_text("title: Test\n")
 
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
@@ -258,24 +397,32 @@ async def test_gate_approved_triggers_dispatch():
     mock_branch = MagicMock()
     mock_branch.stdout = "epic/test-plat/e1\n"
 
-    with (
-        patch("dag_executor.parse_dag", return_value=nodes),
-        patch("dag_executor.topological_sort", return_value=nodes),
-        patch("dag_executor.dispatch_with_retry_async", side_effect=mock_dispatch),
-        patch("dag_executor.verify_outputs", return_value=(True, None)),
-        patch("dag_executor.compose_skill_prompt", return_value=("test prompt", "guardrail")),
-        patch("dag_executor.subprocess.run", return_value=mock_branch),
-        patch("dag_executor.REPO_ROOT", MagicMock()),
-    ):
-        await run_pipeline_async("test-plat", epic_slug="e1", resume=True, conn=conn)
+    try:
+        with (
+            patch("dag_executor.parse_dag", return_value=nodes),
+            patch("dag_executor.topological_sort", return_value=nodes),
+            patch("dag_executor.dispatch_with_retry_async", side_effect=mock_dispatch),
+            patch("dag_executor.verify_outputs", return_value=(True, None)),
+            patch("dag_executor.compose_skill_prompt", return_value=("test prompt", "guardrail")),
+            patch("dag_executor.subprocess.run", return_value=mock_branch),
+            patch("dag_executor.REPO_ROOT", tmp_path),
+        ):
+            await run_pipeline_async("test-plat", epic_slug="e1", resume=True, conn=conn)
 
-    assert dispatch_called, "specify should have been dispatched after gate approval"
+        assert dispatch_called, "specify should have been dispatched after gate approval"
+    finally:
+        conn.close()
 
 
 @pytest.mark.asyncio
-async def test_auto_mode_skips_gate_approval():
+async def test_auto_mode_skips_gate_approval(tmp_path):
     """In auto mode, human gates are auto-approved without DB interaction."""
     import sqlite3
+
+    # Create real platform dir so yaml.safe_load doesn't hit a MagicMock stream
+    plat_dir = tmp_path / "platforms" / "p"
+    plat_dir.mkdir(parents=True)
+    (plat_dir / "platform.yaml").write_text("title: Test\n")
 
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
@@ -313,21 +460,24 @@ async def test_auto_mode_skips_gate_approval():
     mock_branch = MagicMock()
     mock_branch.stdout = "epic/p/e1\n"
 
-    with (
-        patch("dag_executor.parse_dag", return_value=nodes),
-        patch("dag_executor.topological_sort", return_value=nodes),
-        patch("dag_executor.dispatch_with_retry_async", side_effect=mock_dispatch),
-        patch("dag_executor.verify_outputs", return_value=(True, None)),
-        patch("dag_executor.compose_skill_prompt", return_value=("test", "guardrail")),
-        patch("dag_executor.subprocess.run", return_value=mock_branch),
-        patch("dag_executor.REPO_ROOT", MagicMock()),
-    ):
-        await run_pipeline_async("p", epic_slug="e1", resume=True, conn=conn, gate_mode="auto")
+    try:
+        with (
+            patch("dag_executor.parse_dag", return_value=nodes),
+            patch("dag_executor.topological_sort", return_value=nodes),
+            patch("dag_executor.dispatch_with_retry_async", side_effect=mock_dispatch),
+            patch("dag_executor.verify_outputs", return_value=(True, None)),
+            patch("dag_executor.compose_skill_prompt", return_value=("test", "guardrail")),
+            patch("dag_executor.subprocess.run", return_value=mock_branch),
+            patch("dag_executor.REPO_ROOT", tmp_path),
+        ):
+            await run_pipeline_async("p", epic_slug="e1", resume=True, conn=conn, gate_mode="auto")
 
-    assert "specify" in dispatched, "auto mode should dispatch without pausing"
-    # No waiting_approval runs should exist
-    gates = conn.execute("SELECT * FROM pipeline_runs WHERE gate_status='waiting_approval'").fetchall()
-    assert len(gates) == 0, "auto mode should not create waiting_approval gates"
+        assert "specify" in dispatched, "auto mode should dispatch without pausing"
+        # No waiting_approval runs should exist
+        gates = conn.execute("SELECT * FROM pipeline_runs WHERE gate_status='waiting_approval'").fetchall()
+        assert len(gates) == 0, "auto mode should not create waiting_approval gates"
+    finally:
+        conn.close()
 
 
 # --- Tests for task-by-task implement ---
@@ -397,11 +547,11 @@ def test_compose_task_prompt(tmp_path):
 
     task = TaskItem(
         id="T005",
-        description="Add CORS to `daemon.py`",
+        description="Add CORS to `easter.py`",
         checked=False,
         phase="Phase 2",
         parallel=True,
-        files=["daemon.py"],
+        files=["easter.py"],
         line_number=10,
     )
 
@@ -409,7 +559,7 @@ def test_compose_task_prompt(tmp_path):
 
     assert "T005" in prompt
     assert "ONLY implement this specific task" in prompt
-    assert "daemon.py" in prompt
+    assert "easter.py" in prompt
     assert "Plan" in prompt
     assert "Spec" in prompt
     assert "epic/test-plat/001-test" in prompt
@@ -488,7 +638,7 @@ def test_append_implement_context(tmp_path):
         checked=True,
         phase="Phase 1",
         parallel=False,
-        files=["daemon.py"],
+        files=["easter.py"],
         line_number=2,
     )
 
@@ -500,7 +650,7 @@ def test_append_implement_context(tmp_path):
     assert "db.py, models.py" in ctx
     assert "1000/500" in ctx
     assert "T002 — DONE" in ctx
-    assert "daemon.py" in ctx
+    assert "easter.py" in ctx
 
 
 def test_implement_context_deleted_at_cycle_start(tmp_path):
@@ -590,7 +740,7 @@ def test_parse_claude_output_partial_fields():
     """Edge case: JSON output with only some fields populated."""
     from dag_executor import parse_claude_output
 
-    result = parse_claude_output('{"usage": {"input_tokens": 500}, "cost_usd": 0.05}')
+    result = parse_claude_output('{"usage": {"input_tokens": 500}, "total_cost_usd": 0.05}')
     assert result["tokens_in"] == 500
     assert result["tokens_out"] is None  # missing from usage
     assert result["cost_usd"] == 0.05
@@ -904,3 +1054,804 @@ def test_compose_skill_prompt_no_report_graceful(tmp_path):
 
     assert "Upstream Report" not in prompt
     assert guardrail is not None  # guardrail is always generated for epic nodes
+
+
+# --- Tests for build_system_prompt ---
+
+
+def _setup_knowledge(tmp_path):
+    """Create minimal knowledge/contract files for build_system_prompt tests."""
+    knowledge = tmp_path / ".claude" / "knowledge"
+    knowledge.mkdir(parents=True)
+    (knowledge / "pipeline-contract-base.md").write_text("# Pipeline Contract — Base\nStep 0: Prerequisites\n")
+    (knowledge / "pipeline-contract-engineering.md").write_text(
+        "# Pipeline Contract — Engineering\nSimplicity first.\n"
+    )
+    (knowledge / "pipeline-contract-planning.md").write_text("# Pipeline Contract — Planning\nCut scope.\n")
+    (knowledge / "pipeline-contract-business.md").write_text("# Pipeline Contract — Business\nReduce scope.\n")
+
+    rules = tmp_path / ".claude" / "rules"
+    rules.mkdir(parents=True)
+    (rules / "python.md").write_text("# Python Conventions\nUse ruff.\n")
+
+    commands = tmp_path / ".claude" / "commands"
+    commands.mkdir(parents=True)
+    (commands / "speckit.specify.md").write_text("---\ndescription: Create spec\n---\n## Outline\nGenerate spec.\n")
+    (commands / "speckit.analyze.md").write_text("---\ndescription: Analyze\n---\n## Goal\nAnalyze artifacts.\n")
+    (commands / "speckit.implement.md").write_text("---\ndescription: Implement\n---\n## Outline\nExecute tasks.\n")
+
+    madruga = commands / "madruga"
+    madruga.mkdir()
+    (madruga / "vision.md").write_text("---\ndescription: Generate vision\n---\n## Instructions\nVision content.\n")
+    (madruga / "judge.md").write_text("---\ndescription: Run judge\n---\n## Instructions\nJudge content.\n")
+    (madruga / "reconcile.md").write_text("---\ndescription: Reconcile\n---\n## Instructions\nReconcile content.\n")
+    (madruga / "qa.md").write_text("---\ndescription: QA\n---\n## Instructions\nQA content.\n")
+
+    return tmp_path
+
+
+def test_build_system_prompt_includes_conventions_header(tmp_path):
+    """System prompt starts with conventions header."""
+    from dag_executor import build_system_prompt
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("specify", "speckit.specify")
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        result = build_system_prompt(node, "test-plat")
+
+    assert result.startswith("# Conventions")
+    assert "English" in result
+
+
+def test_build_system_prompt_includes_base_contract(tmp_path):
+    """System prompt always includes pipeline-contract-base.md."""
+    from dag_executor import build_system_prompt
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("specify", "speckit.specify")
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        result = build_system_prompt(node, "test-plat")
+
+    assert "Pipeline Contract — Base" in result
+    assert "Step 0: Prerequisites" in result
+
+
+def test_build_system_prompt_includes_layer_contract_engineering(tmp_path):
+    """Engineering layer nodes get engineering contract."""
+    from dag_executor import build_system_prompt
+
+    _setup_knowledge(tmp_path)
+    node = Node(
+        id="specify",
+        skill="speckit.specify",
+        outputs=[],
+        depends=[],
+        gate="human",
+        layer="engineering",
+        optional=False,
+        skip_condition=None,
+    )
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        result = build_system_prompt(node, "test-plat")
+
+    assert "Pipeline Contract — Engineering" in result
+    assert "Simplicity first" in result
+
+
+def test_build_system_prompt_includes_layer_contract_planning(tmp_path):
+    """Planning layer nodes get planning contract."""
+    from dag_executor import build_system_prompt
+
+    _setup_knowledge(tmp_path)
+    node = Node(
+        id="roadmap",
+        skill="madruga:roadmap",
+        outputs=[],
+        depends=[],
+        gate="human",
+        layer="planning",
+        optional=False,
+        skip_condition=None,
+    )
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        result = build_system_prompt(node, "test-plat")
+
+    assert "Pipeline Contract — Planning" in result
+    assert "Cut scope" in result
+
+
+def test_build_system_prompt_includes_layer_contract_business(tmp_path):
+    """Business layer nodes get business contract."""
+    from dag_executor import build_system_prompt
+
+    _setup_knowledge(tmp_path)
+    node = Node(
+        id="vision",
+        skill="madruga:vision",
+        outputs=[],
+        depends=[],
+        gate="human",
+        layer="business",
+        optional=False,
+        skip_condition=None,
+    )
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        result = build_system_prompt(node, "test-plat")
+
+    assert "Pipeline Contract — Business" in result
+    assert "Reduce scope" in result
+
+
+def test_build_system_prompt_no_layer_contract_for_unknown(tmp_path):
+    """Unknown layers do not get a layer contract section."""
+    from dag_executor import build_system_prompt
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("test-node", "test:skill")
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        result = build_system_prompt(node, "test-plat")
+
+    assert "Pipeline Contract — Engineering" not in result
+    assert "Pipeline Contract — Planning" not in result
+    assert "Pipeline Contract — Business" not in result
+
+
+def test_build_system_prompt_includes_skill_body(tmp_path):
+    """System prompt includes the full skill .md body."""
+    from dag_executor import build_system_prompt
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("specify", "speckit.specify")
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        result = build_system_prompt(node, "test-plat")
+
+    assert "# Skill Instructions" in result
+    assert "Generate spec" in result
+
+
+def test_build_system_prompt_implement_includes_python_rules(tmp_path):
+    """Implement nodes include Python rules."""
+    from dag_executor import build_system_prompt
+
+    _setup_knowledge(tmp_path)
+    node = Node(
+        id="implement",
+        skill="speckit.implement",
+        outputs=[],
+        depends=[],
+        gate="auto",
+        layer="engineering",
+        optional=False,
+        skip_condition=None,
+    )
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        result = build_system_prompt(node, "test-plat")
+
+    assert "Python Conventions" in result
+    assert "ruff" in result
+
+
+def test_build_system_prompt_non_implement_excludes_python_rules(tmp_path):
+    """Non-implement nodes do NOT include Python rules."""
+    from dag_executor import build_system_prompt
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("specify", "speckit.specify")
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        result = build_system_prompt(node, "test-plat")
+
+    assert "Python Conventions" not in result
+
+
+def test_build_system_prompt_implement_task_includes_python_rules(tmp_path):
+    """implement:T001 task nodes include Python rules."""
+    from dag_executor import build_system_prompt
+
+    _setup_knowledge(tmp_path)
+    node = Node(
+        id="implement:T001",
+        skill="speckit.implement",
+        outputs=[],
+        depends=[],
+        gate="auto",
+        layer="implementation",
+        optional=False,
+        skip_condition=None,
+    )
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        result = build_system_prompt(node, "test-plat")
+
+    assert "Python Conventions" in result
+
+
+def test_build_system_prompt_missing_skill_file_warns(tmp_path):
+    """Missing skill file logs a warning but still returns conventions+contract."""
+    from dag_executor import build_system_prompt
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("specify", "speckit.nonexistent")
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        result = build_system_prompt(node, "test-plat")
+
+    assert "# Conventions" in result
+    assert "Pipeline Contract — Base" in result
+    assert "# Skill Instructions" not in result
+
+
+def test_build_system_prompt_derives_path_for_madruga_skill(tmp_path):
+    """Skill path is derived from convention for madruga:* skills."""
+    from dag_executor import build_system_prompt
+
+    _setup_knowledge(tmp_path)
+    node = Node(
+        id="vision",
+        skill="madruga:vision",
+        outputs=[],
+        depends=[],
+        gate="human",
+        layer="business",
+        optional=False,
+        skip_condition=None,
+    )
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        result = build_system_prompt(node, "test-plat")
+
+    assert "Vision content" in result
+
+
+# --- Tests for build_dispatch_cmd ---
+
+
+def test_build_dispatch_cmd_bare_with_api_key(tmp_path):
+    """Command includes --bare only when ANTHROPIC_API_KEY is set."""
+    from dag_executor import build_dispatch_cmd
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("specify", "speckit.specify")
+
+    # Without API key: no --bare (OAuth mode)
+    with patch("dag_executor.REPO_ROOT", tmp_path), patch.dict("os.environ", {}, clear=False):
+        os.environ.pop("ANTHROPIC_API_KEY", None)
+        cmd = build_dispatch_cmd(node, "test prompt", "test-plat")
+    assert "--bare" not in cmd
+
+    # With API key: --bare present
+    with patch("dag_executor.REPO_ROOT", tmp_path), patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-test"}):
+        cmd = build_dispatch_cmd(node, "test prompt", "test-plat")
+    assert "--bare" in cmd
+
+
+def test_build_dispatch_cmd_has_output_format_json(tmp_path):
+    """Command includes --output-format json."""
+    from dag_executor import build_dispatch_cmd
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("specify", "speckit.specify")
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        cmd = build_dispatch_cmd(node, "test prompt", "test-plat")
+
+    idx = cmd.index("--output-format")
+    assert cmd[idx + 1] == "json"
+
+
+def test_build_dispatch_cmd_has_system_prompt(tmp_path):
+    """Command includes --system-prompt with conventions content."""
+    from dag_executor import build_dispatch_cmd
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("specify", "speckit.specify")
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        cmd = build_dispatch_cmd(node, "test prompt", "test-plat")
+
+    idx = cmd.index("--system-prompt")
+    system_prompt = cmd[idx + 1]
+    assert "# Conventions" in system_prompt
+    assert "Pipeline Contract — Base" in system_prompt
+
+
+def test_build_dispatch_cmd_allowed_tools_for_analyze(tmp_path):
+    """Analyze nodes get read-only tools."""
+    from dag_executor import build_dispatch_cmd
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("analyze", "speckit.analyze")
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        cmd = build_dispatch_cmd(node, "test prompt", "test-plat")
+
+    idx = cmd.index("--allowedTools")
+    tools = cmd[idx + 1]
+    assert tools == "Bash,Read,Glob,Grep"
+    assert "Write" not in tools
+    assert "Edit" not in tools
+
+
+def test_build_dispatch_cmd_allowed_tools_for_implement(tmp_path):
+    """Implement nodes get full code tools."""
+    from dag_executor import build_dispatch_cmd
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("implement", "speckit.implement")
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        cmd = build_dispatch_cmd(node, "test prompt", "test-plat")
+
+    idx = cmd.index("--allowedTools")
+    tools = cmd[idx + 1]
+    assert "Bash" in tools
+    assert "Write" in tools
+    assert "Edit" in tools
+
+
+def test_build_dispatch_cmd_allowed_tools_for_judge(tmp_path):
+    """Judge nodes get Agent tool for parallel personas."""
+    from dag_executor import build_dispatch_cmd
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("judge", "madruga:judge")
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        cmd = build_dispatch_cmd(node, "test prompt", "test-plat")
+
+    idx = cmd.index("--allowedTools")
+    tools = cmd[idx + 1]
+    assert "Agent" in tools
+
+
+def test_build_dispatch_cmd_default_tools_for_unknown_node(tmp_path):
+    """Unknown nodes get DEFAULT_TOOLS."""
+    from dag_executor import DEFAULT_TOOLS, build_dispatch_cmd
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("unknown-node", "unknown:skill")
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        cmd = build_dispatch_cmd(node, "test prompt", "test-plat")
+
+    idx = cmd.index("--allowedTools")
+    assert cmd[idx + 1] == DEFAULT_TOOLS
+
+
+def test_build_dispatch_cmd_implement_task_tools(tmp_path):
+    """implement:T001 nodes get IMPLEMENT_TASK_TOOLS."""
+    from dag_executor import IMPLEMENT_TASK_TOOLS, build_dispatch_cmd
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("implement:T001", "speckit.implement")
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        cmd = build_dispatch_cmd(node, "test prompt", "test-plat")
+
+    idx = cmd.index("--allowedTools")
+    assert cmd[idx + 1] == IMPLEMENT_TASK_TOOLS
+
+
+def test_build_dispatch_cmd_effort_for_analyze(tmp_path):
+    """Analyze nodes get --effort medium."""
+    from dag_executor import build_dispatch_cmd
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("analyze", "speckit.analyze")
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        cmd = build_dispatch_cmd(node, "test prompt", "test-plat")
+
+    idx = cmd.index("--effort")
+    assert cmd[idx + 1] == "medium"
+
+
+def test_build_dispatch_cmd_effort_for_analyze_post(tmp_path):
+    """analyze-post nodes get --effort medium."""
+    from dag_executor import build_dispatch_cmd
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("analyze-post", "speckit.analyze")
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        cmd = build_dispatch_cmd(node, "test prompt", "test-plat")
+
+    idx = cmd.index("--effort")
+    assert cmd[idx + 1] == "medium"
+
+
+def test_build_dispatch_cmd_no_effort_for_specify(tmp_path):
+    """Specify nodes do NOT get --effort flag."""
+    from dag_executor import build_dispatch_cmd
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("specify", "speckit.specify")
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        cmd = build_dispatch_cmd(node, "test prompt", "test-plat")
+
+    assert "--effort" not in cmd
+
+
+def test_build_dispatch_cmd_guardrail_appended(tmp_path):
+    """Guardrail is added via --append-system-prompt."""
+    from dag_executor import build_dispatch_cmd
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("specify", "speckit.specify")
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        cmd = build_dispatch_cmd(node, "test prompt", "test-plat", guardrail="MANDATORY: stay on branch")
+
+    idx = cmd.index("--append-system-prompt")
+    assert cmd[idx + 1] == "MANDATORY: stay on branch"
+
+
+def test_build_dispatch_cmd_no_guardrail_when_none(tmp_path):
+    """No --append-system-prompt when guardrail is None."""
+    from dag_executor import build_dispatch_cmd
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("specify", "speckit.specify")
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        cmd = build_dispatch_cmd(node, "test prompt", "test-plat")
+
+    assert "--append-system-prompt" not in cmd
+
+
+def test_build_dispatch_cmd_resume_session(tmp_path):
+    """Resume session ID is passed via --resume."""
+    from dag_executor import build_dispatch_cmd
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("implement:T001", "speckit.implement")
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        cmd = build_dispatch_cmd(node, "test prompt", "test-plat", resume_session_id="abc123def")
+
+    idx = cmd.index("--resume")
+    assert cmd[idx + 1] == "abc123def"
+
+
+def test_build_dispatch_cmd_disallowed_tools_present(tmp_path):
+    """Defense-in-depth: --disallowedTools still present alongside --allowedTools."""
+    from dag_executor import DISALLOWED_TOOLS, build_dispatch_cmd
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("specify", "speckit.specify")
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        cmd = build_dispatch_cmd(node, "test prompt", "test-plat")
+
+    idx = cmd.index("--disallowedTools")
+    assert cmd[idx + 1] == DISALLOWED_TOOLS
+
+
+def test_build_dispatch_cmd_prompt_is_second_arg(tmp_path):
+    """Prompt is passed as the argument to -p."""
+    from dag_executor import build_dispatch_cmd
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("specify", "speckit.specify")
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        cmd = build_dispatch_cmd(node, "my test prompt here", "test-plat")
+
+    assert cmd[0] == "claude"
+    assert cmd[1] == "-p"
+    assert cmd[2] == "my test prompt here"
+
+
+# --- Integration test: full dispatch flow ---
+
+
+def test_full_dispatch_flow_integration(tmp_path):
+    """Integration: compose_skill_prompt + build_dispatch_cmd produce correct cmd."""
+    from dag_executor import build_dispatch_cmd, compose_skill_prompt
+
+    root = _setup_knowledge(tmp_path)
+
+    # Create platform structure
+    platform_dir = root / "platforms" / "test-plat"
+    epic_dir = platform_dir / "epics" / "001-test"
+    epic_dir.mkdir(parents=True)
+    (epic_dir / "pitch.md").write_text("# Pitch\nBuild a widget.")
+    (epic_dir / "spec.md").write_text("# Spec\nWidget requirements.")
+
+    node = Node(
+        id="specify",
+        skill="speckit.specify",
+        outputs=["{epic}/spec.md"],
+        depends=["epic-context"],
+        gate="human",
+        layer="engineering",
+        optional=False,
+        skip_condition=None,
+    )
+
+    with patch("dag_executor.REPO_ROOT", root):
+        prompt, guardrail = compose_skill_prompt("test-plat", node, platform_dir, "001-test")
+        cmd = build_dispatch_cmd(node, prompt, "test-plat", guardrail)
+
+    # Verify command structure
+    assert cmd[0] == "claude"
+    # --bare only present with ANTHROPIC_API_KEY (not set in test env)
+    assert "--output-format" in cmd
+    assert "--system-prompt" in cmd
+    assert "--allowedTools" in cmd
+    assert "--disallowedTools" in cmd
+
+    # Verify system prompt contains skill body
+    sp_idx = cmd.index("--system-prompt")
+    system_prompt = cmd[sp_idx + 1]
+    assert "# Conventions" in system_prompt
+    assert "Pipeline Contract — Base" in system_prompt
+    assert "Pipeline Contract — Engineering" in system_prompt
+    assert "# Skill Instructions" in system_prompt
+    assert "Generate spec" in system_prompt
+
+    # Verify user prompt contains epic artifacts
+    assert "Pitch" in prompt or "pitch.md" in prompt
+    assert "Widget requirements" in prompt or "spec.md" in prompt
+
+    # Verify guardrail is appended
+    assert "--append-system-prompt" in cmd
+
+
+# --- T014: Tests for --quick DAG parsing ---
+
+
+def test_parse_dag_quick_mode_returns_three_nodes(tmp_path):
+    """parse_dag with mode='quick' returns only specify, implement, judge nodes."""
+    from dag_executor import parse_dag
+
+    platform_yaml = tmp_path / "platform.yaml"
+    platform_yaml.write_text(
+        "title: Test Platform\n"
+        "pipeline:\n"
+        "  epic_cycle:\n"
+        "    nodes:\n"
+        "      - id: epic-context\n"
+        "        skill: 'madruga:epic-context'\n"
+        "        outputs: ['{epic}/pitch.md']\n"
+        "        depends: []\n"
+        "        gate: human\n"
+        "        layer: business\n"
+        "      - id: specify\n"
+        "        skill: 'speckit.specify'\n"
+        "        outputs: ['{epic}/spec.md']\n"
+        "        depends: [epic-context]\n"
+        "        gate: human\n"
+        "        layer: business\n"
+        "      - id: clarify\n"
+        "        skill: 'speckit.clarify'\n"
+        "        outputs: ['{epic}/spec.md']\n"
+        "        depends: [specify]\n"
+        "        gate: human\n"
+        "        layer: business\n"
+        "        optional: true\n"
+        "      - id: plan\n"
+        "        skill: 'speckit.plan'\n"
+        "        outputs: ['{epic}/plan.md']\n"
+        "        depends: [specify]\n"
+        "        gate: human\n"
+        "        layer: engineering\n"
+        "      - id: tasks\n"
+        "        skill: 'speckit.tasks'\n"
+        "        outputs: ['{epic}/tasks.md']\n"
+        "        depends: [plan]\n"
+        "        gate: human\n"
+        "        layer: engineering\n"
+        "      - id: implement\n"
+        "        skill: 'speckit.implement'\n"
+        "        outputs: ['{epic}/implement-context.md']\n"
+        "        depends: [tasks]\n"
+        "        gate: auto\n"
+        "        layer: engineering\n"
+        "      - id: judge\n"
+        "        skill: 'madruga:judge'\n"
+        "        outputs: ['{epic}/judge-report.md']\n"
+        "        depends: [implement]\n"
+        "        gate: auto-escalate\n"
+        "        layer: engineering\n"
+        "      - id: reconcile\n"
+        "        skill: 'madruga:reconcile'\n"
+        "        outputs: ['{epic}/reconcile-report.md']\n"
+        "        depends: [judge]\n"
+        "        gate: human\n"
+        "        layer: engineering\n"
+        "  quick_cycle:\n"
+        "    nodes:\n"
+        "      - id: specify\n"
+        "        skill: 'speckit.specify'\n"
+        "        outputs: ['{epic}/spec.md']\n"
+        "        depends: []\n"
+        "        gate: human\n"
+        "        layer: business\n"
+        "      - id: implement\n"
+        "        skill: 'speckit.implement'\n"
+        "        outputs: ['{epic}/implement-context.md']\n"
+        "        depends: [specify]\n"
+        "        gate: auto\n"
+        "        layer: engineering\n"
+        "      - id: judge\n"
+        "        skill: 'madruga:judge'\n"
+        "        outputs: ['{epic}/judge-report.md']\n"
+        "        depends: [implement]\n"
+        "        gate: auto-escalate\n"
+        "        layer: engineering\n"
+    )
+
+    nodes = parse_dag(platform_yaml, mode="quick", epic="001-test-fix")
+
+    # Exactly 3 nodes in quick mode
+    assert len(nodes) == 3
+
+    node_ids = [n.id for n in nodes]
+    assert node_ids == ["specify", "implement", "judge"]
+
+    # Verify node properties are correctly parsed
+    specify = nodes[0]
+    assert specify.skill == "speckit.specify"
+    assert specify.gate == "human"
+    assert specify.depends == []
+
+    implement = nodes[1]
+    assert implement.skill == "speckit.implement"
+    assert implement.gate == "auto"
+    assert implement.depends == ["specify"]
+
+    judge = nodes[2]
+    assert judge.skill == "madruga:judge"
+    assert judge.gate == "auto-escalate"
+    assert judge.depends == ["implement"]
+
+
+def test_parse_dag_quick_mode_resolves_epic_templates(tmp_path):
+    """parse_dag with mode='quick' resolves {epic} templates in outputs."""
+    from dag_executor import parse_dag
+
+    platform_yaml = tmp_path / "platform.yaml"
+    platform_yaml.write_text(
+        "title: Test\n"
+        "pipeline:\n"
+        "  quick_cycle:\n"
+        "    nodes:\n"
+        "      - id: specify\n"
+        "        skill: 'speckit.specify'\n"
+        "        outputs: ['{epic}/spec.md']\n"
+        "        depends: []\n"
+        "        gate: human\n"
+        "        layer: business\n"
+        "      - id: implement\n"
+        "        skill: 'speckit.implement'\n"
+        "        outputs: ['{epic}/implement-context.md']\n"
+        "        depends: [specify]\n"
+        "        gate: auto\n"
+        "        layer: engineering\n"
+        "      - id: judge\n"
+        "        skill: 'madruga:judge'\n"
+        "        outputs: ['{epic}/judge-report.md']\n"
+        "        depends: [implement]\n"
+        "        gate: auto-escalate\n"
+        "        layer: engineering\n"
+    )
+
+    nodes = parse_dag(platform_yaml, mode="quick", epic="042-hotfix")
+
+    assert nodes[0].outputs == ["epics/042-hotfix/spec.md"]
+    assert nodes[1].outputs == ["epics/042-hotfix/implement-context.md"]
+    assert nodes[2].outputs == ["epics/042-hotfix/judge-report.md"]
+
+
+def test_parse_dag_quick_mode_errors_when_no_quick_cycle(tmp_path):
+    """parse_dag with mode='quick' exits with error if quick_cycle section missing."""
+    from dag_executor import parse_dag
+
+    platform_yaml = tmp_path / "platform.yaml"
+    platform_yaml.write_text(
+        "title: Test\n"
+        "pipeline:\n"
+        "  epic_cycle:\n"
+        "    nodes:\n"
+        "      - id: specify\n"
+        "        skill: 'speckit.specify'\n"
+        "        outputs: ['{epic}/spec.md']\n"
+        "        depends: []\n"
+        "        gate: human\n"
+        "        layer: business\n"
+    )
+
+    with pytest.raises(SystemExit, match="quick_cycle"):
+        parse_dag(platform_yaml, mode="quick", epic="001-test")
+
+
+# --- T015: Tests for quick-fix node dependencies ---
+
+
+def _make_quick_cycle_yaml(tmp_path):
+    """Helper: create platform.yaml with quick_cycle section."""
+    platform_yaml = tmp_path / "platform.yaml"
+    platform_yaml.write_text(
+        "title: Test\n"
+        "pipeline:\n"
+        "  quick_cycle:\n"
+        "    nodes:\n"
+        "      - id: specify\n"
+        "        skill: 'speckit.specify'\n"
+        "        outputs: ['{epic}/spec.md']\n"
+        "        depends: []\n"
+        "        gate: human\n"
+        "        layer: business\n"
+        "      - id: implement\n"
+        "        skill: 'speckit.implement'\n"
+        "        outputs: ['{epic}/implement-context.md']\n"
+        "        depends: [specify]\n"
+        "        gate: auto\n"
+        "        layer: engineering\n"
+        "      - id: judge\n"
+        "        skill: 'madruga:judge'\n"
+        "        outputs: ['{epic}/judge-report.md']\n"
+        "        depends: [implement]\n"
+        "        gate: auto-escalate\n"
+        "        layer: engineering\n"
+    )
+    return platform_yaml
+
+
+def test_quick_fix_dependency_chain(tmp_path):
+    """Quick-fix DAG has linear chain: specify → implement → judge."""
+    from dag_executor import parse_dag
+
+    platform_yaml = _make_quick_cycle_yaml(tmp_path)
+    nodes = parse_dag(platform_yaml, mode="quick", epic="099-bugfix")
+    node_map = {n.id: n for n in nodes}
+
+    # specify is the root — no dependencies
+    assert node_map["specify"].depends == []
+
+    # implement depends ONLY on specify
+    assert node_map["implement"].depends == ["specify"]
+
+    # judge depends ONLY on implement
+    assert node_map["judge"].depends == ["implement"]
+
+
+def test_quick_fix_topological_sort_order(tmp_path):
+    """topological_sort on quick-fix DAG produces specify → implement → judge."""
+    from dag_executor import parse_dag, topological_sort
+
+    platform_yaml = _make_quick_cycle_yaml(tmp_path)
+    nodes = parse_dag(platform_yaml, mode="quick", epic="099-bugfix")
+    sorted_nodes = topological_sort(nodes)
+
+    order = [n.id for n in sorted_nodes]
+    assert order == ["specify", "implement", "judge"]
+
+
+def test_quick_fix_no_skipped_nodes_in_dependencies(tmp_path):
+    """Quick-fix nodes do NOT depend on plan, tasks, clarify, analyze, qa, or reconcile."""
+    from dag_executor import parse_dag
+
+    platform_yaml = _make_quick_cycle_yaml(tmp_path)
+    nodes = parse_dag(platform_yaml, mode="quick", epic="099-bugfix")
+
+    skipped_nodes = {"plan", "tasks", "clarify", "analyze", "analyze-post", "qa", "reconcile", "epic-context"}
+    all_deps = set()
+    all_ids = set()
+    for n in nodes:
+        all_deps.update(n.depends)
+        all_ids.add(n.id)
+
+    # No skipped node appears as a dependency or as a node
+    assert all_deps.isdisjoint(skipped_nodes), f"Quick DAG references skipped nodes: {all_deps & skipped_nodes}"
+    assert all_ids.isdisjoint(skipped_nodes), f"Quick DAG contains skipped nodes: {all_ids & skipped_nodes}"

@@ -3,7 +3,7 @@
 
 PLATFORM := .specify/scripts/platform_cli.py
 
-.PHONY: help test lint ruff status seed portal-dev portal-build
+.PHONY: help test lint ruff format status seed portal-dev portal-build
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-18s %s\n", $$1, $$2}'
@@ -19,6 +19,9 @@ ruff: ## Run ruff check on Python scripts
 
 ruff-fix: ## Run ruff fix on Python scripts
 	python3 -m ruff check --fix .specify/scripts/
+
+format: ## Run ruff format on Python scripts
+	python3 -m ruff format .specify/scripts/
 
 status: ## Show pipeline status for all platforms
 	python3 $(PLATFORM) status --all

@@ -223,6 +223,28 @@ Present the full reconcile report (drift score, health table, impact radius, pro
 
 ---
 
+### Phase 9. Auto-Commit (Cascade Branch Seal)
+
+After user approval, stage, commit, and push all epic work so the next epic's worktree can cascade from a clean remote base:
+
+```bash
+git add -A
+git commit -m "feat: epic <NNN> <title> — full L2 cycle"
+git push -u origin HEAD
+```
+
+Report:
+- Commit hash and branch name
+- Files committed (count + summary by category)
+- Push result: `origin/<branch>` updated (or error details if push failed)
+- Confirmation: `epic/<platform>/<NNN-slug>` is ready to be the base for the next epic
+
+If nothing to commit: report "Working tree clean — nothing to commit. Branch already sealed."
+If `git commit` fails: report the error clearly, do NOT block handoff (commit is advisory, not a gate).
+If `git push` fails: report the error clearly, do NOT block handoff (push is advisory — cascade falls back to main if branch is not on remote).
+
+---
+
 ## Error Handling
 
 | Problem | Action |

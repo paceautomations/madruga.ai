@@ -64,7 +64,7 @@ SpecKit e Madruga operam em diretórios separados: SpecKit cria artifacts em `sp
 | 4 | Eliminação de `specs/` | Migrar `specs/001-*` e `specs/002-*` para `epics/` e **deletar `specs/`**. Corte limpo, sem README redirect. Git preserva histórico via `git log --follow`. | ADR-008 (MECE — um diretório por propósito) | Manter `specs/` com redirect — gambiarra que acumula |
 | 5 | Renaming de skills | Rename atômico (único commit): discuss→epic-context, adr-gen→adr, test-ai→qa, vision-one-pager→vision, folder-arch eliminado. Sem aliases/symlinks. | Pipeline DAG knowledge, ADR-008 | Aliases temporários — dívida técnica que nunca é paga |
 | 6 | Merge folder-arch em blueprint | Absorver conteúdo de `folder-structure.md` como seção "Folder Structure" no template do blueprint. Deletar skill `folder-arch.md`. DAG reduz de 14→13 nós. | Blueprint (já contém concerns transversais), ADR-008 | Manter deprecated — procrastinação |
-| 7 | HANDOFF blocks | Bloco YAML no footer do artefato gerado + campo `handoff_template` nos nós do DAG knowledge. Formato: `from`, `to`, `context` (texto livre), `blockers` (lista). | ADR-013 (decision gates), Pipeline DAG knowledge | Só no artefato — daemon futuro precisaria retrofit para routing automático |
+| 7 | HANDOFF blocks | Bloco YAML no footer do artefato gerado + campo `handoff_template` nos nós do DAG knowledge. Formato: `from`, `to`, `context` (texto livre), `blockers` (lista). | ADR-013 (decision gates), Pipeline DAG knowledge | Só no artefato — easter futuro precisaria retrofit para routing automático |
 | 8 | Epic cycle no SQLite | **Nova tabela `epic_cycle_nodes`** com FK para epic. Separada de `pipeline_nodes` (L1). Query limpa, schema explícito. | ADR-012 (SQLite WAL), Domain model §Execution | Expandir `pipeline_nodes` com colunas — polui queries, mistura 13 nós fixos com N×10 nós variáveis |
 | 9 | `/pipeline` unificado | Merge de pipeline-status + pipeline-next em 1 skill. Lê SQLite para ambos os níveis (L1 + L2). Mermaid dinâmico com cores por status. | ADR-012 (SQLite WAL), Containers §Dashboard | Filesystem para L2 — inconsistente com L1 que já usa SQLite |
 | 10 | Source of truth para status | `check-platform-prerequisites.sh --epic NNN --use-db` lê SQLite. Sem `--use-db`, fallback para filesystem (existência de arquivos). Consistente com comportamento L1 existente. | ADR-004, ADR-012 | Só filesystem — perde observabilidade do SQLite |
@@ -94,7 +94,7 @@ handoff:
   context: "Spec deve endereçar as decisões capturadas acima. Constraints do blueprint aplicam."
   blockers: []
 ```
-**Rationale:** Minimalista mas completo. `context` é texto livre para o próximo skill. `blockers` lista impedimentos não resolvidos. Duplicado no DAG knowledge como `handoff_template` por nó para routing futuro do daemon.
+**Rationale:** Minimalista mas completo. `context` é texto livre para o próximo skill. `blockers` lista impedimentos não resolvidos. Duplicado no DAG knowledge como `handoff_template` por nó para routing futuro do easter.
 
 ### GA4. Migração de specs/ — mover vs redirect
 

@@ -21,6 +21,46 @@ def _branch_exists_on_remote(repo_path: Path, branch: str) -> bool:
     return bool(result.stdout.strip())
 
 
+def _get_cascade_base(repo_path: Path, platform_name: str, fallback: str) -> str:
+    """Return the best base ref for a new epic worktree.
+
+    Queries the DB for the last shipped epic's branch; if it exists on remote,
+    returns ``origin/<branch>`` (cascade). Falls back to ``origin/<fallback>``
+    on any error or if the branch is gone from remote.
+    """
+    try:
+        from config import DB_PATH
+        from db import get_conn
+
+        with get_conn(DB_PATH) as conn:
+            row = conn.execute(
+                """SELECT branch_name FROM epics
+                   WHERE platform_id = ? AND status = 'shipped' AND branch_name IS NOT NULL
+                   ORDER BY delivered_at DESC, rowid DESC
+                   LIMIT 1""",
+                (platform_name,),
+            ).fetchone()
+
+        if row and row["branch_name"]:
+            candidate = row["branch_name"]
+            if _branch_exists_on_remote(repo_path, candidate):
+                log.info(
+                    "Cascade base: '%s' → last shipped branch '%s'",
+                    platform_name,
+                    candidate,
+                )
+                return f"origin/{candidate}"
+            log.info(
+                "Cascade base: '%s' not on remote — fallback to origin/%s",
+                candidate,
+                fallback,
+            )
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Cascade base lookup failed (%s) — using origin/%s", exc, fallback)
+
+    return f"origin/{fallback}"
+
+
 def create_worktree(platform_name: str, epic_slug: str) -> Path:
     """Create an isolated git worktree for an epic. Returns worktree path."""
     from ensure_repo import (
@@ -77,22 +117,10 @@ def create_worktree(platform_name: str, epic_slug: str) -> Path:
             check=True,
         )
     else:
-        log.info(
-            "Creating worktree: %s (branch: %s from origin/%s)",
-            wt_path,
-            branch,
-            base_branch,
-        )
+        cascade_base = _get_cascade_base(repo_path, platform_name, base_branch)
+        log.info("Creating worktree: %s (branch: %s from %s)", wt_path, branch, cascade_base)
         subprocess.run(
-            [
-                "git",
-                "worktree",
-                "add",
-                str(wt_path),
-                "-b",
-                branch,
-                f"origin/{base_branch}",
-            ],
+            ["git", "worktree", "add", str(wt_path), "-b", branch, cascade_base],
             cwd=str(repo_path),
             check=True,
         )

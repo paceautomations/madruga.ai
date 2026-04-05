@@ -1,12 +1,13 @@
 ---
 id: 021
 title: "Pipeline Intelligence"
-status: planned
+status: shipped
 appetite: 2w
 priority: P3
 depends_on: [017]
 blocks: []
 updated: 2026-04-04
+delivered_at: 2026-04-05
 ---
 # Epic 021: Pipeline Intelligence
 
@@ -161,14 +162,14 @@ Apos `reconcile` completar um epic, adicionar step opcional que avalia se o road
 
 ## Acceptance Criteria
 
-- [ ] `pipeline_runs` populada com `tokens_in`, `tokens_out`, `cost_usd` apos cada dispatch
-- [ ] Output com zero tool calls gera WARNING no log (hallucination guard)
-- [ ] `/quick-fix` skill existe e executa ciclo comprimido: specify → implement → judge
-- [ ] `--quick` flag funciona no dag_executor.py
-- [ ] `roadmap-reassess` node existe como opcional no epic_cycle
-- [ ] Portal tab "Cost" (epic 017) mostra dados reais de custo
-- [ ] `make test` passa
-- [ ] `make ruff` passa
+- [X] `pipeline_runs` populada com `tokens_in`, `tokens_out`, `cost_usd` apos cada dispatch
+- [X] Output com zero tool calls gera WARNING no log (hallucination guard)
+- [X] `/quick-fix` skill existe e executa ciclo comprimido: specify → implement → judge
+- [X] `--quick` flag funciona no dag_executor.py
+- [X] `roadmap-reassess` node existe como opcional no epic_cycle
+- [X] Portal tab "Cost" (epic 017) mostra dados reais de custo
+- [X] `make test` passa
+- [X] `make ruff` passa
 
 ## Implementation Context
 

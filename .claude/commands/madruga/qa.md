@@ -299,7 +299,7 @@ If no tooling is detected at all: `⏭️ L1: No static analysis tools configure
    | Entrypoint type | Smoke test | Success criteria |
    |-----------------|-----------|------------------|
    | Script with argparse | `timeout 5 python3 <file> --help 2>&1` | Exit 0, no ImportError |
-   | daemon.py | `timeout 10 python3 <file> 2>&1` | Contains "Uvicorn running" |
+   | easter.py | `timeout 10 python3 <file> 2>&1` | Contains "Uvicorn running" |
    | Other | `python3 -c "import importlib.util; s=importlib.util.spec_from_file_location('_t','<file>'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)"` | No ImportError |
 
    **Why this matters**: pytest caches stdlib modules in `sys.modules` before test fixtures inject script paths via `sys.path.insert`. A file shadowing a stdlib module (e.g. `platform.py`) passes all pytest tests but crashes on real startup. This step catches that class of bug.

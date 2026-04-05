@@ -104,7 +104,7 @@ graph LR
     subgraph local["WSL2 Local"]
         portal["Portal\nAstro :4321"]
         cli["Platform CLI\nplatform_cli.py"]
-        daemon["Daemon\nFastAPI :8040"]
+        easter["Easter\nFastAPI :8040"]
         dag["DAG Executor\ndag_executor.py"]
         telegram_bot["Telegram Bot\naiogram"]
         sqlite["SQLite\nmadruga.db"]
@@ -119,17 +119,17 @@ graph LR
         likec4["LikeC4 CLI"]
     end
 
-    daemon --> dag
+    easter --> dag
     dag --> claude
-    daemon --> telegram_bot
+    easter --> telegram_bot
     telegram_bot --> telegram_api
-    daemon --> sqlite
+    easter --> sqlite
     dag --> sqlite
     portal --> fs
     portal --> sqlite
     cli --> fs
     cli --> sqlite
-    daemon --> sentry
+    easter --> sentry
     dag --> github
     cli --> likec4
 ```
@@ -137,9 +137,9 @@ graph LR
 | Componente | Runtime | Porta/Protocolo | Scaling |
 |------------|---------|-----------------|---------|
 | Portal (Astro + Starlight) | Node.js 20+ | :4321 (dev) / SSG | Single instance |
-| Daemon (FastAPI + uvicorn) | Python 3.12+ | :8040 | Single instance |
-| DAG Executor | Python 3.12+ | Lib (invocado pelo daemon) | Single instance |
-| Telegram Bot (aiogram) | Python 3.12+ (integrado ao daemon) | HTTPS outbound | Single instance |
+| Easter (FastAPI + uvicorn) | Python 3.12+ | :8040 | Single instance |
+| DAG Executor | Python 3.12+ | Lib (invocado pelo easter) | Single instance |
+| Telegram Bot (aiogram) | Python 3.12+ (integrado ao easter) | HTTPS outbound | Single instance |
 | Platform CLI | Python 3.12+ | CLI | N/A |
 | SQLite BD | SQLite 3 WAL mode | File (.pipeline/madruga.db) | Single writer, N readers |
 | LikeC4 serve | Node.js (likec4 CLI) | :5173 (dev) | Single instance |
@@ -195,5 +195,5 @@ N/A — sistema nao processa dados pessoais. Artefatos sao documentacao tecnica.
 | AUTO marker | Marcador `<!-- AUTO:name -->` para conteudo auto-gerado | Pipeline |
 | Drift score | Metrica 0.0-1.0 de divergencia implementacao vs arquitetura | Runtime |
 | 1-way door | Decisao irreversivel que requer aprovacao humana | Decisions |
-| 2-way door | Decisao reversivel, auto-aprovavel pelo daemon | Decisions |
+| 2-way door | Decisao reversivel, auto-aprovavel pelo easter | Decisions |
 | Constitution | Documento com regras que governam artefatos gerados | Governance |

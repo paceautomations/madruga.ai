@@ -231,7 +231,7 @@ Comparing `madruga-ai-vision.md` (the target) with current implementation state.
 |-----------------|--------|-----|
 | 24-skill pipeline (L1 13 + L2 11) | **Implemented** | All 31 skill files exist (22 madruga + 9 speckit) |
 | SQLite state store | **Implemented** | 13+ tables, WAL, migrations, FTS5 |
-| Daemon (24/7 autonomous) | **Partial** | `daemon.py` exists (528 LOC) but lives in madruga.ai, not consolidated from `general/services/madruga-ai/`. Engine (10K LOC + 10K tests) not yet migrated |
+| Easter (24/7 autonomous) | **Partial** | `easter.py` exists (528 LOC) but lives in madruga.ai, not consolidated from `general/services/madruga-ai/`. Engine (10K LOC + 10K tests) not yet migrated |
 | LikeC4 architecture-as-code | **Implemented** | Model files, vision-build.py, AUTO markers |
 | Portal Starlight | **Implemented** | Astro + Starlight + LikeC4 React, auto-discovery |
 | Copier template | **Implemented** | Full scaffolding + `copier update` sync |

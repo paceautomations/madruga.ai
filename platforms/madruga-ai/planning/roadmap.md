@@ -11,7 +11,7 @@ updated: 2026-04-02
 ## MVP
 
 **MVP Epics:** 012 + 013 + 014 + 015 + 016 (todos os candidatos)
-**MVP Criterion:** Pipeline executa pelo menos 1 epic completo (pitch-to-PR) em repo externo (Fulano) com autonomia — human gates notificados via Telegram, specs revisadas por Subagent Judge, daemon operando 24/7.
+**MVP Criterion:** Pipeline executa pelo menos 1 epic completo (pitch-to-PR) em repo externo (Fulano) com autonomia — human gates notificados via Telegram, specs revisadas por Subagent Judge, easter operando 24/7.
 **Total MVP Appetite:** ~14w (team size: 1)
 
 ---
@@ -24,7 +24,7 @@ updated: 2026-04-02
 | Tempo de resposta a gates | Tempo medio entre notificacao e aprovacao de human gate | ∞ (manual) | < 30min | 014 |
 | Qualidade de specs autonomas | % specs com review multi-perspectiva antes de implement | 0% | 100% | 015 |
 | Pipeline cross-repo | Ciclos L2 executados em repos externos | 0 | Fulano operacional | 012 |
-| Uptime do pipeline | Horas/dia de daemon operacional | 0 | 24h | 016 |
+| Uptime do pipeline | Horas/dia de easter operacional | 0 | 24h | 016 |
 
 ---
 
@@ -45,7 +45,7 @@ gantt
     013 DAG Executor + Bridge    :done, e013, 2026-03-31, 1d
     014 Telegram Notifications   :done, e014, 2026-04-01, 1d
     015 Subagent Judge           :done, e015, 2026-04-01, 1d
-    016 Daemon 24/7              :done, e016, 2026-04-01, 1d
+    016 Easter 24/7              :done, e016, 2026-04-01, 1d
     section Post-MVP
     017 Observability & Evals    :done, e017, 2026-04-04, 1d
 ```
@@ -62,7 +62,7 @@ gantt
 | 013 | DAG Executor + SpeckitBridge | Custom DAG executor: Kahn's topological sort, claude -p dispatch, human gates (CLI pause/resume), retry/circuit breaker/watchdog. 494 LOC + 110 LOC extensions. 43 testes. | **shipped** | 2026-03-31 |
 | 014 | Telegram Notifications | Bot Telegram standalone (aiogram 3.x): notifica human gates pendentes, inline keyboard approve/reject, health check, backoff exponencial, offset persistence. Migration 008. 28 testes. | **shipped** | 2026-04-01 |
 | 015 | Subagent Judge + Decision Classifier | Tech-reviewers: 4 personas paralelas (Arch Reviewer, Bug Hunter, Simplifier, Stress Tester) + Judge pass. Decision Classifier (risk score). Substitui verify (L2) e Tier 3 (L1). YAML config extensivel. 47 testes. | **shipped** | 2026-04-01 |
-| 016 | Daemon 24/7 | FastAPI + asyncio daemon: dag_scheduler (poll epics, dispatch pipeline), Telegram integration (gate approvals via inline keyboard), health_checker (degradation state machine + systemd watchdog), ntfy.sh fallback, Sentry. Endpoints /health + /status. systemd unit file. 393 LOC daemon + ~200 LOC async dag_executor. 221 testes. | **shipped** | 2026-04-01 |
+| 016 | Easter 24/7 | FastAPI + asyncio easter: dag_scheduler (poll epics, dispatch pipeline), Telegram integration (gate approvals via inline keyboard), health_checker (degradation state machine + systemd watchdog), ntfy.sh fallback, Sentry. Endpoints /health + /status. systemd unit file. 393 LOC easter + ~200 LOC async dag_executor. 221 testes. | **shipped** | 2026-04-01 |
 | 017 | Observability, Tracing & Evals | Traces hierarquicos por pipeline run (trace → spans), eval scoring heuristico (4 dimensoes: quality, adherence, completeness, cost_efficiency), API REST (/api/traces, /api/stats, /api/evals, /api/export/csv), portal React (4 tabs: Runs, Traces, Evals, Cost), cleanup automatico 90 dias, context threading no DAG (analyze→judge→qa→reconcile), auto-escalate gate. Migration 010. eval_scorer.py + observability_export.py. 393 testes. | **shipped** | 2026-04-04 |
 
 ---
@@ -78,7 +78,7 @@ gantt
     013 DAG Executor + Bridge    :done, e013, 2026-03-31, 1d
     014 Telegram Notifications   :done, e014, 2026-04-01, 1d
     015 Subagent Judge           :done, e015, 2026-04-01, 1d
-    016 Daemon 24/7              :done, e016, 2026-04-01, 1d
+    016 Easter 24/7              :done, e016, 2026-04-01, 1d
     section Post-MVP
     017 Observability & Evals    :done, e017, 2026-04-04, 1d
 ```
@@ -91,8 +91,8 @@ gantt
 | 2 | 013 DAG Executor + SpeckitBridge | 6w | Alto | Value: runtime funcional. Real: ~1d. Infraestrutura existente (db.py, post_save.py) + decisoes bem capturadas em context.md reduziram escopo. |
 | 3 | 014 Telegram Notifications | 2w (real: 1d) | Baixo | Depende da gate state machine de 013. aiogram e framework maduro — baixo risco tecnico. Appetite reduzido: scope claro + framework maduro. |
 | 3 | 015 Subagent Judge + Decision Classifier | 2w (real: 1d) | Medio→Baixo | Paralelo com 014. Agent tool ja provado. Knowledge files = maioria do deliverable. Calibracao validada com 7 ADRs reais. |
-| 4 | 016 Daemon 24/7 | 2w (real: 1d) | Baixo | Ultimo — monta em cima de tudo. Mecanico: asyncio event loop + health checks + systemd. Appetite reduzido: modulos existentes (dag_executor, telegram_bot) ja tinham 90% da logica. |
-| 5 | 017 Observability, Tracing & Evals | 2w (real: 1d) | Baixo | Primeiro post-MVP. Infraestrutura completa (daemon, db.py, portal). Heuristicas simples — sem ML. Appetite reduzido: reuso de patterns existentes (db CRUD, daemon endpoints, portal React). |
+| 4 | 016 Easter 24/7 | 2w (real: 1d) | Baixo | Ultimo — monta em cima de tudo. Mecanico: asyncio event loop + health checks + systemd. Appetite reduzido: modulos existentes (dag_executor, telegram_bot) ja tinham 90% da logica. |
+| 5 | 017 Observability, Tracing & Evals | 2w (real: 1d) | Baixo | Primeiro post-MVP. Infraestrutura completa (easter, db.py, portal). Heuristicas simples — sem ML. Appetite reduzido: reuso de patterns existentes (db CRUD, easter endpoints, portal React). |
 
 > 014 e 015 podem rodar em paralelo apos 013. Gantt mostra sequencial por team size = 1.
 
@@ -106,7 +106,7 @@ graph LR
     E013["013 DAG Executor\n+ SpeckitBridge (6w)"]
     E014["014 Telegram\nNotifications (2w)"]
     E015["015 Subagent Judge\n+ Decision Classifier (2w)"]
-    E016["016 Daemon 24/7 (2w)"]
+    E016["016 Easter 24/7 (2w)"]
     E017["017 Observability\nTracing & Evals (2w)"]
 
     E012 --> E013
@@ -125,7 +125,7 @@ graph LR
 |-----------|-------|---------------------|------------|
 | **Fulano Operacional** | 012 | `speckit.implement` executa em repo Fulano via worktree, PR criado com `gh` | Semana 2 | Tooling pronto (ensure_repo, worktree, implement_remote). Falta teste end-to-end com Fulano real. |
 | **Runtime Funcional** | 012, 013 | DAG executor processa 1 pipeline L1 completo via CLI, human gates pausam/resumem corretamente | Semana 8 | Tooling pronto (ensure_repo, worktree, dag_executor). Falta teste end-to-end com claude -p real. |
-| **Autonomia MVP** | 012-016 | 1 epic completo (pitch-to-PR) processado pelo daemon em repo Fulano, com Telegram notifications e Subagent Judge review | **Alcancado 2026-04-01** — todos os 5 epics MVP shipped. MADRUGA_MODE=auto habilita execucao end-to-end. Falta validacao end-to-end com Fulano real. |
+| **Autonomia MVP** | 012-016 | 1 epic completo (pitch-to-PR) processado pelo easter em repo Fulano, com Telegram notifications e Subagent Judge review | **Alcancado 2026-04-01** — todos os 5 epics MVP shipped. MADRUGA_MODE=auto habilita execucao end-to-end. Falta validacao end-to-end com Fulano real. |
 
 ---
 

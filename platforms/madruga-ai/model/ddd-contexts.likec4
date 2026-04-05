@@ -56,9 +56,9 @@ model {
 
   execution = boundedContext 'Execution' {
     #supporting
-    description 'Dominio supporting: daemon asyncio (FastAPI), DAG executor com 3 modos de operacao (MADRUGA_MODE). Executa specs autonomamente.'
+    description 'Dominio supporting: easter asyncio (FastAPI), DAG executor com 3 modos de operacao (MADRUGA_MODE). Executa specs autonomamente.'
 
-    daemonProcess = module 'Daemon Process' {
+    easterProcess = module 'Easter Process' {
       description 'Processo asyncio 24/7 (FastAPI + uvicorn): DAG scheduler, Telegram polling, health checks com degradation state machine, gate poller. Endpoints /health + /status'
     }
 
@@ -114,7 +114,7 @@ model {
     description 'Dominio generico: dashboard, health checks, metricas SQLite, Sentry. Visibilidade sobre estado e performance do sistema.'
 
     healthCheck = module 'Health Check' {
-      description 'Verifica saude do sistema: daemon alive, SQLite acessivel, Telegram Bot reachable, git status limpo'
+      description 'Verifica saude do sistema: easter alive, SQLite acessivel, Telegram Bot reachable, git status limpo'
     }
 
     dashboardWeb = module 'Dashboard Web' {

@@ -26,14 +26,20 @@ Usage:
 from __future__ import annotations
 
 import json
+import logging
 import re
 import subprocess
 import sys
+from functools import lru_cache
 from pathlib import Path
 
 import yaml
 
 from config import PLATFORMS_DIR, PORTAL_DIR, REPO_ROOT, TEMPLATE_DIR  # noqa: F401
+from log_utils import setup_logging as _setup_logging
+
+log = logging.getLogger("platform_cli")
+
 
 CANONICAL_SPEC = TEMPLATE_DIR / "template" / "model" / "spec.likec4"
 LIKEC4_DIAGRAM_TSX = PORTAL_DIR / "src" / "components" / "viewers" / "LikeC4Diagram.tsx"
@@ -59,17 +65,18 @@ EPIC_REQUIRED_FIELDS = ["title", "status"]
 
 
 def _ok(msg: str) -> None:
-    print(f"  [ok] {msg}")
+    log.info(msg)
 
 
 def _warn(msg: str) -> None:
-    print(f"  [warn] {msg}")
+    log.warning(msg)
 
 
 def _error(msg: str) -> None:
-    print(f"  [error] {msg}")
+    log.error(msg)
 
 
+@lru_cache(maxsize=None)
 def _discover_platforms() -> list[str]:
     """Return sorted list of platform names that have platform.yaml."""
     return sorted(d.name for d in PLATFORMS_DIR.iterdir() if d.is_dir() and (d / "platform.yaml").exists())
@@ -167,7 +174,7 @@ def cmd_new(name: str) -> None:
         sys.exit(1)
 
     # 1. Scaffold via copier
-    print(f"Scaffolding platform '{name}'...")
+    log.info("Scaffolding platform '%s'...", name)
     result = subprocess.run(
         ["copier", "copy", str(TEMPLATE_DIR), str(dst), "--trust"],
         check=False,
@@ -337,7 +344,7 @@ def cmd_sync(name: str | None) -> None:
             _warn(f"{p}: no .copier-answers.yml, skipping")
             continue
 
-        print(f"Syncing {p}...")
+        log.info("Syncing %s...", p)
         result = subprocess.run(
             ["copier", "update", str(pdir), "--trust", "--defaults"],
             check=False,
@@ -364,7 +371,7 @@ def cmd_register(name: str) -> None:
     # Validate LikeC4 model
     model_dir = pdir / "model"
     if model_dir.exists():
-        print(f"Validating LikeC4 model at {model_dir}...")
+        log.info("Validating LikeC4 model at %s...", model_dir)
         result = subprocess.run(
             ["npx", "likec4", "build", str(model_dir)],
             capture_output=True,
@@ -376,7 +383,7 @@ def cmd_register(name: str) -> None:
         else:
             _warn(f"LikeC4 model has warnings: {result.stderr[:200]}")
 
-    print(f"\nPlatform '{name}' registered. Run: cd portal && npm run dev")
+    log.info("Platform '%s' registered. Run: cd portal && npm run dev", name)
 
 
 # -- Main --
@@ -396,11 +403,11 @@ def cmd_repair_timestamps(name: str) -> None:
         repaired = repair_timestamps(conn, name)
 
     if repaired:
-        print(f"=== {name}: repaired {len(repaired)} node(s) ===")
+        log.info("%s: repaired %d node(s)", name, len(repaired))
         for r in repaired:
-            print(f"  {r['node_id']}: {r['old']} → {r['new']}")
+            log.info("%s: %s → %s", r["node_id"], r["old"], r["new"])
     else:
-        print(f"=== {name}: all timestamps OK ===")
+        log.info("%s: all timestamps OK", name)
 
 
 def cmd_check_stale(name: str) -> None:
@@ -426,12 +433,12 @@ def cmd_check_stale(name: str) -> None:
         stale = get_stale_nodes(conn, name, dag_edges)
 
     if stale:
-        print(f"=== {name}: {len(stale)} stale node(s) ===")
+        log.warning("%s: %d stale node(s)", name, len(stale))
         for s in stale:
-            print(f"  [stale] {s['node_id']} — {s['stale_reason']}")
+            log.warning("stale: %s — %s", s["node_id"], s["stale_reason"])
         sys.exit(1)
     else:
-        print(f"=== {name}: no stale nodes ===")
+        log.info("%s: no stale nodes", name)
 
 
 def cmd_import_adrs(name: str) -> None:
@@ -446,7 +453,7 @@ def cmd_import_adrs(name: str) -> None:
         migrate(conn)
         upsert_platform(conn, name, name=name, repo_path=f"platforms/{name}")
         count = import_all_adrs(conn, name, decisions_dir)
-    print(f"Imported {count} ADRs for platform '{name}'")
+    log.info("Imported %d ADRs for platform '%s'", count, name)
 
 
 def cmd_export_adrs(name: str) -> None:
@@ -457,7 +464,7 @@ def cmd_export_adrs(name: str) -> None:
     with get_conn() as conn:
         migrate(conn)
         count = sync_decisions_to_markdown(conn, name, decisions_dir)
-    print(f"Exported {count} decisions to {decisions_dir}")
+    log.info("Exported %d decisions to %s", count, decisions_dir)
 
 
 def cmd_import_memory() -> None:
@@ -476,7 +483,7 @@ def cmd_import_memory() -> None:
         for mem_dir in candidates:
             if mem_dir.is_dir():
                 total += import_all_memories(conn, mem_dir)
-    print(f"Imported {total} memory entries")
+    log.info("Imported %d memory entries", total)
 
 
 def cmd_export_memory() -> None:
@@ -491,7 +498,7 @@ def cmd_export_memory() -> None:
     with get_conn() as conn:
         migrate(conn)
         count = sync_memories_to_markdown(conn, candidates[0])
-    print(f"Exported {count} memory entries to {candidates[0]}")
+    log.info("Exported %d memory entries to %s", count, candidates[0])
 
 
 def cmd_use(name: str) -> None:
@@ -613,6 +620,7 @@ def cmd_status(name: str | None, show_all: bool, as_json: bool, output_file: str
                         "status": epic.get("status", "proposed"),
                         "total": epic_status.get("total_nodes", 0),
                         "done": epic_status.get("done", 0),
+                        "skipped": epic_status.get("skipped", 0),
                         "pending": epic_status.get("pending", 0),
                         "progress_pct": epic_status.get("progress_pct", 0),
                         "nodes": enodes,
@@ -650,7 +658,8 @@ def cmd_status(name: str | None, show_all: bool, as_json: bool, output_file: str
             for p in result["platforms"]:
                 print(f"\n{'=' * 60}")
                 print(f"  {p['title']}  ({p['lifecycle']})")
-                print(f"  L1 Progress: {p['l1']['done']}/{p['l1']['total']} ({p['l1']['progress_pct']}%)")
+                completed = p["l1"]["done"] + p["l1"].get("skipped", 0)
+                print(f"  L1 Progress: {completed}/{p['l1']['total']} ({p['l1']['progress_pct']}%)")
                 print(f"{'=' * 60}")
                 print(f"  {'Node':<25} {'Status':<10} {'Layer':<15} {'Gate'}")
                 print(f"  {'-' * 55}")
@@ -660,7 +669,8 @@ def cmd_status(name: str | None, show_all: bool, as_json: bool, output_file: str
                 if p["l2"]["epics"]:
                     print("\n  L2 Epics:")
                     for e in p["l2"]["epics"]:
-                        print(f"    {e['id']}: {e['title']} — {e['done']}/{e['total']} ({e['progress_pct']}%)")
+                        epic_completed = e["done"] + e.get("skipped", 0)
+                        print(f"    {e['id']}: {e['title']} — {epic_completed}/{e['total']} ({e['progress_pct']}%)")
 
 
 def _build_parser():  # -> argparse.ArgumentParser
@@ -669,6 +679,12 @@ def _build_parser():  # -> argparse.ArgumentParser
     parser = argparse.ArgumentParser(
         prog="platform_cli.py",
         description="Unified CLI for managing madruga.ai platforms.",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        dest="json_mode",
+        help="Emit structured NDJSON log output (for CI consumption)",
     )
     sub = parser.add_subparsers(dest="command", help="Available commands")
 
@@ -759,6 +775,8 @@ def main() -> None:
     parser = _build_parser()
     args = parser.parse_args()
 
+    _setup_logging(args.json_mode)
+
     if not args.command:
         parser.print_help()
         sys.exit(1)
@@ -767,6 +785,7 @@ def main() -> None:
         cmd_list()
     elif args.command == "new":
         cmd_new(args.name)
+        _discover_platforms.cache_clear()
     elif args.command == "lint":
         if not args.name and not args.lint_all:
             _error("Provide a platform name or --all")
@@ -774,6 +793,7 @@ def main() -> None:
         cmd_lint(args.name, lint_all=args.lint_all)
     elif args.command == "sync":
         cmd_sync(args.name)
+        _discover_platforms.cache_clear()
     elif args.command == "register":
         cmd_register(args.name)
     elif args.command == "check-stale":

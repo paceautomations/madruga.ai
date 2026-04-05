@@ -13,7 +13,7 @@ graph TB
     subgraph users["Usuarios"]
         dev["Engenheiro / Arquiteto"]
         claude["Claude Code (interativo)"]
-        daemon_user["Daemon (autonomo)"]
+        easter_user["Easter (autonomo)"]
     end
 
     subgraph portal_group["Portal (SSG)"]
@@ -27,7 +27,7 @@ graph TB
     end
 
     subgraph runtime["Runtime Engine (Python asyncio)"]
-        daemon["Daemon<br/>daemon.py<br/>:8040"]
+        easter["Easter<br/>easter.py<br/>:8040"]
         dag_executor["DAG Executor<br/>dag_executor.py"]
     end
 
@@ -68,13 +68,13 @@ graph TB
     vision_build --> likec4_cli
     vision_build --> filesystem
 
-    daemon --> dag_executor
+    easter --> dag_executor
     dag_executor --> claude_api
     dag_executor --> judge
 
     judge --> claude_api
 
-    daemon --> sqlite
+    easter --> sqlite
     dag_executor --> sqlite
     dashboard --> sqlite
     sentry_sdk --> sentry_cloud
@@ -82,7 +82,7 @@ graph TB
     dag_executor --> github
 
     style portal fill:#E1F5FE
-    style daemon fill:#FFF3E0
+    style easter fill:#FFF3E0
     style dashboard fill:#F3E5F5
     style sqlite fill:#E8F5E9
     style claude_api fill:#FFEBEE
@@ -95,8 +95,8 @@ graph TB
 | 1 | **Portal** | Astro + Starlight + LikeC4 React | Site SSG de documentacao de arquitetura com diagramas interativos; auto-descobre todas as plataformas | :4321 |
 | 2 | **Platform CLI** | Python (platform_cli.py) | Gerencia plataformas: new, lint, sync, register, status, import/export | CLI |
 | 3 | **Vision Build** | Python (vision-build.py) | Exporta LikeC4 JSON e popula tabelas AUTO em markdown | CLI |
-| 4 | **SpecKit Skills** | Markdown (.claude/commands/) | 24 skills consumidos interativamente pelo Claude Code ou autonomamente pelo daemon | Claude Code |
-| 5 | **Daemon** | Python asyncio (daemon.py) + FastAPI | Processo 24/7 que orquestra execucao autonoma do pipeline. DAG scheduler, Telegram polling, health checks, gate poller. Endpoints /health + /status | :8040 |
+| 4 | **SpecKit Skills** | Markdown (.claude/commands/) | 24 skills consumidos interativamente pelo Claude Code ou autonomamente pelo easter | Claude Code |
+| 5 | **Easter** | Python asyncio (easter.py) + FastAPI | Processo 24/7 que orquestra execucao autonoma do pipeline. DAG scheduler, Telegram polling, health checks, gate poller. Endpoints /health + /status | :8040 |
 | 6 | **DAG Executor** | Python (dag_executor.py) | Le pipeline DAG de platform.yaml, resolve dependencias (topological sort), despacha nodes via claude -p, gerencia human gates (3 modos: manual/interactive/auto via MADRUGA_MODE), retry com circuit breaker | Lib |
 | 7 | **Subagent Judge** | Python + Claude Code Agent tool | Subagent Paralelo + Judge Pattern (ADR-019): 4 personas (Architecture Reviewer, Bug Hunter, Simplifier, Stress Tester) + 1 juiz que filtra por Accuracy/Actionability/Severity. Output: BLOCKER/WARNING/NIT | Lib |
 | 8 | **State Store** | SQLite WAL (madruga.db) | Persistencia de pipeline state, epics, decisions, memory, provenance, metrics | File |
@@ -109,7 +109,7 @@ graph TB
 
 | NFR | Target | Mecanismo | Container |
 |-----|--------|-----------|-----------|
-| **Disponibilidade** | 24/7 (daemon) | asyncio event loop com health check | Daemon |
+| **Disponibilidade** | 24/7 (easter) | asyncio event loop com health check | Easter |
 | **Resiliencia** | 3 retries por fase | Retry com backoff + marcacao `blocked` | DAG Executor |
 | **DAG resume** | < 5s retomada | SQLite checkpoint por node, resume CLI | DAG Executor |
 | **Build time** | < 30s (portal SSG) | Astro static build + symlinks | Portal |

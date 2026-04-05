@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextvars
 import json
 import logging
 import os
@@ -41,6 +42,10 @@ from config import REPO_ROOT  # noqa: E402
 
 log = logging.getLogger(__name__)
 
+
+from log_utils import setup_logging as _setup_logging  # noqa: E402
+
+
 DEFAULT_TIMEOUT = int(os.environ.get("MADRUGA_EXECUTOR_TIMEOUT", "3000"))
 RETRY_BACKOFFS = [5, 10, 20]
 CB_MAX_FAILURES = 5
@@ -49,12 +54,106 @@ HUMAN_GATES = frozenset({"human", "1-way-door"})
 VALID_GATE_MODES = frozenset({"manual", "interactive", "auto"})
 DEFAULT_GATE_MODE = os.environ.get("MADRUGA_MODE", "manual")
 DISALLOWED_TOOLS = "Bash(git checkout:*) Bash(git branch -:*) Bash(git switch:*)"
+# Quick mode flag — set by run_pipeline/run_pipeline_async when --quick is active.
+# Checked by build_dispatch_cmd to inject quick-fix context into system prompt.
+# Uses contextvars for async safety (avoids shared mutable state between coroutines).
+
+_quick_mode_ctx: contextvars.ContextVar[bool] = contextvars.ContextVar("_quick_mode", default=False)
 # Upstream reports injected into downstream node prompts (context threading)
 REPORT_CONTEXT: dict[str, list[str]] = {
     "judge": ["analyze-post-report.md"],
     "qa": ["analyze-post-report.md", "judge-report.md"],
     "reconcile": ["judge-report.md", "qa-report.md"],
 }
+
+# ── Bare-mode dispatch configuration ──────────────────────────────
+# Maps node.skill → skill .md file path (relative to REPO_ROOT)
+SKILL_FILE_MAP: dict[str, str] = {
+    # L1 — platform foundation
+    "madruga:platform-new": ".claude/commands/madruga/platform-new.md",
+    "madruga:vision": ".claude/commands/madruga/vision.md",
+    "madruga:solution-overview": ".claude/commands/madruga/solution-overview.md",
+    "madruga:business-process": ".claude/commands/madruga/business-process.md",
+    "madruga:tech-research": ".claude/commands/madruga/tech-research.md",
+    "madruga:codebase-map": ".claude/commands/madruga/codebase-map.md",
+    "madruga:adr": ".claude/commands/madruga/adr.md",
+    "madruga:blueprint": ".claude/commands/madruga/blueprint.md",
+    "madruga:domain-model": ".claude/commands/madruga/domain-model.md",
+    "madruga:containers": ".claude/commands/madruga/containers.md",
+    "madruga:context-map": ".claude/commands/madruga/context-map.md",
+    "madruga:epic-breakdown": ".claude/commands/madruga/epic-breakdown.md",
+    "madruga:roadmap": ".claude/commands/madruga/roadmap.md",
+    # L2 — epic cycle
+    "madruga:epic-context": ".claude/commands/madruga/epic-context.md",
+    "speckit.specify": ".claude/commands/speckit.specify.md",
+    "speckit.clarify": ".claude/commands/speckit.clarify.md",
+    "speckit.plan": ".claude/commands/speckit.plan.md",
+    "speckit.tasks": ".claude/commands/speckit.tasks.md",
+    "speckit.analyze": ".claude/commands/speckit.analyze.md",
+    "speckit.implement": ".claude/commands/speckit.implement.md",
+    "madruga:judge": ".claude/commands/madruga/judge.md",
+    "madruga:qa": ".claude/commands/madruga/qa.md",
+    "madruga:reconcile": ".claude/commands/madruga/reconcile.md",
+}
+
+# Maps node.layer → layer-specific contract file (relative to REPO_ROOT)
+LAYER_CONTRACT_MAP: dict[str, str] = {
+    "engineering": ".claude/knowledge/pipeline-contract-engineering.md",
+    "planning": ".claude/knowledge/pipeline-contract-planning.md",
+    "business": ".claude/knowledge/pipeline-contract-business.md",
+}
+
+# Allowed tools per node ID. Nodes not in map use DEFAULT_TOOLS.
+NODE_TOOLS: dict[str, str] = {
+    # L1 — business layer (read + write artifacts)
+    "platform-new": "Bash,Read,Write,Glob,Grep",
+    "vision": "Bash,Read,Write,Glob,Grep",
+    "solution-overview": "Bash,Read,Write,Glob,Grep",
+    "business-process": "Bash,Read,Write,Glob,Grep",
+    # L1 — research layer
+    "tech-research": "Bash,Read,Write,Glob,Grep,WebFetch,WebSearch",
+    "codebase-map": "Bash,Read,Write,Glob,Grep",
+    # L1 — engineering layer
+    "adr": "Bash,Read,Write,Glob,Grep",
+    "blueprint": "Bash,Read,Write,Glob,Grep",
+    "domain-model": "Bash,Read,Write,Glob,Grep",
+    "containers": "Bash,Read,Write,Glob,Grep",
+    "context-map": "Bash,Read,Write,Glob,Grep",
+    # L1 — planning layer
+    "epic-breakdown": "Bash,Read,Write,Glob,Grep",
+    "roadmap": "Bash,Read,Write,Glob,Grep",
+    # L2 — epic cycle
+    "epic-context": "Bash,Read,Write,Glob,Grep",
+    "specify": "Bash,Read,Write,Glob,Grep",
+    "clarify": "Read,Write,Glob,Grep",
+    "plan": "Bash,Read,Write,Glob,Grep",
+    "tasks": "Read,Write,Glob,Grep",
+    "analyze": "Bash,Read,Glob,Grep",
+    "implement": "Bash,Read,Write,Edit,Glob,Grep",
+    "analyze-post": "Bash,Read,Glob,Grep",
+    "judge": "Bash,Read,Glob,Grep,Agent",
+    "qa": "Bash,Read,Write,Edit,Glob,Grep,Agent",
+    "reconcile": "Bash,Read,Write,Edit,Glob,Grep",
+}
+DEFAULT_TOOLS = "Bash,Read,Write,Edit,Glob,Grep"
+IMPLEMENT_TASK_TOOLS = "Bash,Read,Write,Edit,Glob,Grep"
+
+# Effort level per node ID. Nodes not in map use default (high).
+NODE_EFFORT: dict[str, str] = {
+    "analyze": "medium",
+    "analyze-post": "medium",
+    "reconcile": "medium",
+}
+
+# Minimal CLAUDE.md essentials for --bare mode system prompt
+_CONVENTIONS_HEADER = (
+    "# Conventions\n"
+    "Docs, comments and code in English.\n"
+    "Commits with prefixes: feat:, fix:, chore:, merge:.\n"
+    "Python: stdlib + pyyaml. SQLite WAL mode. Ruff for lint/format.\n"
+    "Platforms at platforms/<name>/. Skills at .claude/commands/.\n"
+    "Scripts at .specify/scripts/. Portal at portal/.\n"
+)
 
 
 # ── Claude Output Parsing (Observability) ──────────────────────────
@@ -65,6 +164,9 @@ def parse_claude_output(stdout: str) -> dict:
 
     Returns dict with keys: tokens_in, tokens_out, cost_usd, duration_ms.
     All values default to None on parse failure (best-effort, FR-011).
+
+    If total_cost_usd is missing but token counts are available, estimates
+    cost using Sonnet pricing as fallback (see _estimate_cost_usd).
     """
     result: dict = {"tokens_in": None, "tokens_out": None, "cost_usd": None, "duration_ms": None}
     if not stdout:
@@ -74,11 +176,51 @@ def parse_claude_output(stdout: str) -> dict:
         usage = data.get("usage", {})
         result["tokens_in"] = usage.get("input_tokens")
         result["tokens_out"] = usage.get("output_tokens")
-        result["cost_usd"] = data.get("cost_usd")
+        result["cost_usd"] = data.get("total_cost_usd")
         result["duration_ms"] = data.get("duration_ms")
+        # Fallback: estimate cost from token counts if claude didn't provide it
+        if result["cost_usd"] is None:
+            result["cost_usd"] = _estimate_cost_usd(result["tokens_in"], result["tokens_out"])
     except (ValueError, TypeError, AttributeError):
         log.debug("Failed to parse claude output as JSON")
     return result
+
+
+def _estimate_cost_usd(tokens_in: int | None, tokens_out: int | None) -> float | None:
+    """Estimate cost from token counts using Sonnet pricing (from config).
+
+    Returns None if both token counts are missing (cannot estimate).
+    Pricing is configurable via MADRUGA_INPUT_PRICE_PER_TOKEN / MADRUGA_OUTPUT_PRICE_PER_TOKEN env vars.
+    """
+    from config import SONNET_INPUT_PRICE, SONNET_OUTPUT_PRICE
+
+    if tokens_in is None and tokens_out is None:
+        return None
+    cost = (tokens_in or 0) * SONNET_INPUT_PRICE + (tokens_out or 0) * SONNET_OUTPUT_PRICE
+    return round(cost, 8)
+
+
+def _check_hallucination(stdout: str) -> bool:
+    """Detect likely hallucinated output (zero tool calls heuristic).
+
+    Returns True if the dispatch likely fabricated output without using tools.
+    Heuristic: num_turns <= 2 means no tool was invoked (1 user + 1 assistant).
+    Error runs (is_error=True) are excluded — they fail for other reasons.
+
+    Fails safe: returns False on malformed JSON, missing fields, or empty input.
+    """
+    if not stdout:
+        return False
+    try:
+        data = json.loads(stdout)
+        if not isinstance(data, dict):
+            return False
+        num_turns = data.get("num_turns")
+        if num_turns is None or not isinstance(num_turns, (int, float)):
+            return False
+        return num_turns <= 2 and not data.get("is_error", False)
+    except (ValueError, TypeError):
+        return False
 
 
 def parse_session_id(stdout: str) -> str | None:
@@ -388,6 +530,8 @@ async def run_implement_tasks(
             breaker,
             guardrail,
             resume_session_id=resume_id,
+            platform_name=platform_name,
+            abort_check=_make_abort_check(conn, epic_slug),
         )
 
         if success:
@@ -448,6 +592,63 @@ async def run_implement_tasks(
     return all_done, None if all_done else summary, summary
 
 
+_SENSITIVE_PATTERNS = frozenset({".env", "credentials", ".key", ".pem", "id_rsa", ".secret", ".password"})
+
+
+def _is_sensitive_path(filepath: str) -> bool:
+    """Return True if filepath matches a sensitive pattern (case-insensitive)."""
+    lower = filepath.lower()
+    return any(pat in lower for pat in _SENSITIVE_PATTERNS)
+
+
+def _auto_commit_epic(cwd: str | Path, platform_name: str, epic_slug: str) -> bool:
+    """Commit working tree changes to the epic branch after implement.
+
+    Filters out files matching sensitive patterns (e.g. .env, .key, .pem)
+    to prevent accidental credential exposure in easter auto-commits.
+    """
+    try:
+        status = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True, cwd=str(cwd))
+        if not status.stdout.strip():
+            log.info("No changes to commit for %s/%s", platform_name, epic_slug)
+            return True
+
+        safe_files = []
+        for line in status.stdout.splitlines():
+            if not line or len(line) < 4:
+                continue
+            # git status --porcelain format: XY <path> or XY <orig> -> <path>
+            filepath = line[3:].strip().strip('"')
+            if " -> " in filepath:
+                filepath = filepath.split(" -> ", 1)[1].strip('"')
+            if _is_sensitive_path(filepath):
+                log.warning("Skipping sensitive file from auto-commit: %s", filepath)
+                continue
+            safe_files.append(filepath)
+
+        if not safe_files:
+            log.info("No safe files to commit for %s/%s (all filtered)", platform_name, epic_slug)
+            return True
+
+        subprocess.run(["git", "add", "--"] + safe_files, cwd=str(cwd), check=True, capture_output=True)
+        subprocess.run(
+            [
+                "git",
+                "commit",
+                "-m",
+                f"feat: epic {epic_slug} — implement tasks\n\nAuto-committed by easter after implement phase.",
+            ],
+            cwd=str(cwd),
+            check=True,
+            capture_output=True,
+        )
+        log.info("Auto-committed implement changes for %s/%s", platform_name, epic_slug)
+        return True
+    except subprocess.CalledProcessError as exc:
+        log.warning("Auto-commit failed for %s/%s: %s", platform_name, epic_slug, exc.stderr)
+        return False
+
+
 # ── Data Structures ─────────────────────────────────────────────────
 
 
@@ -467,8 +668,9 @@ def parse_dag(platform_yaml: Path, mode: str = "l1", epic: str | None = None) ->
 
     Args:
         platform_yaml: Path to platform.yaml
-        mode: 'l1' for platform pipeline, 'l2' for epic cycle
-        epic: Epic slug (required for l2 mode, used to resolve {epic} templates)
+        mode: 'l1' for platform pipeline, 'l2' for epic cycle,
+              'quick' for fast lane (specify → implement → judge)
+        epic: Epic slug (required for l2/quick mode, used to resolve {epic} templates)
 
     Returns:
         List of Node namedtuples.
@@ -476,7 +678,12 @@ def parse_dag(platform_yaml: Path, mode: str = "l1", epic: str | None = None) ->
     data = yaml.safe_load(platform_yaml.read_text())
     pipeline = data.get("pipeline", {})
 
-    if mode == "l2":
+    if mode == "quick":
+        cycle = pipeline.get("quick_cycle", {})
+        raw_nodes = cycle.get("nodes", [])
+        if not raw_nodes:
+            raise SystemExit("ERROR: No quick_cycle.nodes section in platform.yaml")
+    elif mode == "l2":
         cycle = pipeline.get("epic_cycle", {})
         raw_nodes = cycle.get("nodes", [])
         if not raw_nodes:
@@ -678,6 +885,7 @@ def dispatch_node(
     prompt: str,
     timeout: int = DEFAULT_TIMEOUT,
     guardrail: str | None = None,
+    platform_name: str = "",
 ) -> tuple[bool, str | None, str | None]:
     """Dispatch a skill via claude -p subprocess.
 
@@ -686,17 +894,7 @@ def dispatch_node(
     if not shutil.which("claude"):
         return False, "claude CLI not found in PATH", None
 
-    cmd = [
-        "claude",
-        "-p",
-        prompt,
-        "--output-format",
-        "json",
-        "--disallowedTools",
-        DISALLOWED_TOOLS,
-    ]
-    if guardrail:
-        cmd.extend(["--append-system-prompt", guardrail])
+    cmd = build_dispatch_cmd(node, prompt, platform_name, guardrail)
     log.info("Dispatching node '%s' (skill: %s, timeout: %ds)", node.id, node.skill, timeout)
     log.debug("Command: %s", " ".join(cmd[:4]) + " ...")
 
@@ -734,6 +932,7 @@ def dispatch_with_retry(
     timeout: int,
     breaker: CircuitBreaker,
     guardrail: str | None = None,
+    platform_name: str = "",
 ) -> tuple[bool, str | None, str | None]:
     """Dispatch with retry (3x exponential backoff) and circuit breaker.
 
@@ -749,7 +948,7 @@ def dispatch_with_retry(
             log.info("Retry %d/%d for node '%s' after %ds", attempt - 1, len(RETRY_BACKOFFS), node.id, backoff)
             time.sleep(backoff)
 
-        success, error, stdout = dispatch_node(node, cwd, prompt, timeout, guardrail)
+        success, error, stdout = dispatch_node(node, cwd, prompt, timeout, guardrail, platform_name)
         if success:
             breaker.record_success()
             return True, None, stdout
@@ -760,7 +959,7 @@ def dispatch_with_retry(
     return False, last_error, last_stdout
 
 
-# ── Async Dispatch (for daemon integration) ─────────────────────────
+# ── Async Dispatch (for easter integration) ─────────────────────────
 
 
 async def dispatch_node_async(
@@ -770,6 +969,7 @@ async def dispatch_node_async(
     timeout: int = DEFAULT_TIMEOUT,
     guardrail: str | None = None,
     resume_session_id: str | None = None,
+    platform_name: str = "",
 ) -> tuple[bool, str | None, str | None]:
     """Async version of dispatch_node using asyncio.create_subprocess_exec.
 
@@ -779,19 +979,7 @@ async def dispatch_node_async(
     if not shutil.which("claude"):
         return False, "claude CLI not found in PATH", None
 
-    cmd = [
-        "claude",
-        "-p",
-        prompt,
-        "--output-format",
-        "json",
-        "--disallowedTools",
-        DISALLOWED_TOOLS,
-    ]
-    if resume_session_id:
-        cmd.extend(["--resume", resume_session_id])
-    if guardrail:
-        cmd.extend(["--append-system-prompt", guardrail])
+    cmd = build_dispatch_cmd(node, prompt, platform_name, guardrail, resume_session_id)
     log.info(
         "Dispatching node '%s' async (skill: %s, timeout: %ds%s)",
         node.id,
@@ -822,6 +1010,21 @@ async def dispatch_node_async(
         return False, error, None
 
 
+def _make_abort_check(conn, epic_slug: str | None):
+    """Create a callable that returns True if the epic is no longer in_progress."""
+    if not conn or not epic_slug:
+        return None
+
+    def check() -> bool:
+        try:
+            row = conn.execute("SELECT status FROM epics WHERE epic_id=?", (epic_slug,)).fetchone()
+            return row is not None and row[0] != "in_progress"
+        except Exception:
+            return False
+
+    return check
+
+
 async def dispatch_with_retry_async(
     node: Node,
     cwd: str | Path,
@@ -830,6 +1033,8 @@ async def dispatch_with_retry_async(
     breaker: CircuitBreaker,
     guardrail: str | None = None,
     resume_session_id: str | None = None,
+    platform_name: str = "",
+    abort_check: "object | None" = None,
 ) -> tuple[bool, str | None, str | None]:
     """Async version of dispatch_with_retry using asyncio.sleep.
 
@@ -842,6 +1047,10 @@ async def dispatch_with_retry_async(
     last_stdout = None
     for attempt, backoff in enumerate([0] + RETRY_BACKOFFS, 1):
         if backoff > 0:
+            # F2: Check if epic was cancelled/blocked before retrying
+            if abort_check and abort_check():
+                log.info("Aborting retries for '%s' — epic status changed", node.id)
+                return False, "epic_status_changed", None
             jittered = backoff + random.uniform(0, backoff * 0.3)
             log.info("Retry %d/%d for node '%s' after %.1fs", attempt - 1, len(RETRY_BACKOFFS), node.id, jittered)
             await asyncio.sleep(jittered)
@@ -855,6 +1064,7 @@ async def dispatch_with_retry_async(
             timeout,
             guardrail,
             resume_session_id,
+            platform_name,
         )
         if success:
             breaker.record_success()
@@ -866,7 +1076,7 @@ async def dispatch_with_retry_async(
     return False, last_error, last_stdout
 
 
-# ── Async Pipeline (for daemon) ─────────────────────────────────────
+# ── Async Pipeline (for easter) ─────────────────────────────────────
 
 
 async def run_pipeline_async(
@@ -877,17 +1087,20 @@ async def run_pipeline_async(
     semaphore: "asyncio.Semaphore | None" = None,
     conn: object | None = None,
     gate_mode: str | None = None,
+    quick: bool = False,
 ) -> int:
-    """Async version of run_pipeline for daemon integration.
+    """Async version of run_pipeline for easter integration.
 
     gate_mode: 'manual' (default) — pause at human gates, wait for CLI/Telegram approval.
                'interactive' — print summary, wait for y/n on stdin.
                'auto' — auto-approve all human gates, run pipeline end-to-end.
 
     Returns exit code: 0=success or paused at gate, 1=failure.
-    Human gates are written to DB and the function returns (daemon continues).
+    Human gates are written to DB and the function returns (easter continues).
     If conn is provided, it is reused (not closed). Otherwise a new one is created.
     """
+    _quick_mode_ctx.set(quick)
+
     gmode = gate_mode or DEFAULT_GATE_MODE
     if gmode not in VALID_GATE_MODES:
         log.error("Invalid gate_mode '%s'. Valid: %s", gmode, VALID_GATE_MODES)
@@ -901,7 +1114,7 @@ async def run_pipeline_async(
         log.error("platform.yaml not found: %s", yaml_path)
         return 1
 
-    mode = "l2" if epic_slug else "l1"
+    mode = "quick" if quick else ("l2" if epic_slug else "l1")
     nodes = parse_dag(yaml_path, mode=mode, epic=epic_slug)
     ordered = topological_sort(nodes)
 
@@ -924,13 +1137,6 @@ async def run_pipeline_async(
         conn = get_conn()
     completed_nodes: set[str] = set()
 
-    # Create trace for this pipeline run (best-effort)
-    trace_id = None
-    try:
-        trace_id = create_trace(conn, platform_name, epic_id=epic_slug, mode=mode, total_nodes=len(ordered))
-    except Exception:
-        log.debug("Failed to create trace — continuing without tracing")
-
     if resume:
         # Cleanup stale 'running' runs from previous crashes/failures
         if epic_slug:
@@ -945,6 +1151,22 @@ async def run_pipeline_async(
                 "WHERE platform_id=? AND epic_id IS NULL AND status='running'",
                 (platform_name,),
             )
+        # Cancel stale running traces from previous resume cycles (best-effort)
+        try:
+            if epic_slug:
+                conn.execute(
+                    "UPDATE traces SET status='cancelled', completed_at=datetime('now') "
+                    "WHERE platform_id=? AND epic_id=? AND status='running'",
+                    (platform_name, epic_slug),
+                )
+            else:
+                conn.execute(
+                    "UPDATE traces SET status='cancelled', completed_at=datetime('now') "
+                    "WHERE platform_id=? AND epic_id IS NULL AND status='running'",
+                    (platform_name,),
+                )
+        except Exception:
+            log.debug("Traces table not available — skipping stale trace cleanup")
         conn.commit()
 
         completed_nodes = get_resumable_nodes(conn, platform_name, epic_slug)
@@ -953,11 +1175,19 @@ async def run_pipeline_async(
             pending = [g for g in pending if g.get("epic_id") == epic_slug]
         for gate in pending:
             if gate["node_id"] not in completed_nodes:
-                log.info("Gate pendente para '%s' — daemon aguardara aprovacao", gate["node_id"])
+                log.info("Gate pendente para '%s' — easter aguardara aprovacao", gate["node_id"])
                 if owns_conn:
                     conn.close()
                 return 0
         log.info("Resume async: %d nodes already completed", len(completed_nodes))
+
+    # Create trace for this pipeline run (best-effort)
+    # Placed AFTER gate check to avoid orphan traces when returning early
+    trace_id = None
+    try:
+        trace_id = create_trace(conn, platform_name, epic_id=epic_slug, mode=mode, total_nodes=len(ordered))
+    except Exception:
+        log.debug("Failed to create trace — continuing without tracing")
 
     breaker = CircuitBreaker()
     cwd = REPO_ROOT
@@ -1057,17 +1287,36 @@ async def run_pipeline_async(
             upsert_epic_node(conn, platform_name, epic_slug, node.id, status="done")
             completed_nodes.add(node.id)
             log.info("Node '%s' completed successfully (task-by-task)", node.id)
+            # F9: Auto-commit implement changes to epic branch
+            _auto_commit_epic(cwd, platform_name, epic_slug)
             continue
 
         else:
             prompt, guardrail = compose_skill_prompt(platform_name, node, platform_dir, epic_slug)
+            abort_fn = _make_abort_check(conn, epic_slug)
             if semaphore:
                 async with semaphore:
                     success, error, stdout = await dispatch_with_retry_async(
-                        node, cwd, prompt, timeout, breaker, guardrail
+                        node,
+                        cwd,
+                        prompt,
+                        timeout,
+                        breaker,
+                        guardrail,
+                        platform_name=platform_name,
+                        abort_check=abort_fn,
                     )
             else:
-                success, error, stdout = await dispatch_with_retry_async(node, cwd, prompt, timeout, breaker, guardrail)
+                success, error, stdout = await dispatch_with_retry_async(
+                    node,
+                    cwd,
+                    prompt,
+                    timeout,
+                    breaker,
+                    guardrail,
+                    platform_name=platform_name,
+                    abort_check=abort_fn,
+                )
 
         if not success:
             run_id = insert_run(conn, platform_name, node.id, epic_id=epic_slug, error=error, trace_id=trace_id)
@@ -1128,6 +1377,13 @@ async def run_pipeline_async(
 
         # Parse metrics from claude JSON output (best-effort)
         metrics = parse_claude_output(stdout) if stdout else {}
+
+        # Hallucination guard: warn if dispatch used zero tool calls (US2)
+        if stdout and _check_hallucination(stdout):
+            log.warning(
+                "Hallucination guard: node '%s' completed with zero tool calls — output may be fabricated", node.id
+            )
+
         # Resolve output artifact for eval scoring and output_lines (FR-012/U2)
         eval_output = None
         if node.outputs:
@@ -1186,6 +1442,32 @@ async def run_pipeline_async(
 
     log.info("Pipeline async %s complete — %d nodes executed", mode.upper(), len(completed_nodes))
 
+    # Transition epic status (in_progress → shipped) if all required nodes done
+    if epic_slug:
+        try:
+            from db import compute_epic_status, get_epics, upsert_epic
+            from post_save import _get_required_epic_nodes
+
+            pipeline_data = yaml.safe_load(yaml_path.read_text(encoding="utf-8")).get("pipeline", {})
+            required_nodes = _get_required_epic_nodes(platform_name, pipeline_data)
+            existing = [e for e in get_epics(conn, platform_name) if e["epic_id"] == epic_slug]
+            if existing:
+                new_status, delivered_at = compute_epic_status(
+                    conn, platform_name, epic_slug, required_nodes, existing[0]["status"]
+                )
+                if new_status != existing[0]["status"]:
+                    upsert_epic(
+                        conn,
+                        platform_name,
+                        epic_slug,
+                        title=existing[0]["title"],
+                        status=new_status,
+                        delivered_at=delivered_at,
+                    )
+                    log.info("Epic '%s' transitioned: %s → %s", epic_slug, existing[0]["status"], new_status)
+        except Exception:
+            log.debug("Failed to compute epic status — non-blocking")
+
     # Refresh portal dashboard JSON (best-effort)
     try:
         from post_save import _refresh_portal_status
@@ -1243,13 +1525,11 @@ def compose_skill_prompt(
 
     # L2 speckit.* or madruga:* epic skills — instruction + epic context + guardrail
     if epic_slug:
-        skill_name = skill.split(".", 1)[1] if skill.startswith("speckit.") else skill
-        skill_cmd = f"/speckit.{skill_name}" if skill.startswith("speckit.") else f"/{skill}"
         epic_dir = platform_dir / "epics" / epic_slug
         output_dir = f"platforms/{platform_name}/epics/{epic_slug}"
 
         parts = [
-            f"Execute {skill_cmd} for platform '{platform_name}', epic '{epic_slug}'.",
+            f"Follow the skill instructions in the system prompt for platform '{platform_name}', epic '{epic_slug}'.",
             "",
             "CRITICAL CONSTRAINTS:",
             f"- export SPECIFY_BASE_DIR={output_dir}/",
@@ -1288,7 +1568,7 @@ def compose_skill_prompt(
         return "\n".join(parts), guardrail
 
     # L1 madruga:* — instruction + dependency outputs as context
-    parts = [f"Execute /{skill} {platform_name}"]
+    parts = [f"Follow the skill instructions in the system prompt for platform '{platform_name}'."]
 
     # Read dependency outputs as context
     for dep_id in node.depends:
@@ -1306,6 +1586,138 @@ def compose_skill_prompt(
     return "\n\n---\n\n".join(parts), None
 
 
+# ── Bare-mode System Prompt & Command Builder ─────────────────────
+
+
+_QUICK_FIX_CONTEXT = (
+    "# Quick-Fix Mode (Fast Lane)\n\n"
+    "You are running in QUICK-FIX mode — a compressed L2 cycle: specify → implement → judge.\n"
+    "This mode skips plan, tasks, analyze, clarify, qa, and reconcile.\n\n"
+    "CONSTRAINTS:\n"
+    "- Scope is restricted to bug fixes and small changes (max 3 files, ~100 LOC)\n"
+    "- Do NOT create plan.md or tasks.md — they are not part of the quick cycle\n"
+    "- Generate a minimal spec.md (problem + fix + acceptance criteria)\n"
+    "- Focus on shipping the fix fast with quality (judge review follows)\n"
+)
+
+
+def build_system_prompt(node: Node, platform_name: str, quick_mode: bool = False) -> str:
+    """Build a focused system prompt for --bare dispatch.
+
+    Assembles:
+    1. Trimmed CLAUDE.md essentials (conventions, not discovery)
+    2. pipeline-contract-base.md (full)
+    3. Layer-specific contract (engineering/planning/business)
+    4. Python rules (only for implement nodes)
+    5. Full skill .md body
+    6. Quick-fix context (only when quick_mode=True)
+
+    Returns the concatenated system prompt string.
+    """
+    parts: list[str] = [_CONVENTIONS_HEADER]
+
+    # Base contract (always)
+    base_contract = REPO_ROOT / ".claude" / "knowledge" / "pipeline-contract-base.md"
+    if base_contract.exists():
+        parts.append(base_contract.read_text(encoding="utf-8"))
+
+    # Layer contract
+    layer_file = LAYER_CONTRACT_MAP.get(node.layer)
+    if layer_file:
+        layer_path = REPO_ROOT / layer_file
+        if layer_path.exists():
+            parts.append(layer_path.read_text(encoding="utf-8"))
+
+    # Python rules (implement nodes only — they write code)
+    if node.id == "implement" or node.id.startswith("implement:"):
+        python_rules = REPO_ROOT / ".claude" / "rules" / "python.md"
+        if python_rules.exists():
+            parts.append(python_rules.read_text(encoding="utf-8"))
+
+    # Skill body
+    skill_file = SKILL_FILE_MAP.get(node.skill)
+    if not skill_file:
+        # Derive from convention
+        if node.skill.startswith("speckit."):
+            skill_file = f".claude/commands/{node.skill}.md"
+        elif ":" in node.skill:
+            name = node.skill.split(":", 1)[1]
+            skill_file = f".claude/commands/madruga/{name}.md"
+    if skill_file:
+        skill_path = REPO_ROOT / skill_file
+        if skill_path.exists():
+            parts.append(f"# Skill Instructions\n\n{skill_path.read_text(encoding='utf-8')}")
+        else:
+            log.warning("Skill file not found: %s", skill_path)
+
+    # Quick-fix mode context
+    if quick_mode:
+        parts.append(_QUICK_FIX_CONTEXT)
+
+    return "\n\n---\n\n".join(parts)
+
+
+def build_dispatch_cmd(
+    node: Node,
+    prompt: str,
+    platform_name: str,
+    guardrail: str | None = None,
+    resume_session_id: str | None = None,
+    quick_mode: bool = False,
+) -> list[str]:
+    """Build the claude -p command array with --system-prompt, --allowedTools, --effort.
+
+    Uses --bare only when ANTHROPIC_API_KEY is set (API key auth).
+    With OAuth (claude.ai), --bare is skipped because it disables OAuth/keychain reads.
+
+    Centralizes command construction for both dispatch_node() and dispatch_node_async().
+    """
+    system_prompt = build_system_prompt(node, platform_name, quick_mode=quick_mode or _quick_mode_ctx.get())
+
+    cmd = [
+        "claude",
+        "-p",
+        prompt,
+    ]
+
+    # --bare disables OAuth/keychain — only use with API key auth
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        cmd.append("--bare")
+
+    cmd.extend(
+        [
+            "--output-format",
+            "json",
+            "--system-prompt",
+            system_prompt,
+        ]
+    )
+
+    # Tool restriction
+    tools = NODE_TOOLS.get(node.id, DEFAULT_TOOLS)
+    if node.id.startswith("implement:"):
+        tools = IMPLEMENT_TASK_TOOLS
+    cmd.extend(["--allowedTools", tools])
+
+    # Effort tuning
+    effort = NODE_EFFORT.get(node.id)
+    if effort:
+        cmd.extend(["--effort", effort])
+
+    # Resume session
+    if resume_session_id:
+        cmd.extend(["--resume", resume_session_id])
+
+    # Guardrail (append-system-prompt for hard constraints)
+    if guardrail:
+        cmd.extend(["--append-system-prompt", guardrail])
+
+    # Defense-in-depth: block dangerous git operations
+    cmd.extend(["--disallowedTools", DISALLOWED_TOOLS])
+
+    return cmd
+
+
 # ── Pipeline Orchestrator ────────────────────────────────────────────
 
 
@@ -1316,6 +1728,7 @@ def run_pipeline(
     dry_run: bool = False,
     timeout: int = DEFAULT_TIMEOUT,
     gate_mode: str | None = None,
+    quick: bool = False,
 ) -> int:
     """Execute the pipeline DAG.
 
@@ -1328,6 +1741,8 @@ def run_pipeline(
     isolation). Self-ref platforms share working dir, DB, and skills —
     see pipeline-dag-knowledge.md "Parallel Epics Constraint".
     """
+    _quick_mode_ctx.set(quick)
+
     gmode = gate_mode or DEFAULT_GATE_MODE
     if gmode not in VALID_GATE_MODES:
         log.error("Invalid gate_mode '%s'. Valid: %s", gmode, VALID_GATE_MODES)
@@ -1340,7 +1755,7 @@ def run_pipeline(
         log.error("platform.yaml not found: %s", yaml_path)
         return 1
 
-    mode = "l2" if epic_slug else "l1"
+    mode = "quick" if quick else ("l2" if epic_slug else "l1")
     nodes = parse_dag(yaml_path, mode=mode, epic=epic_slug)
     ordered = topological_sort(nodes)
 
@@ -1375,14 +1790,25 @@ def run_pipeline(
     conn = get_conn()
     completed_nodes: set[str] = set()
 
-    # Create trace for this pipeline run (best-effort)
-    trace_id = None
-    try:
-        trace_id = create_trace(conn, platform_name, epic_id=epic_slug, mode=mode, total_nodes=len(ordered))
-    except Exception:
-        log.debug("Failed to create trace — continuing without tracing")
-
     if resume:
+        # Cancel stale running traces from previous resume cycles (best-effort)
+        try:
+            if epic_slug:
+                conn.execute(
+                    "UPDATE traces SET status='cancelled', completed_at=datetime('now') "
+                    "WHERE platform_id=? AND epic_id=? AND status='running'",
+                    (platform_name, epic_slug),
+                )
+            else:
+                conn.execute(
+                    "UPDATE traces SET status='cancelled', completed_at=datetime('now') "
+                    "WHERE platform_id=? AND epic_id IS NULL AND status='running'",
+                    (platform_name,),
+                )
+            conn.commit()
+        except Exception:
+            log.debug("Traces table not available — skipping stale trace cleanup")
+
         completed_nodes = get_resumable_nodes(conn, platform_name, epic_slug)
         # Check for pending (unapproved) gates
         pending = get_pending_gates(conn, platform_name)
@@ -1390,10 +1816,19 @@ def run_pipeline(
             pending = [g for g in pending if g.get("epic_id") == epic_slug]
         for gate in pending:
             if gate["node_id"] not in completed_nodes:
-                print(f"Gate pendente para '{gate['node_id']}'. Execute:")
-                print(f"  python3 .specify/scripts/platform_cli.py gate approve {gate['run_id']}")
+                log.info("Gate pendente para '%s'. Execute:", gate["node_id"])
+                log.info("  python3 .specify/scripts/platform_cli.py gate approve %s", gate["run_id"])
                 conn.close()
                 return 0
+
+    # Create trace for this pipeline run (best-effort)
+    # Placed AFTER gate check to avoid orphan traces when returning early
+    trace_id = None
+    try:
+        trace_id = create_trace(conn, platform_name, epic_id=epic_slug, mode=mode, total_nodes=len(ordered))
+    except Exception:
+        log.debug("Failed to create trace — continuing without tracing")
+    if resume:
         log.info("Resume: %d nodes already completed", len(completed_nodes))
 
     breaker = CircuitBreaker()
@@ -1447,23 +1882,25 @@ def run_pipeline(
                     (run_id,),
                 )
                 conn.commit()
-                print(f"\nAguardando aprovacao para '{node.id}' (gate: {node.gate}).")
-                print(f"Execute: python3 .specify/scripts/platform_cli.py gate approve {run_id}")
-                print("Apos aprovar, re-execute com --resume.\n")
+                log.info("Aguardando aprovacao para '%s' (gate: %s)", node.id, node.gate)
+                log.info("Execute: python3 .specify/scripts/platform_cli.py gate approve %s", run_id)
+                log.info("Apos aprovar, re-execute com --resume.")
                 conn.close()
                 return 0
 
         # Task-by-task dispatch for speckit.implement (sync falls back to monolithic)
         if node.skill == "speckit.implement" and epic_slug:
             log.warning(
-                "Sync run_pipeline does not support task-by-task dispatch. Use async (daemon/--mode interactive)."
+                "Sync run_pipeline does not support task-by-task dispatch. Use async (easter/--mode interactive)."
             )
 
         # Compose prompt
         prompt, guardrail = compose_skill_prompt(platform_name, node, platform_dir, epic_slug)
 
         # Dispatch with retry + circuit breaker
-        success, error, stdout = dispatch_with_retry(node, cwd, prompt, timeout, breaker, guardrail)
+        success, error, stdout = dispatch_with_retry(
+            node, cwd, prompt, timeout, breaker, guardrail, platform_name=platform_name
+        )
 
         if not success:
             run_id = insert_run(conn, platform_name, node.id, epic_id=epic_slug, error=error, trace_id=trace_id)
@@ -1523,6 +1960,13 @@ def run_pipeline(
 
         # Parse metrics from claude JSON output (best-effort)
         metrics = parse_claude_output(stdout) if stdout else {}
+
+        # Hallucination guard: warn if dispatch used zero tool calls (US2)
+        if stdout and _check_hallucination(stdout):
+            log.warning(
+                "Hallucination guard: node '%s' completed with zero tool calls — output may be fabricated", node.id
+            )
+
         # Resolve output artifact for eval scoring and output_lines (FR-012/U2)
         eval_output = None
         if node.outputs:
@@ -1580,6 +2024,32 @@ def run_pipeline(
 
     print(f"\nPipeline {mode.upper()} complete — {len(completed_nodes)} nodes executed.")
 
+    # Transition epic status (in_progress → shipped) if all required nodes done
+    if epic_slug:
+        try:
+            from db import compute_epic_status, get_epics, upsert_epic
+            from post_save import _get_required_epic_nodes
+
+            pipeline_data = yaml.safe_load(yaml_path.read_text(encoding="utf-8")).get("pipeline", {})
+            required_nodes = _get_required_epic_nodes(platform_name, pipeline_data)
+            existing = [e for e in get_epics(conn, platform_name) if e["epic_id"] == epic_slug]
+            if existing:
+                new_status, delivered_at = compute_epic_status(
+                    conn, platform_name, epic_slug, required_nodes, existing[0]["status"]
+                )
+                if new_status != existing[0]["status"]:
+                    upsert_epic(
+                        conn,
+                        platform_name,
+                        epic_slug,
+                        title=existing[0]["title"],
+                        status=new_status,
+                        delivered_at=delivered_at,
+                    )
+                    log.info("Epic '%s' transitioned: %s → %s", epic_slug, existing[0]["status"], new_status)
+        except Exception:
+            log.debug("Failed to compute epic status — non-blocking")
+
     # Refresh portal dashboard JSON (best-effort)
     try:
         from post_save import _refresh_portal_status
@@ -1613,11 +2083,19 @@ def main() -> None:
         default=None,
         help="Gate mode: manual (default, pause at gates), interactive (y/n prompt), auto (no pauses)",
     )
+    parser.add_argument(
+        "--quick",
+        action="store_true",
+        help="Fast lane: use quick_cycle (specify → implement → judge) instead of full epic_cycle",
+    )
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose logging")
+    parser.add_argument("--json", action="store_true", dest="json_mode", help="Emit structured NDJSON log output")
     args = parser.parse_args()
 
-    level = logging.DEBUG if args.verbose else logging.INFO
-    logging.basicConfig(level=level, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+    if args.quick and not args.epic:
+        parser.error("--quick requires --epic")
+
+    _setup_logging(args.json_mode, verbose=args.verbose)
 
     # Use async path (supports task-by-task implement); sync only for dry-run
     if args.dry_run:
@@ -1629,6 +2107,7 @@ def main() -> None:
                 dry_run=True,
                 timeout=args.timeout,
                 gate_mode=args.mode,
+                quick=args.quick,
             )
         )
     else:
@@ -1640,6 +2119,7 @@ def main() -> None:
                     resume=args.resume,
                     timeout=args.timeout,
                     gate_mode=args.mode,
+                    quick=args.quick,
                 )
             )
         )

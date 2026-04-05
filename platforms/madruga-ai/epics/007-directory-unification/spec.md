@@ -73,7 +73,7 @@ O sistema persiste status de cada nó do epic cycle (epic-context, specify, clar
 
 ### User Story 5 — HANDOFF blocks propagam contexto entre skills (Priority: P2)
 
-Após cada skill com gate `human` gerar seu artefato, o footer contém um bloco YAML HANDOFF com: `from` (skill atual), `to` (próximo skill), `context` (texto livre com decisões e constraints relevantes), `blockers` (lista de impedimentos). O DAG knowledge inclui `handoff_template` por nó como referência para o daemon futuro.
+Após cada skill com gate `human` gerar seu artefato, o footer contém um bloco YAML HANDOFF com: `from` (skill atual), `to` (próximo skill), `context` (texto livre com decisões e constraints relevantes), `blockers` (lista de impedimentos). O DAG knowledge inclui `handoff_template` por nó como referência para o easter futuro.
 
 **Why this priority**: Decisões se perdem entre skills hoje. HANDOFF resolve isso de forma estruturada e prepara para automação futura.
 
@@ -185,6 +185,6 @@ O template Copier (`platform.yaml.jinja`) ganha seção `epic_cycle` com os 10 n
 
 - O operador é o único usuário do sistema (single-operator). Não há risco de breaking change para terceiros com os renames.
 - Epic 005 corresponde a `specs/001-atomic-skills-dag-pipeline/` e epic 006 a `specs/002-sqlite-foundation/`. Mapeamento confirmado pelo histórico do projeto.
-- O daemon (epic 008+) consumirá HANDOFF blocks e `epic_cycle` do platform.yaml. O formato definido aqui é estável o suficiente para não requerer breaking changes futuros.
+- O easter (epic 008+) consumirá HANDOFF blocks e `epic_cycle` do platform.yaml. O formato definido aqui é estável o suficiente para não requerer breaking changes futuros.
 - `copier update` em plataformas existentes adicionará `epic_cycle` sem sobrescrever seções customizadas (comportamento `_skip_if_exists` do Copier).
 - Scripts SpecKit existentes (create-new-feature.sh, setup-plan.sh, check-prerequisites.sh) aceitam modificação incremental com `--base-dir` sem reescrita da lógica interna.

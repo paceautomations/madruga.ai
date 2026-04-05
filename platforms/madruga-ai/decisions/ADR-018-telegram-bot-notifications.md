@@ -3,7 +3,7 @@ title: "ADR-018: Telegram Bot API (aiogram) como Canal de Notificacoes"
 status: accepted
 date: 2026-03-31
 supersedes: ADR-015
-decision: Usar Telegram Bot API via aiogram como canal de notificacoes do daemon,
+decision: Usar Telegram Bot API via aiogram como canal de notificacoes do easter,
   substituindo WhatsApp via wpp-bridge. Long-polling (outbound HTTPS only).
 alternatives: WhatsApp via wpp-bridge (ADR-015), ntfy.sh (push notifications), Discord
   Webhooks/Bot
@@ -18,7 +18,7 @@ Accepted — 2026-03-31. Supersedes [ADR-015](ADR-015-whatsapp-wpp-bridge.md).
 
 ## Contexto
 
-O daemon Madruga AI precisa notificar o operador sobre status de epics, decisoes pendentes (1-way-door), e erros criticos. O canal deve suportar comunicacao bidirecional: o daemon envia, o operador responde para aprovar/rejeitar decisoes.
+O easter Madruga AI precisa notificar o operador sobre status de epics, decisoes pendentes (1-way-door), e erros criticos. O canal deve suportar comunicacao bidirecional: o easter envia, o operador responde para aprovar/rejeitar decisoes.
 
 A decisao anterior (ADR-015) escolheu WhatsApp via wpp-bridge como canal. Na pratica, wpp-bridge apresenta problemas significativos:
 - Depende de protocolo WhatsApp Web **nao-oficial** — pode quebrar com atualizacoes do WhatsApp
@@ -31,22 +31,22 @@ Alem disso, a decisao de **nao migrar** o wpp-bridge de `general` para `madruga.
 
 ## Decisao
 
-Usar **Telegram Bot API via aiogram** como canal de notificacoes do daemon, substituindo WhatsApp via wpp-bridge.
+Usar **Telegram Bot API via aiogram** como canal de notificacoes do easter, substituindo WhatsApp via wpp-bridge.
 
-A interface `MessagingProvider` permanece abstrata com 4 metodos (`send`, `ask_choice`, `alert`, `edit_message`). A implementacao muda de `WhatsAppBridge` para `TelegramAdapter`. Isso mantem a escolha de canal como **2-way door** — trocar provider requer apenas nova implementacao, sem mudar daemon ou pipeline.
+A interface `MessagingProvider` permanece abstrata com 4 metodos (`send`, `ask_choice`, `alert`, `edit_message`). A implementacao muda de `WhatsAppBridge` para `TelegramAdapter`. Isso mantem a escolha de canal como **2-way door** — trocar provider requer apenas nova implementacao, sem mudar easter ou pipeline.
 
-**Modo de operacao: long-polling** (nao webhook). O bot usa `aiogram`'s built-in polling loop para receber updates. Isso evita necessidade de porta inbound, tunnel, ou certificado HTTPS — o daemon faz apenas requests HTTPS outbound para `api.telegram.org`.
+**Modo de operacao: long-polling** (nao webhook). O bot usa `aiogram`'s built-in polling loop para receber updates. Isso evita necessidade de porta inbound, tunnel, ou certificado HTTPS — o easter faz apenas requests HTTPS outbound para `api.telegram.org`.
 
 **Plano de degradacao (Telegram Bot API unreachable):**
 1. Health check periodico (HTTPS GET `getMe` a cada 60s)
-2. Se unreachable por >3 checks: daemon muda para modo log-only (structlog WARNING, continua processando auto gates, pausa human gates)
+2. Se unreachable por >3 checks: easter muda para modo log-only (structlog WARNING, continua processando auto gates, pausa human gates)
 3. Notificacao de fallback via ntfy.sh (HTTP POST, zero deps, config opcional em config.yaml)
-4. Quando Telegram volta, daemon detecta e retoma notificacoes
+4. Quando Telegram volta, easter detecta e retoma notificacoes
 
 ## Alternativas Consideradas
 
 ### Alternativa A: Telegram Bot API via aiogram (escolhida)
-- **Pros:** inline keyboard buttons nativos para approve/reject (UX superior para human gates), callbacks sem tunnel (outbound HTTPS only), setup rapido (~10 min com @BotFather), aiogram e excelente framework asyncio (fit perfeito com daemon asyncio), mensagens com Markdown rico, zero processo extra (sem bridge, sem Chromium)
+- **Pros:** inline keyboard buttons nativos para approve/reject (UX superior para human gates), callbacks sem tunnel (outbound HTTPS only), setup rapido (~10 min com @BotFather), aiogram e excelente framework asyncio (fit perfeito com easter asyncio), mensagens com Markdown rico, zero processo extra (sem bridge, sem Chromium)
 - **Cons:** operador precisa instalar Telegram (app extra), perda de contexto conversacional existente no WhatsApp
 - **Fit:** Alto — infra mais simples, UX melhor para human gates, asyncio-native.
 
@@ -71,7 +71,7 @@ A interface `MessagingProvider` permanece abstrata com 4 metodos (`send`, `ask_c
 - Inline keyboard buttons para human gates — UX muito melhor que texto A/B/C
 - Zero processo extra — sem bridge, sem Chromium, sem QR code
 - Outbound HTTPS only — sem porta inbound, sem tunnel, sem exposicao de rede
-- Framework asyncio-native (aiogram) — fit perfeito com daemon asyncio existente
+- Framework asyncio-native (aiogram) — fit perfeito com easter asyncio existente
 - Callback queries com data payload — permite approve/reject com um toque
 - Markdown rico nas mensagens (bold, code, links)
 - Setup em ~10 min via @BotFather

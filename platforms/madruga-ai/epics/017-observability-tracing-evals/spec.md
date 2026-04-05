@@ -134,7 +134,7 @@ Como operador do pipeline, quero que dados de observabilidade mais antigos que 9
 
 - O executor do pipeline ja produz output estruturado (JSON) contendo dados de tokens e custo por node. Caso nao produza, o sistema registra esses campos como nulos.
 - O portal Astro existente suporta adicao de novas paginas e componentes React interativos (islands).
-- O daemon FastAPI existente aceita adicao de novos endpoints sem refatoracao significativa.
+- O easter FastAPI existente aceita adicao de novos endpoints sem refatoracao significativa.
 - A carga de trabalho e single-user (um operador). Nao ha necessidade de autenticacao nem controle de acesso no portal.
 - O volume de dados e moderado (dezenas de runs por dia, nao milhares). Otimizacoes de escala nao sao necessarias em V1.
 - Evals qualitativos usam o Judge pattern ja validado no projeto (4 personas + decision classifier). Nao sera necessario implementar o Judge do zero.

@@ -18,9 +18,9 @@ model {
       description 'Exporta LikeC4 JSON e popula tabelas markdown via AUTO markers em engineering docs'
     }
 
-    runtimeDaemon = worker 'Runtime Daemon' {
+    runtimeEaster = worker 'Runtime Easter' {
       technology 'Python 3.12+ asyncio + FastAPI :8040'
-      description 'Daemon 24/7: executa DAG do pipeline, gerencia human gates via MADRUGA_MODE (manual/interactive/auto), health endpoints, serve dashboard'
+      description 'Easter 24/7: executa DAG do pipeline, gerencia human gates via MADRUGA_MODE (manual/interactive/auto), health endpoints, serve dashboard'
     }
 
     dagExecutor = worker 'DAG Executor' {

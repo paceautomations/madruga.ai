@@ -64,18 +64,18 @@ jobs:
           cache: pip
           cache-dependency-path: requirements-dev.txt
       - run: pip install -r requirements-dev.txt
-      - name: Daemon boots successfully
+      - name: Easter boots successfully
         run: |
-          OUTPUT=$(timeout 10 python3 .specify/scripts/daemon.py 2>&1 || true)
+          OUTPUT=$(timeout 10 python3 .specify/scripts/easter.py 2>&1 || true)
           echo "$OUTPUT" | head -20
           echo "$OUTPUT" | grep -q "Uvicorn running" || {
-            echo "::error::Daemon failed to start"
+            echo "::error::Easter failed to start"
             exit 1
           }
       - name: All entrypoints import cleanly
         run: |
           FAILED=0
-          for f in daemon.py platform_cli.py dag_executor.py post_save.py \
+          for f in easter.py platform_cli.py dag_executor.py post_save.py \
                    vision-build.py skill-lint.py telegram_bot.py worktree.py \
                    ensure_repo.py implement_remote.py sync_memory.py \
                    hook_post_save.py hook_skill_lint.py; do
