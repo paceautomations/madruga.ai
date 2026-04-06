@@ -14,7 +14,7 @@ test: ## Run Python tests
 
 coverage: ## Run tests with coverage report
 	python3 -m pytest .specify/scripts/tests/ -v --cov --cov-report=term-missing --cov-report=html
-	@echo "Report HTML em htmlcov/index.html"
+	@echo "HTML report at htmlcov/index.html"
 
 lint: ## Lint all platforms
 	python3 $(PLATFORM) lint --all

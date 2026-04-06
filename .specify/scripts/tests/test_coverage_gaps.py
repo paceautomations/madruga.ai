@@ -12,7 +12,6 @@ Covers: db_observability (cleanup_old_data, get_runs_with_evals, get_stats),
 import importlib.util
 import json
 import logging
-import sqlite3
 import sys
 from pathlib import Path
 from unittest.mock import patch
@@ -21,15 +20,9 @@ import pytest
 import yaml
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent))
 
-from db_core import migrate
-
-
-def _init_db() -> sqlite3.Connection:
-    conn = sqlite3.connect(":memory:")
-    conn.row_factory = sqlite3.Row
-    migrate(conn)
-    return conn
+from helpers import init_mem_db as _init_db
 
 
 # ══════════════════════════════════════
@@ -588,8 +581,8 @@ class TestPostSaveDetect:
         with patch("post_save.REPO_ROOT", tmp_path):
             result = detect_from_path(str(artifact))
 
-        # Should detect platform and node
-        assert result is not None or result is None  # may return None if node mapping fails
+        # detect_from_path exercises the code path; result depends on node mapping
+        assert isinstance(result, dict) or result is None
 
     def test_validate_artifact_path(self):
         from post_save import _validate_artifact_path

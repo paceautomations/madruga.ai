@@ -232,20 +232,21 @@ class TestBranchExistsOnRemote:
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-class TestCreateWorktree:
-    def _binding(self, name="other-repo"):
-        return {
-            "org": "myorg",
-            "name": name,
-            "base_branch": "main",
-            "epic_branch_prefix": "epic/myplat/",
-        }
+def _make_binding(name="other-repo"):
+    return {
+        "org": "myorg",
+        "name": name,
+        "base_branch": "main",
+        "epic_branch_prefix": "epic/myplat/",
+    }
 
+
+class TestCreateWorktree:
     def test_self_ref_returns_repo_root(self, tmp_path):
         from worktree import create_worktree
 
         with (
-            patch("ensure_repo._load_repo_binding", return_value=self._binding("madruga.ai")),
+            patch("ensure_repo._load_repo_binding", return_value=_make_binding("madruga.ai")),
             patch("ensure_repo._is_self_ref", return_value=True),
             patch("ensure_repo.REPO_ROOT", tmp_path),
         ):
@@ -263,7 +264,7 @@ class TestCreateWorktree:
         (wt_path / ".git").mkdir(parents=True)
 
         with (
-            patch("ensure_repo._load_repo_binding", return_value=self._binding()),
+            patch("ensure_repo._load_repo_binding", return_value=_make_binding()),
             patch("ensure_repo._is_self_ref", return_value=False),
             patch("ensure_repo.ensure_repo", return_value=repo_path),
             patch("ensure_repo._resolve_repos_base", return_value=repos_base),
@@ -280,7 +281,7 @@ class TestCreateWorktree:
         repo_path.mkdir(parents=True)
 
         with (
-            patch("ensure_repo._load_repo_binding", return_value=self._binding()),
+            patch("ensure_repo._load_repo_binding", return_value=_make_binding()),
             patch("ensure_repo._is_self_ref", return_value=False),
             patch("ensure_repo.ensure_repo", return_value=repo_path),
             patch("ensure_repo._resolve_repos_base", return_value=repos_base),
@@ -304,7 +305,7 @@ class TestCreateWorktree:
         repo_path.mkdir(parents=True)
 
         with (
-            patch("ensure_repo._load_repo_binding", return_value=self._binding()),
+            patch("ensure_repo._load_repo_binding", return_value=_make_binding()),
             patch("ensure_repo._is_self_ref", return_value=False),
             patch("ensure_repo.ensure_repo", return_value=repo_path),
             patch("ensure_repo._resolve_repos_base", return_value=repos_base),
@@ -325,19 +326,11 @@ class TestCreateWorktree:
 
 
 class TestCleanupWorktree:
-    def _binding(self, name="other-repo"):
-        return {
-            "org": "myorg",
-            "name": name,
-            "base_branch": "main",
-            "epic_branch_prefix": "epic/myplat/",
-        }
-
     def test_self_ref_noop(self):
         from worktree import cleanup_worktree
 
         with (
-            patch("ensure_repo._load_repo_binding", return_value=self._binding("madruga.ai")),
+            patch("ensure_repo._load_repo_binding", return_value=_make_binding("madruga.ai")),
             patch("ensure_repo._is_self_ref", return_value=True),
             patch("worktree.subprocess.run") as mock_run,
         ):
@@ -358,7 +351,7 @@ class TestCleanupWorktree:
         mock_branch_del = MagicMock(returncode=0)
 
         with (
-            patch("ensure_repo._load_repo_binding", return_value=self._binding()),
+            patch("ensure_repo._load_repo_binding", return_value=_make_binding()),
             patch("ensure_repo._is_self_ref", return_value=False),
             patch("ensure_repo.ensure_repo", return_value=repo_path),
             patch("ensure_repo._resolve_repos_base", return_value=repos_base),
@@ -379,7 +372,7 @@ class TestCleanupWorktree:
         mock_branch_del = MagicMock(returncode=0)
 
         with (
-            patch("ensure_repo._load_repo_binding", return_value=self._binding()),
+            patch("ensure_repo._load_repo_binding", return_value=_make_binding()),
             patch("ensure_repo._is_self_ref", return_value=False),
             patch("ensure_repo.ensure_repo", return_value=repo_path),
             patch("ensure_repo._resolve_repos_base", return_value=repos_base),

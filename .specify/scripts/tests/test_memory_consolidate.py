@@ -6,15 +6,10 @@ from pathlib import Path
 
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent))
 
 import memory_consolidate
-
-
-def _write_memory(path: Path, name: str, type_: str, desc: str, body: str = "content") -> Path:
-    """Write a valid memory markdown file."""
-    content = f"---\nname: {name}\ntype: {type_}\ndescription: {desc}\n---\n\n{body}\n"
-    path.write_text(content, encoding="utf-8")
-    return path
+from helpers import write_memory_md as _write_memory
 
 
 class TestScanMemoryFiles:

@@ -1,28 +1,15 @@
 """Tests for sync_memory.py — the sync() function and find_memory_dirs()."""
 
-import sqlite3
 import sys
 from pathlib import Path
 from unittest.mock import patch
 
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent))
 
 import sync_memory
-from db_core import migrate
-
-
-def _init_db() -> sqlite3.Connection:
-    conn = sqlite3.connect(":memory:")
-    conn.row_factory = sqlite3.Row
-    migrate(conn)
-    return conn
-
-
-def _write_memory_md(path: Path, name: str, type_: str, desc: str, body: str = "content") -> Path:
-    content = f"---\nname: {name}\ntype: {type_}\ndescription: {desc}\n---\n\n{body}\n"
-    path.write_text(content, encoding="utf-8")
-    return path
+from helpers import init_mem_db as _init_db, write_memory_md as _write_memory_md
 
 
 class TestFindMemoryDirs:
