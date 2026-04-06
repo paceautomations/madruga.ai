@@ -68,6 +68,8 @@ Generate `engineering/containers.md` with the following structure:
 ---
 title: "Containers"
 updated: YYYY-MM-DD
+sidebar:
+  order: 4
 ---
 # <Name> — Container Architecture (C4 Level 2)
 
@@ -106,6 +108,8 @@ graph LR
 
 ## Container Matrix
 
+<!-- Tech choices justified in Blueprint — list technology here without justification -->
+
 | # | Container | Bounded Context | Technology | Responsibility | Protocol In | Protocol Out |
 |---|-----------|----------------|------------|----------------|-------------|-------------|
 | 1 | API Server | Context A | [tech] | [1 sentence] | HTTP/REST | SQL, async msg |
@@ -123,12 +127,14 @@ graph LR
 
 ---
 
-## Per-Container NFRs
+## Scaling Strategy
 
-| Container | Availability | Latency | Throughput | Scaling Strategy |
-|-----------|-------------|---------|------------|-----------------|
-| API Server | [target] | [target] | [target] | [horizontal/vertical/none] |
-| Worker | [target] | [target] | [target] | [strategy] |
+| Container | Strategy | Trigger | Notes |
+|-----------|----------|---------|-------|
+| API Server | [horizontal/vertical/none] | [condition] | [notes] |
+| Worker | [strategy] | [condition] | [notes] |
+
+> NFRs globais e targets mensuráveis → ver [blueprint.md](../blueprint/)
 
 ---
 
@@ -155,10 +161,11 @@ graph LR
 | 1 | Does every container have a single responsibility? | Merge or justify |
 | 2 | Are there any orphan containers (disconnected)? | Connect or remove |
 | 3 | Are protocols defined for every communication? | Add them |
-| 4 | Are NFRs measurable per container? | Add targets |
+| 4 | Does Scaling Strategy avoid duplicating NFR targets from Blueprint? | Remove targets, keep only strategy/trigger |
 | 5 | Does the Mermaid diagram render correctly? | Fix syntax |
 | 6 | Are all bounded contexts from domain-model represented? | Add missing containers |
 | 7 | Container count <= 8? | Challenge: "Do you have a team to maintain this many?" |
+| 8 | Does Container Matrix avoid justifying technology choices? (Blueprint owns stack) | Remove justifications |
 
 ## Error Handling
 

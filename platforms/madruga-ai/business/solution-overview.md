@@ -1,6 +1,8 @@
 ---
 title: "Solution Overview"
 updated: 2026-04-05
+sidebar:
+  order: 2
 ---
 # Madruga AI — Solution Overview
 

@@ -133,10 +133,6 @@ export function discoverEpics(platformName, platformsDir) {
     });
 }
 
-function platformFileExists(platformName, relPath) {
-  return fs.existsSync(path.join(PLATFORMS_DIR, platformName, relPath));
-}
-
 export function buildSidebar(platforms) {
   return platforms.map((p) => {
     const epics = discoverEpics(p.name);
@@ -159,28 +155,18 @@ export function buildSidebar(platforms) {
         },
         {
           label: 'Business',
-          items: [
-            { slug: `${p.name}/business/vision` },
-            { slug: `${p.name}/business/solution-overview` },
-            ...(platformFileExists(p.name, 'business/process.md')
-              ? [{ slug: `${p.name}/business/process` }]
-              : []),
-          ],
+          autogenerate: { directory: `${p.name}/business` },
         },
         {
           label: 'Engineering',
+          autogenerate: { directory: `${p.name}/engineering` },
+        },
+        {
+          label: 'ADRs',
+          collapsed: true,
           items: [
-            {
-              label: 'ADRs',
-              collapsed: true,
-              items: [
-                { label: 'Decision Overviews', link: `/${p.name}/decisions/` },
-                { label: 'ADRs', collapsed: true, autogenerate: { directory: `${p.name}/decisions` } },
-              ],
-            },
-            { slug: `${p.name}/engineering/blueprint` },
-            { slug: `${p.name}/engineering/domain-model` },
-            { slug: `${p.name}/engineering/integrations` },
+            { label: 'Decision Overviews', link: `/${p.name}/decisions/` },
+            { label: 'ADRs', collapsed: true, autogenerate: { directory: `${p.name}/decisions` } },
           ],
         },
         {

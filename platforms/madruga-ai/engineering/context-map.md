@@ -1,10 +1,14 @@
 ---
 title: "Context Map"
 updated: 2026-04-06
+sidebar:
+  order: 3
 ---
 # Madruga AI — Context Map
 
 > Relacionamentos entre bounded contexts com padroes DDD explicitos. Monolito modular com SQLite compartilhado. Ultima atualizacao: 2026-04-06.
+>
+> Definicoes dos BCs → ver [domain-model.md](../domain-model/) · NFRs e stack → ver [blueprint.md](../blueprint/)
 
 ---
 

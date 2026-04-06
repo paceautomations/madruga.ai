@@ -111,7 +111,7 @@ def test_conditional_business_flow(tmp_path: Path, template_root: Path, default_
     run_copy(str(template_root), str(dst), data=data, unsafe=True, defaults=True)
 
     platform_yaml = yaml.safe_load((dst / "platform.yaml").read_text())
-    # After LikeC4 removal, views block no longer exists in platform.yaml
+    # Views block no longer exists in platform.yaml (diagrams are Mermaid inline)
     views = platform_yaml.get("views", {})
     assert not views, "platform.yaml should not have views block after Mermaid migration"
 

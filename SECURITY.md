@@ -211,7 +211,7 @@ madruga.ai follows a **stdlib-first** dependency policy:
 | Python scripts | `stdlib` + `pyyaml` | Minimize supply chain attack surface |
 | Portal | `astro`, `starlight`, `react` | Standard static site generator stack |
 | CI | `actions/checkout@v4`, `actions/setup-python@v5` | Pinned GitHub Actions only |
-| CLI tools | `likec4`, `copier` | Installed globally, not bundled |
+| CLI tools | `copier` | Installed globally, not bundled |
 
 ### Lock Files
 

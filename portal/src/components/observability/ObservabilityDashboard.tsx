@@ -36,7 +36,7 @@ export interface StatsData {
 
 // ── Constants ──
 
-const EASTER_BASE = 'http://localhost:8040';
+const EASTER_BASE = 'http://localhost:18789';
 const POLL_INTERVAL = 10_000;
 
 // ── Helpers ──
@@ -114,7 +114,7 @@ export default function ObservabilityDashboard({ platform }: ObservabilityDashbo
         >
           <strong>Easter server not reachable</strong>
           <span style={{ color: 'var(--sl-color-gray-3, #888)', fontSize: '0.75rem' }}>
-            Observability data requires the Easter API running on <code style={{ fontSize: '0.75rem' }}>localhost:8040</code>.
+            Observability data requires the Easter API running on <code style={{ fontSize: '0.75rem' }}>localhost:18789</code>.
             Start it with: <code style={{ fontSize: '0.75rem' }}>make easter</code>
           </span>
         </div>

@@ -12,7 +12,7 @@ rationale: Zero overhead operacional — git ja e usado, nenhum servidor adicion
 
 ## Contexto
 
-O sistema gera e gerencia artefatos de documentacao (specs, plans, ADRs, epics, modelos LikeC4). Estes artefatos sao texto/markdown e precisam de: versionamento com historico, diff legivel, code review via PR, e acesso por humanos e LLMs. A persistencia precisa ter zero overhead operacional — sem servidor de banco, sem migrations, sem backups.
+O sistema gera e gerencia artefatos de documentacao (specs, plans, ADRs, epics, diagramas Mermaid inline). Estes artefatos sao texto/markdown e precisam de: versionamento com historico, diff legivel, code review via PR, e acesso por humanos e LLMs. A persistencia precisa ter zero overhead operacional — sem servidor de banco, sem migrations, sem backups.
 
 ## Decisao
 
@@ -51,4 +51,4 @@ O papel do SQLite expandiu alem de "lightweight operational data". Agora inclui:
 - **Local config** (active_platform, repos_base_dir) — estado local da maquina
 - **Decisions + Memory** como source of truth (ADR-012, epic 009)
 
-O principio continua: **filesystem e source of truth para escrita** (platform.yaml, .md, .likec4). SQLite e **interface de leitura** populada via `reseed` a partir dos YAMLs. Veja ADR-012 para detalhes do SQLite WAL mode.
+O principio continua: **filesystem e source of truth para escrita** (platform.yaml, .md). SQLite e **interface de leitura** populada via `reseed` a partir dos YAMLs. Veja ADR-012 para detalhes do SQLite WAL mode.

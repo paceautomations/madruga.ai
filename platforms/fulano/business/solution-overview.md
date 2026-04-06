@@ -1,6 +1,8 @@
 ---
 title: "Solution Overview"
 updated: 2026-03-27
+sidebar:
+  order: 2
 ---
 # Fulano — Solution Overview
 

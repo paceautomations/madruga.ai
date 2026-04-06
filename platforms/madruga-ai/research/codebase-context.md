@@ -27,7 +27,7 @@ madruga.ai/
 │   ├── dag_executor.py (2,117) # DAG scheduler, circuit breaker, skill dispatch
 │   ├── platform_cli.py (833)  # CLI: list, lint, status, seed, register
 │   ├── post_save.py (558)     # Artifact recording → DB
-│   ├── easter.py (609)        # FastAPI 24/7 daemon, /api endpoints
+│   ├── easter.py (609)        # Easter 24/7, /api endpoints
 │   ├── telegram_bot.py (539)  # Gate approvals via Telegram inline buttons
 │   ├── eval_scorer.py (294)   # 4-dimension heuristic scoring (Q/A/C/E)
 │   ├── worktree.py (210)      # Git worktree lifecycle for external epics
@@ -96,7 +96,7 @@ madruga.ai/
 | ntfy.sh | Emergency alerts | HTTPS POST (stdlib) | ntfy.py |
 | Sentry | Error tracking | SDK DSN (optional) | easter.py |
 | GitHub | VCS operations | SSH/HTTPS git | ensure_repo.py |
-| systemd | Daemon watchdog | Unix socket | sd_notify.py |
+| systemd | Easter watchdog | Unix socket | sd_notify.py |
 
 ---
 
@@ -105,5 +105,5 @@ madruga.ai/
 - **dag_executor.py (2,117 LOC)** is the largest module — handles DAG parsing, sort, dispatch, circuit breaker, retry, gates, auto-commit. Candidate for decomposition.
 - **DB module isolation**: db_core, db_pipeline, db_decisions, db_observability have zero cross-imports.
 - **Claude CLI coupling**: All skill dispatch via `claude -p` subprocess — no SDK.
-- **Easter as runtime**: FastAPI daemon runs DAG scheduler, gate poller, and observability API.
+- **Easter as runtime**: runs DAG scheduler, gate poller, and observability API.
 - **Self-ref constraint**: madruga-ai epics must run sequentially (shared DB + skills).

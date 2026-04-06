@@ -174,7 +174,7 @@ RTK mapeia "o que mudou" → "que docs atualizar":
 | Nova skill | pipeline-dag-knowledge.md, CLAUDE.md, portal sidebar |
 | Novo script | CLAUDE.md (Common Commands) |
 | Nova migration | CLAUDE.md (Active Technologies) |
-| Novo ecossistema/platform | portal LikeC4Diagram.tsx, platform.yaml |
+| Novo ecossistema/platform | portal sidebar config, platform.yaml |
 
 ### F. Fail-safe com fallback
 

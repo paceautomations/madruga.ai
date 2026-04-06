@@ -1,6 +1,8 @@
 ---
 title: "Business Process"
 updated: 2026-04-05
+sidebar:
+  order: 3
 ---
 # Madruga AI — Business Flows
 
@@ -397,7 +399,7 @@ sequenceDiagram
 
 **Premissas para este fluxo:**
 - O portal auto-descobre plataformas escaneando manifesto de cada uma
-- Diagramas LikeC4 sao interativos (nao imagens estaticas)
+- Diagramas Mermaid sao renderizados pelo portal (astro-mermaid)
 - O dashboard reflete o estado do banco (atualizado a cada save de skill)
 - Documentacao versionada e sempre a fonte da verdade — o portal e view layer
 

@@ -1,32 +1,18 @@
 ---
 title: "Domain Model"
 updated: 2026-04-06
+sidebar:
+  order: 2
 ---
 # Madruga AI — Domain Model
 
-> DDD domain model com bounded contexts, aggregates, entities, value objects e invariants. Derivado do codebase real (~8,500 LOC Python). Ultima atualizacao: 2026-04-06.
+> DDD domain model com bounded contexts, aggregates, entities, value objects e invariants. Derivado do codebase real. Ultima atualizacao: 2026-04-06.
+>
+> Stack e NFRs → ver [blueprint.md](../blueprint/) · Relacionamentos DDD → ver [context-map.md](../context-map/)
 
 ---
 
-## Context Map
-
-```mermaid
-graph LR
-    subgraph madruga["Madruga AI"]
-        PO["Pipeline\nOrchestration"]
-        PS["Pipeline\nState"]
-        OBS["Observability"]
-        DM["Decision &\nMemory"]
-        NT["Notifications"]
-    end
-
-    PO -->|"grava runs\n(upstream)"| PS
-    PO -->|"cria traces\n(upstream)"| OBS
-    PO -->|"notifica gates\n(upstream)"| NT
-    PS -->|"alimenta\n(upstream)"| OBS
-    DM -->|"pesquisa FTS5\n(conformist)"| PS
-    NT -->|"atualiza gate_status\n(ACL)"| PS
-```
+## Bounded Contexts
 
 | # | Bounded Context | Proposito | Justificativa de Separacao | Aggregates |
 |---|----------------|-----------|---------------------------|------------|
@@ -40,6 +26,8 @@ graph LR
 
 **Interfaces (nao sao BCs):** platform_cli.py (ACL sobre Pipeline State), skill definitions (.claude/commands/ — fuel do pipeline, nao dominio proprio).
 
+> Relacionamentos entre contextos e padroes DDD → ver [context-map.md](../context-map/)
+
 ---
 
 ## Bounded Context 1: Pipeline Orchestration
@@ -52,8 +40,8 @@ graph LR
 | **Proposito** | Parsear DAG de platform.yaml, ordenar topologicamente, despachar skills via claude -p, gerenciar retry com circuit breaker |
 | **Linguagem Ubiqua** | node, gate, dispatch, topological sort, circuit breaker, half-open, backoff, skill, trace |
 | **Aggregates** | PipelineExecution, CircuitBreaker |
-| **Modulos** | dag_executor.py (2,117 LOC), easter.py (609), worktree.py (210), ensure_repo.py (160), implement_remote.py (232) |
-| **Relacao com outros** | Upstream de Pipeline State (grava runs), Observability (cria traces), Notifications (notifica gates) |
+| **Modulos** | dag_executor.py, easter.py, worktree.py, ensure_repo.py, implement_remote.py |
+
 
 ### Aggregates
 
@@ -135,8 +123,8 @@ classDiagram
 | **Proposito** | Persistir e consultar estado de platforms, epics, nodes, runs, artifact provenance |
 | **Linguagem Ubiqua** | upsert, seed, migrate, platform_id, epic_id, node_id, run_id, gate_status, output_hash |
 | **Aggregates** | Platform, Epic, PipelineRun |
-| **Modulos** | db_core.py (354), db_pipeline.py (925), post_save.py (558), config.py (23) |
-| **Relacao com outros** | Downstream de Orchestration (recebe runs), upstream de Observability (alimenta traces) |
+| **Modulos** | db_core.py, db_pipeline.py, post_save.py, config.py |
+
 
 ### Aggregates
 
@@ -232,7 +220,7 @@ classDiagram
 | **Proposito** | Rastrear execucoes (traces), avaliar qualidade (eval scores), agregar estatisticas, exportar dados |
 | **Linguagem Ubiqua** | trace, span, dimension, score, quality, adherence, completeness, cost_efficiency |
 | **Aggregates** | Trace, EvalScore |
-| **Modulos** | db_observability.py (375), eval_scorer.py (294), observability_export.py (114) |
+| **Modulos** | db_observability.py, eval_scorer.py, observability_export.py |
 
 ### Aggregates
 
@@ -275,7 +263,7 @@ classDiagram
 | **Nome** | Decision & Memory |
 | **Proposito** | Registrar ADRs, classificar decisoes (1-way/2-way), consolidar memory entries, busca FTS5 |
 | **Linguagem Ubiqua** | decision, supersede, accepted, deprecated, 1-way-door, memory_type, content_hash |
-| **Modulos** | db_decisions.py (729), decision_classifier.py (136), sync_memory.py (169), memory_consolidate.py (245) |
+| **Modulos** | db_decisions.py, decision_classifier.py, sync_memory.py, memory_consolidate.py |
 
 **Key entities:** Decision (ADR registry com FTS5), MemoryEntry (user/feedback/project/reference), DecisionLink (supersedes/depends_on/contradicts).
 
@@ -292,7 +280,7 @@ classDiagram
 | **Nome** | Notifications |
 | **Proposito** | Notificar humano sobre gates pendentes, entregar aprovacoes/rejeicoes de volta ao pipeline |
 | **Linguagem Ubiqua** | gate_notification, inline_keyboard, callback_query, backoff, offset |
-| **Modulos** | telegram_bot.py (539), telegram_adapter.py (98), ntfy.py (19), sd_notify.py (25) |
+| **Modulos** | telegram_bot.py, telegram_adapter.py, ntfy.py, sd_notify.py |
 
 **Key entity:** GateNotification (envia inline keyboard via Telegram, processa callback de aprovacao/rejeicao, atualiza gate_status no Pipeline State via ACL).
 

@@ -189,7 +189,7 @@ Documentação que o agente consulta sob demanda, mas **não carrega por default
 | `docs/domain-model.md` | Bounded contexts, aggregates, invariants |
 | `docs/integration.md` | Pontos de integração, data flows, contratos de API |
 
-**Regra:** Diagramas como código (LikeC4, Mermaid) — nunca imagens binárias sem fonte.
+**Regra:** Diagramas como código (Mermaid inline em `.md`) — nunca imagens binárias sem fonte.
 
 ### Security docs (profundidade máxima)
 
@@ -538,7 +538,7 @@ CLAUDE.md (instrução ao agente)
   │     └── docs/security/ ──── Threat model (profundidade)
   │
   ├── @docs/architecture.md ─── Referência arquitetural
-  │     └── model/*.likec4 ──── Diagramas como código
+  │     └── engineering/*.md ── Diagramas Mermaid inline
   │
   ├── .claude/rules/ ────────── Regras condicionais por path
   │     ├── api-rules.md

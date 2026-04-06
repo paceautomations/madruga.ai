@@ -89,6 +89,8 @@ Write the document with exactly **6 sections**. All generated content MUST be in
 ---
 title: "Solution Overview"
 updated: YYYY-MM-DD
+sidebar:
+  order: 2
 ---
 # <Name> — Solution Overview
 

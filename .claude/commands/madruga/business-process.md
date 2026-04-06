@@ -81,6 +81,8 @@ Write the document with **3-5 business flows**. Structure: **End-to-End vision f
 ---
 title: "Business Process"
 updated: YYYY-MM-DD
+sidebar:
+  order: 3
 ---
 # <Name> — Business Flows
 

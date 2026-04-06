@@ -1,9 +1,14 @@
 ---
 title: "Integrations"
+sidebar:
+  order: 5
 ---
-# Integrations
+# Fulano — Integrations
 
-## Diagrama
+> Pontos de integracao externa: APIs, webhooks, filas, bancos de dados externos.
+> Topologia de deploy → ver [blueprint.md](../blueprint/) · Containers → ver [containers.md](../containers/)
+
+---
 
 ## Tabela de Integracoes
 

@@ -1,6 +1,8 @@
 ---
 title: "Vision"
 updated: 2026-04-02
+sidebar:
+  order: 1
 ---
 # Madruga AI — Business Vision
 
@@ -12,7 +14,7 @@ Documentacao de arquitetura, especificacao de features e implementacao vivem dis
 
 **North Star Metric:** Percentual de epics processados autonomamente (pitch-to-PR sem intervencao humana). Hoje: 0%. Meta 6 meses: 80%.
 
-**Diferencial estrutural:** Nenhuma ferramenta existente conecta documentacao arquitetural, especificacao de features e execucao autonoma em um unico pipeline git-versionado. Madruga AI e o unico sistema onde o modelo de arquitetura (LikeC4) alimenta diretamente o pipeline de especificacao (SpecKit), que alimenta execucao autonoma (Easter), que retroalimenta a arquitetura (RECONCILE).
+**Diferencial estrutural:** Nenhuma ferramenta existente conecta documentacao arquitetural, especificacao de features e execucao autonoma em um unico pipeline git-versionado. Madruga AI e o unico sistema onde a documentacao arquitetural (Mermaid inline em .md) alimenta diretamente o pipeline de especificacao (SpecKit), que alimenta execucao autonoma (Easter), que retroalimenta a arquitetura (RECONCILE).
 
 ---
 
@@ -58,7 +60,7 @@ Times de engenharia de software (1-20 engenheiros) que precisam manter documenta
 
 ### Moat estrutural
 
-1. **LikeC4-first pipeline:** O modelo de arquitetura (`.likec4`) e a source of truth. Markdown e view layer. Isso garante que diagramas, tabelas e documentacao nunca divergem — sao gerados do mesmo modelo.
+1. **Mermaid-inline pipeline:** Diagramas Mermaid vivem inline nos proprios `.md` de arquitetura — contexto visual junto com prosa, zero tooling extra (ADR-020). GitHub, Starlight e qualquer viewer Markdown renderiza nativamente.
 2. **Skills reutilizaveis:** As mesmas skills (`speckit.*` e `madruga/*`) funcionam tanto interativamente (humano invoca) quanto autonomamente (easter invoca via `SpeckitBridge`). Zero reescrita.
 3. **File-based + git-versionado:** Todo estado vive em arquivos git. Sem banco externo para documentacao, sem SaaS para specs. Diff, blame, revert — tudo funciona nativamente.
 4. **RECONCILE loop:** Apos implementacao, o sistema compara o diff do PR com a arquitetura e auto-atualiza quando o drift e baixo. Nenhuma ferramenta existente fecha esse loop.
@@ -69,7 +71,7 @@ Times de engenharia de software (1-20 engenheiros) que precisam manter documenta
 | Capability | Status | Criticidade |
 |------------|--------|-------------|
 | Platform CLI (scaffold, lint, sync) | Funcional | Alta |
-| LikeC4 model + vision-build pipeline | Funcional | Alta |
+| Mermaid inline diagrams + astro-mermaid | Funcional | Alta |
 | Portal Starlight com auto-discovery | Funcional | Alta |
 | SpecKit pipeline (specify, plan, tasks) | Funcional (interativo + autonomo) | Alta |
 | DAG Executor + compose_skill_prompt | Funcional — execucao autonoma do pipeline via dag_executor.py | Alta |
@@ -99,7 +101,7 @@ Uso interno — sem pricing externo. Custo operacional: consumo de API Claude (c
 
 ## 5. Principios inegociaveis
 
-1. **LikeC4-first** — O modelo `.likec4` e a source of truth. Markdown e view layer. Nunca editar conteudo dentro de marcadores `<!-- AUTO -->`.
+1. **Mermaid-inline** — Diagramas Mermaid inline nos `.md` sao a source of truth visual (ADR-020). Prosa e diagrama vivem juntos, sem tooling externo.
 2. **Skills reutilizaveis** — Mesma skill funciona interativa e autonomamente. Se a skill nao funciona nos dois modos, esta errada.
 3. **Copier template** — Toda plataforma herda a mesma estrutura. Desvios sao bugs, nao features.
 4. **File-based storage** — Git-versionado, zero overhead operacional. Sem banco externo para documentacao.
@@ -129,7 +131,7 @@ Uso interno — sem pricing externo. Custo operacional: consumo de API Claude (c
 | **arc42 / Structurizr** | Documentacao arquitetural + diagramas C4 | Standard industry, DSL maduro (Structurizr), comunidade ativa | Sem pipeline spec-to-code. Sem execucao autonoma. Diagramas sao output final, nao input de pipeline. |
 | **Backstage (Spotify)** | Developer portal + service catalog | Ecossistema de plugins, adocao enterprise, TechDocs | Sem IA. Sem pipeline de especificacao. Focado em catalog, nao em documentacao arquitetural ativa. |
 | **adr-tools / log4brains** | ADR management | Simples, leve, focado | So ADRs. Sem visao integrada de arquitetura. Sem pipeline. |
-| **BMAD / GSD** | Frameworks spec-to-code com IA | Pipeline similar (spec -> plan -> tasks), multi-agent | Sem documentacao arquitetural. Sem LikeC4. Sem RECONCILE loop. Skills nao reutilizaveis interativo/autonomo. |
+| **BMAD / GSD** | Frameworks spec-to-code com IA | Pipeline similar (spec -> plan -> tasks), multi-agent | Sem documentacao arquitetural integrada. Sem RECONCILE loop. Skills nao reutilizaveis interativo/autonomo. |
 | **Cursor / Windsurf / Claude Code** | AI-assisted coding | Excelente para implementacao pontual, context-aware | Sem framework de documentacao. Sem pipeline determinístico. Sem persistencia de decisoes arquiteturais entre sessoes. |
 
 **Tese competitiva:** Nenhum player existente conecta as 3 camadas (documentacao arquitetural + especificacao de features + execucao autonoma) em um unico pipeline git-versionado. Madruga AI nao compete com IDEs ou CI/CD — ocupa o espaco entre "decisao arquitetural" e "codigo em PR", que hoje e um vazio de tooling.
@@ -140,7 +142,7 @@ Uso interno — sem pricing externo. Custo operacional: consumo de API Claude (c
 
 | Termo | Definicao | Dominio |
 |-------|-----------|---------|
-| **Platform** | Unidade central de documentacao. Cada plataforma (`platforms/<name>/`) contem Vision, epics e modelo LikeC4. | Core |
+| **Platform** | Unidade central de documentacao. Cada plataforma (`platforms/<name>/`) contem Vision, epics e diagramas Mermaid inline. | Core |
 | **Vision** | Conjunto de artefatos de arquitetura de uma plataforma: business/, engineering/, decisions/, model/. | Core |
 | **Epic** | Folder autocontido (`epics/NNN-slug/`) que progride por pitch -> spec -> plan -> tasks -> implement. | Planning |
 | **Pitch** | Documento Shape Up que define problema, appetite, solucao e rabbit holes. Ponto de entrada de um epic. | Planning |
