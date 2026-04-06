@@ -124,6 +124,157 @@ Referencia tecnica consolidada da plataforma **Fulano — Agentes WhatsApp**: co
 | Infisical | Docker Compose (self-hosted) | 8080/HTTP | Single instance |
 | Evolution API | Cloud mode (managed) | — (webhook) | Managed pelo provider |
 
+#### Deploy Topology (L1)
+
+> Visao geral de todos os componentes, atores e conexoes da plataforma. [→ Ver containers em detalhe](#containers)
+
+```mermaid
+graph LR
+    %% Actors
+    agent(("Agente WhatsApp"))
+    admin_user(("Admin / Operador"))
+
+    %% Platform
+    subgraph fulano ["Fulano Platform"]
+        fulano-api["fulano-api<br/><small>Python 3.12 + FastAPI</small>"]
+        fulano-worker["fulano-worker<br/><small>Python 3.12 + ARQ</small>"]
+        fulano-admin["fulano-admin<br/><small>Next.js 15 + shadcn/ui</small>"]
+    end
+
+    %% Infrastructure
+    subgraph infra ["Infrastructure"]
+        redis["Redis 7"]
+        supabase-fulano[("Supabase Fulano<br/><small>PG 15 + pgvector</small>")]
+        bifrost["Bifrost<br/><small>Go LLM Proxy</small>"]
+    end
+
+    %% External Services
+    subgraph external ["External"]
+        evolution-api["Evolution API<br/><small>WhatsApp Gateway</small>"]
+        supabase-resenhai[("Supabase ResenhAI<br/><small>PG 15 read-only</small>")]
+        claude-sonnet["Claude Sonnet"]
+        claude-haiku["Claude Haiku"]
+        langfuse["LangFuse v3"]
+        infisical["Infisical"]
+    end
+
+    %% Actor connections
+    agent -- "HTTPS webhook" --> fulano-api
+    admin_user -- "HTTPS + JWT" --> fulano-admin
+    evolution-api -- "webhook POST<br/>HMAC-SHA256" --> fulano-api
+
+    %% Internal platform flows
+    fulano-api -- "XADD Redis Streams" --> redis
+    fulano-api -- "GET/SET cache" --> redis
+    fulano-api -- "Socket.io WebSocket" --> fulano-admin
+    fulano-admin -- "REST API /api/v1/*" --> fulano-api
+    fulano-admin -- "Supabase JS client" --> supabase-fulano
+    redis -- "XREADGROUP" --> fulano-worker
+    fulano-worker -- "PUBLISH events" --> redis
+
+    %% Worker → Infrastructure
+    fulano-worker -- "asyncpg SQL" --> supabase-fulano
+    supabase-fulano -. "PG LISTEN/NOTIFY" .-> fulano-worker
+    fulano-worker -- "POST /v1/chat/completions" --> bifrost
+
+    %% Worker → External
+    fulano-worker -- "POST sendText" --> evolution-api
+    fulano-worker -- "asyncpg read-only" --> supabase-resenhai
+    fulano-worker -. "HTTPS SDK traces" .-> langfuse
+    fulano-worker -- "SDK secret read" --> infisical
+
+    %% Bifrost → LLMs
+    bifrost -- "Anthropic API" --> claude-sonnet
+    bifrost -- "Anthropic API<br/>fallback" --> claude-haiku
+```
+
+#### Containers (L2)
+
+> Detalhe dos containers deployaveis, seus componentes internos e protocolos de comunicacao. [→ Ver domain model](../domain-model/) | [→ Ver fluxo de negocio](../business/process/)
+
+```mermaid
+graph LR
+    %% Actors
+    agent(("Agente WhatsApp"))
+    admin_user(("Admin / Operador"))
+
+    subgraph fulano ["Fulano Platform"]
+        subgraph fulano_api ["fulano-api :8040"]
+            api_webhook["Webhook receiver<br/><small>HMAC-SHA256 validation</small>"]
+            api_rest["REST endpoints<br/><small>/api/v1/*</small>"]
+            api_socketio["Socket.io gateway<br/><small>realtime push</small>"]
+        end
+
+        subgraph fulano_worker ["fulano-worker"]
+            wk_debounce["Debounce flush<br/><small>Redis Lua 3s window</small>"]
+            wk_llm["LLM orchestration<br/><small>via Bifrost proxy</small>"]
+            wk_delivery["Delivery + retry<br/><small>3x backoff</small>"]
+            wk_eval["Eval batch jobs<br/><small>DeepEval offline</small>"]
+            wk_trigger["Trigger evaluator<br/><small>PG LISTEN/NOTIFY</small>"]
+        end
+
+        subgraph fulano_admin ["fulano-admin :3000"]
+            adm_dash["Dashboard<br/><small>metricas por tenant</small>"]
+            adm_conv["Conversation viewer<br/><small>realtime via Socket.io</small>"]
+            adm_prompt["Prompt manager<br/><small>versionamento</small>"]
+            adm_handoff["Handoff queue<br/><small>fila de atendimento</small>"]
+        end
+    end
+
+    subgraph storage ["Storage"]
+        redis["Redis 7<br/><small>arq: buf: cache: ps:</small>"]
+        supabase-fulano[("Supabase Fulano<br/><small>PG 15 + pgvector + RLS</small>")]
+    end
+
+    subgraph llm_proxy ["LLM Proxy"]
+        bifrost["Bifrost :8050<br/><small>Go — rate limit + fallback</small>"]
+    end
+
+    subgraph external ["External Services"]
+        evolution-api["Evolution API<br/><small>WhatsApp gateway</small>"]
+        supabase-resenhai[("Supabase ResenhAI<br/><small>PG 15 read-only</small>")]
+        claude-sonnet["Claude Sonnet<br/><small>primary LLM</small>"]
+        claude-haiku["Claude Haiku<br/><small>classification + fallback</small>"]
+        langfuse["LangFuse v3<br/><small>tracing + eval</small>"]
+        infisical["Infisical<br/><small>secrets vault</small>"]
+    end
+
+    %% Actor → Platform
+    agent -- "HTTPS" --> api_webhook
+    evolution-api -- "webhook POST<br/>HMAC-SHA256" --> api_webhook
+    admin_user -- "HTTPS + JWT" --> fulano_admin
+
+    %% API internal
+    api_webhook -- "XADD stream:messages" --> redis
+    api_webhook -- "SET dedup message_id<br/>TTL 24h" --> redis
+    api_rest -- "asyncpg SQL" --> supabase-fulano
+    api_socketio -- "WebSocket" --> adm_conv
+
+    %% Admin → API
+    fulano_admin -- "REST /api/v1/*" --> api_rest
+    fulano_admin -- "Supabase JS client<br/>Auth + queries" --> supabase-fulano
+
+    %% Redis → Worker
+    redis -- "XREADGROUP<br/>BLOCK 5000ms" --> wk_debounce
+
+    %% Worker processing
+    wk_debounce -- "BufferedBatch" --> wk_llm
+    wk_llm -- "POST /v1/chat/completions" --> bifrost
+    wk_llm -- "asyncpg SQL" --> supabase-fulano
+    wk_llm -- "asyncpg read-only" --> supabase-resenhai
+    wk_delivery -- "POST sendText" --> evolution-api
+    wk_delivery -- "PUBLISH ps:events" --> redis
+    wk_eval -. "HTTPS SDK<br/>fire-and-forget" .-> langfuse
+    wk_trigger -- "SDK secret read<br/>cached 5min" --> infisical
+
+    %% PG events → Worker
+    supabase-fulano -. "PG LISTEN/NOTIFY<br/>games, group_members" .-> wk_trigger
+
+    %% Bifrost → LLMs
+    bifrost -- "Anthropic API" --> claude-sonnet
+    bifrost -- "Anthropic API<br/>fallback chain" --> claude-haiku
+```
+
 ### 3.2 Ambientes
 
 | Ambiente | Finalidade | Infra |

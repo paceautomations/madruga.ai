@@ -1,6 +1,7 @@
 ---
 title: 'ADR-001: LikeC4 como Source of Truth'
-status: Accepted
+status: Superseded
+superseded_by: ADR-020
 decision: We will use LikeC4 as the single source of truth for all architecture models,
   with `.likec4` files in `platforms/<name>/model/` and JSON export feeding the vision-build
   pipeline.
@@ -9,7 +10,7 @@ rationale: DSL declarativa com tipagem de elementos (person, platform, api, work
   boundedContext, module) mapeia diretamente para C4 + DDD
 ---
 # ADR-001: LikeC4 como Source of Truth para Modelos Arquiteturais
-**Status:** Accepted | **Data:** 2026-03-27
+**Status:** Superseded by [ADR-020](ADR-020-mermaid-inline-diagrams.md) | **Data:** 2026-03-27
 
 ## Contexto
 

@@ -179,21 +179,7 @@ export function buildSidebar(platforms) {
               ],
             },
             { slug: `${p.name}/engineering/blueprint` },
-            { label: 'System Landscape', link: `/${p.name}/landscape/` },
             { slug: `${p.name}/engineering/domain-model` },
-            { label: 'Containers', link: `/${p.name}/containers/` },
-            {
-              label: 'Context Map',
-              items: [
-                { label: 'Context Map', link: `/${p.name}/context-map/` },
-                ...p.views.structural
-                  .filter((v) => v.id.endsWith('Detail'))
-                  .map((v) => ({
-                    label: v.label,
-                    link: `/${p.name}/bc/${v.id.replace('Detail', '').toLowerCase()}/`,
-                  })),
-              ],
-            },
             { slug: `${p.name}/engineering/integrations` },
           ],
         },
@@ -218,29 +204,4 @@ export function buildSidebar(platforms) {
       ],
     };
   });
-}
-
-export function buildViewPaths(platform) {
-  const paths = {
-    index: `/${platform.name}/landscape/`,
-    containers: `/${platform.name}/containers/`,
-    contextMap: `/${platform.name}/context-map/`,
-  };
-
-  for (const flow of platform.views.flows ?? []) {
-    const slug = flow.id
-      .replace(/([A-Z])/g, '-$1')
-      .toLowerCase()
-      .replace(/^-/, '');
-    paths[flow.id] = `/${platform.name}/${slug}/`;
-  }
-
-  for (const view of platform.views.structural) {
-    if (view.id.endsWith('Detail')) {
-      const slug = view.id.replace('Detail', '').toLowerCase();
-      paths[view.id] = `/${platform.name}/bc/${slug}/`;
-    }
-  }
-
-  return paths;
 }

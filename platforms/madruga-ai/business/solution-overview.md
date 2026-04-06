@@ -1,6 +1,6 @@
 ---
 title: "Solution Overview"
-updated: 2026-03-31
+updated: 2026-04-05
 ---
 # Madruga AI — Solution Overview
 
@@ -37,12 +37,23 @@ Tudo vive em um unico lugar, versionado, consultavel por qualquer membro do time
 
 ---
 
+## Implementado (cont.) — Epics 017-021
+
+| Feature | Descricao | Por que é importante |
+|---------|-----------|---------------------|
+| **Observabilidade e tracing** | Traces hierarquicos por pipeline run, eval scoring em 4 dimensoes (quality, adherence, completeness, cost_efficiency), dashboard no portal com 4 tabs (Runs, Traces, Evals, Cost), API REST, export CSV, cleanup 90 dias | Visibilidade total sobre custo, performance e qualidade de cada execucao |
+| **Qualidade de codigo e DX** | db.py dividido em 4 modulos (db_core, db_pipeline, db_decisions, db_observability), error hierarchy tipada, structured logging (log_utils), 644 testes automatizados em 29 arquivos | Base de codigo sustentavel — cada modulo tem responsabilidade unica, erros sao tipados, logs parseados por CI |
+| **Pipeline intelligence** | Cost tracking (tokens_in/out, cost_usd por run), hallucination guard (detecta outputs sem tool calls), quick-fix skill (fast lane L2 para bug fixes: specify→implement→judge) | Custo visivel, outputs fabricados bloqueados, bug fixes sem overhead de 11 passos |
+| **Governanca de AI infrastructure** | CODEOWNERS (review obrigatorio em .claude/), CONTRIBUTING.md, SECURITY.md, PR template, skill-lint extensivel com blast radius detection | Mudancas em AI instructions nunca passam sem review — governanca minima estabelecida |
+
+---
+
 ## Next — Candidatos para proximos ciclos
 
 | Feature | Descricao | Por que é importante |
 |---------|-----------|---------------------|
+| **Fulano end-to-end** | Primeiro epic completo processado pelo Easter em repo externo Fulano — validacao real do pipeline autonomo pitch-to-PR | Prova que o sistema funciona fora do self-ref — valor real entregue |
 | **Roadmap auto-atualizado** | Roadmap gerado automaticamente do estado real dos ciclos, com drift score e status de milestones | Planejamento sempre reflete a realidade — nunca desatualizado |
-| **Observabilidade e tracing** | Traces hierarquicos por pipeline run, spans por node, metricas de custo/tokens, eval scoring no portal | Visibilidade total sobre custo, performance e qualidade de cada execucao |
 
 ---
 

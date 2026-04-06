@@ -1,6 +1,6 @@
 ---
 title: "Roadmap"
-updated: 2026-04-02
+updated: 2026-04-05
 ---
 # Madruga AI — Delivery Roadmap
 
@@ -48,6 +48,10 @@ gantt
     016 Easter 24/7              :done, e016, 2026-04-01, 1d
     section Post-MVP
     017 Observability & Evals    :done, e017, 2026-04-04, 1d
+    018 Pipeline Hardening       :done, e018, 2026-04-05, 1d
+    019 AI Infra as Code         :done, e019, 2026-04-05, 1d
+    020 Code Quality & DX        :done, e020, 2026-04-05, 1d
+    021 Pipeline Intelligence    :done, e021, 2026-04-05, 1d
 ```
 
 | # | Epic | Descricao | Status | Concluido |
@@ -64,6 +68,10 @@ gantt
 | 015 | Subagent Judge + Decision Classifier | Tech-reviewers: 4 personas paralelas (Arch Reviewer, Bug Hunter, Simplifier, Stress Tester) + Judge pass. Decision Classifier (risk score). Substitui verify (L2) e Tier 3 (L1). YAML config extensivel. 47 testes. | **shipped** | 2026-04-01 |
 | 016 | Easter 24/7 | FastAPI + asyncio easter: dag_scheduler (poll epics, dispatch pipeline), Telegram integration (gate approvals via inline keyboard), health_checker (degradation state machine + systemd watchdog), ntfy.sh fallback, Sentry. Endpoints /health + /status. systemd unit file. 393 LOC easter + ~200 LOC async dag_executor. 221 testes. | **shipped** | 2026-04-01 |
 | 017 | Observability, Tracing & Evals | Traces hierarquicos por pipeline run (trace → spans), eval scoring heuristico (4 dimensoes: quality, adherence, completeness, cost_efficiency), API REST (/api/traces, /api/stats, /api/evals, /api/export/csv), portal React (4 tabs: Runs, Traces, Evals, Cost), cleanup automatico 90 dias, context threading no DAG (analyze→judge→qa→reconcile), auto-escalate gate. Migration 010. eval_scorer.py + observability_export.py. 393 testes. | **shipped** | 2026-04-04 |
+| 018 | Pipeline Hardening & Safety | Context managers em dag_executor (elimina connection leaks), input validation (platform names, URLs, gate types), error hierarchy tipada (errors.py), graceful shutdown com signal handlers, path traversal security em post_save. | **shipped** | 2026-04-05 |
+| 019 | AI Infrastructure as Code | CODEOWNERS (.claude/ requer review), CONTRIBUTING.md (regras de PR, commits, AI code), SECURITY.md (trust model, secrets, subprocess isolation), PR template, skill-lint com blast radius detection. | **shipped** | 2026-04-05 |
+| 020 | Code Quality & DX | db.py (2.268 LOC) dividido em 4 modulos (db_core, db_pipeline, db_decisions, db_observability). Error hierarchy (errors.py). Structured logging (log_utils.py). Memory consolidation. 644 testes em 29 arquivos (~10.800 LOC). | **shipped** | 2026-04-05 |
+| 021 | Pipeline Intelligence | Cost tracking (tokens_in/out, cost_usd parseados do claude -p JSON output). Hallucination guard (detecta outputs sem tool calls). Quick-fix skill (fast lane L2: specify→implement→judge). | **shipped** | 2026-04-05 |
 
 ---
 
@@ -81,6 +89,10 @@ gantt
     016 Easter 24/7              :done, e016, 2026-04-01, 1d
     section Post-MVP
     017 Observability & Evals    :done, e017, 2026-04-04, 1d
+    018 Pipeline Hardening       :done, e018, 2026-04-05, 1d
+    019 AI Infra as Code         :done, e019, 2026-04-05, 1d
+    020 Code Quality & DX        :done, e020, 2026-04-05, 1d
+    021 Pipeline Intelligence    :done, e021, 2026-04-05, 1d
 ```
 
 ### Sequencia e Justificativa
@@ -131,28 +143,12 @@ graph LR
 
 ## Proximos Epics (candidatos)
 
-> **Source**: `docs/madruga/madruga_next_evolution.md` — consolidacao de 9 docs de referencia + benchmarks (Claude Code CLI, RTK, GSD, BMAD, Gas Town, OpenClaw). Revisao por 6 personas.
+> Todos os epics planejados (018-021) foram shipped em 2026-04-05. Proximos candidatos a definir.
 
-```mermaid
-graph LR
-    E018["018 Pipeline\nHardening (2w)"]
-    E019["019 AI Infra\nas Code (2w)"]
-    E020["020 Code Quality\n& DX (2w)"]
-    E021["021 Pipeline\nIntelligence (2w)"]
-    E017["017 Observability\n(shipped)"]
-
-    E018 --> E020
-    E017 --> E021
-```
-
-| # | Epic (candidato) | Problema | Appetite | Prioridade | Depende de | Status |
-|---|------------------|----------|----------|------------|------------|--------|
-| 018 | Pipeline Hardening & Safety | Connection leaks, no input validation, gate typos bypass approval, no error hierarchy, no graceful shutdown | 2w | P1 | — | planned |
-| 019 | AI Infrastructure as Code | `.claude/` changes merge without review, no blast radius visibility, no security scan, missing governance files | 2w | P1 | — | planned |
-| 020 | Code Quality & DX | db.py 2,268 lines (6 responsibilities mixed), inconsistent logging, memory grows unbounded, skills drift from contract | 2w | P2 | 018 | planned |
-| 021 | Pipeline Intelligence | No cost visibility (columns exist but empty), no hallucination detection, 24-skill pipeline too heavy for bug fixes | 2w | P3 | 017 | planned |
-
-**Nota**: 018 e 019 podem rodar em paralelo (bounded contexts diferentes: runtime vs CI/governance). 020 depende de 018 (error hierarchy). 021 depende de 017 (observability tables).
+| # | Candidato | Problema | Prioridade | Status |
+|---|-----------|----------|------------|--------|
+| — | Fulano end-to-end | Primeiro epic completo processado pelo Easter em repo externo Fulano — validacao real do pipeline autonomo pitch-to-PR | P0 | candidato |
+| — | Roadmap auto-atualizado | Roadmap gerado automaticamente do estado real dos ciclos, com drift score e status de milestones | P2 | candidato |
 
 ---
 
@@ -165,7 +161,7 @@ graph LR
 | Calibracao de personas do Subagent Judge | Reviews com muito noise (false positives) | Media | **Mitigado**: 4 personas fixas + Judge filtra por Accuracy/Actionability/Severity. Calibrado com 7 ADRs reais. |
 | aiogram breaking changes | TelegramAdapter quebra sem aviso | Baixa | Pin version. Health check detecta falha. Fallback log-only. Nao ocorreu ate agora. |
 | Team size = 1 | Nenhum paralelismo real entre 014 e 015 | Alta | **Materializado**: todos os epics foram sequenciais. Appetite real ~1d cada (vs 2w planejado). |
-| Documentation drift acumulado | Drift entre implementacao e docs cresce sem reconcile regular | Media | **Materializado**: 7/8 docs outdated neste reconcile. Mitigacao: rodar reconcile apos cada epic. |
+| Documentation drift acumulado | Drift entre implementacao e docs cresce sem reconcile regular | Media | **Materializado**: 4/13 docs outdated no reconcile consolidado 017-021. Mitigacao: rodar reconcile apos cada epic. |
 | stdlib shadowing (platform.py) | Import do modulo errado causa erros sutis | Media | **Mitigado**: renomeado para platform_cli.py + teste automatizado. |
 
 ---

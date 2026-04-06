@@ -14,11 +14,11 @@ def test_epic_cycle_exists(scaffold: Path):
     assert "epic_cycle" in pipeline, "Missing epic_cycle section in platform.yaml"
 
 
-def test_epic_cycle_has_11_nodes(scaffold: Path):
-    """epic_cycle contains exactly 11 nodes."""
+def test_epic_cycle_has_12_nodes(scaffold: Path):
+    """epic_cycle contains exactly 12 nodes."""
     content = yaml.safe_load((scaffold / "platform.yaml").read_text())
     nodes = content["pipeline"]["epic_cycle"]["nodes"]
-    assert len(nodes) == 11, f"Expected 11 epic_cycle nodes, got {len(nodes)}"
+    assert len(nodes) == 12, f"Expected 12 epic_cycle nodes, got {len(nodes)}"
 
 
 def test_epic_cycle_node_ids(scaffold: Path):
@@ -34,9 +34,10 @@ def test_epic_cycle_node_ids(scaffold: Path):
         "analyze",
         "implement",
         "analyze-post",
-        "verify",
+        "judge",
         "qa",
         "reconcile",
+        "roadmap-reassess",
     ]
     actual_ids = [n["id"] for n in nodes]
     assert actual_ids == expected_ids, f"Expected {expected_ids}, got {actual_ids}"
@@ -52,27 +53,12 @@ def test_epic_cycle_nodes_have_required_fields(scaffold: Path):
         assert not missing, f"Node {node['id']} missing fields: {missing}"
 
 
-def test_epic_cycle_optional_nodes(scaffold: Path):
-    """clarify and reconcile are marked optional."""
+def test_epic_cycle_all_nodes_mandatory(scaffold: Path):
+    """All 12 epic_cycle nodes are mandatory (no optional flag)."""
     content = yaml.safe_load((scaffold / "platform.yaml").read_text())
     nodes = content["pipeline"]["epic_cycle"]["nodes"]
-    node_map = {n["id"]: n for n in nodes}
-
-    for opt_id in ["clarify", "reconcile"]:
-        assert node_map[opt_id].get("optional") is True, f"Node {opt_id} should be optional"
-
-    for req_id in [
-        "epic-context",
-        "specify",
-        "plan",
-        "tasks",
-        "analyze",
-        "implement",
-        "analyze-post",
-        "verify",
-        "qa",
-    ]:
-        assert not node_map[req_id].get("optional"), f"Node {req_id} should not be optional"
+    for node in nodes:
+        assert not node.get("optional"), f"Node {node['id']} should not be optional — all L2 nodes are mandatory"
 
 
 def test_epic_cycle_outputs_use_epic_placeholder(scaffold: Path):

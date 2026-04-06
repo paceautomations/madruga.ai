@@ -3,7 +3,105 @@ title: "Domain Model"
 ---
 # Domain Model
 
-Consolidacao dos 4 dominios taticos do Fulano v2: entidades, diagramas de classe, schemas SQL e invariantes. Para a visao estrategica (Context Map), veja [Context Map](/fulano/context-map/).
+Consolidacao dos bounded contexts, context map (L3), diagramas de classe (L4), schemas SQL e invariantes do Fulano v2. Para a topologia de deploy e containers, veja [Blueprint](../blueprint/). Para o fluxo de negocio completo (L5), veja [Business Process](../business/process/).
+
+---
+
+## Context Map (L3)
+
+> Relacoes DDD entre bounded contexts: ACL, Customer-Supplier, Conformist, Pub-Sub. [→ Ver detalhe por BC abaixo](#channel-m1-m2-m3-m11)
+
+```mermaid
+flowchart LR
+    %% Bounded Contexts
+    subgraph Channel ["Channel<br/><small>#supporting — Ingestao e Entrega</small>"]
+        M1["M1 Recepcao"]
+        M2["M2 Debounce"]
+        M3["M3 Router"]
+        M11["M11 Entrega"]
+    end
+
+    subgraph Conversation ["Conversation (Core)<br/><small>#core — Pipeline IA</small>"]
+        M4["M4 Clientes"]
+        M5["M5 Contexto"]
+        M7["M7 Classificador"]
+        M8["M8 Agente IA"]
+        M9["M9 Avaliador"]
+    end
+
+    subgraph Safety ["Safety<br/><small>#supporting — Guardrails</small>"]
+        M6["M6 Guardrails Entrada"]
+        M10["M10 Guardrails Saida"]
+    end
+
+    subgraph Operations ["Operations<br/><small>#supporting — Handoff & Triggers</small>"]
+        M12["M12 Handoff"]
+        M13["M13 Triggers"]
+    end
+
+    subgraph Observability ["Observability<br/><small>#generic — Tracing & Metricas</small>"]
+        M14["M14 Observabilidade"]
+    end
+
+    %% External actors & systems
+    agent(("Agente WhatsApp"))
+    admin_user(("Admin"))
+    evolution-api["Evolution API"]
+    redis["Redis"]
+    bifrost["Bifrost"]
+    supabase-fulano[("Supabase Fulano")]
+    supabase-resenhai[("Supabase ResenhAI")]
+    langfuse["LangFuse"]
+
+    %% Conformist (aceita formato externo sem traducao)
+    evolution-api -- "Conformist" --> M1
+    agent -- "Conformist" --> M1
+
+    %% ACL (traduz formato externo, isola o core)
+    M3 -- "ACL" --> M4
+    M8 -- "ACL" --> bifrost
+    M8 -- "ACL" --> supabase-resenhai
+    M4 -- "ACL" --> supabase-fulano
+    M2 -- "ACL" --> redis
+
+    %% Customer-Supplier
+    M6 -- "Customer-Supplier" --> M7
+    M9 -- "Customer-Supplier" --> M10
+    M9 -- "Customer-Supplier" --> M12
+    M13 -- "Customer-Supplier" --> M11
+
+    %% Pub-Sub (observabilidade passiva)
+    M1 -. "Pub-Sub" .-> M14
+    M5 -. "Pub-Sub" .-> M14
+    M8 -. "Pub-Sub" .-> M14
+    M9 -. "Pub-Sub" .-> M14
+    M12 -. "Pub-Sub" .-> M14
+    M13 -. "Pub-Sub" .-> M14
+
+    %% Conformist (observabilidade → LangFuse)
+    M14 -- "Conformist" --> langfuse
+
+    %% Admin → Operations
+    admin_user --> M12
+```
+
+### Relacoes DDD
+
+| De | Para | Tipo | Descricao |
+|----|------|------|-----------|
+| Evolution API → Channel (M1) | Conformist | Channel aceita o schema de webhooks sem traducao |
+| Agente WhatsApp → Channel (M1) | Conformist | Aceita formato do usuario sem traducao |
+| Channel (M3) → Conversation (M4) | ACL | Traduz InboundMessage → ConversationRequest |
+| Conversation (M8) → Bifrost | ACL | Traduz para formato OpenAI-compatible |
+| Conversation (M8) → Supabase ResenhAI | ACL | Acesso read-only com ACL isolando schema externo |
+| Conversation (M4) → Supabase Fulano | ACL | Repositories com ACL isolam domain models do schema SQL |
+| Channel (M2) → Redis | ACL | Debounce via Lua scripts com ACL isolando detalhes |
+| Safety (M6) → Conversation (M7) | Customer-Supplier | Conversation consome Safety para validacao de entrada |
+| Conversation (M9) → Safety (M10) | Customer-Supplier | Conversation consome Safety para validacao de saida |
+| Conversation (M9) → Operations (M12) | Customer-Supplier | Conversation solicita handoff quando avaliador escala |
+| Operations (M13) → Channel (M11) | Customer-Supplier | Operations envia triggers proativos via Channel |
+| M1, M5, M8, M9, M12, M13 → Observability (M14) | Pub-Sub | Eventos de todos os modulos para tracing passivo |
+| Observability (M14) → LangFuse | Conformist | Conforma-se ao SDK/API do LangFuse |
 
 ---
 
@@ -11,7 +109,10 @@ Consolidacao dos 4 dominios taticos do Fulano v2: entidades, diagramas de classe
 
 Responsavel por receber mensagens do Evolution API, agrupar mensagens rapidas via debounce, decidir a rota e entregar a resposta de volta ao WhatsApp.
 
-### Class Diagram
+Integracoes: Evolution API, Redis. [→ Ver no fluxo de negocio: Fase 1 (Entrada), Fase 2 (Router), Fase 5 (Saida)](../business/process/)
+
+<details>
+<summary><strong>Class Diagram (L4)</strong></summary>
 
 ```mermaid
 classDiagram
@@ -81,6 +182,8 @@ classDiagram
     Router --> RouteDecision : produces
     Router --> DeliveryAttempt : triggers (if not IGNORE)
 ```
+
+</details>
 
 ### Structs de Pipeline (Channel)
 
@@ -290,7 +393,10 @@ CREATE INDEX idx_delivery_pending ON delivery_attempts (status) WHERE status = '
 
 Dominio central do Fulano. Gerencia o ciclo de vida de conversas, contexto do cliente, classificacao de intencao, orquestracao de agentes de resposta e avaliacao de qualidade.
 
-### Class Diagram
+Integracoes: Bifrost, Supabase Fulano, Supabase ResenhAI. [→ Ver no fluxo de negocio: Fase 3 (Pipeline Core), Fase 4 (Avaliador)](../business/process/)
+
+<details>
+<summary><strong>Class Diagram (L4)</strong></summary>
 
 ```mermaid
 classDiagram
@@ -397,6 +503,8 @@ classDiagram
     AgentOrchestrator --> ConversationState : reads/writes
     AgentOrchestrator --> AgentConfigVersion : selects (active or canary)
 ```
+
+</details>
 
 ### Structs de Pipeline (Conversation)
 
@@ -589,13 +697,85 @@ CREATE INDEX idx_eval_conversation ON eval_scores (tenant_id, conversation_id, m
 
 ---
 
+## Safety (M6, M10)
+
+Guardrails de entrada e saida que protegem o pipeline contra conteudo toxico, PII e prompt injection. [→ Ver no fluxo de negocio: Fase 3 (Guardrails Entrada), Fase 5 (Guardrails Saida)](../business/process/)
+
+<details>
+<summary><strong>Class Diagram (L4)</strong></summary>
+
+```mermaid
+classDiagram
+    class GuardrailInput {
+        +uuid message_id
+        +string content
+        +string message_type
+        +validate() GuardrailResult
+    }
+
+    class GuardrailResult {
+        <<enumeration>>
+        PASS
+        BLOCK
+        FLAG
+    }
+
+    class GuardrailLayer {
+        <<abstract>>
+        +string name
+        +int order
+        +check(input: GuardrailInput) GuardrailResult
+    }
+
+    class RegexLayer {
+        +string[] blocklist_patterns
+        +string[] pii_patterns
+        +int max_length
+        +check(input: GuardrailInput) GuardrailResult
+    }
+
+    class MLClassifierLayer {
+        +string model_name
+        +float threshold
+        +check(input: GuardrailInput) GuardrailResult
+    }
+
+    class LLMJudgeLayer {
+        +string llm_model
+        +string judge_prompt
+        +check(input: GuardrailInput) GuardrailResult
+    }
+
+    class OutputFormatter {
+        +uuid message_id
+        +string raw_response
+        +format_whatsapp() string
+        +check_prohibited() GuardrailResult
+        +split_long_messages() string[]
+    }
+
+    GuardrailLayer <|-- RegexLayer : Layer A
+    GuardrailLayer <|-- MLClassifierLayer : Layer B
+    GuardrailLayer <|-- LLMJudgeLayer : Layer C
+    GuardrailInput --> GuardrailLayer : validated by
+    GuardrailLayer --> GuardrailResult : produces
+    OutputFormatter --> GuardrailResult : validates output
+```
+
+</details>
+
+---
+
 ## Operations (M12, M13)
 
 Gerencia transicoes de controle (bot → humano → bot) e automacoes baseadas em regras de trigger.
 
+Integracoes: fulano-admin, Supabase Fulano, Channel (M11). [→ Ver no fluxo de negocio: Fase 6 (Handoff), Fase 7 (Triggers)](../business/process/)
+
 ### M12 — Handoff
 
-#### State Diagram
+<details>
+<summary><strong>State Diagram</strong></summary>
 
 ```mermaid
 stateDiagram-v2
@@ -624,7 +804,10 @@ stateDiagram-v2
     end note
 ```
 
-#### Class Diagram
+</details>
+
+<details>
+<summary><strong>Class Diagram — Handoff (L4)</strong></summary>
 
 ```mermaid
 classDiagram
@@ -667,9 +850,12 @@ classDiagram
     HandoffRequest --> HandoffPriority : prioritized by
 ```
 
+</details>
+
 ### M13 — Triggers
 
-#### Class Diagram
+<details>
+<summary><strong>Class Diagram — Triggers (L4)</strong></summary>
 
 ```mermaid
 classDiagram
@@ -721,6 +907,8 @@ classDiagram
     TriggerRule --> ActionType : executes
     TriggerRule "1" --> "*" TriggerLog : produces
 ```
+
+</details>
 
 ### Structs de Pipeline (Safety)
 
@@ -836,7 +1024,7 @@ CREATE INDEX idx_trigger_log_conversation ON trigger_logs (conversation_id) WHER
 
 ## Observability (M14)
 
-Dominio passivo. Consome eventos de todos os outros dominios para prover tracing distribuido, avaliacao de qualidade e metricas de uso. Nunca altera estado de outros dominios.
+Dominio passivo. Consome eventos de todos os outros dominios para prover tracing distribuido, avaliacao de qualidade e metricas de uso. Nunca altera estado de outros dominios. [→ Ver no fluxo de negocio: Fase 8 (Observabilidade)](../business/process/)
 
 ### Stack
 
@@ -926,6 +1114,10 @@ ORDER BY avg_score ASC;
 3. **Eval scores podem ser gerados async** — batch jobs no worker processam em background
 4. **Retencao de 90 dias para usage_events** — alem disso, agregados em tabela resumo
 5. **LangFuse trace_id = conversation_id** — correlacao 1:1 para facilitar debugging
+
+---
+
+> **Navegacao**: [← Blueprint (L1/L2)](../blueprint/) | [→ Business Process (L5)](../business/process/) — fluxo completo do pipeline com sequenceDiagrams por fase.
 
 ---
 

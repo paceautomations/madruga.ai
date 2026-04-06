@@ -4,6 +4,7 @@ import type { EvalScore } from './ObservabilityDashboard';
 
 interface EvalsTabProps {
   scores: EvalScore[];
+  connected: boolean;
 }
 
 type Dimension = EvalScore['dimension'];
@@ -245,7 +246,7 @@ function computeAvg(dimMap: Map<Dimension, number[]>): string {
 
 // ── Main Component ──
 
-export default function EvalsTab({ scores }: EvalsTabProps) {
+export default function EvalsTab({ scores, connected }: EvalsTabProps) {
   if (!scores.length) {
     return (
       <div
@@ -256,7 +257,7 @@ export default function EvalsTab({ scores }: EvalsTabProps) {
           fontSize: '0.85rem',
         }}
       >
-        No eval scores found
+        {connected ? 'No eval scores found' : 'Waiting for Easter connection...'}
       </div>
     );
   }

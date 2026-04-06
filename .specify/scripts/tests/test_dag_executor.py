@@ -101,8 +101,8 @@ async def test_run_pipeline_async_transitions_epic_to_shipped(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_run_pipeline_async_resume_cancels_stale_traces(tmp_path):
-    """resume=True must cancel stale running traces from previous cycles."""
+async def test_run_pipeline_async_resume_does_not_cancel_traces(tmp_path):
+    """resume=True must NOT cancel running traces (reuses them instead)."""
     plat_dir = tmp_path / "platforms" / "test-plat"
     plat_dir.mkdir(parents=True)
     (plat_dir / "platform.yaml").write_text("title: Test\n")
@@ -111,7 +111,6 @@ async def test_run_pipeline_async_resume_cancels_stale_traces(tmp_path):
     mock_conn.execute.return_value.fetchall.return_value = []
     mock_conn.execute.return_value.fetchone.return_value = None
 
-    # Track SQL calls to verify traces cleanup
     sql_calls = []
     original_execute = mock_conn.execute
 
@@ -135,9 +134,9 @@ async def test_run_pipeline_async_resume_cancels_stale_traces(tmp_path):
 
         await run_pipeline_async("test-plat", epic_slug="021-test", resume=True, conn=mock_conn)
 
-    # Verify that traces cleanup SQL was executed
-    trace_cleanup = [s for s, p in sql_calls if "traces" in s and "cancelled" in s]
-    assert len(trace_cleanup) >= 1, f"Expected trace cleanup SQL, got: {[s for s, _ in sql_calls]}"
+    # Traces should NOT be cancelled on resume — they are reused
+    trace_cancel = [s for s, p in sql_calls if "traces" in s and "cancelled" in s]
+    assert len(trace_cancel) == 0, f"Should not cancel traces on resume, got: {trace_cancel}"
 
 
 # --- Helpers ---

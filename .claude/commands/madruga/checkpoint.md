@@ -37,6 +37,7 @@ Session Recorder. Factual, concise. Write all generated artifact content in Braz
 - tasks.md — tasks marked [X]
 - `git log --oneline -20` — recent commits
 - `git diff --stat` — changed files
+- `decisions.md` (if present in epic dir — for decision count and recent entries)
 
 ### 2. Generate/Update STATE.md
 
@@ -55,6 +56,12 @@ If STATE.md exists, append a new session section. If not, create it.
 ## Decisions Made
 
 [Decisions taken and why — extract from commits/context]
+
+## Decision Log Status
+
+**Total registradas:** <N> decisoes em decisions.md
+**Ultimas 3:**
+- <last 3 entries from decisions.md, or "Nenhuma" if file absent>
 
 ## Issues and Solutions
 

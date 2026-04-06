@@ -26,5 +26,5 @@ When working on this platform:
 - Python 3.11+ (stdlib only: sqlite3, pathlib, json, hashlib)
 - SQLite WAL mode (.pipeline/madruga.db)
 - Astro + Starlight (portal)
-- LikeC4 (architecture models)
+- Mermaid (inline architecture diagrams in .md, rendered by astro-mermaid)
 - Copier (platform templates)

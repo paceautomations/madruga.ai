@@ -8,6 +8,7 @@ interface RunsTabProps {
   traces: Trace[];
   onSelectTrace: (traceId: string) => void;
   selectedTrace: TraceDetail | null;
+  connected: boolean;
 }
 
 // ── Helpers ──
@@ -93,7 +94,7 @@ function SpanRow({ span }: { span: Span }) {
 
 // ── Main Component ──
 
-export default function RunsTab({ traces, onSelectTrace, selectedTrace }: RunsTabProps) {
+export default function RunsTab({ traces, onSelectTrace, selectedTrace, connected }: RunsTabProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const handleRowClick = useCallback(
@@ -118,7 +119,7 @@ export default function RunsTab({ traces, onSelectTrace, selectedTrace }: RunsTa
           fontSize: '0.85rem',
         }}
       >
-        No runs found
+        {connected ? 'No runs found' : 'Waiting for Easter connection...'}
       </div>
     );
   }

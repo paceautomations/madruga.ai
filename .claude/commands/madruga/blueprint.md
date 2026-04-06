@@ -57,12 +57,18 @@ Save to `platforms/<name>/engineering/blueprint.md`.
 
 **Structured Questions:**
 
-| Category | Question |
-|----------|----------|
-| **Assumptions** | "I assume [concern X] is needed because [reason]. Correct?" |
-| **Trade-offs** | "For logging: [structured JSON] (simple, easy search) or [ELK stack] (powerful, complex). Which?" |
-| **Gaps** | "ADRs do not cover [observability/security]. Define now?" |
-| **Challenge** | "Do you really need [concern]? Netflix has it, but at 100x your scale." |
+Every question MUST present **>=2 options with pros/cons/risks and a recommendation**, regardless of category. Format:
+
+> **A)** Option — Pros: ... Cons: ... Risks: ...
+> **B)** Option — Pros: ... Cons: ... Risks: ...
+> **Recommendation:** [A or B] because [reason].
+
+| Category | Pattern | Example |
+|----------|---------|---------|
+| **Assumptions** | "I assume [X] because [ref]. Alternatives:" + options | "Observability: **A)** structlog + SQLite custom — Pros: ~100 LOC, zero deps. Cons: no standard export. Risks: low. **B)** OpenTelemetry — Pros: industry standard. Cons: heavy for 1 operator. Risks: overengineering. **Rec:** A." |
+| **Trade-offs** | "For [concern]: [A] or [B]?" + options | "Error handling: **A)** Exception hierarchy — Pros: Python idiomatic, granular catch. Cons: none for this scale. **B)** Result types — Pros: explicit, no hidden throws. Cons: boilerplate. **Rec:** A." |
+| **Gaps** | "ADRs do not cover [X]. Options:" + options | "Secrets management: **A)** Env vars (current) — Pros: simple. Cons: no rotation. **B)** Vault/SOPS — Pros: rotation, audit. Cons: infra overhead. **Rec:** A for single-machine." |
+| **Challenge** | "Do you really need [concern]? Alternatives:" + options | "Auth: **A)** Skip (single operator, CLI only) — Pros: zero complexity. Cons: no multi-user. **B)** Basic token auth — Pros: future-proof. Cons: premature. **Rec:** A." |
 
 Wait for answers BEFORE generating.
 
@@ -83,11 +89,11 @@ updated: YYYY-MM-DD
 
 ## Technology Stack
 
-[Summary table derived from ADRs — do not repeat details, reference ADR-NNN]
+[Summary table derived from ADRs — include alternatives considered and why they were rejected]
 
-| Category | Choice | ADR |
-|----------|--------|-----|
-| ... | ... | ADR-NNN |
+| Category | Choice | ADR | Alternatives Considered |
+|----------|--------|-----|------------------------|
+| ... | ... | ADR-NNN | [Alt A] (rejected: reason), [Alt B] (rejected: reason) |
 
 ---
 
@@ -165,6 +171,8 @@ graph LR
 | 6 | References real-world patterns (companies/projects)? | Add |
 | 7 | Does the topology include a Mermaid diagram? | Add |
 | 8 | Does each decision answer "is this the simplest thing that works?"? | Revalidate |
+| 9 | Does every tech stack choice list alternatives considered? | Add alternatives + why rejected |
+| 10 | Does every cross-cutting concern show >=2 options with pros/cons? | Add options |
 
 ## Error Handling
 

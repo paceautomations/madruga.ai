@@ -25,7 +25,6 @@ Every piece of information lives in exactly ONE canonical file. Skills reference
 | DAG topology (nodes, deps, gates, layers) | `pipeline-dag-knowledge.md` | All skills (via prerequisite check) |
 | Execution contract (steps 0-5) | `pipeline-contract-base.md` | All pipeline skills (via `> **Contract**:` reference) |
 | Layer personas + rules | `pipeline-contract-{business,engineering,planning}.md` | Skills in that layer |
-| LikeC4 syntax | `likec4-syntax.md` | domain-model, containers |
 | QA template | `qa-template.md` | qa skill |
 | Node status at runtime | SQLite DB (`.pipeline/madruga.db`) | pipeline, post_save.py |
 | Platform manifest | `platforms/<name>/platform.yaml` | All skills, portal |

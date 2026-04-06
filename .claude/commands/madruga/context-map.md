@@ -46,8 +46,7 @@ Save to `platforms/<name>/engineering/context-map.md`.
 
 **Required reading:**
 - `engineering/domain-model.md` — bounded contexts, aggregates
-- `model/platform.likec4` — how contexts map to containers
-- `model/ddd-contexts.likec4` — context naming for consistency
+- `engineering/containers.md` — how contexts map to containers
 
 **Structured Questions:**
 
@@ -134,9 +133,7 @@ graph TD
 | 5 | Does the Mermaid diagram render? | Fix |
 | 6 | Max 150 lines? | Condense |
 | 7 | Are all contexts from the domain model present? | Add missing ones |
-| 8 | Every BC has a matching `view <name>Detail of <name>` in views.likec4? | Flag — containers skill should have created them. If missing, add now. |
-| 9 | Every `<name>Detail` view registered in `platform.yaml` `views.structural`? | Flag and add entry |
-| 10 | DDD relationships use typed kinds (`-[acl]->`, `-[conformist]->`, etc.)? | Fix — no plain `->` for DDD |
+| 8 | DDD relationships use typed labels in Mermaid (`-->|"ACL"|`, `-->|"Conformist"|`, etc.)? | Fix — no unlabeled arrows for DDD |
 
 ## Error Handling
 

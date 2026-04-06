@@ -25,6 +25,7 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import fcntl
 import logging
 import os
 import signal
@@ -160,6 +161,8 @@ async def dag_scheduler(conn, semaphore, shutdown_event, poll_interval=15, platf
                             await asyncio.to_thread(
                                 ntfy_alert, topic, f"Pipeline failed for epic {epic_id} (exit={result})"
                             )
+                        # Cooldown after failure to avoid rapid retry busy-loop
+                        await asyncio.sleep(poll_interval * 2)
                 finally:
                     _running_epics.discard(epic_id)
 
@@ -276,6 +279,22 @@ async def lifespan(app: FastAPI):
     _easter_state.easter_state = "running"
     _easter_state.start_time = time.time()
 
+    # Single-instance lock — prevent multiple easters from running concurrently
+    from config import REPO_ROOT as _lock_repo_root
+
+    lock_path = _lock_repo_root / ".pipeline" / "madruga.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    lock_file = open(lock_path, "w")  # noqa: SIM115
+    try:
+        fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        lock_file.write(str(os.getpid()))
+        lock_file.flush()
+        logger.info("instance_lock_acquired", lock=str(lock_path), pid=os.getpid())
+    except OSError:
+        logger.error("another_easter_running", lock=str(lock_path))
+        lock_file.close()
+        sys.exit(1)
+
     # Sentry (optional)
     dsn = os.environ.get("MADRUGA_SENTRY_DSN")
     if dsn:
@@ -303,7 +322,16 @@ async def lifespan(app: FastAPI):
 
             from telegram_adapter import TelegramAdapter
             from telegram_bot import gate_poller as tg_gate_poller
-            from telegram_bot import handle_decision_callback, handle_gate_callback, load_offset, save_offset
+            from telegram_bot import (
+                handle_decision_callback,
+                handle_freetext,
+                handle_gate_callback,
+                handle_gates,
+                handle_help,
+                handle_status,
+                load_offset,
+                save_offset,
+            )
 
             bot = Bot(token=telegram_token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
             dp = Dispatcher()
@@ -376,6 +404,35 @@ async def lifespan(app: FastAPI):
                 async def _handle_decision(callback: CallbackQuery):
                     await handle_decision_callback(callback, adapter, conn)
 
+                # Command handlers (must be registered before catch-all)
+                from aiogram.filters import Command
+                from aiogram.types import Message
+
+                @dp.message(Command("start", "help"))
+                async def _handle_help(message: Message):
+                    if message.chat.id != chat_id:
+                        return
+                    await handle_help(message, adapter, chat_id)
+
+                @dp.message(Command("status"))
+                async def _handle_status(message: Message):
+                    if message.chat.id != chat_id:
+                        return
+                    await handle_status(message, adapter, chat_id, conn)
+
+                @dp.message(Command("gates"))
+                async def _handle_gates(message: Message):
+                    if message.chat.id != chat_id:
+                        return
+                    await handle_gates(message, adapter, chat_id, conn)
+
+                # Catch-all: free text → claude -p (MUST be last)
+                @dp.message()
+                async def _handle_freetext(message: Message):
+                    if message.chat.id != chat_id:
+                        return
+                    await handle_freetext(message, adapter, chat_id, conn)
+
                 tg.create_task(dp.start_polling(bot, offset=offset))
                 tg.create_task(tg_gate_poller(adapter, chat_id, conn))
                 tg.create_task(gate_reminder(conn, adapter, chat_id, _shutdown_event))
@@ -391,6 +448,8 @@ async def lifespan(app: FastAPI):
             logger.exception("taskgroup_error", error=str(exc))
     finally:
         conn.close()
+        lock_file.close()
+        lock_path.unlink(missing_ok=True)
         logger.info("easter_stopped", uptime_s=int(time.time() - _easter_state.start_time))
 
 
@@ -458,6 +517,24 @@ async def trace_detail(request: Request, trace_id: str):
     if result is None:
         return JSONResponse(status_code=404, content={"error": "trace not found"})
     return result
+
+
+@app.get("/api/runs")
+async def list_runs(
+    request: Request,
+    platform_id: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    status: str | None = Query(default=None),
+    epic_id: str | None = Query(default=None),
+):
+    if not platform_id:
+        return JSONResponse(status_code=400, content={"error": "platform_id is required"})
+
+    from db import get_runs_with_evals
+
+    runs, total = get_runs_with_evals(request.app.state.db_conn, platform_id, limit, offset, status, epic_id)
+    return {"runs": runs, "total": total, "limit": limit, "offset": offset}
 
 
 @app.get("/api/evals")

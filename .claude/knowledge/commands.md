@@ -8,7 +8,7 @@ python3 .specify/scripts/platform_cli.py new <name>              # scaffold nova
 python3 .specify/scripts/platform_cli.py lint <name>             # validar estrutura
 python3 .specify/scripts/platform_cli.py lint --all              # validar todas
 python3 .specify/scripts/platform_cli.py sync                    # copier update todas
-python3 .specify/scripts/platform_cli.py register <name>         # injetar LikeC4 loader + validar model
+python3 .specify/scripts/platform_cli.py register <name>         # registrar plataforma + validar
 python3 .specify/scripts/platform_cli.py import-adrs <name>      # importar ADRs markdown → DB
 python3 .specify/scripts/platform_cli.py export-adrs <name>      # exportar decisions DB → markdown
 python3 .specify/scripts/platform_cli.py import-memory           # importar .claude/memory/*.md → DB
@@ -25,20 +25,6 @@ python3 .specify/scripts/platform_cli.py status --all --json     # todas platafo
 cd portal && npm install     # instalar deps (symlinks auto-managed por Vite plugin)
 cd portal && npm run dev     # http://localhost:4321
 cd portal && npm run build   # production build
-```
-
-## LikeC4
-
-```bash
-cd platforms/<name>/model && likec4 serve   # http://localhost:5173 (hot reload)
-```
-
-## Build Pipeline
-
-```bash
-python3 .specify/scripts/vision-build.py <name>                # popular AUTO tables do model
-python3 .specify/scripts/vision-build.py <name> --validate-only
-python3 .specify/scripts/vision-build.py <name> --export-png
 ```
 
 ## DAG Executor

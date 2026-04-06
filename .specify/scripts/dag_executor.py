@@ -38,7 +38,7 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from config import REPO_ROOT  # noqa: E402
+from config import REPO_ROOT, UNFILLED_TEMPLATE_MARKERS  # noqa: E402
 
 log = logging.getLogger(__name__)
 
@@ -131,7 +131,7 @@ NODE_TOOLS: dict[str, str] = {
     "analyze": "Bash,Read,Glob,Grep",
     "implement": "Bash,Read,Write,Edit,Glob,Grep",
     "analyze-post": "Bash,Read,Glob,Grep",
-    "judge": "Bash,Read,Glob,Grep,Agent",
+    "judge": "Bash,Read,Write,Edit,Glob,Grep,Agent",
     "qa": "Bash,Read,Write,Edit,Glob,Grep,Agent",
     "reconcile": "Bash,Read,Write,Edit,Glob,Grep",
 }
@@ -800,7 +800,7 @@ def _handle_auto_escalate(
     escalate = check_auto_escalate(node, platform_dir, epic_slug)
     if escalate is False:
         if gmode == "auto":
-            log.warning("Auto-escalate: '%s' FAILED (score < 80) — mode=auto, proceeding to let qa heal", node.id)
+            log.warning("Auto-escalate: '%s' FAILED (score < 80 after fix) — mode=auto, proceeding to qa", node.id)
         elif gmode == "interactive":
             print(f"\n>>> Auto-escalate: '{node.id}' FAILED quality gate (score < 80)")
             report_hint = node.outputs[0] if node.outputs else "report.md"
@@ -912,7 +912,7 @@ def dispatch_node(
 
 
 def verify_outputs(node: Node, platform_dir: Path) -> tuple[bool, str | None]:
-    """Check that all expected output files exist."""
+    """Check that all expected output files exist and are not unfilled templates."""
     for output in node.outputs:
         # Skip glob patterns (e.g., "epics/*/pitch.md")
         if "*" in output:
@@ -922,6 +922,16 @@ def verify_outputs(node: Node, platform_dir: Path) -> tuple[bool, str | None]:
             error = f"output not found: {output}"
             log.error("Node '%s': %s", node.id, error)
             return False, error
+        # Detect unfilled template placeholders
+        try:
+            with path.open(encoding="utf-8", errors="replace") as f:
+                head = f.read(2000)
+            if any(m in head for m in UNFILLED_TEMPLATE_MARKERS):
+                error = f"output is unfilled template: {output}"
+                log.error("Node '%s': %s", node.id, error)
+                return False, error
+        except OSError:
+            pass
     return True, None
 
 
@@ -1076,6 +1086,35 @@ async def dispatch_with_retry_async(
     return False, last_error, last_stdout
 
 
+def _resolve_trace_id(
+    conn, platform_name: str, epic_slug: str | None, resume: bool, mode: str, total_nodes: int
+) -> str | None:
+    """Find an existing running trace on resume, or create a new one. Best-effort."""
+    from db import create_trace
+
+    try:
+        if resume:
+            if epic_slug:
+                row = conn.execute(
+                    "SELECT trace_id FROM traces WHERE platform_id=? AND epic_id=? AND status='running' "
+                    "ORDER BY started_at DESC LIMIT 1",
+                    (platform_name, epic_slug),
+                ).fetchone()
+            else:
+                row = conn.execute(
+                    "SELECT trace_id FROM traces WHERE platform_id=? AND epic_id IS NULL AND status='running' "
+                    "ORDER BY started_at DESC LIMIT 1",
+                    (platform_name,),
+                ).fetchone()
+            if row:
+                log.info("Reusing existing trace: %s", row[0])
+                return row[0]
+        return create_trace(conn, platform_name, epic_id=epic_slug, mode=mode, total_nodes=total_nodes)
+    except Exception:
+        log.debug("Failed to create/reuse trace — continuing without tracing")
+        return None
+
+
 # ── Async Pipeline (for easter) ─────────────────────────────────────
 
 
@@ -1123,7 +1162,6 @@ async def run_pipeline_async(
     from db import (
         complete_run,
         complete_trace,
-        create_trace,
         get_conn,
         get_pending_gates,
         get_resumable_nodes,
@@ -1138,35 +1176,23 @@ async def run_pipeline_async(
     completed_nodes: set[str] = set()
 
     if resume:
-        # Cleanup stale 'running' runs from previous crashes/failures
+        # Cleanup stale 'running' runs from previous crashes/failures.
+        # Preserve runs with gate_status set (approved or waiting_approval) —
+        # these are gate checkpoints, not orphan dispatches.
         if epic_slug:
             conn.execute(
                 "UPDATE pipeline_runs SET status='cancelled', completed_at=datetime('now') "
-                "WHERE platform_id=? AND epic_id=? AND status='running'",
+                "WHERE platform_id=? AND epic_id=? AND status='running' "
+                "AND (gate_status IS NULL OR gate_status NOT IN ('approved', 'waiting_approval'))",
                 (platform_name, epic_slug),
             )
         else:
             conn.execute(
                 "UPDATE pipeline_runs SET status='cancelled', completed_at=datetime('now') "
-                "WHERE platform_id=? AND epic_id IS NULL AND status='running'",
+                "WHERE platform_id=? AND epic_id IS NULL AND status='running' "
+                "AND (gate_status IS NULL OR gate_status NOT IN ('approved', 'waiting_approval'))",
                 (platform_name,),
             )
-        # Cancel stale running traces from previous resume cycles (best-effort)
-        try:
-            if epic_slug:
-                conn.execute(
-                    "UPDATE traces SET status='cancelled', completed_at=datetime('now') "
-                    "WHERE platform_id=? AND epic_id=? AND status='running'",
-                    (platform_name, epic_slug),
-                )
-            else:
-                conn.execute(
-                    "UPDATE traces SET status='cancelled', completed_at=datetime('now') "
-                    "WHERE platform_id=? AND epic_id IS NULL AND status='running'",
-                    (platform_name,),
-                )
-        except Exception:
-            log.debug("Traces table not available — skipping stale trace cleanup")
         conn.commit()
 
         completed_nodes = get_resumable_nodes(conn, platform_name, epic_slug)
@@ -1181,13 +1207,7 @@ async def run_pipeline_async(
                 return 0
         log.info("Resume async: %d nodes already completed", len(completed_nodes))
 
-    # Create trace for this pipeline run (best-effort)
-    # Placed AFTER gate check to avoid orphan traces when returning early
-    trace_id = None
-    try:
-        trace_id = create_trace(conn, platform_name, epic_id=epic_slug, mode=mode, total_nodes=len(ordered))
-    except Exception:
-        log.debug("Failed to create trace — continuing without tracing")
+    trace_id = _resolve_trace_id(conn, platform_name, epic_slug, resume, mode, len(ordered))
 
     breaker = CircuitBreaker()
     cwd = REPO_ROOT
@@ -1294,6 +1314,8 @@ async def run_pipeline_async(
         else:
             prompt, guardrail = compose_skill_prompt(platform_name, node, platform_dir, epic_slug)
             abort_fn = _make_abort_check(conn, epic_slug)
+            # Insert "running" record before dispatch so it appears in real-time
+            run_id = insert_run(conn, platform_name, node.id, epic_id=epic_slug, trace_id=trace_id)
             if semaphore:
                 async with semaphore:
                     success, error, stdout = await dispatch_with_retry_async(
@@ -1319,7 +1341,6 @@ async def run_pipeline_async(
                 )
 
         if not success:
-            run_id = insert_run(conn, platform_name, node.id, epic_id=epic_slug, error=error, trace_id=trace_id)
             complete_run(conn, run_id, status="failed", error=error)
             log.error("Node '%s' failed after retries: %s", node.id, error)
             try:
@@ -1363,7 +1384,6 @@ async def run_pipeline_async(
 
         ok, verify_error = verify_outputs(node, platform_dir)
         if not ok:
-            run_id = insert_run(conn, platform_name, node.id, epic_id=epic_slug, error=verify_error, trace_id=trace_id)
             complete_run(conn, run_id, status="failed", error=verify_error)
             log.error("Node '%s': %s", node.id, verify_error)
             try:
@@ -1391,14 +1411,6 @@ async def run_pipeline_async(
             eval_path = platform_dir / resolved
             if eval_path.exists():
                 eval_output = str(eval_path)
-        run_id = insert_run(
-            conn,
-            platform_name,
-            node.id,
-            epic_id=epic_slug,
-            trace_id=trace_id,
-            output_lines=_count_output_lines(eval_output),
-        )
         complete_run(
             conn,
             run_id,
@@ -1407,6 +1419,7 @@ async def run_pipeline_async(
             tokens_out=metrics.get("tokens_out"),
             cost_usd=metrics.get("cost_usd"),
             duration_ms=metrics.get("duration_ms"),
+            output_lines=_count_output_lines(eval_output),
         )
         _run_eval_scoring(
             conn,
@@ -1778,7 +1791,6 @@ def run_pipeline(
     from db import (
         complete_run,
         complete_trace,
-        create_trace,
         get_conn,
         get_pending_gates,
         get_resumable_nodes,
@@ -1791,24 +1803,6 @@ def run_pipeline(
     completed_nodes: set[str] = set()
 
     if resume:
-        # Cancel stale running traces from previous resume cycles (best-effort)
-        try:
-            if epic_slug:
-                conn.execute(
-                    "UPDATE traces SET status='cancelled', completed_at=datetime('now') "
-                    "WHERE platform_id=? AND epic_id=? AND status='running'",
-                    (platform_name, epic_slug),
-                )
-            else:
-                conn.execute(
-                    "UPDATE traces SET status='cancelled', completed_at=datetime('now') "
-                    "WHERE platform_id=? AND epic_id IS NULL AND status='running'",
-                    (platform_name,),
-                )
-            conn.commit()
-        except Exception:
-            log.debug("Traces table not available — skipping stale trace cleanup")
-
         completed_nodes = get_resumable_nodes(conn, platform_name, epic_slug)
         # Check for pending (unapproved) gates
         pending = get_pending_gates(conn, platform_name)
@@ -1821,13 +1815,7 @@ def run_pipeline(
                 conn.close()
                 return 0
 
-    # Create trace for this pipeline run (best-effort)
-    # Placed AFTER gate check to avoid orphan traces when returning early
-    trace_id = None
-    try:
-        trace_id = create_trace(conn, platform_name, epic_id=epic_slug, mode=mode, total_nodes=len(ordered))
-    except Exception:
-        log.debug("Failed to create trace — continuing without tracing")
+    trace_id = _resolve_trace_id(conn, platform_name, epic_slug, resume, mode, len(ordered))
     if resume:
         log.info("Resume: %d nodes already completed", len(completed_nodes))
 

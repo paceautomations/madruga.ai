@@ -18,7 +18,7 @@ handoffs:
 
 > **Contract**: Follow steps 0 and 5 from `.claude/knowledge/pipeline-contract-base.md`.
 
-Compare implementation (git diff / PR) against ALL platform documentation. Detect drift across 9 categories (D1-D9), compute a drift score, propose concrete updates, review the roadmap, manage ADR contradictions, flag impact on future epics, and update the README if needed.
+Compare implementation (git diff / PR) against ALL platform documentation. Detect drift across 10 categories (D1-D10), compute a drift score, propose concrete updates, review the roadmap, manage ADR contradictions, flag impact on future epics, and update the README if needed.
 
 ## Cardinal Rule: ZERO Silent Drift
 
@@ -63,12 +63,11 @@ git diff main...HEAD --name-only
 | If diff touches... | Read these docs |
 |---------------------|----------------|
 | Business logic, features, scope | `business/solution-overview.md`, `business/process.md` |
-| Architecture, infra, deploy, new services | `engineering/blueprint.md`, `model/platform.likec4` |
+| Architecture, infra, deploy, new services | `engineering/blueprint.md`, `engineering/containers.md` |
 | Domain entities, aggregates, events | `engineering/domain-model.md` |
 | APIs, contracts, integrations | `engineering/context-map.md` |
-| LikeC4 model files or new containers | `model/*.likec4` |
 | Technology choices, patterns | `decisions/ADR-*.md` |
-| Always (mandatory) | `planning/roadmap.md`, `epics/<NNN>/verify-report.md`, `epics/<NNN>/qa-report.md` |
+| Always (mandatory) | `planning/roadmap.md`, `epics/<NNN>/verify-report.md`, `epics/<NNN>/qa-report.md`, `epics/<NNN>/decisions.md` |
 
 **Step 3 — Read future epic pitches** only if the diff changed APIs, schemas, or bounded context boundaries:
 - `epics/*/pitch.md` (up to 15 future epics, prioritize by roadmap proximity)
@@ -90,7 +89,7 @@ Wait for answers BEFORE generating the report or proposing updates.
 
 ---
 
-### Phase 2. Detect Drift (9 Categories)
+### Phase 2. Detect Drift (10 Categories)
 
 Scan each category systematically. For each drift item found, record: ID, category, affected doc, current state in doc, actual state in code, severity (high/medium/low).
 
@@ -98,19 +97,30 @@ Scan each category systematically. For each drift item found, record: ID, catego
 |----|----------|----------------|-----------------|---------------|---------|
 | D1 | Scope | `business/solution-overview.md` features | Implemented code | Feature in code but not in doc, or listed but not implemented | New `/v2/orders` endpoint not in solution-overview |
 | D2 | Architecture | `engineering/blueprint.md` topology + NFRs | Code structure, dependencies | New service not in blueprint; different tech used | Blueprint says SQLite but code added Redis |
-| D3 | Model | `model/*.likec4` diagrams | Actual containers/relationships | LikeC4 missing new containers or stale relationships | New `worker` container not in model |
+| D3 | Model | `engineering/containers.md` diagrams | Actual containers/relationships | Mermaid diagrams missing new containers or stale relationships | New `worker` container not in containers.md |
 | D4 | Domain | `engineering/domain-model.md` | Code entities, aggregates, events | New entity/aggregate not in domain model | New `OrderItem` entity undocumented |
 | D5 | Decision | `decisions/ADR-*.md` (Accepted) | Implementation patterns | Code contradicts an accepted ADR | ADR chose REST but code uses GraphQL |
 | D6 | Roadmap | `planning/roadmap.md` | Actual epic outcome | Appetite over/under; milestone status; risk materialized | 2w appetite took 4w |
 | D7 | Epic (future) | `epics/*/pitch.md` (unimplemented) | Changes from current epic | Current epic changed APIs/schema/boundaries assumed by future pitches | Future epic assumes `/v1/channels` but it was renamed |
 | D8 | Integration | `engineering/context-map.md` | Actual API contracts, events | Published API changed; new integration not in context map | New webhook not documented |
 | D9 | README | `platforms/<name>/README.md` | Current implementation state | Setup instructions outdated; new dependencies not listed; architecture section stale | README lists old env vars; missing new service |
+| D10 | Epic Decisions | `epics/<NNN>/decisions.md` | `decisions/ADR-*.md` + code | Decision in log contradicts ADR; significant decision not promoted to ADR; decision no longer reflected in code | decisions.md says "used polling" but ADR-005 mandates websockets |
 
 #### D5 — Decision Drift: Action on Detection
 
 Propose one of:
 - **Amend**: ADR decision is still valid but needs an exception clause
 - **Supersede**: ADR decision is no longer valid — draft header for new ADR (title, status: Proposed, supersedes: ADR-NNN). Do NOT generate the full ADR — that is the `adr` skill's job.
+
+#### D10 — Epic Decision Drift: Action on Detection
+
+If `decisions.md` does not exist for this epic, skip D10 silently.
+
+For each entry in `decisions.md`, run 3 checks:
+
+1. **Contradiction**: Does this decision contradict any accepted ADR? If yes, flag with severity HIGH and propose amend/supersede (same flow as D5).
+2. **Promotion**: Is this decision significant enough to become a platform-level ADR? Heuristic: the decision (a) affects more than one epic, (b) constrains future architectural choices, or (c) is a 1-way-door pattern. If yes, flag and propose running `/madruga:adr` with the decision as input. Do NOT generate the ADR — that is the `adr` skill's job.
+3. **Staleness**: Does the code still reflect this decision? If not (decision was superseded during implementation but not updated), flag for removal or amendment in `decisions.md`.
 
 #### D6 — Roadmap Drift: Mandatory Checks
 
@@ -136,7 +146,7 @@ Propose one of:
 
 `Score = (docs_current / docs_checked) * 100` — a doc is "current" if zero drift items found.
 
-Generate a **Documentation Health Table** listing each checked doc, which categories (D1-D9) apply, status (CURRENT/OUTDATED), and drift item count.
+Generate a **Documentation Health Table** listing each checked doc, which categories (D1-D10) apply, status (CURRENT/OUTDATED), and drift item count.
 
 #### Impact Radius Matrix
 
@@ -162,7 +172,6 @@ For each detected drift item, generate a structured proposal:
 **For each proposal, provide the concrete diff:**
 
 - **Markdown docs**: Show the specific section with before/after (3 lines of context)
-- **LikeC4 files**: Show the `.likec4` code block to add/change
 - **Roadmap**: Show the updated epic table row and milestone status
 - **ADRs**: Draft the supersede/amend header only (full ADR is the `adr` skill's job)
 
@@ -196,7 +205,7 @@ If zero future epics are affected: report "Nenhum impacto em epics futuros detec
 | # | Check | How | Action on Failure |
 |---|-------|-----|-------------------|
 | 1 | Report file exists and is non-empty | `test -s <file>` | Save it |
-| 2 | All 9 drift categories scanned | grep for D1-D9 in report | Scan missing categories |
+| 2 | All 10 drift categories scanned | grep for D1-D10 in report | Scan missing categories |
 | 3 | Drift score computed | grep for "Drift Score:" | Compute it |
 | 4 | No placeholder markers remain | `grep -c 'TODO\|TKTK\|???\|PLACEHOLDER'` = 0 | Remove or resolve |
 | 5 | HANDOFF block present at footer | grep `handoff:` at end | Add it |
@@ -208,8 +217,7 @@ If zero future epics are affected: report "Nenhum impacto em epics futuros detec
 | # | Scorecard Item | Self-Assessment |
 |---|---------------|-----------------|
 | 1 | Every drift item has current vs expected state | Yes/No |
-| 2 | LikeC4 diffs are syntactically valid | Yes/No |
-| 3 | Roadmap review completed with actual vs planned | Yes/No |
+| 2 | Roadmap review completed with actual vs planned | Yes/No |
 | 4 | ADR contradictions flagged with recommendation (amend/supersede) | Yes/No |
 | 5 | Future epic impact assessed (top 5) | Yes/No |
 | 6 | Concrete diffs provided (not vague descriptions) | Yes/No |
@@ -255,7 +263,6 @@ If `git push` fails: report the error clearly, do NOT block handoff (push is adv
 | No `planning/roadmap.md` | Skip roadmap review, report as WARNING |
 | No `decisions/ADR-*.md` | Skip decision drift (D5), report as WARNING |
 | No future epics exist | Skip epic drift (D7), report "Nenhum epic futuro encontrado" |
-| LikeC4 syntax error in proposed diff | Validate with `likec4 build`, fix before proposing |
 | No `verify-report.md` for this epic | WARN: "Verify deveria rodar antes de reconcile" |
 | No `qa-report.md` for this epic | WARN: "QA deveria rodar antes de reconcile" |
 | No `README.md` for this platform | Skip README drift (D9), not all platforms have one |

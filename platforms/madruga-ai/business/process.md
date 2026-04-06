@@ -1,10 +1,12 @@
 ---
 title: "Business Process"
-updated: 2026-04-02
+updated: 2026-04-05
 ---
 # Madruga AI — Business Flows
 
 ## Visao End-to-End
+
+> [→ Ver arquitetura de containers](../engineering/blueprint/#containers-l2) | [→ Ver domain model](../engineering/domain-model/)
 
 > O ciclo de vida completo de uma plataforma: documentar (1x), entregar epics (Nx), consultar (continuo), e no futuro, autonomia via easter. O reconcile fecha o loop retroalimentando a documentacao.
 
@@ -27,7 +29,7 @@ flowchart TB
         F2A["Contexto do Epic\n(/epic-context)"] --> F2B["Especificar\n(/speckit.specify)"]
         F2B --> F2C["Planejar + Tasks\n(/speckit.plan + .tasks)"]
         F2C --> F2D["Implementar\n(/speckit.implement)"]
-        F2D --> F2E["Verificar + QA\n(/verify + /qa)"]
+        F2D --> F2E["Judge + QA\n(/judge + /qa)"]
         F2E --> F2F["Reconciliar\n(/reconcile)"]
         F2F --> F2G["PR + Merge\n(manual)"]
     end
@@ -74,8 +76,8 @@ flowchart TB
 | 5 | Pesquisa Tecnologica | PM-Arquiteto | `/tech-research` | research/tech-alternatives.md | 1-way-door |
 | 6 | Decisoes Arquiteturais | PM-Arquiteto | `/adr` | decisions/ADR-*.md | 1-way-door |
 | 7 | Blueprint | PM-Arquiteto | `/blueprint` | engineering/blueprint.md | human |
-| 8 | Modelo de Dominio | PM-Arquiteto | `/domain-model` | engineering/domain-model.md + model/ddd-contexts.likec4 | human |
-| 9 | Containers | PM-Arquiteto | `/containers` | model/platform.likec4 + model/views.likec4 | human |
+| 8 | Modelo de Dominio | PM-Arquiteto | `/domain-model` | engineering/domain-model.md + engineering/domain-model.md (Mermaid) | human |
+| 9 | Containers | PM-Arquiteto | `/containers` | engineering/blueprint.md (Mermaid) | human |
 | 10 | Context Map | PM-Arquiteto | `/context-map` | engineering/context-map.md | human |
 | 11 | Decompor em Epics | PM-Arquiteto | `/epic-breakdown` | epics/*/pitch.md | 1-way-door |
 | 12 | Roadmap | PM-Arquiteto | `/roadmap` | planning/roadmap.md | human |
@@ -163,7 +165,7 @@ sequenceDiagram
     Plataforma-->>-PM: Bounded contexts, agregados, invariantes, schemas
 
     PM->>+Plataforma: Definir containers (C4 Level 2)
-    Plataforma-->>-PM: Containers, protocolos, diagramas LikeC4
+    Plataforma-->>-PM: Containers, protocolos, diagramas Mermaid
 
     PM->>+Plataforma: Mapear relacoes entre contextos
     Plataforma-->>-PM: Context map com padroes DDD
@@ -358,7 +360,7 @@ sequenceDiagram
 
     alt Consultar arquitetura
         Cons->>Portal: Abrir diagrama de containers
-        Portal->>Artefatos: Carregar modelo LikeC4
+        Portal->>Artefatos: Carregar modelo Mermaid
         Portal-->>Cons: Diagrama interativo (zoom, pan, click-through)
     else Consultar decisoes
         Cons->>Portal: Abrir lista de ADRs
@@ -383,7 +385,7 @@ sequenceDiagram
     participant Portal as Portal (Documentacao Visual)
 
     Cons->>+Portal: Acessar plataforma
-    alt Plataforma sem modelo LikeC4
+    alt Plataforma sem diagramas
         Portal-->>Cons: Secao de diagramas vazia — "Modelo ainda nao criado"
     else Artefato desatualizado (drift detectado)
         Portal-->>Cons: Banner "Ultima atualizacao: X dias atras"

@@ -277,14 +277,17 @@ def _score_cost_efficiency(
 
 
 def _get_avg_cost(conn: sqlite3.Connection, platform_id: str, node_id: str) -> float | None:
-    """Get average cost_usd for a node from pipeline_runs history."""
+    """Get average cost_usd for a node from pipeline_runs history.
+
+    Returns None if fewer than 3 completed runs exist (not enough data for meaningful average).
+    """
     try:
         row = conn.execute(
-            "SELECT AVG(cost_usd) as avg_cost FROM pipeline_runs "
+            "SELECT AVG(cost_usd) as avg_cost, COUNT(*) as cnt FROM pipeline_runs "
             "WHERE platform_id=? AND node_id=? AND cost_usd > 0 AND status='completed'",
             (platform_id, node_id),
         ).fetchone()
-        if row and row[0] is not None:
+        if row and row[0] is not None and (row[1] or 0) >= 3:
             return float(row[0])
     except Exception:
         logger.debug("Could not query avg cost for %s/%s", platform_id, node_id)

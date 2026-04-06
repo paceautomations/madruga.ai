@@ -1,122 +1,110 @@
 ---
 title: "Containers"
-updated: 2026-04-02
+updated: 2026-04-06
 ---
-# C4 L2 — Containers
+# Madruga AI — Container Architecture (C4 Level 2)
 
-Visao de containers (unidades deployaveis) do Madruga AI. O sistema combina um portal de documentacao SSG, ferramentas CLI em Python, um runtime engine asyncio com DAG executor, e integracoes com sistemas externos (Claude API, GitHub, Telegram).
+> Decomposicao em containers com responsabilidades, tecnologias, protocolos e NFRs. Monolito modular — todos os modulos Python rodam no mesmo processo. Ultima atualizacao: 2026-04-06.
 
-## Diagrama
+---
+
+## Container Diagram
 
 ```mermaid
-graph TB
-    subgraph users["Usuarios"]
-        dev["Engenheiro / Arquiteto"]
-        claude["Claude Code (interativo)"]
-        easter_user["Easter (autonomo)"]
+graph LR
+    subgraph ext["Atores Externos"]
+        Arch["👤 PM-Arquiteto"]
+        TG["🌐 Telegram API"]
+        Sentry["🌐 Sentry"]
+        GH["🌐 GitHub"]
     end
 
-    subgraph portal_group["Portal (SSG)"]
-        portal["Portal<br/>Astro + Starlight<br/>:4321"]
-        likec4_viewer["LikeC4 Viewer<br/>React Components"]
+    subgraph madruga["Madruga AI"]
+        subgraph daemon["Easter Daemon (24/7)"]
+            Easter["easter.py<br/><small>FastAPI + asyncio</small>"]
+            DAG["dag_executor.py<br/><small>DAG + Circuit Breaker</small>"]
+            TBot["telegram_bot.py<br/><small>aiogram</small>"]
+        end
+
+        subgraph cli["CLI Tools"]
+            CLI["platform_cli.py<br/><small>argparse</small>"]
+        end
+
+        subgraph portal["Portal"]
+            Astro["Astro + Starlight<br/><small>SSG Build</small>"]
+        end
+
+        DB[("madruga.db<br/><small>SQLite WAL</small>")]
     end
 
-    subgraph cli_tools["CLI Tools (Python)"]
-        platform_cli["Platform CLI<br/>platform_cli.py"]
-        vision_build["Vision Build<br/>vision-build.py"]
+    subgraph ai["AI Runtime"]
+        Claude["claude -p<br/><small>subprocess</small>"]
     end
 
-    subgraph runtime["Runtime Engine (Python asyncio)"]
-        easter["Easter<br/>easter.py<br/>:8040"]
-        dag_executor["DAG Executor<br/>dag_executor.py"]
-    end
+    Arch -->|"CLI commands"| CLI
+    Arch -->|"browser"| Astro
+    Arch -->|"Telegram inline buttons"| TG
 
-    subgraph intelligence["Intelligence (Python)"]
-        judge["Subagent Judge<br/>Claude Code Agent tool"]
-    end
-
-    subgraph observability["Observability"]
-        dashboard["Dashboard<br/>FastAPI + HTML<br/>:8040"]
-        sentry_sdk["Sentry SDK<br/>Error Tracking"]
-    end
-
-    subgraph storage["Storage"]
-        sqlite["SQLite<br/>madruga.db<br/>(state + metrics)"]
-        filesystem["Filesystem<br/>.likec4, .md, .yaml"]
-        git["Git<br/>Version Control"]
-    end
-
-    subgraph external["Sistemas Externos"]
-        claude_api["Claude API<br/>claude -p subprocess"]
-        github["GitHub<br/>Issues, PRs"]
-        telegram["Telegram<br/>Bot API (aiogram)"]
-        likec4_cli["LikeC4 CLI<br/>npm global"]
-        copier_cli["Copier CLI<br/>pip"]
-        sentry_cloud["Sentry Cloud<br/>Free Tier"]
-    end
-
-    dev --> portal
-    dev --> platform_cli
-    dev --> dashboard
-
-    portal --> filesystem
-    portal --> likec4_viewer
-    likec4_viewer --> filesystem
-
-    platform_cli --> copier_cli
-    platform_cli --> filesystem
-    vision_build --> likec4_cli
-    vision_build --> filesystem
-
-    easter --> dag_executor
-    dag_executor --> claude_api
-    dag_executor --> judge
-
-    judge --> claude_api
-
-    easter --> sqlite
-    dag_executor --> sqlite
-    dashboard --> sqlite
-    sentry_sdk --> sentry_cloud
-
-    dag_executor --> github
-
-    style portal fill:#E1F5FE
-    style easter fill:#FFF3E0
-    style dashboard fill:#F3E5F5
-    style sqlite fill:#E8F5E9
-    style claude_api fill:#FFEBEE
-    style dag_executor fill:#FFF3E0
+    Easter -->|"dispatch skill"| DAG
+    DAG -->|"subprocess JSON"| Claude
+    Easter -->|"SQL (runs, traces)"| DB
+    CLI -->|"SQL (platforms, status)"| DB
+    Astro -->|"read JSON pre-build"| DB
+    TBot -->|"HTTPS long-poll"| TG
+    TBot -->|"SQL (gate_status)"| DB
+    Easter -->|"HTTPS DSN"| Sentry
+    DAG -->|"SSH/HTTPS git"| GH
 ```
 
-<!-- AUTO:containers -->
-| # | Container | Tecnologia | Responsabilidade | Porta |
-|---|-----------|-----------|------------------|-------|
-| 1 | **Portal** | Astro + Starlight + LikeC4 React | Site SSG de documentacao de arquitetura com diagramas interativos; auto-descobre todas as plataformas | :4321 |
-| 2 | **Platform CLI** | Python (platform_cli.py) | Gerencia plataformas: new, lint, sync, register, status, import/export | CLI |
-| 3 | **Vision Build** | Python (vision-build.py) | Exporta LikeC4 JSON e popula tabelas AUTO em markdown | CLI |
-| 4 | **SpecKit Skills** | Markdown (.claude/commands/) | 24 skills consumidos interativamente pelo Claude Code ou autonomamente pelo easter | Claude Code |
-| 5 | **Easter** | Python asyncio (easter.py) + FastAPI | Processo 24/7 que orquestra execucao autonoma do pipeline. DAG scheduler, Telegram polling, health checks, gate poller. Endpoints /health + /status | :8040 |
-| 6 | **DAG Executor** | Python (dag_executor.py) | Le pipeline DAG de platform.yaml, resolve dependencias (topological sort), despacha nodes via claude -p, gerencia human gates (3 modos: manual/interactive/auto via MADRUGA_MODE), retry com circuit breaker | Lib |
-| 7 | **Subagent Judge** | Python + Claude Code Agent tool | Subagent Paralelo + Judge Pattern (ADR-019): 4 personas (Architecture Reviewer, Bug Hunter, Simplifier, Stress Tester) + 1 juiz que filtra por Accuracy/Actionability/Severity. Output: BLOCKER/WARNING/NIT | Lib |
-| 8 | **State Store** | SQLite WAL (madruga.db) | Persistencia de pipeline state, epics, decisions, memory, provenance, metrics | File |
-| 9 | **Dashboard** | FastAPI + HTML | Dashboard web de status, metricas, e pipeline progress | :8040 |
-| 10 | **Copier Templates** | Jinja2 + YAML | Scaffolding de novas plataformas com estrutura padrao | CLI |
-| 11 | **Telegram Adapter** | Python (aiogram) | Adapter para Telegram Bot API (ADR-018) — send, ask_choice (inline buttons), alert, gate approvals | HTTPS outbound |
-<!-- /AUTO:containers -->
+---
 
-## Requisitos Nao-Funcionais
+## Container Matrix
 
-| NFR | Target | Mecanismo | Container |
-|-----|--------|-----------|-----------|
-| **Disponibilidade** | 24/7 (easter) | asyncio event loop com health check | Easter |
-| **Resiliencia** | 3 retries por fase | Retry com backoff + marcacao `blocked` | DAG Executor |
-| **DAG resume** | < 5s retomada | SQLite checkpoint por node, resume CLI | DAG Executor |
-| **Build time** | < 30s (portal SSG) | Astro static build + symlinks | Portal |
-| **Storage** | Zero ops | SQLite file-based, sem servidor | State Store |
-| **Observabilidade** | Health em < 500ms | FastAPI endpoint dedicado | Dashboard |
-| **Isolamento** | ACL por integracao | Anti-Corruption Layer pattern | Todas integracoes |
-| **Idempotencia** | Fases re-executaveis | Check de pre-condicoes + context acumulado | DAG Executor |
-| **Extensibilidade** | N plataformas | Copier template + auto-discovery | Portal, Platform CLI |
-| **Versionamento** | Tudo em Git | Filesystem-first, zero lock-in | Todos |
-| **Concorrencia** | Max 3 claude -p | Semaforo asyncio | DAG Executor |
+| # | Container | BC(s) | Tecnologia | Responsabilidade | Protocol In | Protocol Out |
+|---|-----------|-------|------------|------------------|-------------|-------------|
+| 1 | **Easter Daemon** | Orchestration, Notifications | FastAPI + asyncio + aiogram | Runtime 24/7: DAG scheduler, gate poller, health check, API observability | — (daemon autonomo) | subprocess, SQL, HTTPS |
+| 2 | **DAG Executor** | Orchestration | Python (modulo importado) | Topological sort, skill dispatch via claude -p, retry + circuit breaker | Chamado por Easter/CLI | subprocess (claude -p), SQL |
+| 3 | **Platform CLI** | State (interface) | Python argparse | Scaffold, lint, status, seed, register — interface humana sobre Pipeline State | CLI commands | SQL |
+| 4 | **Portal** | Apresentacao | Astro 6 + Starlight + React | SSG: documentacao navegavel, dashboards, observability tabs | browser HTTP | read JSON (pre-build) |
+| 5 | **madruga.db** | State, Observability, Decision | SQLite WAL 3.35+ | Persistencia: 14 tabelas + 2 FTS5 (platforms, runs, traces, evals, decisions, memory) | SQL | — |
+| 6 | **Claude CLI** | Orchestration (externo) | claude -p subprocess | Execucao de skills: recebe prompt, retorna JSON com tokens/cost/output | subprocess + JSON | — |
+
+---
+
+## Communication Protocols
+
+| De | Para | Protocolo | Padrao | Justificativa |
+|----|------|-----------|--------|---------------|
+| Easter | DAG Executor | Import Python | sync (in-process) | Monolito modular — mesmo processo |
+| DAG Executor | Claude CLI | subprocess + JSON stdout | sync (blocking) | ADR-010: claude -p com --output-format json |
+| Easter | madruga.db | SQL via sqlite3 stdlib | sync (WAL) | ADR-012: WAL mode, busy_timeout=5000ms |
+| Easter (TBot) | Telegram API | HTTPS long-polling | async (aiogram) | ADR-018: inline keyboards para gates |
+| Easter | Sentry | HTTPS SDK | async (fire-and-forget) | ADR-016: opcional via DSN |
+| DAG Executor | GitHub | SSH/HTTPS git | sync (subprocess) | Clone/fetch repos externos para worktree |
+| CLI | madruga.db | SQL via sqlite3 stdlib | sync | Mesmo DB, processos diferentes (single-writer WAL) |
+| Portal (build) | madruga.db | JSON pre-build | offline (pre-build script) | `npm run prestatus` gera pipeline-status.json antes do build |
+
+---
+
+## Per-Container NFRs
+
+| Container | Disponibilidade | Latencia | Throughput | Scaling |
+|-----------|----------------|----------|------------|---------|
+| Easter Daemon | 99% (systemd auto-restart) | N/A (daemon) | 3 dispatches concorrentes | Vertical (single-process) |
+| DAG Executor | Depende de Easter | < 3000s por skill dispatch | 1 dispatch por vez (sequencial para self-ref) | Nenhum |
+| Platform CLI | N/A (on-demand) | < 5s por comando | N/A | Nenhum |
+| Portal | 100% (static files) | < 200ms TTFB | Ilimitado (SSG) | CDN (futuro) |
+| madruga.db | 99.9% (file-based) | < 50ms por query | ~100 writes/s (WAL) | Vertical (single file) |
+| Claude CLI | Depende de Anthropic | 10s-300s por skill | Max 3 concurrent (semaforo) | Nenhum |
+
+---
+
+## Premissas e Decisoes
+
+| # | Decisao | Alternativas Consideradas | Justificativa |
+|---|---------|---------------------------|---------------|
+| 1 | Monolito modular (todos modulos no mesmo processo) | Microservices (1 container por BC) — rejeitado: single-developer, zero justificativa de escala | Simplicidade: 1 deploy, 1 DB, zero network overhead |
+| 2 | SQLite como unico store (compartilhado entre BCs) | PostgreSQL separado — rejeitado: overhead de ops para ~200 runs | ADR-004 + ADR-012: zero-ops, WAL suficiente |
+| 3 | Portal como SSG (pre-build, nao SSR) | SSR com API routes — rejeitado: portal nao precisa de dados real-time, pre-build suficiente | Astro SSG = zero runtime, hosting simples |
+| 4 | Claude CLI como processo externo (nao SDK) | Anthropic SDK direto — rejeitado: claude -p integra auth/keychain automaticamente | ADR-010: subprocess mais simples que gerenciar SDK auth |
+| 5 | Easter como unico daemon (scheduler + API + notifications) | 3 processos separados — rejeitado: complexidade operacional desnecessaria | Single-process asyncio cobre todos os casos |
