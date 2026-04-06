@@ -45,19 +45,19 @@ jobs:
       - run: pip install -r requirements-dev.txt
       - name: Easter boots successfully
         run: |
-          python3 .specify/scripts/easter.py > /tmp/easter.log 2>&1 &
+          setsid python3 .specify/scripts/easter.py > /tmp/easter.log 2>&1 &
           PID=$!
           for i in $(seq 1 10); do
             if grep -q "Uvicorn running" /tmp/easter.log 2>/dev/null; then
               echo "Easter started successfully (${i}s)"
-              kill $PID 2>/dev/null; wait $PID 2>/dev/null || true
+              kill -- -$PID 2>/dev/null || true
               exit 0
             fi
             sleep 1
           done
           echo "::error::Easter failed to start within 10s"
           cat /tmp/easter.log
-          kill $PID 2>/dev/null; wait $PID 2>/dev/null || true
+          kill -- -$PID 2>/dev/null || true
           exit 1
       - name: All entrypoints import cleanly
         run: |
