@@ -1,0 +1,15 @@
+[Unit]
+Description=Madruga AI Portal — Astro dev server
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=%h/.nvm/versions/node/v22.22.1/bin/node %h/.nvm/versions/node/v22.22.1/bin/npm run dev
+WorkingDirectory=%h/repos/paceautomations/madruga.ai/portal
+Restart=on-failure
+RestartSec=5
+Environment=NODE_ENV=development
+Environment=PATH=%h/.nvm/versions/node/v22.22.1/bin:/usr/local/bin:/usr/bin:/bin
+
+[Install]
+WantedBy=default.target
