@@ -12,3 +12,5 @@ venv/
 .pipeline/madruga.db-shm
 platforms/*/model/output/
 .env
+htmlcov/
+.coverage

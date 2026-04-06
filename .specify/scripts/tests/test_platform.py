@@ -194,3 +194,248 @@ def test_cmd_current_when_unset(tmp_path, capsys):
         assert "No active platform set" in captured.out
     finally:
         db_core.DB_PATH = old_db
+
+
+# ══════════════════════════════════════
+# _check_frontmatter tests
+# ══════════════════════════════════════
+
+
+def test_check_frontmatter_valid(tmp_path, caplog):
+    """Valid frontmatter with all required fields."""
+    f = tmp_path / "ADR-001.md"
+    f.write_text(
+        "---\ntitle: Test\nstatus: accepted\ndecision: Use X\nalternatives: [A, B]\nrationale: Because\n---\n\nBody"
+    )
+    with caplog.at_level(logging.INFO):
+        plat._check_frontmatter(f, plat.ADR_REQUIRED_FIELDS, "ADR")
+    assert "frontmatter valid" in caplog.text
+
+
+def test_check_frontmatter_missing_fields(tmp_path, caplog):
+    """Frontmatter missing required fields logs warning."""
+    f = tmp_path / "ADR-002.md"
+    f.write_text("---\ntitle: Test\n---\n\nBody")
+    with caplog.at_level(logging.WARNING):
+        plat._check_frontmatter(f, plat.ADR_REQUIRED_FIELDS, "ADR")
+    assert "missing fields" in caplog.text
+
+
+def test_check_frontmatter_no_frontmatter(tmp_path, caplog):
+    """File without frontmatter logs warning."""
+    f = tmp_path / "ADR-003.md"
+    f.write_text("# No frontmatter here")
+    with caplog.at_level(logging.WARNING):
+        plat._check_frontmatter(f, plat.ADR_REQUIRED_FIELDS, "ADR")
+    assert "no frontmatter" in caplog.text
+
+
+def test_check_frontmatter_malformed(tmp_path, caplog):
+    """Malformed frontmatter (no closing ---) logs warning."""
+    f = tmp_path / "ADR-004.md"
+    f.write_text("---\ntitle: Test\nno closing delimiter")
+    with caplog.at_level(logging.WARNING):
+        plat._check_frontmatter(f, plat.ADR_REQUIRED_FIELDS, "ADR")
+    assert "malformed" in caplog.text
+
+
+def test_check_frontmatter_empty(tmp_path, caplog):
+    """Empty frontmatter logs warning."""
+    f = tmp_path / "ADR-005.md"
+    f.write_text("---\n\n---\n\nBody")
+    with caplog.at_level(logging.WARNING):
+        plat._check_frontmatter(f, plat.ADR_REQUIRED_FIELDS, "ADR")
+    assert "empty frontmatter" in caplog.text
+
+
+# ══════════════════════════════════════
+# cmd_new tests
+# ══════════════════════════════════════
+
+
+def test_cmd_new_invalid_name():
+    """cmd_new rejects invalid platform names."""
+    import pytest
+
+    with pytest.raises(SystemExit):
+        plat.cmd_new("Invalid Name")
+
+
+def test_cmd_new_existing_platform(tmp_path):
+    """cmd_new rejects existing platform."""
+    import pytest
+
+    old = plat.PLATFORMS_DIR
+    plat.PLATFORMS_DIR = tmp_path
+    (tmp_path / "my-plat").mkdir()
+
+    try:
+        with pytest.raises(SystemExit):
+            plat.cmd_new("my-plat")
+    finally:
+        plat.PLATFORMS_DIR = old
+
+
+# ══════════════════════════════════════
+# cmd_lint tests
+# ══════════════════════════════════════
+
+
+def test_cmd_lint_no_name_or_all():
+    """cmd_lint exits when neither name nor --all provided."""
+    import pytest
+
+    with pytest.raises(SystemExit):
+        plat.cmd_lint(None, lint_all=False)
+
+
+def test_cmd_lint_single_platform(tmp_path):
+    """cmd_lint for a single valid platform."""
+    import pytest
+
+    old = plat.PLATFORMS_DIR
+    plat.PLATFORMS_DIR = tmp_path
+
+    pdir = _create_platform(tmp_path, "test-plat")
+    for d in ["business", "engineering", "decisions", "epics"]:
+        (pdir / d).mkdir()
+
+    try:
+        # Should exit 0 (success)
+        with pytest.raises(SystemExit) as exc_info:
+            plat.cmd_lint("test-plat")
+        assert exc_info.value.code == 0
+    finally:
+        plat.PLATFORMS_DIR = old
+
+
+# ══════════════════════════════════════
+# cmd_sync tests
+# ══════════════════════════════════════
+
+
+def test_cmd_sync_skips_without_copier_answers(tmp_path, caplog):
+    """cmd_sync skips platforms without .copier-answers.yml."""
+    old = plat.PLATFORMS_DIR
+    plat.PLATFORMS_DIR = tmp_path
+    plat._discover_platforms.cache_clear()
+
+    _create_platform(tmp_path, "my-plat")
+
+    try:
+        with caplog.at_level(logging.WARNING):
+            plat.cmd_sync("my-plat")
+        assert "skipping" in caplog.text
+    finally:
+        plat.PLATFORMS_DIR = old
+        plat._discover_platforms.cache_clear()
+
+
+# ══════════════════════════════════════
+# cmd_register tests
+# ══════════════════════════════════════
+
+
+def test_cmd_register_nonexistent_exits(tmp_path):
+    """cmd_register exits for non-existent platform."""
+    import pytest
+
+    old = plat.PLATFORMS_DIR
+    plat.PLATFORMS_DIR = tmp_path
+
+    try:
+        with pytest.raises(SystemExit):
+            plat.cmd_register("nonexistent")
+    finally:
+        plat.PLATFORMS_DIR = old
+
+
+def test_cmd_register_valid(tmp_path, caplog):
+    """cmd_register succeeds for existing platform."""
+    old = plat.PLATFORMS_DIR
+    plat.PLATFORMS_DIR = tmp_path
+    _create_platform(tmp_path, "my-plat")
+
+    try:
+        with caplog.at_level(logging.INFO, logger="platform_cli"):
+            plat.cmd_register("my-plat")
+        assert "registered" in caplog.text
+    finally:
+        plat.PLATFORMS_DIR = old
+
+
+# ══════════════════════════════════════
+# _lint_platform edge cases
+# ══════════════════════════════════════
+
+
+def test_lint_platform_missing_dir(tmp_path):
+    """_lint_platform returns False for nonexistent platform dir."""
+    old = plat.PLATFORMS_DIR
+    plat.PLATFORMS_DIR = tmp_path
+
+    try:
+        result = plat._lint_platform("nonexistent")
+        assert result is False
+    finally:
+        plat.PLATFORMS_DIR = old
+
+
+def test_lint_platform_yaml_missing_fields(tmp_path):
+    """_lint_platform detects missing required fields in platform.yaml."""
+    old = plat.PLATFORMS_DIR
+    plat.PLATFORMS_DIR = tmp_path
+
+    pdir = tmp_path / "bad-plat"
+    pdir.mkdir()
+    (pdir / "platform.yaml").write_text("lifecycle: design\n")
+    for d in ["business", "engineering", "decisions", "epics"]:
+        (pdir / d).mkdir()
+
+    try:
+        result = plat._lint_platform("bad-plat")
+        assert result is False
+    finally:
+        plat.PLATFORMS_DIR = old
+
+
+def test_lint_platform_name_mismatch(tmp_path, caplog):
+    """_lint_platform warns when yaml name != dir name."""
+    old = plat.PLATFORMS_DIR
+    plat.PLATFORMS_DIR = tmp_path
+
+    pdir = tmp_path / "my-plat"
+    pdir.mkdir()
+    (pdir / "platform.yaml").write_text("name: wrong-name\ntitle: Test\nlifecycle: design\n")
+    for d in ["business", "engineering", "decisions", "epics"]:
+        (pdir / d).mkdir()
+
+    try:
+        with caplog.at_level(logging.WARNING, logger="platform_cli"):
+            plat._lint_platform("my-plat")
+        assert "wrong-name" in caplog.text
+    finally:
+        plat.PLATFORMS_DIR = old
+
+
+def test_lint_platform_with_auto_markers(tmp_path, caplog):
+    """_lint_platform checks AUTO markers in engineering files."""
+    old = plat.PLATFORMS_DIR
+    plat.PLATFORMS_DIR = tmp_path
+
+    pdir = _create_platform(tmp_path, "test-plat")
+    for d in ["business", "engineering", "decisions", "epics"]:
+        (pdir / d).mkdir()
+
+    # Add AUTO markers
+    (pdir / "engineering" / "context-map.md").write_text(
+        "# Context Map\n<!-- AUTO:domains -->\ncontent\n<!-- /AUTO:domains -->\n"
+        "<!-- AUTO:relations -->\nrels\n<!-- /AUTO:relations -->\n"
+    )
+
+    try:
+        with caplog.at_level(logging.INFO, logger="platform_cli"):
+            plat._lint_platform("test-plat")
+        assert "AUTO:domains" in caplog.text
+    finally:
+        plat.PLATFORMS_DIR = old

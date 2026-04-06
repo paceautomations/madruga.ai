@@ -16,6 +16,160 @@ skill_lint = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(skill_lint)
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Unit tests — parse_frontmatter, get_archetype, resolve_handoff_target, lint_skill
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+class TestParseFrontmatter:
+    def test_valid_frontmatter(self):
+        text = "---\ndescription: Test skill\narguments: []\n---\n\n# Body"
+        result = skill_lint.parse_frontmatter(text)
+        assert result is not None
+        assert result["description"] == "Test skill"
+
+    def test_no_frontmatter(self):
+        result = skill_lint.parse_frontmatter("# No frontmatter here")
+        assert result is None
+
+    def test_invalid_yaml(self):
+        text = "---\nkey: [unclosed\n---\n\nBody"
+        result = skill_lint.parse_frontmatter(text)
+        assert result is None
+
+
+class TestGetArchetype:
+    def test_pipeline(self):
+        assert skill_lint.get_archetype("vision") == "pipeline"
+        assert skill_lint.get_archetype("blueprint") == "pipeline"
+
+    def test_specialist(self):
+        assert skill_lint.get_archetype("judge") == "specialist"
+
+    def test_utility(self):
+        assert skill_lint.get_archetype("pipeline") == "utility"
+        assert skill_lint.get_archetype("getting-started") == "utility"
+
+    def test_unknown(self):
+        assert skill_lint.get_archetype("nonexistent-skill") == "unknown"
+
+
+class TestResolveHandoffTarget:
+    def test_existing_madruga_skill(self):
+        # vision.md should exist
+        result = skill_lint.resolve_handoff_target("madruga/vision")
+        assert result is not None
+
+    def test_nonexistent_madruga_skill(self):
+        result = skill_lint.resolve_handoff_target("madruga/does-not-exist")
+        assert result is None
+
+    def test_speckit_skill_trusted(self):
+        result = skill_lint.resolve_handoff_target("speckit.implement")
+        assert result == Path("external")
+
+    def test_unknown_prefix(self):
+        result = skill_lint.resolve_handoff_target("other/something")
+        assert result is None
+
+
+class TestLintSkill:
+    def test_missing_file(self, tmp_path):
+        findings = skill_lint.lint_skill("test", tmp_path / "nonexistent.md")
+        assert len(findings) == 1
+        assert findings[0]["severity"] == "BLOCKER"
+        assert "not found" in findings[0]["message"]
+
+    def test_no_frontmatter(self, tmp_path):
+        f = tmp_path / "test.md"
+        f.write_text("# No frontmatter\nJust a body.")
+        findings = skill_lint.lint_skill("test", f)
+        assert any(f["severity"] == "BLOCKER" and "frontmatter" in f["message"] for f in findings)
+
+    def test_missing_description(self, tmp_path):
+        f = tmp_path / "test.md"
+        f.write_text("---\narguments: []\n---\n\n# Body")
+        findings = skill_lint.lint_skill("test", f)
+        assert any("description" in f["message"] for f in findings)
+
+    def test_long_description_nit(self, tmp_path):
+        f = tmp_path / "test.md"
+        long_desc = "x" * 160
+        f.write_text(f"---\ndescription: {long_desc}\narguments: []\n---\n\n# Body")
+        findings = skill_lint.lint_skill("test", f)
+        assert any("too long" in f["message"] for f in findings)
+
+    def test_valid_pipeline_skill(self, tmp_path):
+        f = tmp_path / "vision.md"
+        f.write_text(
+            "---\n"
+            "description: Generate vision\n"
+            "arguments:\n"
+            "  - name: platform\n"
+            "argument-hint: '[platform]'\n"
+            "handoffs:\n"
+            "  - label: Next\n"
+            "    agent: madruga/solution-overview\n"
+            "    prompt: Generate\n"
+            "---\n\n"
+            "# Vision\n"
+            "## Cardinal Rule\nNo scope creep\n"
+            "## Persona\nBrazilian Portuguese strategist\n"
+            "## Usage\n/madruga:vision\n"
+            "## Output Directory\nplatforms/<name>/business/\n"
+            "## Error Handling\nFail gracefully\n"
+            "## Auto-Review\nCheck all\n"
+            "pipeline-contract-base\n"
+        )
+        findings = skill_lint.lint_skill("vision", f)
+        blockers = [f for f in findings if f["severity"] == "BLOCKER"]
+        assert len(blockers) == 0
+
+    def test_pipeline_missing_handoffs_warning(self, tmp_path):
+        f = tmp_path / "vision.md"
+        f.write_text("---\ndescription: Test\narguments: []\n---\n\n# Body")
+        findings = skill_lint.lint_skill("vision", f)
+        assert any("handoffs" in f["message"].lower() for f in findings)
+
+    def test_invalid_gate_value(self, tmp_path):
+        f = tmp_path / "test.md"
+        f.write_text("---\ndescription: Test\narguments: []\ngate: invalid_gate\n---\n\n# Body")
+        findings = skill_lint.lint_skill("test", f)
+        assert any("Invalid gate" in f["message"] for f in findings)
+
+    def test_handoff_to_nonexistent_target(self, tmp_path):
+        f = tmp_path / "test.md"
+        f.write_text(
+            "---\n"
+            "description: Test\n"
+            "arguments: []\n"
+            "handoffs:\n"
+            "  - label: Next\n"
+            "    agent: madruga/does-not-exist-at-all\n"
+            "    prompt: go\n"
+            "---\n\n# Body"
+        )
+        findings = skill_lint.lint_skill("test", f)
+        assert any("does not exist" in f["message"] for f in findings)
+
+
+class TestLintKnowledgeFiles:
+    def test_returns_list(self):
+        findings = skill_lint.lint_knowledge_files()
+        assert isinstance(findings, list)
+
+
+class TestLintHandoffChain:
+    def test_returns_list(self):
+        findings = skill_lint.lint_handoff_chain()
+        assert isinstance(findings, list)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Integration tests (existing)
+# ──────────────────────────────────────────────────────────────────────────────
+
+
 def test_build_knowledge_graph():
     """Verify graph matches known references on disk (no mocks)."""
     graph = skill_lint.build_knowledge_graph()

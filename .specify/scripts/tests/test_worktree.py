@@ -1,4 +1,5 @@
-"""Tests for worktree._get_cascade_base."""
+"""Tests for worktree.py — _get_cascade_base, _branch_exists_on_remote,
+create_worktree, and cleanup_worktree."""
 
 from __future__ import annotations
 
@@ -199,3 +200,185 @@ class TestGetCascadeBaseIntegration:
 
         assert result == "origin/main"
         mock_exists.assert_not_called()
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# _branch_exists_on_remote
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+class TestBranchExistsOnRemote:
+    def test_returns_true_when_branch_found(self, tmp_path):
+        from worktree import _branch_exists_on_remote
+
+        mock_result = MagicMock()
+        mock_result.stdout = "  origin/main\n"
+
+        with patch("worktree.subprocess.run", return_value=mock_result):
+            assert _branch_exists_on_remote(tmp_path, "main") is True
+
+    def test_returns_false_when_empty(self, tmp_path):
+        from worktree import _branch_exists_on_remote
+
+        mock_result = MagicMock()
+        mock_result.stdout = ""
+
+        with patch("worktree.subprocess.run", return_value=mock_result):
+            assert _branch_exists_on_remote(tmp_path, "nonexistent") is False
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# create_worktree
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def _make_binding(name="other-repo"):
+    return {
+        "org": "myorg",
+        "name": name,
+        "base_branch": "main",
+        "epic_branch_prefix": "epic/myplat/",
+    }
+
+
+class TestCreateWorktree:
+    def test_self_ref_returns_repo_root(self, tmp_path):
+        from worktree import create_worktree
+
+        with (
+            patch("ensure_repo._load_repo_binding", return_value=_make_binding("madruga.ai")),
+            patch("ensure_repo._is_self_ref", return_value=True),
+            patch("ensure_repo.REPO_ROOT", tmp_path),
+        ):
+            result = create_worktree("myplat", "001-feat")
+
+        assert result == tmp_path
+
+    def test_existing_worktree_reused(self, tmp_path):
+        from worktree import create_worktree
+
+        repos_base = tmp_path / "repos"
+        repo_path = repos_base / "myorg" / "other-repo"
+        repo_path.mkdir(parents=True)
+        wt_path = repos_base / "other-repo-worktrees" / "001-feat"
+        (wt_path / ".git").mkdir(parents=True)
+
+        with (
+            patch("ensure_repo._load_repo_binding", return_value=_make_binding()),
+            patch("ensure_repo._is_self_ref", return_value=False),
+            patch("ensure_repo.ensure_repo", return_value=repo_path),
+            patch("ensure_repo._resolve_repos_base", return_value=repos_base),
+        ):
+            result = create_worktree("myplat", "001-feat")
+
+        assert result == wt_path
+
+    def test_creates_worktree_existing_branch(self, tmp_path):
+        from worktree import create_worktree
+
+        repos_base = tmp_path / "repos"
+        repo_path = repos_base / "myorg" / "other-repo"
+        repo_path.mkdir(parents=True)
+
+        with (
+            patch("ensure_repo._load_repo_binding", return_value=_make_binding()),
+            patch("ensure_repo._is_self_ref", return_value=False),
+            patch("ensure_repo.ensure_repo", return_value=repo_path),
+            patch("ensure_repo._resolve_repos_base", return_value=repos_base),
+            patch("worktree.subprocess.run") as mock_run,
+            patch("worktree._branch_exists_on_remote", return_value=True),
+        ):
+            create_worktree("myplat", "001-feat")
+
+        # Should have called fetch + worktree add (checkout existing branch)
+        assert mock_run.call_count == 2
+        wt_add_call = mock_run.call_args_list[1][0][0]
+        assert "worktree" in wt_add_call
+        assert "add" in wt_add_call
+        assert "-b" not in wt_add_call
+
+    def test_creates_worktree_new_branch(self, tmp_path):
+        from worktree import create_worktree
+
+        repos_base = tmp_path / "repos"
+        repo_path = repos_base / "myorg" / "other-repo"
+        repo_path.mkdir(parents=True)
+
+        with (
+            patch("ensure_repo._load_repo_binding", return_value=_make_binding()),
+            patch("ensure_repo._is_self_ref", return_value=False),
+            patch("ensure_repo.ensure_repo", return_value=repo_path),
+            patch("ensure_repo._resolve_repos_base", return_value=repos_base),
+            patch("worktree.subprocess.run") as mock_run,
+            patch("worktree._branch_exists_on_remote", return_value=False),
+            patch("worktree._get_cascade_base", return_value="origin/main"),
+        ):
+            create_worktree("myplat", "001-feat")
+
+        assert mock_run.call_count == 2
+        wt_add_call = mock_run.call_args_list[1][0][0]
+        assert "-b" in wt_add_call
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# cleanup_worktree
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+class TestCleanupWorktree:
+    def test_self_ref_noop(self):
+        from worktree import cleanup_worktree
+
+        with (
+            patch("ensure_repo._load_repo_binding", return_value=_make_binding("madruga.ai")),
+            patch("ensure_repo._is_self_ref", return_value=True),
+            patch("worktree.subprocess.run") as mock_run,
+        ):
+            cleanup_worktree("myplat", "001-feat")
+
+        mock_run.assert_not_called()
+
+    def test_removes_worktree_and_branch(self, tmp_path):
+        from worktree import cleanup_worktree
+
+        repos_base = tmp_path / "repos"
+        repo_path = repos_base / "myorg" / "other-repo"
+        repo_path.mkdir(parents=True)
+        wt_path = repos_base / "other-repo-worktrees" / "001-feat"
+        wt_path.mkdir(parents=True)
+
+        mock_wt_remove = MagicMock(returncode=0)
+        mock_branch_del = MagicMock(returncode=0)
+
+        with (
+            patch("ensure_repo._load_repo_binding", return_value=_make_binding()),
+            patch("ensure_repo._is_self_ref", return_value=False),
+            patch("ensure_repo.ensure_repo", return_value=repo_path),
+            patch("ensure_repo._resolve_repos_base", return_value=repos_base),
+            patch("worktree.subprocess.run", side_effect=[mock_wt_remove, mock_branch_del]),
+        ):
+            cleanup_worktree("myplat", "001-feat")
+
+    def test_falls_back_to_rmtree_on_failure(self, tmp_path):
+        from worktree import cleanup_worktree
+
+        repos_base = tmp_path / "repos"
+        repo_path = repos_base / "myorg" / "other-repo"
+        repo_path.mkdir(parents=True)
+        wt_path = repos_base / "other-repo-worktrees" / "001-feat"
+        wt_path.mkdir(parents=True)
+
+        mock_wt_fail = MagicMock(returncode=1)
+        mock_branch_del = MagicMock(returncode=0)
+
+        with (
+            patch("ensure_repo._load_repo_binding", return_value=_make_binding()),
+            patch("ensure_repo._is_self_ref", return_value=False),
+            patch("ensure_repo.ensure_repo", return_value=repo_path),
+            patch("ensure_repo._resolve_repos_base", return_value=repos_base),
+            patch("worktree.subprocess.run", side_effect=[mock_wt_fail, mock_branch_del]),
+            patch("worktree.shutil.rmtree") as mock_rmtree,
+        ):
+            cleanup_worktree("myplat", "001-feat")
+
+        assert mock_rmtree.call_count >= 1

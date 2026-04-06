@@ -1,17 +1,18 @@
 [Unit]
-Description=Madruga AI Easter — Pipeline orchestrator 24/7
+Description=Madruga AI Easter — Pipeline orchestrator
 After=network.target
 
 [Service]
 Type=notify
-ExecStart=/usr/bin/python3 %h/repos/paceautomations/madruga.ai/.specify/scripts/easter.py
-WorkingDirectory=%h/repos/paceautomations/madruga.ai
+ExecStart=%h/.local/bin/uvicorn easter:app --host 127.0.0.1 --port 18789
+WorkingDirectory=%h/repos/paceautomations/madruga.ai/.specify/scripts
 Restart=on-failure
 RestartSec=5
 WatchdogSec=120
 NotifyAccess=all
+EnvironmentFile=-%h/repos/paceautomations/madruga.ai/.env
 Environment=PYTHONUNBUFFERED=1
-Environment=MADRUGA_MODE=manual
+Environment=PYTHONPATH=%h/repos/paceautomations/madruga.ai/.specify/scripts
 
 [Install]
 WantedBy=default.target
