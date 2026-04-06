@@ -88,6 +88,8 @@ Write the document with exactly **7 sections**, following this template. All gen
 ---
 title: "Business Vision"
 updated: YYYY-MM-DD
+sidebar:
+  order: 1
 ---
 # <Name> — Business Vision
 

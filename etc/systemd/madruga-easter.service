@@ -8,11 +8,13 @@ ExecStart=%h/.local/bin/uvicorn easter:app --host 127.0.0.1 --port 18789
 WorkingDirectory=%h/repos/paceautomations/madruga.ai/.specify/scripts
 Restart=on-failure
 RestartSec=5
+TimeoutStopSec=15
 WatchdogSec=120
 NotifyAccess=all
 EnvironmentFile=-%h/repos/paceautomations/madruga.ai/.env
 Environment=PYTHONUNBUFFERED=1
 Environment=PYTHONPATH=%h/repos/paceautomations/madruga.ai/.specify/scripts
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
 
 [Install]
 WantedBy=default.target

@@ -1,5 +1,5 @@
 ---
-title: 'Business Process — Pipeline Completo'
+title: "Business Process"
 description: 'Fluxo de negocio da plataforma Fulano: mensagem individual (1:1), grupo (@mention), handoff humano, triggers proativos.'
 sidebar:
   order: 3

@@ -80,6 +80,8 @@ Check if the template exists at `.specify/templates/platform/template/engineerin
 ---
 title: "Engineering Blueprint"
 updated: YYYY-MM-DD
+sidebar:
+  order: 1
 ---
 # <Name> — Engineering Blueprint
 
@@ -94,6 +96,36 @@ updated: YYYY-MM-DD
 | Category | Choice | ADR | Alternatives Considered |
 |----------|--------|-----|------------------------|
 | ... | ... | ADR-NNN | [Alt A] (rejected: reason), [Alt B] (rejected: reason) |
+
+---
+
+## Deploy Topology
+
+[Mermaid diagram — infrastructure-level: where things run, how they connect. NOT C4 L2 detail.]
+
+```mermaid
+graph LR
+  ...
+```
+
+> Detalhamento C4 L2 dos containers → ver [containers.md](../containers/)
+
+---
+
+## Folder Structure
+
+[Annotated directory tree + conventions]
+
+```text
+project-root/
+├── src/           # [purpose]
+├── tests/         # [purpose]
+└── ...
+```
+
+| Convention | Rule |
+|------------|------|
+| ... | ... |
 
 ---
 
@@ -129,21 +161,6 @@ updated: YYYY-MM-DD
 
 ---
 
-## Deploy Topology
-
-[Mermaid diagram with containers/services and how they connect]
-
-```mermaid
-graph LR
-  ...
-```
-
-| Container | Technology | Responsibility |
-|-----------|-----------|----------------|
-| ... | ... | ... |
-
----
-
 ## Data Map
 
 | Store | Type | Data | Estimated Size |
@@ -173,6 +190,8 @@ graph LR
 | 8 | Does each decision answer "is this the simplest thing that works?"? | Revalidate |
 | 9 | Does every tech stack choice list alternatives considered? | Add alternatives + why rejected |
 | 10 | Does every cross-cutting concern show >=2 options with pros/cons? | Add options |
+| 11 | Does Deploy Topology stay infra-level (no C4 L2 container detail)? | Move container detail to containers.md |
+| 12 | Does Folder Structure include annotated directory tree? | Add it |
 
 ## Error Handling
 

@@ -1,71 +1,38 @@
 ---
-title: "Blueprint"
+title: "Engineering Blueprint"
+sidebar:
+  order: 1
 ---
 # Blueprint de Engenharia
 
-Referencia tecnica consolidada da plataforma **{{ platform_title }}**: concerns transversais, requisitos de qualidade, topologia de deploy, mapa de dados e glossario.
+Referencia tecnica consolidada da plataforma **{{ platform_title }}**: stack, topologia, concerns transversais, NFRs, mapa de dados e glossario.
 
 > **Convencao**: esta pagina consolida o **O QUE** e **COMO**. Para o **POR QUE** de cada decisao, consulte os [ADRs](../decisions/).
 
 ---
 
-## 1. Concerns Transversais
+## 1. Technology Stack
 
-### 1.1 Autenticacao & Autorizacao
-
-| Aspecto | Mecanismo | ADR |
-|---------|-----------|-----|
-| <!-- Preencher --> | | |
-
-### 1.2 Seguranca & Safety
-
-| Camada | Mecanismo | Latencia | ADR |
-|--------|-----------|----------|-----|
+| Categoria | Escolha | ADR | Alternativas Consideradas |
+|-----------|---------|-----|---------------------------|
 | <!-- Preencher --> | | | |
-
-### 1.3 Secrets & Encryption
-
-| Aspecto | Mecanismo | ADR |
-|---------|-----------|-----|
-| <!-- Preencher --> | | |
-
-### 1.4 Observabilidade
-
-| Ferramenta | Papel | Integracao |
-|------------|-------|------------|
-| <!-- Preencher --> | | |
-
-### 1.5 Multi-Tenancy
-
-| Mecanismo | Descricao | ADR |
-|-----------|-----------|-----|
-| <!-- Preencher --> | | |
-
-### 1.6 Error Handling
-
-| Cenario | Estrategia | Fallback |
-|---------|------------|----------|
-| <!-- Preencher --> | | |
 
 ---
 
-## 2. Qualidade & NFRs
+## 2. Deploy & Infraestrutura
 
-| # | Cenario | Metrica | Target | Mecanismo | Prioridade |
-|---|---------|---------|--------|-----------|------------|
-| Q1 | <!-- Preencher --> | | | | |
+### 2.1 Topologia
 
----
+<!-- Diagrama Mermaid infra-level: onde roda, como conecta. NAO detalhar C4 L2 aqui. -->
 
-## 3. Deploy & Infraestrutura
+```mermaid
+graph LR
+  <!-- Preencher -->
+```
 
-### 3.1 Topologia
+> Detalhamento C4 L2 dos containers → ver [containers.md](../containers/)
 
-| Componente | Runtime | Porta/Protocolo | Scaling |
-|------------|---------|-----------------|---------|
-| <!-- Preencher --> | | | |
-
-### 3.2 Ambientes
+### 2.2 Ambientes
 
 | Ambiente | Finalidade | Infra |
 |----------|------------|-------|
@@ -73,7 +40,7 @@ Referencia tecnica consolidada da plataforma **{{ platform_title }}**: concerns 
 | staging | QA | <!-- Preencher --> |
 | production | Tenants reais | <!-- Preencher --> |
 
-### 3.3 CI/CD
+### 2.3 CI/CD
 
 | Etapa | Ferramenta | Gate |
 |-------|------------|------|
@@ -81,39 +48,17 @@ Referencia tecnica consolidada da plataforma **{{ platform_title }}**: concerns 
 
 ---
 
-## 4. Mapa de Dados & Privacidade
-
-### 4.1 Fluxo de Dados Pessoais
-
-| Dado | Origem | Storage | Retention | PII? | Base Legal |
-|------|--------|---------|-----------|------|------------|
-| <!-- Preencher --> | | | | | |
-
-### 4.2 Direitos do Titular
-
-| Direito | Mecanismo | SLA | ADR |
-|---------|-----------|-----|-----|
-| <!-- Preencher --> | | | |
-
-### 4.3 Compliance Checklist
-
-| Item | Status | Nota |
-|------|--------|------|
-| <!-- Preencher --> | | |
-
----
-
-## 5. Folder Structure
+## 3. Folder Structure
 
 Arquitetura de diretorios do software com proposito de cada modulo.
 
-### 5.1 Arvore
+### 3.1 Arvore
 
 ```text
 <!-- Preencher com estrutura anotada -->
 ```
 
-### 5.2 Convencoes
+### 3.2 Convencoes
 
 | Convencao | Regra |
 |-----------|-------|
@@ -121,7 +66,77 @@ Arquitetura de diretorios do software com proposito de cada modulo.
 
 ---
 
-## 6. Glossario
+## 4. Concerns Transversais
+
+### 4.1 Autenticacao & Autorizacao
+
+| Aspecto | Mecanismo | ADR |
+|---------|-----------|-----|
+| <!-- Preencher --> | | |
+
+### 4.2 Seguranca & Safety
+
+| Camada | Mecanismo | Latencia | ADR |
+|--------|-----------|----------|-----|
+| <!-- Preencher --> | | | |
+
+### 4.3 Secrets & Encryption
+
+| Aspecto | Mecanismo | ADR |
+|---------|-----------|-----|
+| <!-- Preencher --> | | |
+
+### 4.4 Observabilidade
+
+| Ferramenta | Papel | Integracao |
+|------------|-------|------------|
+| <!-- Preencher --> | | |
+
+### 4.5 Multi-Tenancy
+
+| Mecanismo | Descricao | ADR |
+|-----------|-----------|-----|
+| <!-- Preencher --> | | |
+
+### 4.6 Error Handling
+
+| Cenario | Estrategia | Fallback |
+|---------|------------|----------|
+| <!-- Preencher --> | | |
+
+---
+
+## 5. Qualidade & NFRs
+
+| # | Cenario | Metrica | Target | Mecanismo | Prioridade |
+|---|---------|---------|--------|-----------|------------|
+| Q1 | <!-- Preencher --> | | | | |
+
+---
+
+## 6. Mapa de Dados & Privacidade
+
+### 6.1 Fluxo de Dados Pessoais
+
+| Dado | Origem | Storage | Retention | PII? | Base Legal |
+|------|--------|---------|-----------|------|------------|
+| <!-- Preencher --> | | | | | |
+
+### 6.2 Direitos do Titular
+
+| Direito | Mecanismo | SLA | ADR |
+|---------|-----------|-----|-----|
+| <!-- Preencher --> | | | |
+
+### 6.3 Compliance Checklist
+
+| Item | Status | Nota |
+|------|--------|------|
+| <!-- Preencher --> | | |
+
+---
+
+## 7. Glossario
 
 | Termo | Definicao | Dominio |
 |-------|-----------|---------|

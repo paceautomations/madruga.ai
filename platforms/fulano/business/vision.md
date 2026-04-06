@@ -1,6 +1,8 @@
 ---
 title: "Vision"
 updated: 2026-03-27
+sidebar:
+  order: 1
 ---
 # Fulano — Business Vision
 

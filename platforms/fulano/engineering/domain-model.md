@@ -1,107 +1,27 @@
 ---
 title: "Domain Model"
+sidebar:
+  order: 2
 ---
 # Domain Model
 
-Consolidacao dos bounded contexts, context map (L3), diagramas de classe (L4), schemas SQL e invariantes do Fulano v2. Para a topologia de deploy e containers, veja [Blueprint](../blueprint/). Para o fluxo de negocio completo (L5), veja [Business Process](../business/process/).
+Consolidacao dos bounded contexts, diagramas de classe (L4), schemas SQL e invariantes do Fulano v2.
+
+> Stack e NFRs → ver [blueprint.md](../blueprint/) · Relacionamentos DDD → ver [context-map.md](../context-map/) · Fluxo de negocio → ver [processo](../business/process/)
 
 ---
 
-## Context Map (L3)
+## Bounded Contexts
 
-> Relacoes DDD entre bounded contexts: ACL, Customer-Supplier, Conformist, Pub-Sub. [→ Ver detalhe por BC abaixo](#channel-m1-m2-m3-m11)
+| # | Bounded Context | Tipo | Proposito | Modulos | Aggregates |
+|---|----------------|------|-----------|---------|------------|
+| 1 | **Channel** | Supporting | Ingestao e entrega de mensagens WhatsApp | M1 Recepcao, M2 Debounce, M3 Router, M11 Entrega | InboundMessage, DebounceBuffer, Router, DeliveryAttempt |
+| 2 | **Conversation** | Core | Pipeline IA — classificacao, agente, avaliacao | M4 Clientes, M5 Contexto, M7 Classificador, M8 Agente IA, M9 Avaliador | Customer, Conversation, SystemPrompt, Message, ToolCall |
+| 3 | **Safety** | Supporting | Guardrails de entrada e saida | M6 Guardrails Entrada, M10 Guardrails Saida | PiiDetector, InjectionDetector, GuardrailCheck |
+| 4 | **Operations** | Supporting | Handoff humano e triggers proativos | M12 Handoff, M13 Triggers | HandoffRequest, TriggerRule |
+| 5 | **Observability** | Generic | Tracing e metricas | M14 Observabilidade | UsageEvent |
 
-```mermaid
-flowchart LR
-    %% Bounded Contexts
-    subgraph Channel ["Channel<br/><small>#supporting — Ingestao e Entrega</small>"]
-        M1["M1 Recepcao"]
-        M2["M2 Debounce"]
-        M3["M3 Router"]
-        M11["M11 Entrega"]
-    end
-
-    subgraph Conversation ["Conversation (Core)<br/><small>#core — Pipeline IA</small>"]
-        M4["M4 Clientes"]
-        M5["M5 Contexto"]
-        M7["M7 Classificador"]
-        M8["M8 Agente IA"]
-        M9["M9 Avaliador"]
-    end
-
-    subgraph Safety ["Safety<br/><small>#supporting — Guardrails</small>"]
-        M6["M6 Guardrails Entrada"]
-        M10["M10 Guardrails Saida"]
-    end
-
-    subgraph Operations ["Operations<br/><small>#supporting — Handoff & Triggers</small>"]
-        M12["M12 Handoff"]
-        M13["M13 Triggers"]
-    end
-
-    subgraph Observability ["Observability<br/><small>#generic — Tracing & Metricas</small>"]
-        M14["M14 Observabilidade"]
-    end
-
-    %% External actors & systems
-    agent(("Agente WhatsApp"))
-    admin_user(("Admin"))
-    evolution-api["Evolution API"]
-    redis["Redis"]
-    bifrost["Bifrost"]
-    supabase-fulano[("Supabase Fulano")]
-    supabase-resenhai[("Supabase ResenhAI")]
-    langfuse["LangFuse"]
-
-    %% Conformist (aceita formato externo sem traducao)
-    evolution-api -- "Conformist" --> M1
-    agent -- "Conformist" --> M1
-
-    %% ACL (traduz formato externo, isola o core)
-    M3 -- "ACL" --> M4
-    M8 -- "ACL" --> bifrost
-    M8 -- "ACL" --> supabase-resenhai
-    M4 -- "ACL" --> supabase-fulano
-    M2 -- "ACL" --> redis
-
-    %% Customer-Supplier
-    M6 -- "Customer-Supplier" --> M7
-    M9 -- "Customer-Supplier" --> M10
-    M9 -- "Customer-Supplier" --> M12
-    M13 -- "Customer-Supplier" --> M11
-
-    %% Pub-Sub (observabilidade passiva)
-    M1 -. "Pub-Sub" .-> M14
-    M5 -. "Pub-Sub" .-> M14
-    M8 -. "Pub-Sub" .-> M14
-    M9 -. "Pub-Sub" .-> M14
-    M12 -. "Pub-Sub" .-> M14
-    M13 -. "Pub-Sub" .-> M14
-
-    %% Conformist (observabilidade → LangFuse)
-    M14 -- "Conformist" --> langfuse
-
-    %% Admin → Operations
-    admin_user --> M12
-```
-
-### Relacoes DDD
-
-| De | Para | Tipo | Descricao |
-|----|------|------|-----------|
-| Evolution API → Channel (M1) | Conformist | Channel aceita o schema de webhooks sem traducao |
-| Agente WhatsApp → Channel (M1) | Conformist | Aceita formato do usuario sem traducao |
-| Channel (M3) → Conversation (M4) | ACL | Traduz InboundMessage → ConversationRequest |
-| Conversation (M8) → Bifrost | ACL | Traduz para formato OpenAI-compatible |
-| Conversation (M8) → Supabase ResenhAI | ACL | Acesso read-only com ACL isolando schema externo |
-| Conversation (M4) → Supabase Fulano | ACL | Repositories com ACL isolam domain models do schema SQL |
-| Channel (M2) → Redis | ACL | Debounce via Lua scripts com ACL isolando detalhes |
-| Safety (M6) → Conversation (M7) | Customer-Supplier | Conversation consome Safety para validacao de entrada |
-| Conversation (M9) → Safety (M10) | Customer-Supplier | Conversation consome Safety para validacao de saida |
-| Conversation (M9) → Operations (M12) | Customer-Supplier | Conversation solicita handoff quando avaliador escala |
-| Operations (M13) → Channel (M11) | Customer-Supplier | Operations envia triggers proativos via Channel |
-| M1, M5, M8, M9, M12, M13 → Observability (M14) | Pub-Sub | Eventos de todos os modulos para tracing passivo |
-| Observability (M14) → LangFuse | Conformist | Conforma-se ao SDK/API do LangFuse |
+> Relacionamentos entre contextos e padroes DDD → ver [context-map.md](../context-map/)
 
 ---
 
@@ -1121,24 +1041,4 @@ ORDER BY avg_score ASC;
 
 ---
 
-## Linguagem Ubiqua
-
-Termos padronizados usados em toda a documentacao e codigo do Fulano.
-
-| Termo | Definicao | Dominio |
-|-------|-----------|---------|
-| **Tenant** | Empresa/negocio que usa Fulano. Isolamento completo de dados, config e billing | Plataforma |
-| **Pipeline** | Sequencia de 14 modulos (M1-M14) que processa cada mensagem recebida | Core |
-| **Handoff** | Transferencia de conversa do agente IA para atendente humano, com maquina de estados | Atendimento |
-| **Guardrails** | Filtros de seguranca pre-LLM (input) e pos-LLM (output) que bloqueiam conteudo indesejado | Seguranca |
-| **Debounce** | Agrupamento de mensagens rapidas (janela 3s) numa unica request para o pipeline | Core |
-| **Cooldown** | Tempo minimo entre mensagens proativas para o mesmo cliente (evitar spam) | Triggers |
-| **Bounded Context** | Area logica do sistema com fronteiras bem definidas (DDD). Ex: Channel, Conversation, Safety | Arquitetura |
-| **ACL (Anti-Corruption Layer)** | Camada que isola integracao com sistemas externos, traduzindo formatos | Arquitetura |
-| **Bifrost** | Proxy LLM em Go que centraliza rate limiting, fallback e cost tracking | Infra |
-| **Evolution API** | Gateway WhatsApp (self-hosted) que conecta Fulano ao WhatsApp sem BSP | Integracao |
-| **LangFuse** | Plataforma de observabilidade para LLMs: tracing, eval, prompt versioning | Observabilidade |
-| **CSAT** | Customer Satisfaction Score (1-5 estrelas) coletado apos atendimento humano | Metricas |
-| **Channel Adapter** | Interface padrao que abstrai canal de mensageria. Agent Engine nao sabe qual canal — recebe/envia msgs normalizadas. Novo canal = novo adapter, zero mudanca no core (ADR-005) | Arquitetura |
-| **Tool Registry** | Catalogo central de tools com metadata (nome, params, categoria, integracao requerida). Alimenta admin panel e valida configs (ADR-014) | Arquitetura |
-| **Infisical** | Secret manager open-source (MIT). Armazena e rotaciona tokens, API keys e credenciais de tenants com envelope encryption (ADR-017) | Seguranca |
+> Glossario de termos → ver [blueprint.md](../blueprint/)

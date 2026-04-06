@@ -1177,20 +1177,22 @@ async def run_pipeline_async(
 
     if resume:
         # Cleanup stale 'running' runs from previous crashes/failures.
-        # Preserve runs with gate_status set (approved or waiting_approval) —
-        # these are gate checkpoints, not orphan dispatches.
+        # Preserve only runs with gate_status='waiting_approval' — these are
+        # real gate checkpoints awaiting human response.
+        # Runs with gate_status='approved' but still 'running' are orphans
+        # (gate was approved but dispatch failed) and must be cancelled.
         if epic_slug:
             conn.execute(
                 "UPDATE pipeline_runs SET status='cancelled', completed_at=datetime('now') "
                 "WHERE platform_id=? AND epic_id=? AND status='running' "
-                "AND (gate_status IS NULL OR gate_status NOT IN ('approved', 'waiting_approval'))",
+                "AND (gate_status IS NULL OR gate_status != 'waiting_approval')",
                 (platform_name, epic_slug),
             )
         else:
             conn.execute(
                 "UPDATE pipeline_runs SET status='cancelled', completed_at=datetime('now') "
                 "WHERE platform_id=? AND epic_id IS NULL AND status='running' "
-                "AND (gate_status IS NULL OR gate_status NOT IN ('approved', 'waiting_approval'))",
+                "AND (gate_status IS NULL OR gate_status != 'waiting_approval')",
                 (platform_name,),
             )
         conn.commit()

@@ -61,10 +61,10 @@ C4 container boundaries, cell-based architecture walls, Team Topologies team API
 > — Simon Brown, C4 Model
 
 **How we apply it:**
-- LikeC4 DSL as single source of truth for architecture models
-- `vision-build.py` generates markdown tables from exported JSON
-- AUTO markers keep docs in sync with model changes
-- Portal renders interactive diagrams from the same source
+- Mermaid inline diagrams as source of truth for architecture models (ADR-020)
+- Diagrams live alongside prose in the same `.md` files — context never drifts
+- Portal renders diagrams via `astro-mermaid` — zero custom tooling
+- GitHub/Starlight/any Markdown viewer renders natively
 
 ---
 
@@ -72,23 +72,22 @@ C4 container boundaries, cell-based architecture walls, Team Topologies team API
 
 Based on C4 Model + Arc42 + IEEE 42010, each platform should maintain:
 
-### 2.1 C4 Hierarchy (mandatory)
+### 2.1 C4 Hierarchy (mandatory) — Mermaid Inline (ADR-020)
 
-| Level | Artifact | LikeC4 File | Purpose |
-|-------|----------|-------------|---------|
-| L1 Context | System Landscape | `views.likec4` (index) | Who uses the system, what external systems exist |
-| L2 Containers | Container Diagram | `platform.likec4` + `views.likec4` (containers) | Deployable units, tech choices, data stores |
-| L3 Components | Context Map | `ddd-contexts.likec4` + `views.likec4` (contextMap) | Bounded contexts, modules, DDD patterns |
-| L4 Code | (source code) | N/A | Classes, functions — live in the code repo |
+| Level | Artifact | Mermaid Type | Document | Purpose |
+|-------|----------|-------------|----------|---------|
+| L1 Context | System Landscape | `graph LR` | `blueprint.md` "Deploy Topology" | Who uses the system, what external systems exist |
+| L2 Containers | Container Diagram | `graph LR` + subgraphs | `blueprint.md` "Containers" | Deployable units, tech choices, data stores |
+| L3 Components | Context Map | `flowchart LR` | `domain-model.md` "Context Map" | Bounded contexts, modules, DDD patterns |
+| L4 Code | Class diagrams | `classDiagram` | `domain-model.md` `<details>` per BC | Aggregates, entities, invariants |
 
 ### 2.2 Supplementary Views
 
-| View | Artifact | Purpose |
-|------|----------|---------|
-| Dynamic / Business Flow | `views.likec4` (businessFlow) | Sequence of interactions for key scenarios |
-| Scoped BC Details | `views.likec4` (*Detail) | Zoom into each bounded context |
-| Relationships | `relationships.likec4` | All integrations (C4) + context map patterns (DDD) |
-| Infrastructure | `infrastructure.likec4` | Shared infra elements (databases, caches, queues) |
+| View | Mermaid Type | Document | Purpose |
+|------|-------------|----------|---------|
+| Business Flow | `flowchart TD` + `sequenceDiagram` | `process.md` | Sequence of interactions for key scenarios |
+| Deploy Topology | `graph LR` | `blueprint.md` | Infrastructure + connectivity |
+| Pipeline DAG | `graph LR` | `roadmap.md` | Epic dependencies and sequencing |
 
 ### 2.3 Documentation Sections (Arc42-aligned)
 
@@ -96,99 +95,63 @@ Based on C4 Model + Arc42 + IEEE 42010, each platform should maintain:
 |---|---------|------------------|--------|
 | 1 | Introduction & Goals | `business/vision.md` | Covered |
 | 2 | Constraints | `engineering/blueprint.md` | Covered |
-| 3 | Context & Scope | `views.likec4` (index) | Covered |
+| 3 | Context & Scope | `blueprint.md` (Deploy Topology) | Covered |
 | 4 | Solution Strategy | `business/solution-overview.md` | Covered |
-| 5 | Building Block View | `ddd-contexts.likec4` + `platform.likec4` | Covered |
-| 6 | Runtime View | `views.likec4` (businessFlow) | Partial |
-| 7 | Deployment View | `infrastructure.likec4` | Gap |
-| 8 | Cross-cutting Concepts | — | Gap |
+| 5 | Building Block View | `domain-model.md` + `blueprint.md` | Covered |
+| 6 | Runtime View | `process.md` (sequence diagrams) | Covered |
+| 7 | Deployment View | `blueprint.md` (Deploy Topology) | Covered |
+| 8 | Cross-cutting Concepts | `blueprint.md` (Cross-Cutting Concerns) | Covered |
 | 9 | Architecture Decisions | `decisions/ADR-*.md` | Covered |
 | 10 | Quality Scenarios | — | Gap |
 | 11 | Risks & Technical Debt | — | Gap |
-| 12 | Glossary | — | Gap |
+| 12 | Glossary | `blueprint.md` (Glossario Tecnico) | Covered |
 
 ---
 
-## 3. LikeC4 Model Conventions
+## 3. Mermaid Diagram Conventions (ADR-020)
 
 ### 3.1 File Structure (per platform)
 
+Diagrams live **inline** in the `.md` files that provide their context — no separate diagram files:
+
 ```
-platforms/<name>/model/
-  likec4.config.json    # {"name": "<platform>"} — required
-  spec.likec4           # Element kinds + relationship kinds (Copier-synced)
-  actors.likec4         # person elements (users, systems)
-  platform.likec4       # platform + containers (C4 L2)
-  ddd-contexts.likec4   # boundedContext + module elements (C4 L3)
-  externals.likec4      # externalService elements
-  infrastructure.likec4 # database, cache, proxy elements (shared infra)
-  relationships.likec4  # ALL relationships (C4 + DDD context map)
-  views.likec4          # ALL views (structural + scoped + dynamic)
+platforms/<name>/
+  engineering/blueprint.md       # Deploy Topology (L1) + Containers (L2)
+  engineering/domain-model.md    # Context Map (L3) + Class diagrams (L4)
+  engineering/context-map.md     # DDD relationships between bounded contexts
+  business/process.md            # Business flows (flowchart + sequence)
 ```
 
-### 3.2 Naming Conventions
+### 3.2 Pyramid of Detail
 
-| Element Kind | Naming Pattern | Example |
-|-------------|---------------|---------|
-| platform | camelCase | `fulano`, `madrugaAi` |
-| boundedContext | camelCase (domain noun) | `channel`, `conversation`, `safety` |
-| module | `m<N>` + descriptive suffix | `m1`, `m2`, `specifyPhase` |
-| person | camelCase (role) | `agent`, `admin`, `architect` |
-| externalService | camelCase (service name) | `evolutionApi`, `claudeApi` |
-| database/cache | camelCase (tech + purpose) | `supabaseFulano`, `redis` |
-| view (structural) | camelCase | `index`, `containers`, `contextMap` |
-| view (scoped) | `<context>Detail` | `channelDetail`, `executionDetail` |
-| view (dynamic) | camelCase (flow name) | `businessFlow`, `checkoutFlow` |
+| Level | Mermaid Type | Document | What it shows |
+|-------|-------------|----------|---------------|
+| L1 | `graph LR` | blueprint.md "Deploy Topology" | System + externals + connectivity |
+| L2 | `graph LR` + subgraphs | blueprint.md "Containers" | Internal containers + integrations |
+| L3 | `flowchart LR` | domain-model.md "Context Map" | Bounded contexts + DDD relations |
+| L4 | `classDiagram` | domain-model.md `<details>` per BC | Aggregates, entities, invariants |
+| L5 | `flowchart TD` + `sequenceDiagram` | process.md | End-to-end business flow |
 
-### 3.3 View Navigation (CRITICAL)
+### 3.3 Diagram Size Guideline
 
-Views MUST include `navigateTo` declarations to enable drill-down navigation:
+- Keep each Mermaid block under ~50 lines — split into multiple diagrams if larger
+- Use `<details>` blocks for drill-down into bounded contexts or subsystems
+- Cross-reference between levels using markdown links (`[→ See containers](../engineering/blueprint/#containers-l2)`)
 
-```likec4
-// In structural views — use 'with { navigateTo ... }'
-view index {
-  include myPlatform with {
-    navigateTo containers
-  }
-}
+### 3.4 Naming Conventions in Diagrams
 
-view containers of myPlatform {
-  include *
-  include myContext with {
-    navigateTo myContextDetail
-  }
-}
-
-// In dynamic views — use navigateTo on steps
-dynamic view businessFlow {
-  source -> target 'label' {
-    navigateTo detailFlow
-  }
-}
-```
-
-### 3.4 Relationship Documentation
-
-Every relationship should include:
-- **technology** — protocol or transport (`HTTPS`, `asyncpg`, `Redis protocol`)
-- **metadata** — endpoint, frequency, data, fallback (where applicable)
-- **DDD pattern** — for context map relationships (ACL, Conformist, Customer-Supplier, Pub-Sub)
-- **description** — for DDD relationships explaining the pattern rationale
-
-### 3.5 Tag Usage
-
-| Tag | Meaning | Applied to |
-|-----|---------|-----------|
-| `#critical` | Failure causes system-wide outage | Infrastructure elements |
-| `#core` | Core domain — highest business value | Bounded contexts |
-| `#supporting` | Supporting domain — necessary but not differentiating | Bounded contexts |
-| `#generic` | Generic domain — commodity, could be outsourced | Bounded contexts |
+| Element | Convention | Example |
+|---------|-----------|---------|
+| Subgraph labels | Title Case with purpose | `subgraph server["VPS (Production)"]` |
+| Node IDs | camelCase | `Easter`, `DB`, `CLI` |
+| Edge labels | quoted strings | `-->\|"subprocess"\|` |
+| Domain classification | Style classes | `:::core`, `:::supporting`, `:::generic` |
 
 ---
 
 ## 4. DDD Context Map Patterns
 
-### 4.1 Relationship Kinds (defined in spec.likec4)
+### 4.1 Relationship Kinds
 
 | Kind | When to Use | Visual |
 |------|------------|--------|
@@ -225,11 +188,11 @@ Every relationship should include:
 
 | Function | What it Checks | How to Implement |
 |----------|---------------|-----------------|
-| View navigation coverage | Every element in index has a navigateTo | `likec4 export json` + script |
-| Orphan detection | No elements without relationships | JSON analysis |
-| Relationship completeness | Every container has at least 1 inbound + 1 outbound | JSON analysis |
-| Tag coverage | Every boundedContext has a domain classification tag | JSON analysis |
-| Description coverage | Every element has a non-empty description | JSON analysis |
+| Cross-reference coverage | Every diagram level links to adjacent levels | Grep for markdown links |
+| Orphan detection | No elements without relationships in context map | Manual review |
+| Diagram size | Each Mermaid block under ~50 lines | Lint script |
+| Label coverage | Every node in Mermaid has a descriptive label | Manual review |
+| Consistency | Same names across L1-L5 diagrams | Grep + review |
 
 ---
 
@@ -277,14 +240,10 @@ Every relationship should include:
 
 | # | Gap | Priority | Recommendation |
 |---|-----|----------|---------------|
-| 1 | **LikeC4 navigation broken** | HIGH | Add `navigateTo` to all views (see section 3.3) |
-| 2 | **No deployment view** | MEDIUM | Add deployment diagrams to infrastructure.likec4 |
-| 3 | **No cross-cutting concepts doc** | MEDIUM | Create shared patterns doc (logging, security, error handling) |
-| 4 | **No quality scenarios** | LOW | Add Arc42 section 10 with measurable quality attributes |
-| 5 | **No risk register** | LOW | Track risks as first-class artifacts alongside ADRs |
-| 6 | **No glossary** | LOW | Enforce ubiquitous language per platform |
-| 7 | **No automated model fitness** | MEDIUM | Script to validate LikeC4 JSON against conventions |
-| 8 | **ADR review cadence missing** | LOW | Quarterly review of ADR relevance |
+| 1 | **No quality scenarios** | LOW | Add Arc42 section 10 with measurable quality attributes |
+| 2 | **No risk register** | LOW | Track risks as first-class artifacts alongside ADRs |
+| 3 | **No automated diagram lint** | MEDIUM | Script to validate Mermaid block size and cross-references |
+| 4 | **ADR review cadence missing** | LOW | Quarterly review of ADR relevance |
 
 ---
 

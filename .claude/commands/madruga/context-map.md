@@ -48,6 +48,8 @@ Save to `platforms/<name>/engineering/context-map.md`.
 - `engineering/domain-model.md` — bounded contexts, aggregates
 - `engineering/containers.md` — how contexts map to containers
 
+**Cross-reference rule:** Reference bounded context definitions from domain-model.md by name only. Do NOT repeat BC descriptions, purposes, or ubiquitous language — domain-model.md is the single source of truth for BC definitions.
+
 **Structured Questions:**
 
 | Category | Question |
@@ -67,6 +69,8 @@ Check whether a template exists at `.specify/templates/platform/template/enginee
 ---
 title: "Context Map"
 updated: YYYY-MM-DD
+sidebar:
+  order: 3
 ---
 # <Name> — Context Map
 
@@ -134,6 +138,7 @@ graph TD
 | 6 | Max 150 lines? | Condense |
 | 7 | Are all contexts from the domain model present? | Add missing ones |
 | 8 | DDD relationships use typed labels in Mermaid (`-->|"ACL"|`, `-->|"Conformist"|`, etc.)? | Fix — no unlabeled arrows for DDD |
+| 9 | Does NOT repeat BC definitions from domain-model.md? | Remove — reference by name only |
 
 ## Error Handling
 

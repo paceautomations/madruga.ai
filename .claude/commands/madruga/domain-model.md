@@ -83,6 +83,8 @@ Present the candidate context map and request validation. Wait for answers BEFOR
 ---
 title: "Domain Model"
 updated: YYYY-MM-DD
+sidebar:
+  order: 2
 ---
 # <Name> — Domain Model
 
@@ -90,20 +92,14 @@ updated: YYYY-MM-DD
 
 ---
 
-## Context Map
-
-```mermaid
-graph LR
-    subgraph "<Platform Name>"
-        A["Context A"] -->|"upstream/downstream"| B["Context B"]
-        A -->|"shared kernel"| C["Context C"]
-    end
-```
+## Bounded Contexts
 
 | # | Bounded Context | Purpose | Separation Justification | Key Aggregates |
 |---|----------------|---------|-------------------------|----------------|
 | 1 | **[Context A]** | [1 sentence] | [why it is separate] | [list] |
 | 2 | **[Context B]** | [1 sentence] | [why it is separate] | [list] |
+
+> Relacionamentos entre contextos e padrões DDD → ver [context-map.md](../context-map/)
 
 ---
 
@@ -117,7 +113,6 @@ graph LR
 | **Purpose** | [what this context solves] |
 | **Ubiquitous Language** | [key terms in this context] |
 | **Aggregates** | [list of aggregates] |
-| **Relationship with other contexts** | [upstream/downstream/shared kernel/ACL] |
 
 ### Aggregates
 
@@ -200,6 +195,8 @@ CREATE INDEX idx_name_field ON table_name(field1);
 | 4 | Do Mermaid diagrams render correctly (valid syntax)? | Fix syntax |
 | 5 | Is domain-model.md <= 250 lines? | Condense — abstract excessive details |
 | 6 | Were recent DDD best practices researched (2025-2026)? | Research |
+| 7 | Does NOT contain a Context Map Mermaid diagram? (owned by context-map.md) | Remove diagram, add cross-ref |
+| 8 | Does the Canvas table omit "Relationship with other contexts"? (owned by context-map.md) | Remove row |
 
 ## Error Handling
 
