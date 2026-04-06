@@ -34,6 +34,7 @@ jobs:
 
   smoke-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -58,14 +59,18 @@ jobs:
                    ensure_repo.py implement_remote.py sync_memory.py \
                    hook_post_save.py hook_skill_lint.py; do
             echo "Checking $f..."
-            python3 -c "
+            timeout 30 python3 -c "
           import importlib.util, sys
+          sys.path.insert(0, '.specify/scripts')
           spec = importlib.util.spec_from_file_location('_check', '.specify/scripts/$f')
           mod = importlib.util.module_from_spec(spec)
+          sys.modules['_check'] = mod
           try:
               spec.loader.exec_module(mod)
           except SystemExit:
               pass  # argparse scripts exit on missing args
+          finally:
+              sys.modules.pop('_check', None)
           " 2>&1 || { echo "::error::Import failed: $f"; FAILED=1; }
           done
           exit $FAILED
