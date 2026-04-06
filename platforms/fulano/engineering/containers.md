@@ -54,8 +54,7 @@ graph LR
     subgraph external ["External Services"]
         evolution-api["Evolution API<br/><small>WhatsApp gateway</small>"]
         supabase-resenhai[("Supabase ResenhAI<br/><small>PG 15 read-only</small>")]
-        claude-sonnet["Claude Sonnet<br/><small>primary LLM</small>"]
-        claude-haiku["Claude Haiku<br/><small>classification + fallback</small>"]
+        openai-gpt-mini["OpenAI GPT mini<br/><small>classification + generation</small>"]
         langfuse["LangFuse v3<br/><small>tracing + eval</small>"]
         infisical["Infisical<br/><small>secrets vault</small>"]
     end
@@ -92,8 +91,7 @@ graph LR
     supabase-fulano -. "PG LISTEN/NOTIFY<br/>games, group_members" .-> wk_trigger
 
     %% Bifrost → LLMs
-    bifrost -- "Anthropic API" --> claude-sonnet
-    bifrost -- "Anthropic API<br/>fallback chain" --> claude-haiku
+    bifrost -- "OpenAI API" --> openai-gpt-mini
 ```
 
 ---
@@ -109,7 +107,7 @@ graph LR
 | 3 | fulano-admin | — (apresentacao) | Next.js 15 + shadcn/ui | Dashboard, conversation viewer, prompt manager, handoff queue | HTTPS + JWT | REST API, Supabase JS |
 | 4 | Redis 7 | — (infra) | Redis | Message streams, cache, PubSub, debounce state | Redis protocol | Redis protocol |
 | 5 | Supabase Fulano | — (infra) | PG 15 + pgvector + RLS | Persistent state multi-tenant | asyncpg SQL, Supabase JS | PG LISTEN/NOTIFY |
-| 6 | Bifrost | — (proxy) | Go binary | LLM proxy: rate limit, fallback Sonnet/Haiku, cost tracking | HTTP POST | Anthropic API |
+| 6 | Bifrost | — (proxy) | Go binary | LLM proxy: rate limit, cost tracking | HTTP POST | OpenAI API |
 | 7 | LangFuse v3 | Observability | Docker (self-hosted) | Tracing LLM, eval, prompt versioning | HTTPS SDK | — |
 | 8 | Infisical | — (infra) | Docker (self-hosted) | Secrets vault: envelope encryption, rotation | HTTPS REST SDK | — |
 | 9 | Evolution API | Channel | Cloud mode (managed) | WhatsApp gateway: send/receive messages | HTTP POST (sendText) | Webhook POST |
@@ -131,7 +129,7 @@ graph LR
 | fulano-worker | Infisical | HTTPS REST SDK (cached 5min) | sync | Secret retrieval |
 | Supabase Fulano | fulano-worker | PG LISTEN/NOTIFY | async (event-driven) | Triggers proativos (games, group_members) |
 | fulano-admin | fulano-api | REST /api/v1/* | sync | CRUD operations |
-| Bifrost | Claude Sonnet/Haiku | Anthropic API | sync | LLM inference |
+| Bifrost | OpenAI GPT mini | OpenAI API | sync | LLM inference |
 
 ---
 

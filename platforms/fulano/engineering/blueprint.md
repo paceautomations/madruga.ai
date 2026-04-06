@@ -59,8 +59,7 @@ graph LR
     subgraph external ["External"]
         evolution-api["Evolution API<br/><small>WhatsApp Gateway</small>"]
         supabase-resenhai[("Supabase ResenhAI<br/><small>PG 15 read-only</small>")]
-        claude-sonnet["Claude Sonnet"]
-        claude-haiku["Claude Haiku"]
+        openai-gpt-mini["OpenAI GPT mini"]
         langfuse["LangFuse v3"]
         infisical["Infisical"]
     end
@@ -91,8 +90,7 @@ graph LR
     fulano-worker -- "SDK secret read" --> infisical
 
     %% Bifrost → LLMs
-    bifrost -- "Anthropic API" --> claude-sonnet
-    bifrost -- "Anthropic API<br/>fallback" --> claude-haiku
+    bifrost -- "OpenAI API" --> openai-gpt-mini
 ```
 
 ### 2.1 Ambientes
@@ -202,7 +200,7 @@ fulano-api/
 | Mecanismo | Descricao | ADR |
 |-----------|-----------|-----|
 | Rate limiting | Sliding window Redis por tenant por tier (Free=20, Starter=100, Growth=200, Business=500 RPM) | [ADR-015](../decisions/ADR-015-noisy-neighbor-mitigation/) |
-| LLM spend caps | Bifrost daily cap por tier; fallback automatico Sonnet → Haiku ao atingir cap | [ADR-015](../decisions/ADR-015-noisy-neighbor-mitigation/) |
+| LLM spend caps | Bifrost daily cap por tier; throttle ao atingir cap | [ADR-015](../decisions/ADR-015-noisy-neighbor-mitigation/) |
 | Queue priority | 3 niveis Redis Streams (high/normal/low) por tier; ratio 1:10 anti-starvation | [ADR-015](../decisions/ADR-015-noisy-neighbor-mitigation/) |
 | Circuit breaker | Por tenant; threshold 50 erros/5min abre por 5min; half-open testing; DLQ para falhas | [ADR-015](../decisions/ADR-015-noisy-neighbor-mitigation/) |
 | Concurrency limits | Free=5, Starter=20, Growth=50, Business=100 requests simultaneos | [ADR-015](../decisions/ADR-015-noisy-neighbor-mitigation/) |
@@ -213,7 +211,7 @@ fulano-api/
 
 | Cenario | Estrategia | Fallback |
 |---------|------------|----------|
-| LLM timeout/falha | 3 retries com backoff exponencial via Bifrost | Sonnet → Haiku; se ambos falham: mensagem amigavel + handoff |
+| LLM timeout/falha | 3 retries com backoff exponencial via Bifrost | Se falham: mensagem amigavel + handoff |
 | Evolution API fora | 3 retries exponential backoff (1s → 4s → 16s) | Mensagem reenfileirada no Redis Stream; alerta admin |
 | Redis desconectado | Reconnect automatico com exponential backoff | — |
 | PG LISTEN/NOTIFY drop | Polling fallback a cada 5s | ARQ cron a cada 30min catch-up de eventos perdidos |
@@ -234,7 +232,7 @@ fulano-api/
 | Q4 | Safety — injection bypass | Taxa de bypass das guardrails | <1% | 3-layer guardrails (regex + ML + LLM-as-judge) | Must |
 | Q5 | Throughput Starter | Mensagens/min por tenant | 100 RPM | Redis sliding window rate limiting | Must |
 | Q6 | Throughput Business | Mensagens/min por tenant | 500 RPM | Redis sliding window rate limiting | Must |
-| Q7 | Custo LLM Starter | Cap diario por tenant | $5/dia | Bifrost spend tracking + Sonnet → Haiku fallback | Should |
+| Q7 | Custo LLM Starter | Cap diario por tenant | $5/dia | Bifrost spend tracking + throttle | Should |
 | Q8 | Retencao automatica | Purge de dados expirados | <=90d default (config 30-365d) | Cron diario com cascade delete | Must |
 | Q9 | SAR response (LGPD) | Tempo de resposta a requisicao do titular | <=15 dias | Endpoint dedicado `/api/v1/sar/{customer_id}` | Must |
 | Q10 | Eval quality | Faithfulness score medio | >0.8 | DeepEval batch offline + alerta se cai abaixo | Should |
@@ -300,7 +298,7 @@ fulano-api/
 | **Cooldown** | Tempo minimo entre mensagens proativas para o mesmo cliente (evitar spam) | Triggers |
 | **Bounded Context** | Area logica do sistema com fronteiras definidas (DDD). 5 contextos no Fulano | Arquitetura |
 | **ACL** | Anti-Corruption Layer — isola integracao com sistemas externos, traduzindo formatos | Arquitetura |
-| **Bifrost** | Proxy LLM em Go — centraliza rate limiting, fallback Sonnet/Haiku, cost tracking | Infra |
+| **Bifrost** | Proxy LLM em Go — centraliza rate limiting, cost tracking | Infra |
 | **Evolution API** | Gateway WhatsApp self-hosted (cloud mode) — conecta Fulano ao WhatsApp sem BSP | Integracao |
 | **LangFuse** | Observabilidade LLM: tracing, eval, prompt versioning. Self-hosted v3 | Observabilidade |
 | **CSAT** | Customer Satisfaction Score (1-5) coletado apos atendimento humano | Metricas |

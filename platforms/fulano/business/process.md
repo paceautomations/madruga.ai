@@ -7,7 +7,7 @@ sidebar:
 
 # Business Process — Pipeline Completo
 
-Todos os caminhos da plataforma Fulano: mensagem individual (1:1), grupo (@mention), handoff humano, triggers proativos. **14 modulos, 5 paths de roteamento, 3 decision points.**
+Todos os caminhos da plataforma Fulano: mensagem individual (1:1), grupo (@mention), handoff humano, triggers proativos. **14 modulos, 6 paths de roteamento, 3 decision points.**
 
 > [→ Ver arquitetura de containers](../engineering/blueprint/#containers) | [→ Ver domain model](../engineering/domain-model/)
 
@@ -91,14 +91,16 @@ flowchart LR
     M3 -->|"1. SUPPORT"| P1["Pipeline completo (1:1)"]
     M3 -->|"2. GROUP_RESPOND"| P2["Pipeline com contexto de grupo"]
     M3 -->|"3. GROUP_SAVE_ONLY"| P3["Salva sem LLM<br/>(zero custo)"]
-    M3 -->|"4. HANDOFF_ATIVO"| P4["Bypass IA<br/>→ M12 Handoff"]
-    M3 -->|"5. IGNORE"| P5["Duplicata ou<br/>evento interno"]
+    M3 -->|"4. GROUP_EVENT"| P6["Evento de membership<br/>(welcome/saida)"]
+    M3 -->|"5. HANDOFF_ATIVO"| P4["Bypass IA<br/>→ M12 Handoff"]
+    M3 -->|"6. IGNORE"| P5["Duplicata ou<br/>evento interno"]
 
     P1 --> M4["→ M4 Clientes"]
     P2 --> M4
 
     style M3 fill:#f9f,stroke:#333
     style P3 fill:#eee,stroke:#999
+    style P6 fill:#eee,stroke:#999
     style P5 fill:#eee,stroke:#999
 ```
 
@@ -106,6 +108,7 @@ flowchart LR
 - **SUPPORT** → Pipeline completo para mensagem individual (1:1)
 - **GROUP_RESPOND** → Mesmo pipeline, com contexto de grupo (@mention)
 - **GROUP_SAVE_ONLY** → Salva mensagem no historico sem acionar LLM (zero custo)
+- **GROUP_EVENT** → Evento de membership (welcome, saida de membro) — aciona trigger template sem LLM
 - **HANDOFF_ATIVO** → Conversa ja escalada — bypass completo da IA, direto para atendente humano
 - **IGNORE** → Duplicata detectada ou evento interno — descarta
 
@@ -123,10 +126,9 @@ sequenceDiagram
     participant M5 as M5 Contexto
     participant M6 as M6 Guardrails Entrada
     participant M7 as M7 Classificador
-    participant Haiku as Claude Haiku
     participant M8 as M8 Agente IA
     participant Bifrost
-    participant Sonnet as Claude Sonnet
+    participant GPTmini as OpenAI GPT mini
     participant ResenhAI as Supabase ResenhAI
 
     M4->>DB: Busca/cria customer
@@ -144,14 +146,14 @@ sequenceDiagram
         M6->>M7: Mensagem sanitizada
     end
 
-    M7->>Haiku: Classifica intent
-    Haiku-->>M7: intent + confidence (0-1)
+    M7->>GPTmini: Classifica intent
+    GPTmini-->>M7: intent + confidence (0-1)
     Note over M7: Se confidence < 0.7<br/>→ fallback "general"
 
     M7->>M8: IntentClassification
     M8->>Bifrost: POST /v1/chat/completions
-    Bifrost->>Sonnet: Anthropic API
-    Sonnet-->>Bifrost: Resposta + tool calls
+    Bifrost->>GPTmini: OpenAI API
+    GPTmini-->>Bifrost: Resposta + tool calls
     Bifrost-->>M8: AgentResponse
 
     opt Tool calls (ResenhAI data)
@@ -231,7 +233,7 @@ sequenceDiagram
     participant M11 as M11 Entrega
 
     M9->>M12: ESCALATE (score < 0.5)
-    Note over M12: Gera resumo via Haiku<br/>para contexto do atendente
+    Note over M12: Gera resumo via GPT mini<br/>para contexto do atendente
 
     M12->>Admin: Notifica atendente (Socket.io)
     Admin->>Operador: Alerta na fila de handoff

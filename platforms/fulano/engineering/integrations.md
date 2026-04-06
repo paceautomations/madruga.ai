@@ -21,8 +21,7 @@ sidebar:
 | 4 | **GET/SET cache** | Redis protocol | fulano-api → Redis | per-request | Cache de sessao, debounce state, dedup message_id | — |
 | 5 | **XREADGROUP** | Redis Streams | Redis → fulano-worker | per-message | — | — |
 | 6 | **POST /v1/chat/completions** | HTTP POST | fulano-worker → Bifrost | per-message | — | retry 3x |
-| 7 | **Anthropic API** | Anthropic API | Bifrost → Claude Sonnet | — | — | — |
-| 8 | **Anthropic API (fallback)** | Anthropic API | Bifrost → Claude Haiku | per-classification | — | — |
+| 7 | **OpenAI API** | OpenAI API | Bifrost → OpenAI GPT mini | per-message | Classificacao + geracao + eval | retry 3x via Bifrost |
 | 9 | **POST sendText/{instance}** | HTTP POST | fulano-worker → Evolution API | per-response | — | 3 retries com backoff exponencial |
 | 10 | **asyncpg SQL** | asyncpg | fulano-worker → Supabase Fulano | per-message | Mensagens, conversas, clientes, prompts, evals | — |
 | 11 | **asyncpg read-only** | asyncpg | fulano-worker → Supabase ResenhAI | per-tool-call | Dados de jogos, estatisticas, ranking | — |

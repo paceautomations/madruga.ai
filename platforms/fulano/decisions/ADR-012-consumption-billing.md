@@ -63,7 +63,7 @@ Referencia de tiers inicial (a ser validada):
 2. Tiers e pricing exatos
 3. Overage: hard limit vs soft limit vs cobranca extra?
 4. Free tier: sim/nao? Qual limite?
-5. Unit economics: custo medio por mensagem (Haiku ~$0.0002, Sonnet ~$0.002) vs preco cobrado
+5. Unit economics: custo medio por mensagem (GPT mini ~$0.0004) vs preco cobrado
 
 ## Proximo passo
 Validar unit economics com dados reais de custo LLM por conversa (pos-Phase 0) antes de decidir modelo e pricing.

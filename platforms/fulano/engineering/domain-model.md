@@ -69,6 +69,7 @@ classDiagram
         GROUP_RESPOND
         GROUP_SAVE_ONLY
         GROUP_EVENT
+        HANDOFF_ATIVO
         IGNORE
     }
 
@@ -263,7 +264,7 @@ CREATE TABLE route_decisions (
     buffer_key      TEXT NOT NULL,
     message_ids     UUID[] NOT NULL,
     decision        TEXT NOT NULL CHECK (decision IN (
-        'SUPPORT', 'GROUP_RESPOND', 'GROUP_SAVE_ONLY', 'GROUP_EVENT', 'IGNORE'
+        'SUPPORT', 'GROUP_RESPOND', 'GROUP_SAVE_ONLY', 'GROUP_EVENT', 'HANDOFF_ATIVO', 'IGNORE'
     )),
     reason          TEXT,
     routing_metadata JSONB,
@@ -699,28 +700,23 @@ Integracoes: fulano-admin, Supabase Fulano, Channel (M11). [→ Ver no fluxo de 
 
 ```mermaid
 stateDiagram-v2
-    [*] --> BotActive : conversa inicia
+    [*] --> AGENT_ACTIVE : conversa inicia
 
-    BotActive --> HandoffRequested : trigger manual\nou confidence baixa\nou classificacao critica
-    HandoffRequested --> WaitingHuman : notificacao enviada
-    WaitingHuman --> HumanActive : agente aceita
-    WaitingHuman --> BotActive : timeout (SLA expirado)
+    AGENT_ACTIVE --> PENDING : ESCALATE\n(confidence baixa, classificacao critica,\nrequest explicito)
+    PENDING --> ASSIGNED : atendente aceita (< 5min)
+    PENDING --> AGENT_ACTIVE : timeout (5min)
+    ASSIGNED --> HUMAN_ACTIVE : atendente responde (< 2min)
+    HUMAN_ACTIVE --> COMPLETED : encerra / inatividade (30min)
+    COMPLETED --> AGENT_ACTIVE : cooldown (5min)
 
-    HumanActive --> BotActive : agente devolve
-    HumanActive --> Closed : agente encerra
-
-    BotActive --> Closed : conversa encerrada
-    Closed --> [*]
-
-    note right of HandoffRequested
+    note right of PENDING
         Mensagem de espera enviada
         ao cliente automaticamente
     end note
 
-    note right of WaitingHuman
-        SLA default: 5 min
-        Apos timeout, bot reassume
-        com aviso ao cliente
+    note right of ASSIGNED
+        SLA default: 2 min para
+        primeira resposta
     end note
 ```
 
@@ -857,8 +853,8 @@ CREATE TABLE handoff_requests (
     )),
     priority        TEXT NOT NULL DEFAULT 'MEDIUM'
                     CHECK (priority IN ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL')),
-    status          TEXT NOT NULL DEFAULT 'requested'
-                    CHECK (status IN ('requested', 'waiting', 'accepted', 'resolved', 'timed_out')),
+    status          TEXT NOT NULL DEFAULT 'PENDING'
+                    CHECK (status IN ('PENDING', 'ASSIGNED', 'HUMAN_ACTIVE', 'COMPLETED')),
     requested_by    UUID,          -- null = sistema automatico
     assigned_to     UUID,          -- agente humano que aceitou
     sla_seconds     INT NOT NULL DEFAULT 300,
@@ -873,7 +869,7 @@ ALTER TABLE handoff_requests ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON handoff_requests USING (tenant_id = auth.tenant_id());
 CREATE INDEX idx_handoff_tenant ON handoff_requests (tenant_id);
 CREATE INDEX idx_handoff_conversation ON handoff_requests (tenant_id, conversation_id, requested_at DESC);
-CREATE INDEX idx_handoff_pending ON handoff_requests (tenant_id, status) WHERE status IN ('requested', 'waiting');
+CREATE INDEX idx_handoff_pending ON handoff_requests (tenant_id, status) WHERE status = 'PENDING';
 CREATE INDEX idx_handoff_assigned ON handoff_requests (assigned_to) WHERE assigned_to IS NOT NULL;
 
 -- M13: Trigger rules
@@ -967,7 +963,7 @@ CREATE TABLE usage_events (
     event_type      TEXT NOT NULL,  -- 'llm_call', 'message_processed', 'handoff', 'delivery', etc
     conversation_id UUID,
     customer_id     UUID,
-    model           TEXT,           -- 'claude-sonnet-4-20250514', 'claude-haiku', etc
+    model           TEXT,           -- 'gpt-4.1-mini', etc
     input_tokens    INT,
     output_tokens   INT,
     latency_ms      INT,

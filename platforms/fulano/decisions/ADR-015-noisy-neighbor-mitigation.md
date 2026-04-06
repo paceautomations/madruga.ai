@@ -39,7 +39,7 @@ async def check_rate_limit(tenant_id: str) -> bool:
 
 - Bifrost proxy rastreia custo acumulado por tenant por dia
 - Hard cap configuravel por tier (ex: Starter = $5/dia, Business = $50/dia)
-- Ao atingir cap: fallback para modelo mais barato (Sonnet → Haiku) antes de bloquear
+- Ao atingir cap: throttle (rate limit reduzido) antes de bloquear
 - Alerta ao admin do tenant quando atinge 80% do cap diario
 - Dashboard de custo no admin panel (real-time via LangFuse — ADR-007)
 
