@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import subprocess
 from pathlib import Path
 
@@ -19,16 +18,6 @@ def test_scaffold_structure(scaffold: Path):
         "engineering/domain-model.md",
         "engineering/context-map.md",
         "engineering/integrations.md",
-        "model/spec.likec4",
-        "model/likec4.config.json",
-        "model/platform.likec4",
-        "model/actors.likec4",
-        "model/externals.likec4",
-        "model/infrastructure.likec4",
-        "model/ddd-contexts.likec4",
-        "model/relationships.likec4",
-        "model/views.likec4",
-        "model/.gitignore",
     ]
     expected_dirs = ["decisions", "epics", "research"]
 
@@ -48,13 +37,6 @@ def test_platform_yaml_values(scaffold: Path, default_data: dict):
     assert content["description"] == default_data["platform_description"]
     assert content["lifecycle"] == default_data["lifecycle"]
     assert content["version"] == "0.1.0"
-
-
-def test_spec_likec4_identical(scaffold: Path, template_root: Path):
-    """spec.likec4 is byte-for-byte identical to the canonical template copy."""
-    canonical = (template_root / "template" / "model" / "spec.likec4").read_bytes()
-    generated = (scaffold / "model" / "spec.likec4").read_bytes()
-    assert canonical == generated, "spec.likec4 diverged from canonical"
 
 
 def test_auto_markers_present(scaffold: Path):
@@ -118,16 +100,8 @@ def test_skip_if_exists_config(template_root: Path):
     )
 
 
-def test_spec_not_in_skip_list(template_root: Path):
-    """spec.likec4 should NOT be in _skip_if_exists (it must sync on update)."""
-    copier_yml = yaml.safe_load((template_root / "copier.yml").read_text())
-    skip_list = copier_yml.get("_skip_if_exists", [])
-    for entry in skip_list:
-        assert "spec.likec4" not in str(entry), f"spec.likec4 should not be skipped on update, but found in: {entry}"
-
-
 def test_conditional_business_flow(tmp_path: Path, template_root: Path, default_data: dict):
-    """include_business_flow=false removes the businessFlow view."""
+    """include_business_flow=false omits business flow from platform.yaml views."""
     from copier import run_copy
 
     data = dict(default_data)
@@ -136,19 +110,10 @@ def test_conditional_business_flow(tmp_path: Path, template_root: Path, default_
 
     run_copy(str(template_root), str(dst), data=data, unsafe=True, defaults=True)
 
-    views = (dst / "model" / "views.likec4").read_text()
-    assert "businessFlow" not in views, "businessFlow view should not exist when disabled"
-
     platform_yaml = yaml.safe_load((dst / "platform.yaml").read_text())
-    flows = platform_yaml.get("views", {}).get("flows", [])
-    flow_ids = [f["id"] for f in flows] if flows else []
-    assert "businessFlow" not in flow_ids, "businessFlow should not be in platform.yaml flows"
-
-
-def test_likec4_config_json(scaffold: Path, default_data: dict):
-    """likec4.config.json has the correct project name."""
-    config = json.loads((scaffold / "model" / "likec4.config.json").read_text())
-    assert config["name"] == default_data["platform_name"]
+    # After LikeC4 removal, views block no longer exists in platform.yaml
+    views = platform_yaml.get("views", {})
+    assert not views, "platform.yaml should not have views block after Mermaid migration"
 
 
 def test_no_jinja_artifacts(scaffold: Path):

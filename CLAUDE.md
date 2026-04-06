@@ -13,7 +13,7 @@ Shared Copier template.
 ## Where to find things
 
 - Skills: `.claude/commands/` | Knowledge: `.claude/knowledge/`
-- Platforms: `platforms/<name>/` (business/, engineering/, decisions/, epics/, model/)
+- Platforms: `platforms/<name>/` (business/, engineering/, decisions/, epics/)
 - Scripts: `.specify/scripts/` | Portal: `portal/`
 
 ## Essential commands
@@ -36,16 +36,15 @@ Full reference: @.claude/knowledge/commands.md
 - ADRs: Nygard format. Epics: Shape Up pitch. Planned epics live only in roadmap.md
 - Repo binding: `platform.yaml` → `repo:` block. External repos at `{repos_base_dir}/{repo_org}/{repo_name}`
 - Python: stdlib + pyyaml. SQLite WAL mode. Ruff for lint/format.
-- Tech stack: Markdown skills + YAML frontmatter, Bash 5.x, Python 3.11+, LikeC4, Astro + Starlight
+- Tech stack: Markdown skills + YAML frontmatter, Bash 5.x, Python 3.11+, Mermaid (inline), Astro + Starlight
 
 ## Prerequisites
 
-Node.js 20+ | Python 3.11+ | `likec4` CLI (`npm i -g likec4`) | `copier` >= 9.4.0
+Node.js 20+ | Python 3.11+ | `copier` >= 9.4.0
 
 ## Gotchas
 
-- Edit `.likec4` sources, run `vision-build.py` to regenerate AUTO markers.
-- Add platformLoaders in `LikeC4Diagram.tsx` when creating a new platform.
+- Architecture diagrams use Mermaid inline in `.md` files (rendered by `astro-mermaid` in portal).
 - Scripts < 300 LOC: write complete + tests in one batch, no empty incrementalism.
 - LOC estimates: multiply by 1.5-2x (docstrings, argparse, logging are not in the base).
 
@@ -88,6 +87,8 @@ Direct edits bypass validation (frontmatter, handoff chains, archetype complianc
 ## Active Technologies
 - Python 3.11+ (backend), TypeScript/React (portal) + sqlite3 (stdlib), structlog, FastAPI (easter), React + @xyflow/react (portal existente), Astro Starlight (epic/madruga-ai/017-observability-tracing-evals)
 - SQLite WAL mode (`.pipeline/madruga.db`) — novas tabelas `traces` e `eval_scores`, coluna `trace_id` em `pipeline_runs` (epic/madruga-ai/017-observability-tracing-evals)
+- TypeScript (Astro 5.x, React), Python 3.11+ (scripts), Bash (CI) + Astro + Starlight, astro-mermaid v2.0.1, js-yaml (portal build-time) (epic/madruga-ai/022-mermaid-migration)
+- Filesystem (Markdown + YAML), SQLite WAL mode (pipeline state) (epic/madruga-ai/022-mermaid-migration)
 
 ## Recent Changes
 - epic/madruga-ai/017-observability-tracing-evals: Added Python 3.11+ (backend), TypeScript/React (portal) + sqlite3 (stdlib), structlog, FastAPI (easter), React + @xyflow/react (portal existente), Astro Starlight

@@ -11,6 +11,7 @@ RestartSec=5
 WatchdogSec=120
 NotifyAccess=all
 Environment=PYTHONUNBUFFERED=1
+Environment=MADRUGA_MODE=manual
 
 [Install]
 WantedBy=default.target

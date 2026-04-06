@@ -240,6 +240,28 @@ python3 .specify/scripts/post_save.py --platform <name> --epic <epic-id> --node 
 python3 .specify/scripts/post_save.py --platform <name> --epic <epic-id> --node epic-context --skill madruga:epic-context --artifact epics/<NNN>/pitch.md
 ```
 
+**Decision Log** (both modes): After saving pitch.md, create `decisions.md` in the same epic directory:
+
+1. Parse the "Captured Decisions" table from the just-generated pitch.md
+2. Create `platforms/<name>/epics/<NNN>/decisions.md` with this structure:
+```markdown
+---
+epic: <NNN-slug>
+created: YYYY-MM-DD
+updated: YYYY-MM-DD
+---
+# Registro de Decisoes — Epic <NNN>
+
+1. `[YYYY-MM-DD epic-context]` <Decision text> (ref: <Architectural Reference>)
+2. `[YYYY-MM-DD epic-context]` <Decision text> (ref: <Architectural Reference>)
+```
+3. One numbered entry per row from the Captured Decisions table
+4. If `decisions.md` already exists (re-run or delta review): append only NEW decisions not already present, incrementing the numbering. Update `updated:` frontmatter field.
+5. Register the artifact:
+```bash
+python3 .specify/scripts/post_save.py --platform <name> --epic <epic-id> --node epic-context --skill madruga:epic-context --artifact epics/<NNN>/decisions.md
+```
+
 ## Error Handling
 
 | Issue | Action |

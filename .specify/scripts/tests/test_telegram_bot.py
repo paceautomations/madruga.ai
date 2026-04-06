@@ -397,6 +397,208 @@ class TestHandleDecisionCallback:
         callback.answer.assert_called_once()
         assert "aprovada" in callback.answer.call_args[0][0].lower()
 
+
+# --- Tests for command & message handlers ---
+
+
+def _make_conn_with_status():
+    """Create in-memory DB with pipeline_nodes + epics schema for status queries."""
+    conn = _make_conn()
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS pipeline_nodes (
+            platform_id TEXT NOT NULL,
+            node_id TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            output_hash TEXT,
+            completed_at TEXT,
+            PRIMARY KEY (platform_id, node_id)
+        )"""
+    )
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS epics (
+            platform_id TEXT NOT NULL,
+            epic_id TEXT NOT NULL,
+            title TEXT,
+            status TEXT NOT NULL DEFAULT 'pending',
+            appetite TEXT,
+            priority INTEGER,
+            delivered_at TEXT,
+            PRIMARY KEY (platform_id, epic_id)
+        )"""
+    )
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS epic_nodes (
+            platform_id TEXT NOT NULL,
+            epic_id TEXT NOT NULL,
+            node_id TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            output_hash TEXT,
+            completed_at TEXT,
+            PRIMARY KEY (platform_id, epic_id, node_id)
+        )"""
+    )
+    return conn
+
+
+class TestHandleHelp:
+    def test_sends_help_text(self):
+        from telegram_bot import handle_help
+
+        adapter = AsyncMock()
+        message = MagicMock()
+        asyncio.get_event_loop().run_until_complete(handle_help(message, adapter, 123))
+        adapter.send.assert_called_once()
+        text = adapter.send.call_args[0][1]
+        assert "/status" in text
+        assert "/gates" in text
+        assert "/help" in text
+
+
+class TestHandleGatesCommand:
+    def test_no_pending_gates(self):
+        from telegram_bot import handle_gates
+
+        conn = _make_conn()
+        adapter = AsyncMock()
+        message = MagicMock()
+        asyncio.get_event_loop().run_until_complete(handle_gates(message, adapter, 123, conn))
+        adapter.send.assert_called_once()
+        assert "nenhum" in adapter.send.call_args[0][1].lower()
+
+    def test_with_pending_gates(self):
+        from telegram_bot import handle_gates
+
+        conn = _make_conn()
+        _insert_gate(conn, "run-1", platform_id="fulano", node_id="specify", notified=False)
+        adapter = AsyncMock()
+        message = MagicMock()
+        asyncio.get_event_loop().run_until_complete(handle_gates(message, adapter, 123, conn))
+        adapter.send.assert_called_once()
+        text = adapter.send.call_args[0][1]
+        assert "specify" in text
+        assert "fulano" in text
+
+
+class TestHandleStatus:
+    def test_no_platforms(self):
+        from unittest.mock import patch
+
+        from telegram_bot import handle_status
+
+        conn = _make_conn_with_status()
+        adapter = AsyncMock()
+        message = MagicMock()
+
+        # Mock REPO_ROOT to a temp dir with no platforms
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            import pathlib
+
+            with patch("telegram_bot.REPO_ROOT", pathlib.Path(tmpdir)):
+                asyncio.get_event_loop().run_until_complete(handle_status(message, adapter, 123, conn))
+        adapter.send.assert_called_once()
+        assert "nenhuma" in adapter.send.call_args[0][1].lower()
+
+    def test_with_platform(self):
+        from unittest.mock import patch
+
+        from telegram_bot import handle_status
+
+        conn = _make_conn_with_status()
+        # Insert platform nodes
+        conn.execute("INSERT INTO pipeline_nodes (platform_id, node_id, status) VALUES ('test-plat', 'vision', 'done')")
+        conn.execute(
+            "INSERT INTO pipeline_nodes (platform_id, node_id, status) VALUES ('test-plat', 'blueprint', 'pending')"
+        )
+        conn.commit()
+
+        adapter = AsyncMock()
+        message = MagicMock()
+
+        # Create a temp dir with a fake platform
+        import pathlib
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            plat_dir = pathlib.Path(tmpdir) / "platforms" / "test-plat"
+            plat_dir.mkdir(parents=True)
+            (plat_dir / "platform.yaml").write_text("name: test-plat\n")
+
+            with patch("telegram_bot.REPO_ROOT", pathlib.Path(tmpdir)):
+                asyncio.get_event_loop().run_until_complete(handle_status(message, adapter, 123, conn))
+
+        adapter.send.assert_called_once()
+        text = adapter.send.call_args[0][1]
+        assert "test-plat" in text
+        assert "50.0%" in text  # 1 done out of 2 nodes
+
+
+class TestHandleFreetext:
+    def test_success(self):
+        from unittest.mock import patch
+
+        from telegram_bot import handle_freetext
+
+        conn = _make_conn_with_status()
+        adapter = AsyncMock()
+        message = MagicMock()
+        message.text = "what is the pipeline status?"
+        message.bot = AsyncMock()
+
+        mock_proc = AsyncMock()
+        mock_proc.communicate.return_value = (
+            b'{"result": "The pipeline is healthy.", "total_cost_usd": 0.05}',
+            b"",
+        )
+        mock_proc.returncode = 0
+
+        with (
+            patch("telegram_bot.REPO_ROOT", MagicMock()),
+            patch("asyncio.create_subprocess_exec", return_value=mock_proc),
+            patch("asyncio.wait_for", return_value=mock_proc.communicate.return_value),
+        ):
+            asyncio.get_event_loop().run_until_complete(handle_freetext(message, adapter, 123, conn))
+
+        adapter.send.assert_called_once()
+        text = adapter.send.call_args[0][1]
+        assert "pipeline is healthy" in text
+        assert "$0.0500" in text
+
+    def test_timeout(self):
+        from unittest.mock import patch
+
+        from telegram_bot import handle_freetext
+
+        conn = _make_conn_with_status()
+        adapter = AsyncMock()
+        message = MagicMock()
+        message.text = "some question"
+        message.bot = AsyncMock()
+
+        mock_proc = AsyncMock()
+
+        with (
+            patch("telegram_bot.REPO_ROOT", MagicMock()),
+            patch("asyncio.create_subprocess_exec", return_value=mock_proc),
+            patch("asyncio.wait_for", side_effect=asyncio.TimeoutError),
+        ):
+            asyncio.get_event_loop().run_until_complete(handle_freetext(message, adapter, 123, conn))
+
+        adapter.send.assert_called_once()
+        assert "timeout" in adapter.send.call_args[0][1].lower()
+
+    def test_empty_message_ignored(self):
+        from telegram_bot import handle_freetext
+
+        conn = _make_conn()
+        adapter = AsyncMock()
+        message = MagicMock()
+        message.text = ""
+
+        asyncio.get_event_loop().run_until_complete(handle_freetext(message, adapter, 123, conn))
+        adapter.send.assert_not_called()
+
     def test_reject_records_event(self):
         from telegram_bot import handle_decision_callback
 

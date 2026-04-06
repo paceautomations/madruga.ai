@@ -59,7 +59,7 @@ def test_lint_platform_valid(tmp_path, capsys):
     plat.PLATFORMS_DIR = tmp_path
 
     pdir = _create_platform(tmp_path, "test-plat")
-    for d in ["business", "engineering", "decisions", "epics", "model"]:
+    for d in ["business", "engineering", "decisions", "epics"]:
         (pdir / d).mkdir()
     for f in [
         "business/vision.md",
@@ -67,10 +67,8 @@ def test_lint_platform_valid(tmp_path, capsys):
         "engineering/domain-model.md",
         "engineering/integrations.md",
         "engineering/blueprint.md",
-        "model/spec.likec4",
     ]:
         (pdir / f).write_text("placeholder")
-    (pdir / "model" / "likec4.config.json").write_text('{"name": "test-plat"}')
 
     try:
         result = plat._lint_platform("test-plat")

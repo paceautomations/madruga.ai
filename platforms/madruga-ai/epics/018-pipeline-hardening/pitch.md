@@ -1,12 +1,13 @@
 ---
 id: 018
 title: "Pipeline Hardening & Safety"
-status: planned
+status: shipped
 appetite: 2w
 priority: P1
 depends_on: []
 blocks: [020]
-updated: 2026-04-04
+updated: 2026-04-05
+delivered_at: 2026-04-05
 ---
 # Epic 018: Pipeline Hardening & Safety
 

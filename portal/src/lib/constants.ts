@@ -6,8 +6,6 @@
 /** Maps pipeline node IDs to portal route overrides (when default path resolution won't work). */
 export const NODE_ROUTE_OVERRIDES: Record<string, string> = {
   'platform-new': '/dashboard/',
-  'containers': '/containers/',
-  'context-map': '/context-map/',
   'epic-breakdown': '/planning/roadmap/',
 };
 
@@ -36,5 +34,5 @@ export function resolveNodeHref(platform: string, nodeId: string, output: string
   if (output.match(/^epics\/.*\/pitch\.md$/)) {
     return `/${platform}/${output.replace(/\.md$/, '')}/`;
   }
-  return `/${platform}/${output.replace(/\.md$/, '').replace(/\.likec4$/, '')}/`;
+  return `/${platform}/${output.replace(/\.md$/, '')}/`;
 }

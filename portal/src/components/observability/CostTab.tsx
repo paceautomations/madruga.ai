@@ -5,6 +5,7 @@ import { formatTokens, formatCostRounded } from './formatters';
 
 interface CostTabProps {
   stats: StatsData | null;
+  connected: boolean;
 }
 
 // ── Helpers ──
@@ -230,7 +231,7 @@ function TopNodesList({ nodes }: { nodes: TopNode[] }) {
 
 // ── Main Component ──
 
-export default function CostTab({ stats }: CostTabProps) {
+export default function CostTab({ stats, connected }: CostTabProps) {
   if (!stats) {
     return (
       <div
@@ -241,7 +242,7 @@ export default function CostTab({ stats }: CostTabProps) {
           fontSize: '0.85rem',
         }}
       >
-        No cost data available
+        {connected ? 'No cost data available' : 'Waiting for Easter connection...'}
       </div>
     );
   }

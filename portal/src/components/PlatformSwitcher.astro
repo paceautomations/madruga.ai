@@ -38,7 +38,7 @@ const currentPlatform = match ? match[1] : '';
       if (match) {
         const rest = match[2];
         // Try same path on new platform; common sections that exist on all platforms
-        const commonPaths = ['/dashboard/', '/business/vision/', '/business/solution-overview/', '/landscape/', '/containers/', '/context-map/', '/roadmap/', '/engineering/domain-model/', '/engineering/integrations/', '/engineering/blueprint/', '/business-flow/'];
+        const commonPaths = ['/dashboard/', '/business/vision/', '/business/solution-overview/', '/roadmap/', '/engineering/domain-model/', '/engineering/integrations/', '/engineering/blueprint/'];
         if (commonPaths.some(p => rest === p || rest.startsWith(p))) {
           window.location.href = `/${newPlatform}${rest}`;
         } else {

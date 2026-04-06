@@ -257,7 +257,11 @@ def test_pipeline_run_trace_id_column_exists(tmp_db):
 
 
 def _complete_trace_with_metrics(conn, trace_id, started_at, **metrics):
-    """Set trace metrics and started_at directly for deterministic tests."""
+    """Set trace metrics and started_at directly for deterministic tests.
+
+    Also creates a pipeline_run with matching metrics so get_stats (which
+    queries pipeline_runs) sees the data.
+    """
     conn.execute(
         "UPDATE traces SET status='completed', completed_at=?, started_at=?, "
         "total_cost_usd=?, total_tokens_in=?, total_tokens_out=?, total_duration_ms=? "
@@ -272,6 +276,31 @@ def _complete_trace_with_metrics(conn, trace_id, started_at, **metrics):
             trace_id,
         ),
     )
+    # Get platform_id from the trace to create a matching pipeline_run
+    row = conn.execute("SELECT platform_id FROM traces WHERE trace_id=?", (trace_id,)).fetchone()
+    platform_id = row["platform_id"] if row else "test-plat"
+    import uuid
+
+    run_id = uuid.uuid4().hex
+    conn.execute(
+        "INSERT INTO pipeline_runs (run_id, platform_id, node_id, status, "
+        "cost_usd, tokens_in, tokens_out, duration_ms, started_at, completed_at, trace_id) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            run_id,
+            platform_id,
+            "stats-node",
+            metrics.get("status", "completed"),
+            metrics.get("cost", 0),
+            metrics.get("tokens_in", 0),
+            metrics.get("tokens_out", 0),
+            metrics.get("duration_ms", 0),
+            started_at,
+            started_at,
+            trace_id,
+        ),
+    )
+    conn.commit()
 
 
 def test_get_stats_empty(tmp_db):
@@ -387,14 +416,19 @@ def test_get_stats_filters_by_platform(tmp_db):
 
 
 def test_get_stats_null_metrics(tmp_db):
-    """get_stats handles traces with NULL metrics gracefully."""
+    """get_stats handles runs with NULL metrics gracefully."""
     from db import get_stats
 
     _seed_platform(tmp_db)
 
-    # Trace with no metrics (still running, never completed with metrics)
+    # Pipeline run with no cost/token metrics
     t1 = _seed_trace(tmp_db)
-    tmp_db.execute("UPDATE traces SET started_at='2026-04-01T10:00:00Z' WHERE trace_id=?", (t1,))
+    run_id = _seed_run(tmp_db, node_id="null-node", trace_id=t1)
+    tmp_db.execute(
+        "UPDATE pipeline_runs SET started_at='2026-04-01T10:00:00Z' WHERE run_id=?",
+        (run_id,),
+    )
+    tmp_db.commit()
 
     result = get_stats(tmp_db, "test-plat", days=90)
     assert len(result["stats"]) == 1
@@ -449,7 +483,7 @@ def test_get_stats_top_nodes_empty(tmp_db):
 
 
 def test_get_stats_summary_includes_failed_runs(tmp_db):
-    """get_stats summary should include failed_runs count."""
+    """get_stats summary should include failed_runs count from pipeline_runs."""
     from db import get_stats
 
     _seed_platform(tmp_db)
@@ -460,11 +494,13 @@ def test_get_stats_summary_includes_failed_runs(tmp_db):
     _complete_trace_with_metrics(
         tmp_db, t1, "2026-04-01T10:00:00Z", cost=1.0, tokens_in=100, tokens_out=50, duration_ms=1000
     )
-    # t2 = failed
+    # t2 = failed — create a failed pipeline_run
+    run_id = _seed_run(tmp_db, node_id="failed-node", trace_id=t2)
     tmp_db.execute(
-        "UPDATE traces SET status='failed', started_at='2026-04-01T12:00:00Z' WHERE trace_id=?",
-        (t2,),
+        "UPDATE pipeline_runs SET status='failed', started_at='2026-04-01T12:00:00Z' WHERE run_id=?",
+        (run_id,),
     )
+    tmp_db.commit()
     _complete_trace_with_metrics(
         tmp_db, t3, "2026-04-02T08:00:00Z", cost=0.5, tokens_in=50, tokens_out=25, duration_ms=500
     )
@@ -475,7 +511,7 @@ def test_get_stats_summary_includes_failed_runs(tmp_db):
 
 
 def test_get_stats_summary_failed_runs_zero_when_none_failed(tmp_db):
-    """failed_runs should be 0 when no traces have failed status."""
+    """failed_runs should be 0 when no pipeline_runs have failed status."""
     from db import get_stats
 
     _seed_platform(tmp_db)

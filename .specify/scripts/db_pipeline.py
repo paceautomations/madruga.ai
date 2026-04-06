@@ -687,6 +687,18 @@ def seed_epic_nodes_from_disk(
         )
         completed.add(nid)
 
+    # Backfill missing nodes so total always reflects the full cycle.
+    # For shipped epics, mark missing nodes as "skipped" to keep 100% progress.
+    epic_row = txn.execute(
+        "SELECT status FROM epics WHERE platform_id=? AND epic_id=?",
+        (platform_id, epic_id),
+    ).fetchone()
+    backfill_status = "skipped" if epic_row and epic_row["status"] == "shipped" else "pending"
+    for node_cfg in epic_cycle:
+        nid = node_cfg["id"]
+        if nid not in existing_epic_nodes and nid not in completed:
+            upsert_epic_node(txn, platform_id, epic_id, nid, backfill_status)
+
     return completed
 
 

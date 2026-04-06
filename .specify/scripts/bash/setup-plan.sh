@@ -46,6 +46,14 @@ check_feature_branch "$CURRENT_BRANCH" "$HAS_GIT" || exit 1
 # Ensure the feature directory exists
 mkdir -p "$FEATURE_DIR"
 
+# Clean up stale template from a previous crashed run
+if [[ -f "$IMPL_PLAN" ]]; then
+    if head -5 "$IMPL_PLAN" | grep -q '\[FEATURE\]\|ACTION REQUIRED'; then
+        rm "$IMPL_PLAN"
+        echo "Removed stale template: $IMPL_PLAN"
+    fi
+fi
+
 # Copy plan template if it exists
 TEMPLATE=$(resolve_template "plan-template" "$REPO_ROOT") || true
 if [[ -n "$TEMPLATE" ]] && [[ -f "$TEMPLATE" ]]; then

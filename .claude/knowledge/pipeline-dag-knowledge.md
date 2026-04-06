@@ -1,6 +1,6 @@
 # Pipeline DAG Knowledge
 
-Reference knowledge file for the madruga.ai pipeline — a **single continuous flow of 24 skills** (L1: 13 platform nodes + L2: 11 per-epic nodes) that takes a platform from conception to implemented, tested code.
+Reference knowledge file for the madruga.ai pipeline — a **single continuous flow of 25 skills** (L1: 13 platform nodes + L2: 12 per-epic nodes) that takes a platform from conception to implemented, tested code.
 
 Skills reference this file to understand node dependencies, gate types, personas, and the uniform contract.
 
@@ -18,8 +18,8 @@ Skills reference this file to understand node dependencies, gate types, personas
 | codebase-map | madruga:codebase-map | research/codebase-context.md | vision | research | auto | YES |
 | adr | madruga:adr | decisions/ADR-*.md (output_pattern) | tech-research | engineering | 1-way-door | no |
 | blueprint | madruga:blueprint | engineering/blueprint.md | adr | engineering | human | no |
-| domain-model | madruga:domain-model | engineering/domain-model.md, model/ddd-contexts.likec4 | blueprint, business-process | engineering | human | no |
-| containers | madruga:containers | model/platform.likec4, model/views.likec4 | domain-model, blueprint | engineering | human | no |
+| domain-model | madruga:domain-model | engineering/domain-model.md | blueprint, business-process | engineering | human | no |
+| containers | madruga:containers | engineering/containers.md | domain-model, blueprint | engineering | human | no |
 | context-map | madruga:context-map | engineering/context-map.md | domain-model, containers | engineering | human | no |
 | epic-breakdown | madruga:epic-breakdown | epics/*/pitch.md (output_pattern) | domain-model, containers, context-map | planning | 1-way-door | no |
 | roadmap | madruga:roadmap | planning/roadmap.md | epic-breakdown | planning | human | no |
@@ -167,7 +167,7 @@ Every skill's auto-review MUST include these universal checks plus artifact-spec
 | 3 | Best practices researched (2025-2026) | Business + Engineering |
 | 4 | Trade-offs explicit (pros/cons) | All |
 | 5 | Zero technical terms in business artifacts | Business only |
-| 6 | Mermaid/LikeC4 diagrams included where applicable | Engineering |
+| 6 | Mermaid diagrams included where applicable | Engineering |
 | 7 | Max line count respected | All |
 | 8 | Verifiable sources? Every factual claim has URL or reference. No URL → [FONTE?] | Research + Engineering |
 
@@ -227,7 +227,7 @@ handoffs:
 
 ---
 
-## 8. L2 — Epic Implementation Cycle (11 nodes per epic)
+## 8. L2 — Epic Implementation Cycle (12 nodes per epic)
 
 After L1 completes (roadmap done), the pipeline continues into L2. Each epic from the roadmap follows this cycle on a dedicated branch:
 
@@ -282,10 +282,19 @@ If parallel self-ref epics are ever needed, ALL L2 skills (not just implement) m
 | 9 | madruga:judge | auto-escalate | Tech-reviewers quality review (4 personas + judge pass) |
 | 10 | madruga:qa | human | Comprehensive testing — static analysis, tests, code review, browser QA |
 | 11 | madruga:reconcile | human | Detect and fix documentation drift |
+| 12 | madruga:roadmap | auto | Reassess roadmap priorities after epic delivery |
 
-**Note:** `clarify` is optional — `plan` depends on `specify`, not `clarify`. Skip clarify when spec has 0 `[NEEDS CLARIFICATION]` markers.
+**All 12 nodes are mandatory.** No nodes are optional — every epic runs the full cycle.
 
-**qa is mandatory** — always runs. Testing layers auto-adapt:
+### Cross-Cutting Artifacts
+
+Some artifacts span multiple nodes and are not owned by a single skill:
+
+| Artifact | Created by | Updated by | Audited by | Purpose |
+|----------|-----------|------------|------------|---------|
+| `decisions.md` | epic-context | implement | reconcile (D10) | Accumulates micro-decisions throughout the L2 cycle. Seeded from pitch.md Captured Decisions, enriched during implementation when deviations or trade-offs occur. Reconcile checks for ADR contradictions and flags promotion candidates. Format: numbered list, one line per decision, `[date skill] decision text (ref: source)`. |
+
+**qa** testing layers auto-adapt:
 - Static analysis + code review + build verification: always available
 - Automated test suites: when test files exist
 - API testing: when server is running + API endpoints detected
@@ -293,4 +302,6 @@ If parallel self-ref epics are ever needed, ALL L2 skills (not just implement) m
 
 **qa heal loop** may modify code, which is why reconcile runs AFTER qa.
 
-**reconcile is mandatory** — always runs after qa. Ensures zero documentation drift after every epic. Even if qa is skipped (optional), reconcile still executes because skipped nodes satisfy downstream dependencies.
+**reconcile** ensures zero documentation drift after every epic.
+
+**roadmap-reassess** re-evaluates roadmap priorities based on what was learned during the epic.

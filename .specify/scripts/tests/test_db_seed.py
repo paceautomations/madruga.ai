@@ -317,8 +317,9 @@ def test_seed_creates_epic_nodes(tmp_db, tmp_path):
     assert node_map["specify"]["status"] == "done"
     assert node_map["specify"]["completed_by"] == "seed:speckit.specify"
     assert node_map["specify"]["completed_at"] is not None
-    # plan was NOT on disk, so should not be in epic_nodes
-    assert "plan" not in node_map
+    # plan output was NOT on disk, so should be backfilled as pending
+    assert "plan" in node_map
+    assert node_map["plan"]["status"] == "pending"
 
 
 def test_seed_epic_auto_ships(tmp_db, tmp_path):

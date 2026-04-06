@@ -30,6 +30,7 @@ import argparse
 import json
 import logging
 import re
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -40,7 +41,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 import yaml
 
-from config import REPO_ROOT  # noqa: F401
+from config import REPO_ROOT, UNFILLED_TEMPLATE_MARKERS  # noqa: F401
 
 log = logging.getLogger("post_save")
 
@@ -181,6 +182,20 @@ def record_save(
         if artifact_path.exists():
             output_hash = compute_file_hash(artifact_path)
 
+        # Detect current git branch before entering transaction (avoid subprocess inside txn)
+        _current_branch = None
+        if epic:
+            try:
+                br = subprocess.run(
+                    ["git", "branch", "--show-current"],
+                    capture_output=True,
+                    text=True,
+                    cwd=str(REPO_ROOT),
+                )
+                _current_branch = br.stdout.strip() if br.returncode == 0 else None
+            except OSError:
+                pass
+
         # Batch all writes into a single transaction for atomicity
         now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         shipped_delivered_at = None  # track ship transition for post-txn filesystem write
@@ -203,6 +218,18 @@ def record_save(
                     and existing_epic_node.get("output_hash")
                     and output_hash == existing_epic_node["output_hash"]
                 )
+                # Reject unfilled templates — don't mark node as done
+                is_template = False
+                if artifact_path.exists():
+                    try:
+                        with artifact_path.open(encoding="utf-8", errors="replace") as _f:
+                            head = _f.read(2000)
+                        is_template = any(m in head for m in UNFILLED_TEMPLATE_MARKERS)
+                    except OSError:
+                        pass
+                if is_template:
+                    log.warning("Skipping node done — unfilled template: %s", artifact)
+                    skip_epic_update = True
                 if not skip_epic_update:
                     upsert_epic_node(
                         txn,
@@ -261,6 +288,10 @@ def record_save(
                         )
                         if delivered_at:
                             shipped_delivered_at = delivered_at
+
+                    # Auto-set branch_name from pre-fetched git branch
+                    if not current.get("branch_name") and _current_branch and _current_branch.startswith("epic/"):
+                        upsert_epic(txn, platform, epic, title=current["title"], branch_name=_current_branch)
             else:
                 # Skip update if node was already completed by a real skill with the same hash
                 # (prevents side-effect edits from other skills overwriting completed_at)

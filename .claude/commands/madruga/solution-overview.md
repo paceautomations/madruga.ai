@@ -20,7 +20,7 @@ Generate a solution overview (~120 lines) containing a product narrative, a feat
 This document describes **what the product does from the user's perspective**. Technical decisions, architecture, and implementation belong in other artifacts.
 
 **NEVER include in the output:**
-- Names of technologies, frameworks, languages, databases, or libraries (e.g., Python, FastAPI, Redis, Supabase, pgvector, React, Docker, LikeC4, Copier, Jinja2, Astro, Starlight, Mermaid, SQLite, Vite, Tailwind)
+- Names of technologies, frameworks, languages, databases, or libraries (e.g., Python, FastAPI, Redis, Supabase, pgvector, React, Docker, Copier, Jinja2, Astro, Starlight, Mermaid, SQLite, Vite, Tailwind)
 - Architecture terms (e.g., RLS, API, SDK, middleware, cache, queue, webhook, endpoint, microservice, pipeline, module, WAL, FTS5, systemd, asyncio, daemon, ruff)
 - References to ADRs, technical specs, C4 diagrams, or numbered epics (e.g., 006, 007, 008)
 - Infrastructure details (e.g., deploy, CI/CD, server, container, cloud provider)
@@ -152,7 +152,7 @@ updated: YYYY-MM-DD
 
 | # | Check | Action on Failure |
 |---|-------|-------------------|
-| 1 | Zero technical terms (scan for: API, SDK, framework, database, backend, frontend, deploy, server, endpoint, middleware, cache, queue, Python, Redis, Docker, Supabase, pgvector, webhook, microservice, CI/CD, ADR, pipeline, module, LikeC4, Copier, Jinja2, Astro, Starlight, Mermaid, WAL, FTS5, SQLite, systemd, asyncio, daemon, ruff, Vite, React, Tailwind, likec4, copier) | Rewrite in product language |
+| 1 | Zero technical terms (scan for: API, SDK, framework, database, backend, frontend, deploy, server, endpoint, middleware, cache, queue, Python, Redis, Docker, Supabase, pgvector, webhook, microservice, CI/CD, ADR, pipeline, module, Copier, Jinja2, Astro, Starlight, Mermaid, WAL, FTS5, SQLite, systemd, asyncio, daemon, ruff, Vite, React, Tailwind, copier) | Rewrite in product language |
 | 2 | Every feature has both description AND "por que é importante" | Complete the missing fields |
 | 3 | No section exceeds 30 lines | Trim |
 | 4 | Total under 120 lines | Condense |

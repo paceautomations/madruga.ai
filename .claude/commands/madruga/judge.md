@@ -123,10 +123,14 @@ Generate `judge-report.md`:
 ---
 title: "Judge Report — {context}"
 score: {N}
+initial_score: {N_before_fixes}
 verdict: pass|fail
 team: {team-name}
 personas_run: [{ids}]
 personas_failed: [{ids}]
+findings_total: {N}
+findings_fixed: {N}
+findings_open: {N}
 updated: {YYYY-MM-DD}
 ---
 # Judge Report — {context}
@@ -138,20 +142,20 @@ updated: {YYYY-MM-DD}
 
 ## Findings
 
-### BLOCKERs ({count})
+### BLOCKERs ({count} — {fixed}/{count} fixed)
 
-| # | Persona | Finding | Localização | Sugestão |
-|---|---------|---------|-------------|----------|
+| # | Source | Finding | Localização | Status | Fix Applied |
+|---|--------|---------|-------------|--------|-------------|
 
-### WARNINGs ({count})
+### WARNINGs ({count} — {fixed}/{count} fixed)
 
-| # | Persona | Finding | Localização | Sugestão |
-|---|---------|---------|-------------|----------|
+| # | Source | Finding | Localização | Status | Fix Applied |
+|---|--------|---------|-------------|--------|-------------|
 
-### NITs ({count})
+### NITs ({count} — {fixed}/{count} fixed)
 
-| # | Persona | Finding | Localização | Sugestão |
-|---|---------|---------|-------------|----------|
+| # | Source | Finding | Localização | Status | Fix Applied |
+|---|--------|---------|-------------|--------|-------------|
 
 ## Safety Net — Decisões 1-Way-Door
 
@@ -162,9 +166,14 @@ updated: {YYYY-MM-DD}
 
 [List if any, otherwise "Nenhuma"]
 
+## Files Changed (by fix phase)
+
+| File | Findings Fixed | Summary |
+|------|---------------|---------|
+
 ## Recomendações
 
-[Actionable recommendations]
+[Actionable recommendations for any OPEN findings]
 ```
 
 ### 6. Degradation Rules
@@ -178,14 +187,55 @@ updated: {YYYY-MM-DD}
 
 **Failure detection**: Agent error, missing `PERSONA:` header, missing `FINDINGS:` section.
 
-### 7. Fix BLOCKERs (L1 Tier 3 only)
+### 7. Fix Phase — Resolve ALL Findings
 
-When running as Tier 3 auto-review (1-way-door gates in L1):
-1. If BLOCKERs found → attempt auto-fix.
-2. Re-verify after fix.
-3. Fixed → mark resolved. Failed → present to human.
+After the Judge Pass (section 4), fix **every** finding from both sources:
+- Findings from `analyze-post-report.md` (received as upstream context)
+- Findings from the 4 personas (filtered by the judge pass)
 
-When running as L2 Judge node → do NOT auto-fix, just report.
+**The judge MUST resolve 100% of issues. No finding should be left OPEN if a fix is possible.**
+
+#### 7a. Ingest Analyze-Post Findings
+
+1. Parse `analyze-post-report.md` from the upstream context injection.
+2. Extract each finding (adherence gaps, spec mismatches, missing implementations).
+3. Add them to the consolidated findings list alongside persona findings.
+4. Deduplicate: if a persona already flagged the same issue, keep the best-described version.
+
+#### 7b. Fix Priority Order
+
+Fix in this order: BLOCKERs first, then WARNINGs, then NITs.
+
+**For each BLOCKER and WARNING:**
+
+| Source | Finding Type | Action |
+|--------|-------------|--------|
+| Analyze-post | Missing implementation | Implement the missing code per spec |
+| Analyze-post | Spec mismatch | Fix code to match spec |
+| Analyze-post | Task not completed | Complete the task |
+| Persona | Security issue | Fix with proper validation/escaping |
+| Persona | Bug / logic error | Fix the code |
+| Persona | Missing error handling | Add error handling at boundaries |
+| Persona | Wrong API usage | Fix to correct usage |
+
+**For each NIT:**
+- If trivial (< 5 lines changed): apply fix
+- If non-trivial: keep as suggestion in report, mark `[SKIPPED — NIT]`
+
+#### 7c. Re-Verify After Fixes
+
+1. Run lint on changed files: `ruff check` (Python), `npx tsc --noEmit` (TypeScript), or equivalent.
+2. Run tests if they exist: `make test` or project-specific test command.
+3. If a fix introduces a new failure → revert that fix, mark finding as `[OPEN — fix caused regression]`.
+
+#### 7d. Re-Score
+
+Recalculate score AFTER fixes:
+- `[FIXED]` findings do NOT count against score.
+- `[OPEN]` findings count normally (blockers×20, warnings×5, nits×1).
+- `[SKIPPED — NIT]` findings count as nits (×1).
+
+The report verdict reflects the **post-fix state**, not the initial state.
 
 ### 8. Safety Net — Escaped 1-Way-Door Decisions (L2 only)
 

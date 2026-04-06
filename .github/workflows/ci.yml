@@ -20,28 +20,6 @@ jobs:
       - run: ruff check .specify/scripts/
       - run: ruff format --check .specify/scripts/
 
-  likec4:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-      - run: pip install pyyaml
-      - name: Discover platforms and build LikeC4
-        run: |
-          for dir in platforms/*/; do
-            if [ -f "$dir/platform.yaml" ] && [ -d "$dir/model" ]; then
-              name=$(basename "$dir")
-              echo "::group::Building LikeC4 for $name"
-              npx likec4 build "$dir/model/"
-              echo "::endgroup::"
-            fi
-          done
-
   db-tests:
     runs-on: ubuntu-latest
     steps:
@@ -76,7 +54,7 @@ jobs:
         run: |
           FAILED=0
           for f in easter.py platform_cli.py dag_executor.py post_save.py \
-                   vision-build.py skill-lint.py telegram_bot.py worktree.py \
+                   skill-lint.py telegram_bot.py worktree.py \
                    ensure_repo.py implement_remote.py sync_memory.py \
                    hook_post_save.py hook_skill_lint.py; do
             echo "Checking $f..."

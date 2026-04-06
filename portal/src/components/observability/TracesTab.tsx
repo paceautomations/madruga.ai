@@ -7,6 +7,7 @@ interface TracesTabProps {
   traces: Trace[];
   onSelectTrace: (traceId: string) => void;
   selectedTrace: TraceDetail | null;
+  connected: boolean;
 }
 
 // ── Constants ──
@@ -165,7 +166,7 @@ function Legend() {
 
 // ── Main Component ──
 
-export default function TracesTab({ traces, onSelectTrace, selectedTrace }: TracesTabProps) {
+export default function TracesTab({ traces, onSelectTrace, selectedTrace, connected }: TracesTabProps) {
   if (!traces.length) {
     return (
       <div
@@ -176,7 +177,7 @@ export default function TracesTab({ traces, onSelectTrace, selectedTrace }: Trac
           fontSize: '0.85rem',
         }}
       >
-        No traces found
+        {connected ? 'No traces found' : 'Waiting for Easter connection...'}
       </div>
     );
   }

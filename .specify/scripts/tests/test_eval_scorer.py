@@ -360,7 +360,7 @@ def test_cost_efficiency_below_budget_high_score(tmp_db, tmp_path):
 
 def test_cost_efficiency_at_budget_low_score(tmp_db, tmp_path):
     _seed_platform(tmp_db)
-    _seed_runs_with_cost(tmp_db, "test-plat", "vision", [1.00, 1.00])
+    _seed_runs_with_cost(tmp_db, "test-plat", "vision", [1.00, 1.00, 1.00])
 
     path = _write_artifact(tmp_path, "# Content\n")
     # Current cost $1.50 = budget → ratio = 1.0 → score = 10 - 10 = 0.0
@@ -372,7 +372,7 @@ def test_cost_efficiency_at_budget_low_score(tmp_db, tmp_path):
 
 def test_cost_efficiency_over_budget_capped_at_zero(tmp_db, tmp_path):
     _seed_platform(tmp_db)
-    _seed_runs_with_cost(tmp_db, "test-plat", "vision", [1.00])
+    _seed_runs_with_cost(tmp_db, "test-plat", "vision", [1.00, 1.00, 1.00])
 
     path = _write_artifact(tmp_path, "# Content\n")
     # Cost $5.00 way over budget $1.50 → capped at 0.0

@@ -6,7 +6,6 @@ import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import react from '@astrojs/react';
 import mermaid from 'astro-mermaid';
-import { LikeC4VitePlugin } from 'likec4/vite-plugin';
 import { discoverPlatforms, buildSidebar } from './src/lib/platforms.mjs';
 
 const platforms = discoverPlatforms();
@@ -18,7 +17,7 @@ const platforms = discoverPlatforms();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const docsDir = path.join(__dirname, 'src', 'content', 'docs');
 const platformsDir = path.resolve(__dirname, '..', 'platforms');
-const portalSections = ['business', 'engineering', 'decisions', 'research', 'planning', 'model'];
+const portalSections = ['business', 'engineering', 'decisions', 'research', 'planning'];
 
 function syncPlatformSymlinks() {
   fs.mkdirSync(docsDir, { recursive: true });
@@ -106,11 +105,6 @@ export default defineConfig({
   site: 'https://madruga.ai',
   vite: {
     resolve: { preserveSymlinks: true },
-    esbuild: {
-      // Ensure consistent JSX runtime for likec4:react/* virtual modules
-      jsx: 'automatic',
-      jsxImportSource: 'react',
-    },
     server: {
       watch: {
         // Follow symlinks into platforms/ so markdown edits trigger HMR
@@ -125,9 +119,6 @@ export default defineConfig({
     },
     plugins: [
       platformSymlinksPlugin(),
-      LikeC4VitePlugin({
-        workspace: '../platforms',
-      }),
     ],
   },
   integrations: [

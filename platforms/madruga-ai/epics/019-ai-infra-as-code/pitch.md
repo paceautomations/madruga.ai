@@ -1,12 +1,13 @@
 ---
 id: 019
 title: "AI Infrastructure as Code"
-status: planned
+status: shipped
 appetite: 2w
 priority: P1
 depends_on: []
 blocks: []
-updated: 2026-04-04
+updated: 2026-04-05
+delivered_at: 2026-04-05
 ---
 # Epic 019: AI Infrastructure as Code
 

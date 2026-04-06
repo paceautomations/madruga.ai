@@ -1,12 +1,13 @@
 ---
 id: 020
 title: "Code Quality & DX"
-status: planned
+status: shipped
 appetite: 2w
 priority: P2
 depends_on: [018]
 blocks: []
-updated: 2026-04-04
+updated: 2026-04-05
+delivered_at: 2026-04-05
 ---
 # Epic 020: Code Quality & DX
 

@@ -1,5 +1,5 @@
 ---
-description: Generate C4 Level 2 container architecture with LikeC4 diagrams for any platform
+description: Generate C4 Level 2 container architecture with Mermaid diagrams for any platform
 arguments:
   - name: platform
     description: "Platform/product name. If empty, prompt for it."
@@ -13,7 +13,7 @@ handoffs:
 
 # Containers — C4 Level 2 Architecture
 
-Generate container architecture (~200 lines) with C4 L2 diagram, container table, communication protocols, and per-container NFRs. Include LikeC4 DSL for interactive portal diagrams.
+Generate container architecture (~200 lines) with C4 L2 Mermaid diagram, container table, communication protocols, and per-container NFRs.
 
 ## Cardinal Rule: ZERO Containers Without Clear Responsibility
 
@@ -38,11 +38,7 @@ Platform engineer — one responsibility per container, explicit protocols. Writ
 
 ## Output Directory
 
-Save to:
-- `platforms/<name>/model/platform.likec4`
-- `platforms/<name>/model/views.likec4`
-
-> **Note:** This skill generates LikeC4 files only. Container NFRs and deploy topology live in `engineering/blueprint.md`. No separate `engineering/containers.md` is generated — the LikeC4 model is the source of truth for containers.
+Save to `platforms/<name>/engineering/containers.md`.
 
 ## Instructions
 
@@ -52,8 +48,6 @@ Save to:
 - `engineering/domain-model.md` — bounded contexts and aggregates
 - `engineering/blueprint.md` — stack, NFRs, topology
 - `decisions/ADR-*.md` — stack decisions that impact containers
-- `model/spec.likec4` — existing element types (NEVER redefine)
-- `model/ddd-contexts.likec4` — bounded context naming
 
 **Structured Questions:**
 
@@ -66,36 +60,93 @@ Save to:
 
 Wait for answers BEFORE generating.
 
-### 2. Generate Artifacts
+### 2. Generate Artifact
 
-**File 1: model/platform.likec4**
-- Define LikeC4 elements for each container
-- Relationships between containers
-- Use existing element types from `model/spec.likec4` (NEVER redefine)
+Generate `engineering/containers.md` with the following structure:
 
-**File 2: model/views.likec4**
-- Views for the interactive portal
-- Main container view + zoom views per bounded context
+````markdown
+---
+title: "Containers"
+updated: YYYY-MM-DD
+---
+# <Name> — Container Architecture (C4 Level 2)
 
-**MANDATORY: For EVERY `boundedContext` in `ddd-contexts.likec4`, generate:**
+> Container decomposition with responsibilities, technologies, protocols, and NFRs.
 
-1. A scoped view in `views.likec4`:
-```likec4
-view <name>Detail of <name> {
-  title '<DisplayName> — <DDD Classification (Core/Supporting/Generic) Domain>'
-  description '<What this bounded context does>'
-  include *
-  include <relevant externals from externals.likec4 and infrastructure.likec4>
-}
+---
+
+## Container Diagram
+
+```mermaid
+graph LR
+    subgraph ext["External Actors"]
+        User["👤 User"]
+        ExtSvc["🌐 External Service"]
+    end
+
+    subgraph platform["<Platform Name>"]
+        subgraph bc1["BC: Context A"]
+            API["API Server<br/><small>Technology</small>"]
+            Worker["Background Worker<br/><small>Technology</small>"]
+        end
+        subgraph bc2["BC: Context B"]
+            Svc["Service B<br/><small>Technology</small>"]
+        end
+        DB[("Database<br/><small>Technology</small>")]
+    end
+
+    User -->|"HTTP/REST"| API
+    API -->|"async msg"| Worker
+    API -->|"SQL"| DB
+    Worker -->|"HTTP"| Svc
+    ExtSvc -->|"webhook"| API
 ```
 
-2. An entry in `platform.yaml` under `views.structural`:
-```yaml
-- id: <name>Detail
-  label: "<DisplayName> (zoom)"
-```
+---
 
-**Why**: LikeC4 auto-generates `navigateTo` for bounded contexts when a scoped `view X of Y` exists. The portal generates navigation URLs only from `platform.yaml` `views.structural`. Missing either one breaks portal navigation.
+## Container Matrix
+
+| # | Container | Bounded Context | Technology | Responsibility | Protocol In | Protocol Out |
+|---|-----------|----------------|------------|----------------|-------------|-------------|
+| 1 | API Server | Context A | [tech] | [1 sentence] | HTTP/REST | SQL, async msg |
+| 2 | Worker | Context A | [tech] | [1 sentence] | async msg | HTTP |
+| 3 | Database | (shared) | [tech] | Persistent state | SQL | — |
+
+---
+
+## Communication Protocols
+
+| From | To | Protocol | Pattern | Why |
+|------|-----|----------|---------|-----|
+| API | Worker | [protocol] | [sync/async/pub-sub] | [justification] |
+| API | Database | SQL | sync | [justification] |
+
+---
+
+## Per-Container NFRs
+
+| Container | Availability | Latency | Throughput | Scaling Strategy |
+|-----------|-------------|---------|------------|-----------------|
+| API Server | [target] | [target] | [target] | [horizontal/vertical/none] |
+| Worker | [target] | [target] | [target] | [strategy] |
+
+---
+
+## Assumptions and Decisions
+
+| # | Decision | Alternatives Considered | Justification |
+|---|---------|------------------------|---------------|
+| 1 | [decision] | [alt A] vs [alt B] | [why] |
+````
+
+**Mermaid diagram guidelines:**
+- Use `graph LR` (left-to-right) for container diagrams
+- Group containers by bounded context using `subgraph`
+- Use `<br/><small>Technology</small>` for technology annotations
+- Databases use cylinder notation: `DB[("Database")]`
+- External actors in a separate subgraph
+- Label every edge with the protocol
+- Keep diagrams under 40 lines — split into detail views if needed
 
 ### Auto-Review Additions
 
@@ -105,16 +156,9 @@ view <name>Detail of <name> {
 | 2 | Are there any orphan containers (disconnected)? | Connect or remove |
 | 3 | Are protocols defined for every communication? | Add them |
 | 4 | Are NFRs measurable per container? | Add targets |
-| 5 | Is LikeC4 syntax valid? | Fix |
-| 6 | Are views defined for all bounded contexts? | Add zoom views |
-| 7 | Every BC from ddd-contexts.likec4 has `view <name>Detail of <name>` in views.likec4? | Add missing views |
-| 8 | Every `<name>Detail` view registered in `platform.yaml` `views.structural`? | Add entry |
-| 9 | `autoLayout` ONLY in `dynamic view`, not in structural views? | Remove |
-| 10 | `likec4 build` passes without errors? | Fix syntax errors |
-
-### LikeC4 Validation
-
-After saving `.likec4` files, validate by running `likec4 build` in the model directory. Reference `.claude/knowledge/likec4-syntax.md` for syntax. Fix all errors before proceeding to the gate.
+| 5 | Does the Mermaid diagram render correctly? | Fix syntax |
+| 6 | Are all bounded contexts from domain-model represented? | Add missing containers |
+| 7 | Container count <= 8? | Challenge: "Do you have a team to maintain this many?" |
 
 ## Error Handling
 
@@ -122,7 +166,7 @@ After saving `.likec4` files, validate by running `likec4 build` in the model di
 |-------|--------|
 | Domain model with 1 bounded context | Generate 1 container (monolith) — do not force a split |
 | Too many containers (>8) | Challenge: "Do you have a team to maintain 8 services?" |
-| LikeC4 syntax error | Validate against spec before saving |
+| Mermaid syntax error | Validate diagram syntax before saving |
 | Conflict with blueprint topology | Align with blueprint, propose update if needed |
 
 ---

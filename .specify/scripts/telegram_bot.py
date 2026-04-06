@@ -15,6 +15,7 @@ import argparse
 import asyncio
 import json
 import logging
+import pathlib
 import os
 import random
 import sqlite3
@@ -350,6 +351,185 @@ async def handle_gate_callback(
     decision = "Aprovado" if action == "a" else "Rejeitado"
     await callback.answer(f"Gate {decision}")
     logger.info("gate_resolved", run_id=run_id, decision=decision.lower())
+
+
+# --- Command & message handlers ---
+
+
+REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent.parent
+
+
+async def handle_help(message, adapter: TelegramAdapter, chat_id: int) -> None:
+    """Respond to /start and /help with available commands."""
+    text = (
+        "<b>Madruga Pipeline Bot</b>\n\n"
+        "<b>Comandos:</b>\n"
+        "/status — status do pipeline (plataformas + epics)\n"
+        "/gates — gates pendentes de aprovacao\n"
+        "/help — esta mensagem\n\n"
+        "<b>Texto livre:</b> qualquer mensagem sera respondida via Claude"
+    )
+    await adapter.send(chat_id, text)
+
+
+async def handle_status(message, adapter: TelegramAdapter, chat_id: int, conn: sqlite3.Connection) -> None:
+    """Respond to /status with pipeline status for all platforms."""
+    from db import get_epic_status, get_epics, get_platform_status
+
+    platforms_dir = REPO_ROOT / "platforms"
+    if not platforms_dir.exists():
+        await adapter.send(chat_id, "Nenhuma plataforma encontrada.")
+        return
+    platforms = sorted(d.name for d in platforms_dir.iterdir() if d.is_dir() and (d / "platform.yaml").exists())
+    if not platforms:
+        await adapter.send(chat_id, "Nenhuma plataforma encontrada.")
+        return
+
+    lines: list[str] = ["<b>Pipeline Status</b>\n"]
+    for plat in platforms:
+        st = get_platform_status(conn, plat)
+        pct = st.get("progress_pct", 0)
+        done = st.get("done", 0)
+        total = st.get("total_nodes", 0)
+        lines.append(f"<b>{plat}</b> — L1: {pct}% ({done}/{total})")
+
+        epics = get_epics(conn, plat)
+        active = [e for e in epics if e.get("status") == "in_progress"]
+        for epic in active:
+            eid = epic["epic_id"]
+            es = get_epic_status(conn, plat, eid)
+            ep = es.get("progress_pct", 0)
+            ed = es.get("done", 0)
+            et = es.get("total_nodes", 0)
+            lines.append(f"  └ <code>{eid}</code> {ep}% ({ed}/{et})")
+
+    await adapter.send(chat_id, "\n".join(lines))
+
+
+async def handle_gates(message, adapter: TelegramAdapter, chat_id: int, conn: sqlite3.Connection) -> None:
+    """Respond to /gates with all pending gates across platforms."""
+    gates = poll_pending_gates(conn)
+    if not gates:
+        await adapter.send(chat_id, "Nenhum gate pendente.")
+        return
+
+    lines = ["<b>Gates Pendentes</b>\n"]
+    for g in gates:
+        node = g.get("node_id", "?")
+        plat = g.get("platform_id", "?")
+        epic = g.get("epic_id") or "-"
+        since = g.get("started_at", "?")
+        lines.append(f"<code>{node}</code> | {plat} | {epic} | {since}")
+
+    await adapter.send(chat_id, "\n".join(lines))
+
+
+async def handle_freetext(message, adapter: TelegramAdapter, chat_id: int, conn: sqlite3.Connection) -> None:
+    """Route free-text messages to claude -p and return the response."""
+    from aiogram.enums import ChatAction
+
+    user_text = message.text
+    if not user_text or not user_text.strip():
+        return
+
+    # Send typing indicator
+    try:
+        await message.bot.send_chat_action(chat_id, ChatAction.TYPING)
+    except Exception:
+        pass  # non-critical
+
+    # Build system prompt with pipeline context
+    system_prompt = _build_claude_system_prompt(conn)
+
+    cmd: list[str] = [
+        "claude",
+        "-p",
+        user_text,
+        "--output-format",
+        "json",
+        "--effort",
+        "medium",
+        "--allowedTools",
+        "Read,Glob,Grep",
+        "--max-budget-usd",
+        "0.10",
+        "--system-prompt",
+        system_prompt,
+    ]
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        cmd.append("--bare")
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=str(REPO_ROOT),
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=90)
+
+        if proc.returncode != 0:
+            err_msg = stderr.decode(errors="replace").strip()[:200] if stderr else "unknown error"
+            logger.warning("claude_bridge_error", returncode=proc.returncode, stderr=err_msg)
+            await adapter.send(chat_id, f"Erro ao processar: exit code {proc.returncode}")
+            return
+
+        # Parse JSON response
+        raw = stdout.decode(errors="replace")
+        data = json.loads(raw)
+        result_text = data.get("result", "").strip()
+        if not result_text:
+            await adapter.send(chat_id, "Claude retornou resposta vazia.")
+            return
+
+        cost = data.get("total_cost_usd", 0)
+        footer = f"\n\n<i>custo: ${cost:.4f}</i>" if cost else ""
+        await adapter.send(chat_id, result_text + footer)
+
+    except asyncio.TimeoutError:
+        logger.warning("claude_bridge_timeout", user_text=user_text[:50])
+        # Kill the process if still running
+        try:
+            proc.kill()  # type: ignore[possibly-undefined]
+        except Exception:
+            pass
+        await adapter.send(chat_id, "Timeout: Claude demorou mais de 90s para responder.")
+    except json.JSONDecodeError:
+        logger.warning("claude_bridge_json_error", raw=raw[:200] if "raw" in dir() else "n/a")  # type: ignore[possibly-undefined]
+        # Fallback: try sending raw stdout as text
+        fallback = stdout.decode(errors="replace").strip()[:4000] if stdout else ""  # type: ignore[possibly-undefined]
+        if fallback:
+            await adapter.send(chat_id, fallback)
+        else:
+            await adapter.send(chat_id, "Erro ao processar resposta do Claude.")
+    except Exception:
+        logger.exception("claude_bridge_unexpected")
+        await adapter.send(chat_id, "Erro inesperado ao processar mensagem.")
+
+
+def _build_claude_system_prompt(conn: sqlite3.Connection) -> str:
+    """Build a system prompt with live pipeline context for the claude -p bridge."""
+    from db import get_epics, get_platform_status
+
+    parts = [
+        "You are Madruga, an AI assistant for the madruga.ai pipeline.",
+        "Answer concisely in the same language the user writes.",
+        "You have read-only access to the codebase (Read, Glob, Grep tools).",
+        "Current pipeline status:",
+    ]
+
+    platforms_dir = REPO_ROOT / "platforms"
+    if platforms_dir.exists():
+        platforms = sorted(d.name for d in platforms_dir.iterdir() if d.is_dir() and (d / "platform.yaml").exists())
+        for plat in platforms:
+            st = get_platform_status(conn, plat)
+            parts.append(f"  Platform '{plat}': L1 {st.get('progress_pct', 0)}% complete")
+            epics = get_epics(conn, plat)
+            for e in epics:
+                if e.get("status") == "in_progress":
+                    parts.append(f"    Active epic: {e['epic_id']} (status: {e['status']})")
+
+    return "\n".join(parts)
 
 
 # --- Polling loop ---

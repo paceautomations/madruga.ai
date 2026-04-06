@@ -1,199 +1,180 @@
 ---
-title: "Blueprint"
-updated: 2026-04-02
+title: "Engineering Blueprint"
+updated: 2026-04-06
 ---
-# Blueprint de Engenharia
+# Madruga AI — Engineering Blueprint
 
-Referencia tecnica consolidada da plataforma **Madruga AI — Architecture Documentation & Spec-to-Code System**: stack tecnologico, concerns transversais, requisitos de qualidade, topologia de deploy, mapa de dados e glossario.
-
-> **Convencao**: esta pagina consolida o **O QUE** e **COMO**. Para o **POR QUE** de cada decisao, consulte os [ADRs](../decisions/).
+> Decisoes de engenharia, cross-cutting concerns, topologia e NFRs. Derivado dos 20 ADRs e do codebase real (~8,500 LOC Python + ~3,500 LOC portal). Ultima atualizacao: 2026-04-06.
 
 ---
 
-## 0. Technology Stack
+## Technology Stack
 
-| Categoria | Escolha | ADR |
-|-----------|---------|-----|
-| Interface com Claude | `claude -p` subprocess (headless mode, subscription auth) | ADR-010 |
-| Notificacoes | Telegram Bot API (aiogram, outbound HTTPS) | ADR-018 |
-| Observabilidade | structlog + SQLite metrics + Sentry free tier | ADR-016 |
-| Automacao do pipeline | Custom DAG Executor (YAML-driven, ~500-800 LOC) | ADR-017 |
-| Storage | SQLite WAL mode (state store) + filesystem (artefatos) | ADR-012 |
-| Portal | Astro + Starlight + LikeC4 React | ADR-003 |
-| Modelos de arquitetura | LikeC4 (.likec4 files) | ADR-001 |
-| Template system | Copier (scaffolding de plataformas) | ADR-002 |
-| Decision gates | 1-way/2-way door classification | ADR-013 |
-| Debate engine | Subagent Paralelo + Judge Pattern (4 personas + 1 juiz) | ADR-019 |
-| Circuit breaker | Suspende claude -p apos 5 falhas, recovery em 5min | ADR-011 |
-
----
-
-## 1. Concerns Transversais
-
-### 1.1 Autenticacao & Autorizacao
-
-N/A — sistema local, single-operator. Autenticacao delegada ao Claude Code (subscription auth gerenciada pelo CLI).
-
-### 1.2 Seguranca & Safety
-
-| Camada | Mecanismo | ADR |
-|--------|-----------|-----|
-| Subprocess isolation | `claude -p` roda em env limpo (CLAUDECODE unset, temp config dir) | ADR-010 |
-| Tool allowlist | `--allowedTools` explicito em toda call (Builder: Read,Write,Edit,Bash; Actions: whitelist configuravel) | ADR-010 |
-| Circuit breaker | Suspende chamadas apos 5 falhas consecutivas, recovery em 5min. Breakers separados para epics/actions. | ADR-011 |
-| Telegram Bot security | Outbound HTTPS only, bot token em .env, sem porta inbound | ADR-018 |
-| Action security | cwd whitelist (so repos configurados), tools allowlist, prompt length cap (10K chars) | — |
-| Secrets | API keys gerenciadas pelo Claude Code CLI. `.env` no `.gitignore`. Nenhum secret no repo. | — |
-
-### 1.3 Observabilidade
-
-| Camada | Ferramenta | Papel | ADR |
-|--------|------------|-------|-----|
-| Logging | structlog | Logs estruturados (JSON) em todos os modulos | ADR-016 |
-| Metricas | SQLite metrics table | Request duration, status codes, error rates, pipeline throughput | ADR-016 |
-| Error tracking | Sentry cloud free tier | Stack traces com breadcrumbs, performance traces, auto-instrumenta FastAPI | ADR-016 |
-| Dashboard | Portal Astro + CLI `status` | Pipeline status visual (L1 + L2), Mermaid DAG, filtros por plataforma | — |
-
-### 1.4 Error Handling
-
-| Cenario | Estrategia | Fallback |
-|---------|------------|----------|
-| Claude -p timeout | Watchdog timer com SIGKILL. Retry 3x com backoff exponencial (5s, 10s, 20s) | Fase marcada `failed`, epic fica `blocked` |
-| Claude -p rate limit | Circuit breaker abre apos 5 falhas, recovery em 300s | Pipeline pausado, slot liberado |
-| Claude -p hang (stream-json bug) | Usar `--output-format json` (evita bug). Watchdog SIGKILL como safety net | Re-executar node |
-| Telegram Bot unreachable | Health check cada 60s (getMe). Apos 3 falhas: modo log-only, human gates pausam | Fallback ntfy.sh (opcional). Retoma automatico quando Telegram volta |
-| DAG executor node failure | SQLite checkpoint apos cada node completo. Resume retoma do ultimo checkpoint | Perda maxima: re-executar 1 node |
-| Human gate timeout | Timeout configuravel (default 24h). Notifica via Telegram. Epic fica `waiting_approval` | Operador aprova via CLI ou Telegram |
-| LikeC4 compilation error | Build abortado com mensagem descritiva | Artefatos nao atualizados, warning no log |
-| SQLite write lock | busy_timeout=5000ms (WAL mode) | Leituras concorrentes ok, writes serializados |
-| GitHub API 429 | Backoff exponencial automatico, retry ate 3x | Fase falha, epic bloqueado |
-
-### 1.5 Configuration
-
-| Tipo | Mecanismo | Exemplo |
-|------|-----------|---------|
-| Platform manifest | `platform.yaml` (YAML, versionado) | Nome, lifecycle, views, pipeline nodes, repo binding |
-| Env vars | `.env` (pydantic-settings, prefix MADRUGA_) | Paths, ports, log level, Telegram bot token, chat ID |
-| Gate mode | `MADRUGA_MODE` env var (manual\|interactive\|auto) | Modo de operacao dos gates: manual (pausa), interactive (y/n), auto (end-to-end) |
-| Pipeline DAG | `platform.yaml > pipeline.nodes` (YAML, versionado) | Node IDs, depends, gates, skills, outputs |
+| Categoria | Escolha | ADR | Alternativas consideradas |
+|-----------|---------|-----|---------------------------|
+| Linguagem (backend) | Python 3.11+ (stdlib + pyyaml) | ADR-004 | Node.js, Go — Python escolhido por afinidade com Claude Code e simplicidade |
+| Linguagem (portal) | TypeScript + React 19 | ADR-003 | Vue, Svelte — React escolhido pelo ecosistema Astro + @xyflow |
+| Framework (portal) | Astro 6 + Starlight | ADR-003 | Docusaurus, MkDocs — Starlight por content collections + auto-discovery |
+| Banco de dados | SQLite WAL mode | ADR-004, ADR-012 | PostgreSQL, DynamoDB — SQLite por zero-ops e single-writer |
+| Diagramas | Mermaid inline em .md | ADR-020 | LikeC4 (superseded), Structurizr — Mermaid por LLM-friendliness |
+| Runtime (daemon) | FastAPI + asyncio | ADR-006 | Celery, cron — asyncio por single-process + concurrent I/O |
+| Orchestracao AI | claude -p subprocess | ADR-010 | SDK, API client — subprocess por simplicidade + auth via keychain |
+| Notificacoes | Telegram Bot API (aiogram) | ADR-018 | WhatsApp/wpp-bridge (superseded ADR-015), Slack — Telegram por inline buttons nativas |
+| Observabilidade | structlog + SQLite + Sentry | ADR-016 | OpenTelemetry, Datadog — custom por ~100 LOC e zero dependencias externas |
+| Pipeline | Custom DAG executor | ADR-017 | Airflow, Prefect — custom por YAML-driven + claude -p dispatch |
+| Templates | Copier >= 9.4 | ADR-002 | Cookiecutter, Yeoman — Copier por `copier update` + `_skip_if_exists` |
+| Review AI | 4 personas + Judge | ADR-019 | Debate engine (superseded ADR-007) — Agent tool nativo elimina runtime custom |
+| Governanca | Decision gates (1-way/2-way) | ADR-013 | Manual-only, auto-only — hybrid por seguranca + velocidade |
 
 ---
 
-## 2. Qualidade & NFRs
+## Cross-Cutting Concerns
 
-| # | Cenario | Metrica | Target | Mecanismo | Prioridade |
-|---|---------|---------|--------|-----------|------------|
-| Q1 | Portal build time | Tempo de SSG build | < 30s | Astro static build | Alta |
-| Q2 | Storage ops | Overhead operacional | Zero (sem servidor) | SQLite WAL mode, file-based | Alta |
-| Q3 | Extensibilidade | Plataformas suportadas | N ilimitado | Copier template + auto-discovery | Alta |
-| Q4 | Idempotencia | Skills re-executaveis | Sem side effects em re-run | Check de pre-condicoes + overwrite | Media |
-| Q5 | Versionamento | Tudo em Git | 100% artefatos versionados | Filesystem-first, zero lock-in | Alta |
-| Q6 | Concorrencia SQLite | Writers paralelos | Sem SQLITE_BUSY | WAL mode + busy_timeout=5000ms | Media |
-| Q7 | HMR dev experience | Editar .md/.likec4 e ver resultado | < 2s hot reload | Vite watch + symlinks + LikeC4 plugin | Media |
-| Q8 | DAG resume | Tempo de retomada apos pausa/crash | < 5s | SQLite checkpoint por node, resume CLI | Media |
-| Q9 | Claude -p concorrencia | Sessions simultaneas estaveis | Max 3 paralelas | Semaforo asyncio | Media |
+### Logging & Observabilidade
+
+**Abordagem:** structlog com processadores (timestamps ISO, log level, context vars) no easter daemon. Scripts CLI usam stdlib logging com NDJSONFormatter para CI.
+
+**Metricas:** SQLite tables `traces` + `eval_scores` + `pipeline_runs`. 4 dimensoes de scoring por node: Quality (Q), Adherence (A), Completeness (C), Cost Efficiency (E). Dashboard React com 5 tabs no portal.
+
+**Tracing:** Hierarquico — 1 trace (L1 pipeline ou L2 epic) contém N spans (pipeline_runs). Agregacao automatica via `complete_trace()`.
+
+**Alertas:** Sentry (error tracking, opcional via DSN) + ntfy.sh (push alerts, stdlib urllib).
+
+**Justificativa:** Escala atual (1 operador, ~200 runs) nao justifica OTEL/Grafana. SQLite + custom dashboard cobre 100% dos casos de uso.
+
+### Error Handling
+
+**Abordagem:** Hierarchy tipada de exceptions com validacao em boundaries.
+
+```
+MadrugaError (base)
+├── ValidationError (input: platform name, paths, DAG fields)
+├── PipelineError (DAG structural/execution)
+│   ├── DispatchError (skill dispatch via subprocess)
+│   └── GateError (gate evaluation)
+```
+
+**Retry:** 3 tentativas com backoff `[5, 10, 20]s` + jitter aleatorio (async). Circuit breaker: 5 falhas → 300s recovery → half-open test.
+
+**Justificativa:** Python idiomatico. Exceptions com hierarchy permitem catch granular sem boilerplate de result types.
+
+### Configuracao
+
+**Abordagem:** Environment variables com defaults sensatos. Sem config files externos, sem feature flags.
+
+| Variavel | Default | Proposito |
+|----------|---------|-----------|
+| MADRUGA_MODE | manual | Gate mode: manual/interactive/auto |
+| MADRUGA_EXECUTOR_TIMEOUT | 3000s | Skill execution timeout |
+| MADRUGA_MAX_CONCURRENT | 3 | Max concurrent pipeline runs |
+| ANTHROPIC_API_KEY | (keychain) | Claude API auth (opcional) |
+| MADRUGA_TELEGRAM_BOT_TOKEN | — | Telegram bot auth |
+| MADRUGA_SENTRY_DSN | — | Sentry error tracking (opcional) |
+
+**Justificativa:** Single-machine deployment. Env vars cobrem 100% — config files adicionariam complexidade sem beneficio.
+
+### Resiliencia
+
+**Circuit Breaker (ADR-011):** Breakers separados por categoria (epic pipeline vs standalone). 3 estados: closed → open (5 falhas) → half-open (apos 300s). Implementado em dag_executor.py:833-876.
+
+**Retry com backoff:** Exponencial com jitter para dispatch async. Sem retry para gates (humano decide).
+
+**Watchdog:** systemd watchdog via sd_notify.py. Health check periodico no easter daemon.
+
+**Justificativa:** Pipeline depende de subprocess externo (claude -p) — falhas transientes sao esperadas. Circuit breaker previne cascata.
 
 ---
 
-## 3. Deploy & Infraestrutura
+## NFRs (Non-Functional Requirements)
 
-### 3.1 Topologia
+| NFR | Target | Metrica | Como Medir |
+|-----|--------|---------|------------|
+| Disponibilidade (easter) | 99% uptime | Watchdog systemd | sd_notify + journal |
+| Latencia (portal) | < 200ms | Time to first byte | Astro SSG (pre-built) |
+| Latencia (API) | < 500ms | Response time /api/* | structlog timestamps |
+| Throughput | 3 concurrent runs | Max parallel dispatches | MADRUGA_MAX_CONCURRENT |
+| Recovery | RTO 5min | Restart time | systemd auto-restart |
+| Data retention | 90 dias | cleanup_old_data() | easter.py retention_cleanup |
+| DB size | < 100MB | SQLite file size | Monitoracao manual |
+
+---
+
+## Deploy Topology
 
 ```mermaid
 graph LR
-    subgraph local["WSL2 Local"]
-        portal["Portal\nAstro :4321"]
-        cli["Platform CLI\nplatform_cli.py"]
-        easter["Easter\nFastAPI :8040"]
-        dag["DAG Executor\ndag_executor.py"]
-        telegram_bot["Telegram Bot\naiogram"]
-        sqlite["SQLite\nmadruga.db"]
-        fs["Filesystem\n.md .likec4 .yaml"]
+    subgraph dev["Ambiente Local (Dev)"]
+        CLI["platform_cli.py<br/><small>CLI Management</small>"]
+        Claude["claude -p<br/><small>AI Dispatch</small>"]
     end
 
-    subgraph external["Externos"]
-        claude["Claude Code\nclaude -p"]
-        github["GitHub\ngh CLI"]
-        telegram_api["Telegram\nBot API"]
-        sentry["Sentry\ncloud free"]
-        likec4["LikeC4 CLI"]
+    subgraph server["VPS (Production)"]
+        Easter["easter.py<br/><small>FastAPI + asyncio</small>"]
+        DB[("madruga.db<br/><small>SQLite WAL</small>")]
     end
 
-    easter --> dag
-    dag --> claude
-    easter --> telegram_bot
-    telegram_bot --> telegram_api
-    easter --> sqlite
-    dag --> sqlite
-    portal --> fs
-    portal --> sqlite
-    cli --> fs
-    cli --> sqlite
-    easter --> sentry
-    dag --> github
-    cli --> likec4
+    subgraph portal["Portal (Static)"]
+        Astro["Astro + Starlight<br/><small>SSG Build</small>"]
+    end
+
+    subgraph external["Servicos Externos"]
+        Telegram["Telegram Bot API"]
+        Sentry["Sentry<br/><small>opcional</small>"]
+        GitHub["GitHub<br/><small>VCS</small>"]
+    end
+
+    CLI -->|"subprocess"| Claude
+    Easter -->|"subprocess"| Claude
+    Easter -->|"SQL"| DB
+    CLI -->|"SQL"| DB
+    Easter -->|"HTTPS"| Telegram
+    Easter -->|"HTTPS"| Sentry
+    Easter -->|"SSH/HTTPS"| GitHub
+    Astro -->|"read JSON"| DB
 ```
 
-| Componente | Runtime | Porta/Protocolo | Scaling |
-|------------|---------|-----------------|---------|
-| Portal (Astro + Starlight) | Node.js 20+ | :4321 (dev) / SSG | Single instance |
-| Easter (FastAPI + uvicorn) | Python 3.12+ | :8040 | Single instance |
-| DAG Executor | Python 3.12+ | Lib (invocado pelo easter) | Single instance |
-| Telegram Bot (aiogram) | Python 3.12+ (integrado ao easter) | HTTPS outbound | Single instance |
-| Platform CLI | Python 3.12+ | CLI | N/A |
-| SQLite BD | SQLite 3 WAL mode | File (.pipeline/madruga.db) | Single writer, N readers |
-| LikeC4 serve | Node.js (likec4 CLI) | :5173 (dev) | Single instance |
-| Claude Code | CLI | Subprocess | Max 3 concorrentes |
-| Sentry | SaaS | HTTPS | N/A |
-
-### 3.2 Ambientes
-
-| Ambiente | Finalidade | Infra |
-|----------|------------|-------|
-| local | Desenvolvimento + producao | WSL2 Ubuntu, systemd service |
-
-### 3.3 CI/CD
-
-| Etapa | Ferramenta | Gate |
-|-------|------------|------|
-| Lint Python | ruff | Zero warnings |
-| Testes | pytest (71 testes) | 100% pass |
-| Portal build | `npm run build` | Build sem erros |
-| Template tests | pytest (.specify/templates/) | 100% pass |
-| Platform lint | `platform_cli.py lint --all` | Estrutura valida |
+| Container | Tecnologia | Responsabilidade |
+|-----------|-----------|------------------|
+| easter.py | FastAPI + asyncio | Daemon 24/7: DAG scheduler, gate poller, API observability |
+| platform_cli.py | Python argparse | CLI: scaffold, lint, status, seed |
+| dag_executor.py | Python + subprocess | Topological sort, skill dispatch, circuit breaker |
+| Portal | Astro + Starlight | SSG: documentacao, dashboards, observabilidade |
+| madruga.db | SQLite WAL | State store: platforms, runs, traces, evals, decisions |
+| Claude CLI | claude -p | AI execution: skill prompts → outputs |
 
 ---
 
-## 4. Mapa de Dados & Privacidade
+## Data Map
 
-### 4.1 Stores
-
-| Store | Tipo | Dados | Tamanho estimado |
+| Store | Tipo | Dados | Tamanho Estimado |
 |-------|------|-------|------------------|
-| SQLite (madruga.db) | Relacional | Pipeline state, epics, decisions, memory, provenance, metrics | < 50MB |
-| Filesystem | Arquivos | .md, .yaml, .likec4, .jinja | ~10MB por plataforma |
-| Git | VCS | Historico completo | Depende do repo |
-| Sentry | SaaS | Error events, performance traces | Free tier: 5K erros/mes |
-
-### 4.2 Privacidade
-
-N/A — sistema nao processa dados pessoais. Artefatos sao documentacao tecnica. SQLite armazena metadata operacional.
+| madruga.db | SQLite WAL | Platforms, epics, nodes, runs, traces, evals, decisions, memory | ~5-50MB |
+| platforms/*/ | Filesystem (git) | Markdown docs, ADRs, epic artifacts | ~15K linhas .md |
+| portal/dist/ | Static files | HTML/JS/CSS gerado por Astro build | ~50MB |
+| .claude/commands/ | Filesystem (git) | 30+ skill definitions (markdown) | ~3K linhas |
 
 ---
 
-## 5. Glossario
+## Riscos Tecnicos
 
-| Termo | Definicao | Dominio |
-|-------|-----------|---------|
-| Platform | Unidade central de documentacao em `platforms/<name>/` | Core |
-| Vision | Conjunto de artefatos de arquitetura de uma plataforma | Core |
-| Epic | Folder autocontido `epics/NNN-slug/` com progressao pitch→spec→plan→tasks | Planning |
-| Skill | Comando Claude Code em `.claude/commands/` | Tooling |
-| SpeckitBridge | Compositor de skills interativas em prompts autonomos | Runtime |
-| DAG Executor | Modulo que le pipeline DAG do platform.yaml e executa nodes via claude -p | Runtime |
-| RECONCILE | Loop que compara diff vs arquitetura e auto-atualiza Vision | Runtime |
-| AUTO marker | Marcador `<!-- AUTO:name -->` para conteudo auto-gerado | Pipeline |
-| Drift score | Metrica 0.0-1.0 de divergencia implementacao vs arquitetura | Runtime |
-| 1-way door | Decisao irreversivel que requer aprovacao humana | Decisions |
-| 2-way door | Decisao reversivel, auto-aprovavel pelo easter | Decisions |
-| Constitution | Documento com regras que governam artefatos gerados | Governance |
+| Risco | Severidade | Mitigacao |
+|-------|-----------|-----------|
+| dag_executor.py (2,117 LOC) concentra muita responsabilidade | Media | Candidato a decomposicao: separar DAG parsing, dispatch, circuit breaker em modulos |
+| Single-writer SQLite limita concorrencia | Baixa | WAL mode + busy_timeout. Escala atual (1 operador) nao estressa |
+| Claude CLI como unico mecanismo de dispatch | Media | Se claude -p mudar breaking, todo dispatch quebra. Mitigado por ADR-010 wrappers |
+
+---
+
+## Glossario Tecnico
+
+| Termo | Definicao |
+|-------|-----------|
+| Easter | Daemon FastAPI 24/7 que orquestra o pipeline autonomamente |
+| Gate | Ponto de aprovacao no DAG — human (pausa), auto (continua), 1-way-door (confirmacao por decisao) |
+| L1 | Pipeline de fundacao da plataforma (13 nodes: vision → roadmap) |
+| L2 | Ciclo de epic (12 nodes: epic-context → roadmap-reassess) |
+| Trace | Grupo de execucao (1 L1 pipeline ou 1 L2 epic cycle) contendo N spans |
+| Span | Uma execucao individual de skill (pipeline_run) |
+| Eval Score | Nota 0-10 em 4 dimensoes: Quality, Adherence, Completeness, Cost Efficiency |
+| Circuit Breaker | Padrao de resiliencia: 5 falhas → suspensao 300s → teste de recuperacao |
+| Self-ref | Plataforma que opera sobre seu proprio repositorio (epics sequenciais obrigatorios) |

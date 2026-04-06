@@ -2,15 +2,14 @@
 
 Sistema de documentacao arquitetural e pipeline spec-to-code para plataformas digitais. Documenta o **que** um sistema faz, **por que** as decisoes foram tomadas, e **como** as pecas se conectam — tudo versionado no git, consumivel por humanos e LLMs.
 
-Suporta **N plataformas** a partir de um template Copier compartilhado. Cada plataforma recebe a mesma estrutura de documentacao, integracao com portal e pipeline LikeC4. A primeira plataforma e **Fulano** — agentes WhatsApp para PMEs brasileiras.
+Suporta **N plataformas** a partir de um template Copier compartilhado. Inclui orquestrador 24/7 (Easter), notificacoes Telegram para gates, observabilidade com tracing e evals, e um ciclo completo de 24 skills que leva uma ideia ate codigo implementado e testado. **12 epics shipped** (006-017), ~10.800 LOC de testes, 32 skills, 28 scripts Python.
 
 ---
 
 ## Quick Start
 
 ```bash
-# Pre-requisitos: Node.js 20+, Python 3.11+, likec4, copier
-npm i -g likec4
+# Pre-requisitos: Node.js 20+, Python 3.11+, copier
 pip install copier pyyaml
 
 # Onboarding interativo (detecta plataformas, explica pipeline, sugere proximo passo)
@@ -30,26 +29,28 @@ cd portal && npm install && npm run dev
 ## Arquitetura Geral
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                         madruga.ai                                  │
-├─────────────┬──────────────┬──────────────┬─────────────────────────┤
-│  20 Skills  │  Python/Bash │   SQLite DB  │   Portal Astro          │
-│  (Claude    │  Scripts     │  (.pipeline/ │   + Starlight            │
-│   Code)     │  (.specify/) │   madruga.db)│   + LikeC4 React        │
-├─────────────┴──────────────┴──────────────┴─────────────────────────┤
-│                     platforms/<name>/                                │
-│  platform.yaml │ business/ │ engineering/ │ decisions/ │ epics/      │
-│                │ research/ │ model/       │ planning/                │
-└─────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                              madruga.ai                                       │
+├──────────────┬──────────────┬──────────────┬──────────────┬──────────────────┤
+│  32 Skills   │  28 Python   │   SQLite DB  │   Easter     │  Portal Astro    │
+│  (Claude     │  Scripts     │  (.pipeline/ │  (FastAPI    │  + Starlight     │
+│   Code)      │  (.specify/) │   madruga.db)│   24/7)      │  + Mermaid       │
+├──────────────┴──────────────┴──────────────┴──────────────┴──────────────────┤
+│                          platforms/<name>/                                     │
+│  platform.yaml │ business/ │ engineering/ │ decisions/ │ epics/               │
+│                │ research/ │ planning/                                         │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Fluxo de Dados
 
-1. **Skills** (Claude Code slash commands) geram artefatos markdown + LikeC4
+1. **Skills** (Claude Code slash commands) geram artefatos markdown com Mermaid inline
 2. **post_save.py** registra cada artefato no SQLite (hash, proveniencia, timestamp)
-3. **vision-build.py** exporta modelos LikeC4 → tabelas markdown (marcadores `<!-- AUTO -->`)
-4. **Portal** descobre plataformas automaticamente via `platform.yaml` e renderiza tudo
+3. **Portal** descobre plataformas automaticamente via `platform.yaml` e renderiza tudo
 5. **check-platform-prerequisites.sh** valida dependencias antes de cada skill rodar
+6. **easter.py** orquestra pipeline 24/7 — poll epics ativos, dispatch via `claude -p`, notifica gates via Telegram
+7. **eval_scorer.py** calcula scores heuristicos em 4 dimensoes (quality, adherence, completeness, cost_efficiency)
+8. **Telegram Bot** notifica gates pendentes com inline keyboard para approve/reject
 
 ---
 
@@ -106,7 +107,7 @@ PLANNING                                    epic-breakdown ←──┘
                                                    │
                                             analyze (pos-impl check)
                                                    │
-                                            verify (coverage score)
+                                            judge (4-persona review)
                                                    │
                                             qa (testing specialist)
                                                    │
@@ -131,8 +132,8 @@ Roda **uma vez por plataforma** para construir toda a fundacao: negocio, pesquis
 | 6 | `/codebase-map` | `research/codebase-context.md` | vision | Research | auto (opcional) |
 | 7 | `/adr` | `decisions/ADR-*.md` | tech-research | Engineering | 1-way-door |
 | 8 | `/blueprint` | `engineering/blueprint.md` | adr | Engineering | human |
-| 9 | `/domain-model` | `engineering/domain-model.md` + `model/ddd-contexts.likec4` | blueprint, business-process | Engineering | human |
-| 10 | `/containers` | `engineering/containers.md` + `model/platform.likec4` | domain-model, blueprint | Engineering | human |
+| 9 | `/domain-model` | `engineering/domain-model.md` | blueprint, business-process | Engineering | human |
+| 10 | `/containers` | `engineering/containers.md` | domain-model, blueprint | Engineering | human |
 | 11 | `/context-map` | `engineering/context-map.md` | domain-model, containers | Engineering | human |
 | 12 | `/epic-breakdown` | `epics/*/pitch.md` | domain-model, containers, context-map | Planning | 1-way-door |
 | 13 | `/roadmap` | `planning/roadmap.md` | epic-breakdown | Planning | human |
@@ -143,7 +144,7 @@ Repete para **cada epic** definido no roadmap. Cada epic roda em branch dedicada
 
 | # | Skill (comando) | Gate | Artefato / Acao | O que faz |
 |---|-----------------|------|-----------------|-----------|
-| 14 | `/epic-context` | human | `epics/<NNN>/pitch.md` | **Cria branch** `epic/<platform>/<NNN-slug>` + enriquece pitch.md com decisoes de implementacao. Referencia blueprint, ADRs, domain model |
+| 14 | `/epic-context` | human | `epics/<NNN>/pitch.md` | **Cria branch** `epic/<platform>/<NNN-slug>` + enriquece pitch.md com decisoes de implementacao. Suporta `--draft` para planejar em main sem criar branch |
 | 15 | `/speckit.specify` | human | `epics/<NNN>/spec.md` | Cria especificacao da feature a partir de descricao em linguagem natural |
 | 16 | `/speckit.clarify` | human | Atualiza `spec.md` | Faz ate 5 perguntas para eliminar ambiguidades na spec |
 | 17 | `/speckit.plan` | human | `epics/<NNN>/plan.md` | Gera artefatos de design tecnico (componentes, interfaces, fluxos) |
@@ -151,8 +152,8 @@ Repete para **cada epic** definido no roadmap. Cada epic roda em branch dedicada
 | 19 | `/speckit.analyze` | auto | Report | Check de consistencia pre-impl: spec vs plan vs tasks alinhados? |
 | 20 | `/speckit.implement` | auto | **Codigo!** | Executa TODAS as tasks do tasks.md — escreve codigo, testes, config |
 | 21 | `/speckit.analyze` | auto | Report | Check de consistencia pos-impl: codigo implementa tudo do tasks? |
-| 22 | `/verify` | auto-escalate | Coverage score | Verifica aderencia do codigo vs spec/tasks/arquitetura. Score numerico |
-| 23 | `/qa` | human | QA report | Testing specialist — analise estatica, testes, code review, API, browser QA. **Heal loop**: corrige bugs encontrados automaticamente |
+| 22 | `/judge` | auto-escalate | Judge report | Tech-reviewers: 4 personas paralelas (Arch Reviewer, Bug Hunter, Simplifier, Stress Tester) + Judge pass com decision classifier |
+| 23 | `/qa` | human | QA report | Testing specialist — analise estatica, testes, code review, build, API, browser QA. **Heal loop**: corrige bugs encontrados automaticamente |
 | 24 | `/reconcile` | human | Atualiza docs | Detecta drift entre implementacao e documentacao, propoe updates |
 
 Apos reconcile: abrir **PR → code review → merge to main** → proximo epic.
@@ -173,7 +174,7 @@ Toda skill do ciclo L2 verifica `git branch --show-current`:
 | `human` | Sempre pausa. Apresenta resumo + scorecard. Espera aprovacao | Decisoes de negocio, arquitetura, planejamento |
 | `1-way-door` | Sempre pausa. >=3 alternativas por decisao. Confirmacao EXPLICITA por decisao. Subagent adversarial review | Decisoes irreversiveis (tech stack, ADRs, epic scope) |
 | `auto` | Procede automaticamente sem pausa | Checks automaticos, implementacao |
-| `auto-escalate` | Auto se OK, escala para humano se encontrar blockers | Verificacao pos-impl |
+| `auto-escalate` | Auto se OK, escala para humano se encontrar blockers | Judge review pos-impl |
 
 ### Personas por Camada
 
@@ -283,6 +284,9 @@ Report: arquivo, line count, checks, proximo passo sugerido.
 | `/pipeline` | Mostra status do DAG (L1 + L2) com tabela, Mermaid, % progresso, proximo passo |
 | `/checkpoint` | Salva STATE.md com progresso da sessao atual |
 | `/getting-started` | Onboarding interativo — detecta plataformas, explica pipeline, recomenda proximo passo |
+| `/skills-mgmt` | Gerencia ciclo de vida de skills — create, edit, lint, audit, dedup |
+| `/quick-fix` | Fast lane L2 para bug fixes e mudancas pequenas — specify → implement → judge (pula plan, tasks, analyze, qa, reconcile) |
+| `/verify` | `[DEPRECATED]` → Redireciona para `/judge` |
 | `/speckit.checklist` | Gera checklist customizado para a feature |
 | `/speckit.constitution` | Cria/atualiza constituicao do projeto |
 | `/speckit.taskstoissues` | Converte tasks em GitHub Issues ordenadas por dependencia |
@@ -293,7 +297,7 @@ Report: arquivo, line count, checks, proximo passo sugerido.
 
 Estado do pipeline persiste em `.pipeline/madruga.db` (SQLite WAL mode, FK ON, busy_timeout 5000ms).
 
-### Schema (11 tabelas + 2 FTS5 virtual)
+### Schema (13 tabelas + 2 FTS5 virtual)
 
 ```
 ┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐
@@ -336,22 +340,37 @@ Estado do pipeline persiste em `.pipeline/madruga.db` (SQLite WAL mode, FK ON, b
 │  pipeline_runs   │     │ memory_id (PK)   │
 │──────────────────│     │ platform_id (FK) │
 │ run_id (PK)      │     │ type             │
-│ ...              │     │ name             │
-└──────────────────┘     │ description      │
-                         │ content          │
-┌──────────────────┐     │ source           │
-│     events       │     │ file_path        │
-│──────────────────│     │ content_hash     │
-│ event_id (PK)    │     └──────────────────┘
-                         │ platform_id (FK) │     │ platform_id (FK) │
-                         │ epic_id          │     │ entity_type      │
-                         │ node_id          │     │ entity_id        │
-                         │ status           │     │ action           │
-                         │ agent            │     │ actor            │
-                         │ tokens_in/out    │     │ payload (JSON)   │
-                         │ cost_usd         │     │ created_at       │
-                         │ duration_ms      │     └──────────────────┘
-                         │ error            │
+│ platform_id (FK) │     │ name             │
+│ epic_id          │     │ description      │
+│ node_id          │     │ content          │
+│ status           │     │ source           │
+│ agent            │     │ file_path        │
+│ tokens_in        │     │ content_hash     │
+│ tokens_out       │     └──────────────────┘
+│ cost_usd         │
+│ duration_ms      │     ┌──────────────────┐
+│ trace_id         │     │     traces       │
+│ error            │     │──────────────────│
+└──────────────────┘     │ trace_id (PK)    │
+                         │ platform_id (FK) │
+┌──────────────────┐     │ epic_id          │
+│     events       │     │ run_id           │
+│──────────────────│     │ status           │
+│ event_id (PK)    │     │ started_at       │
+│ platform_id (FK) │     │ completed_at     │
+│ epic_id          │     │ metadata (JSON)  │
+│ node_id          │     └──────────────────┘
+│ entity_type      │
+│ entity_id        │     ┌──────────────────┐
+│ action           │     │   eval_scores    │
+│ actor            │     │──────────────────│
+│ payload (JSON)   │     │ score_id (PK)    │
+│ created_at       │     │ trace_id (FK)    │
+└──────────────────┘     │ platform_id (FK) │
+                         │ dimension        │
+                         │ score            │
+                         │ metadata (JSON)  │
+                         │ created_at       │
                          └──────────────────┘
 
 _migrations (controle de versao do schema)
@@ -372,7 +391,9 @@ _migrations (controle de versao do schema)
 | `decisions_fts` | FTS5 full-text search em decisoes (title, context, consequences) | Auto-sync via triggers |
 | `memory_fts` | FTS5 full-text search em memory (name, description, content) | Auto-sync via triggers |
 | `artifact_provenance` | Rastreabilidade — qual skill gerou qual arquivo, com hash | `post_save.py` |
-| `pipeline_runs` | Tracking de execucoes (tokens, custo, duracao, erros) | skills (futuro) |
+| `pipeline_runs` | Tracking de execucoes — tokens, custo USD, duracao, erros, trace_id | `dag_executor.py`, `easter.py` |
+| `traces` | Tracing hierarquico por pipeline run (trace → spans) | `dag_executor.py`, `db_observability.py` |
+| `eval_scores` | Scores heuristicos em 4 dimensoes (quality, adherence_to_spec, completeness, cost_efficiency) | `eval_scorer.py` |
 | `events` | Audit log append-only (quem fez o que, quando) | `post_save.py`, `seed_from_filesystem` |
 
 ### Status e Staleness
@@ -383,7 +404,7 @@ _migrations (controle de versao do schema)
 
 ### Migracao
 
-Migrações ficam em `.pipeline/migrations/` (nomeadas `001_*.sql`, `002_*.sql`). `db.py:migrate()` aplica pendentes em ordem, com rollback em caso de falha. Tabela `_migrations` controla o que ja foi aplicado.
+Migracoes ficam em `.pipeline/migrations/` (10 arquivos: `001_initial.sql` ate `010_observability.sql`). `db_core.py:migrate()` aplica pendentes em ordem, com rollback em caso de falha. Tabela `_migrations` controla o que ja foi aplicado.
 
 ---
 
@@ -392,7 +413,7 @@ Migrações ficam em `.pipeline/migrations/` (nomeadas `001_*.sql`, `002_*.sql`)
 ```
 ├── .claude/
 │   ├── commands/
-│   │   ├── madruga/              # 20 skills: 13 L1 + 3 L2 + 4 utilities
+│   │   ├── madruga/              # 23 skills: 13 L1 + 4 L2 + 6 utilities
 │   │   │   ├── platform-new.md   #   Scaffold nova plataforma
 │   │   │   ├── vision.md         #   Vision one-pager (Playing to Win)
 │   │   │   ├── solution-overview.md
@@ -401,15 +422,18 @@ Migrações ficam em `.pipeline/migrations/` (nomeadas `001_*.sql`, `002_*.sql`)
 │   │   │   ├── codebase-map.md   #   Mapear codebase existente (opcional)
 │   │   │   ├── adr.md            #   ADRs formato Nygard
 │   │   │   ├── blueprint.md      #   Blueprint com NFRs + deploy topology
-│   │   │   ├── domain-model.md   #   DDD bounded contexts + LikeC4
-│   │   │   ├── containers.md     #   C4 Level 2 + LikeC4
+│   │   │   ├── domain-model.md   #   DDD bounded contexts + Mermaid
+│   │   │   ├── containers.md     #   C4 Level 2 + Mermaid
 │   │   │   ├── context-map.md    #   DDD context map
 │   │   │   ├── epic-breakdown.md #   Shape Up pitches
 │   │   │   ├── roadmap.md        #   Sequenciamento + MVP
-│   │   │   ├── epic-context.md   #   Cria branch + enriquece pitch.md
-│   │   │   ├── verify.md         #   Verifica codigo vs spec (score)
-│   │   │   ├── qa.md             #   QA via Playwright
+│   │   │   ├── epic-context.md   #   Cria branch + enriquece pitch.md (suporta --draft)
+│   │   │   ├── judge.md          #   Tech-reviewers: 4 personas + judge pass
+│   │   │   ├── qa.md             #   QA adaptativo: static, tests, code review, browser
 │   │   │   ├── reconcile.md      #   Detecta drift docs vs codigo
+│   │   │   ├── quick-fix.md      #   Fast lane L2 (specify→implement→judge)
+│   │   │   ├── skills-mgmt.md    #   Gerencia ciclo de vida de skills
+│   │   │   ├── verify.md         #   [DEPRECATED] → judge
 │   │   │   ├── pipeline.md       #   Status do DAG (tabela + Mermaid)
 │   │   │   ├── checkpoint.md     #   Salva STATE.md da sessao
 │   │   │   └── getting-started.md#   Onboarding interativo
@@ -423,31 +447,88 @@ Migrações ficam em `.pipeline/migrations/` (nomeadas `001_*.sql`, `002_*.sql`)
 │   │       ├── speckit.checklist.md
 │   │       ├── speckit.constitution.md
 │   │       └── speckit.taskstoissues.md
-│   └── knowledge/                # Contratos e referencias
+│   └── knowledge/                # Contratos, referencias e personas
 │       ├── pipeline-dag-knowledge.md     # Definicao canonica do DAG
 │       ├── pipeline-contract-base.md     # Contrato uniforme (6 passos)
 │       ├── pipeline-contract-business.md # Persona business
 │       ├── pipeline-contract-engineering.md # Persona engineering
 │       ├── pipeline-contract-planning.md # Persona planning
-│       └── likec4-syntax.md              # Referencia LikeC4
+│       ├── commands.md                   # Referencia completa de comandos
+│       ├── decision-classifier-knowledge.md # Risk scoring para decisoes
+│       ├── judge-config.yaml             # Config extensivel do Judge
+│       ├── qa-template.md                # Template de QA report
+│       └── personas/                     # Personas do Judge (4 tech-reviewers)
+│           ├── arch-reviewer.md
+│           ├── bug-hunter.md
+│           ├── simplifier.md
+│           └── stress-tester.md
 │
-├── .pipeline/                    # Estado SQLite + migrações
+├── .github/
+│   ├── CODEOWNERS                # Review obrigatorio em .claude/, CLAUDE.md
+│   ├── pull_request_template.md  # Template de PR (summary, security impact, test plan)
+│   └── workflows/
+│       └── ci.yml                # 6 jobs: lint, db-tests, smoke-test, templates, bash-tests, portal-build
+│
+├── .pipeline/                    # Estado SQLite + migracoes
 │   ├── madruga.db                # Banco (WAL mode)
 │   └── migrations/
-│       ├── 001_initial.sql       # 8 tabelas base + indexes
+│       ├── 001_initial.sql             # 8 tabelas base + indexes
 │       ├── 002_indexes_and_fixes.sql
-│       └── 003_decisions_memory.sql  # decision_links, memory_entries, FTS5 + triggers
+│       ├── 003a_decisions_memory.sql   # decision_links, memory_entries
+│       ├── 003b_fts5.sql              # FTS5 virtual tables + triggers
+│       ├── 004_decision_body.sql
+│       ├── 005_platform_repo.sql      # repo binding
+│       ├── 006_epic_delivered_at.sql
+│       ├── 007_gate_fields.sql        # gate approval tracking
+│       ├── 008_telegram_message_id.sql # Telegram integration
+│       ├── 009_add_drafted_status.sql  # epic-context --draft mode
+│       └── 010_observability.sql       # traces, eval_scores, pipeline_runs extensions
 │
 ├── .specify/
 │   ├── scripts/
-│   │   ├── db.py                 # Thin wrapper SQLite (stdlib only)
+│   │   ├── # --- Core DB ---
+│   │   ├── db.py                 # Re-export facade (backward compat)
+│   │   ├── db_core.py            # Connection, migration, transactions
+│   │   ├── db_pipeline.py        # Pipeline CRUD (platforms, nodes, epics, runs)
+│   │   ├── db_decisions.py       # Decisions, memory, FTS5
+│   │   ├── db_observability.py   # Traces, spans, eval scores
+│   │   ├── errors.py             # Error hierarchy (PipelineError, ConfigError, etc.)
+│   │   ├── config.py             # Shared configuration
+│   │   ├── log_utils.py          # Structured logging helpers
+│   │   ├── # --- Pipeline ---
+│   │   ├── dag_executor.py       # Custom DAG executor: topological sort, claude -p dispatch, gates, retry/circuit breaker
 │   │   ├── post_save.py          # CLI: registra artefato no DB
-│   │   ├── vision-build.py       # LikeC4 JSON → tabelas markdown
-│   │   ├── platform_cli.py       # CLI: new, lint, sync, register, list, use, current, status, import/export
-│   │   ├── sync_memory.py       # Sync bidirecional memory ↔ BD
+│   │   ├── eval_scorer.py        # Heuristic eval scoring (4 dimensoes)
+│   │   ├── observability_export.py # Export traces/spans/evals como CSV
+│   │   ├── decision_classifier.py # Risk score para decisoes
+│   │   ├── # --- Easter (24/7 orchestrator) ---
+│   │   ├── easter.py             # FastAPI app: dag_scheduler + Telegram + health + observability API
+│   │   ├── telegram_bot.py       # Bot Telegram standalone (aiogram 3.x)
+│   │   ├── telegram_adapter.py   # Adapter para easter ↔ Telegram
+│   │   ├── ntfy.py               # ntfy.sh fallback notifications
+│   │   ├── sd_notify.py          # systemd watchdog integration
+│   │   ├── # --- Tools ---
+│   │   ├── platform_cli.py       # CLI: new, lint, sync, register, list, use, current, status, import/export, gate
+│   │   ├── skill-lint.py         # Lint all skills (frontmatter, handoffs, archetype compliance)
+│   │   ├── sync_memory.py        # Sync bidirecional memory ↔ BD
+│   │   ├── memory_consolidate.py # Pruning e consolidacao de memories
+│   │   ├── # --- Multi-repo ---
+│   │   ├── ensure_repo.py        # Clone/pull repos externos (SSH/HTTPS)
+│   │   ├── worktree.py           # Git worktree isolado para epics
+│   │   ├── implement_remote.py   # claude -p em repo externo + PR via gh
+│   │   ├── # --- Hooks ---
+│   │   ├── hook_post_save.py     # PostToolUse: auto-registra em SQLite
+│   │   ├── hook_skill_lint.py    # PostToolUse: auto skill-lint
+│   │   ├── # --- Tests (29 arquivos, ~10.800 LOC) ---
+│   │   └── tests/
+│   │       └── test_*.py         # pytest (make test)
 │   │   └── bash/
 │   │       ├── check-platform-prerequisites.sh  # Valida dependencias
-│   │       └── common.sh         # Funcoes compartilhadas
+│   │       ├── check-prerequisites.sh
+│   │       ├── common.sh         # Funcoes compartilhadas
+│   │       ├── create-new-feature.sh
+│   │       ├── setup-plan.sh
+│   │       └── update-agent-context.sh
 │   ├── templates/
 │   │   ├── platform/             # Copier template para nova plataforma
 │   │   │   ├── copier.yml        # Config + perguntas interativas
@@ -466,7 +547,8 @@ Migrações ficam em `.pipeline/migrations/` (nomeadas `001_*.sql`, `002_*.sql`)
 │
 ├── platforms/                    # N plataformas
 │   └── <nome>/
-│       ├── platform.yaml         # Manifesto (pipeline DAG, views, lifecycle)
+│       ├── platform.yaml         # Manifesto (pipeline DAG, views, lifecycle, repo binding)
+│       ├── CLAUDE.md             # Contexto especifico da plataforma
 │       ├── .copier-answers.yml   # Estado Copier (habilita copier update)
 │       ├── business/
 │       │   ├── vision.md         # Vision one-pager
@@ -491,24 +573,28 @@ Migrações ficam em `.pipeline/migrations/` (nomeadas `001_*.sql`, `002_*.sql`)
 │       │       ├── spec.md       # SpecKit spec
 │       │       ├── plan.md       # SpecKit plan
 │       │       └── tasks.md      # SpecKit tasks
-│       └── model/                # Diagramas LikeC4
-│           ├── likec4.config.json
-│           ├── spec.likec4       # Unico que synca via Copier
-│           ├── ddd-contexts.likec4
-│           ├── platform.likec4
-│           ├── actors.likec4
-│           ├── externals.likec4
-│           ├── infrastructure.likec4
-│           ├── relationships.likec4
-│           └── views.likec4
 │
-├── portal/                       # Astro + Starlight + LikeC4 React
+├── portal/                       # Astro + Starlight + Mermaid (astro-mermaid)
 │   ├── astro.config.mjs          # Auto-descobre plataformas + symlinks
 │   ├── src/lib/platforms.mjs     # Discovery via platform.yaml
-│   └── src/components/viewers/
-│       └── LikeC4Diagram.tsx     # React.lazy com imports por plataforma
+│   └── src/components/
+│       ├── dashboard/
+│       │   └── PipelineDAG.tsx       # Visualizacao do DAG pipeline
+│       └── observability/
+│           ├── ObservabilityDashboard.tsx  # Dashboard principal (4 tabs)
+│           ├── RunsTab.tsx            # Pipeline runs com metricas
+│           ├── TracesTab.tsx          # Tracing hierarquico
+│           ├── EvalsTab.tsx           # Eval scores por dimensao
+│           ├── CostTab.tsx            # Custo acumulado por skill/epic
+│           └── formatters.ts          # Formatacao de dados
 │
-└── docs/                         # Docs legados
+├── etc/
+│   └── systemd/
+│       └── madruga-easter.service    # Unit file systemd para Easter 24/7
+│
+├── CONTRIBUTING.md               # Regras de PR, commits, AI-generated code
+├── SECURITY.md                   # Trust model, secret management, subprocess isolation
+└── docs/                         # Docs de referencia
 ```
 
 ---
@@ -525,14 +611,52 @@ python3 .specify/scripts/platform_cli.py current            # mostrar plataforma
 python3 .specify/scripts/platform_cli.py lint <nome>        # validar estrutura
 python3 .specify/scripts/platform_cli.py lint --all         # validar todas
 python3 .specify/scripts/platform_cli.py sync [nome]        # copier update (uma ou todas)
-python3 .specify/scripts/platform_cli.py register <nome>    # injetar loader LikeC4 no portal
 python3 .specify/scripts/platform_cli.py status <nome>      # pipeline status (tabela humana)
 python3 .specify/scripts/platform_cli.py status --all --json # todas plataformas (JSON para dashboard)
 python3 .specify/scripts/platform_cli.py import-adrs <nome> # importar ADRs markdown para BD
 python3 .specify/scripts/platform_cli.py export-adrs <nome> # exportar decisoes do BD para markdown
 python3 .specify/scripts/platform_cli.py import-memory      # importar .claude/memory/ para BD
 python3 .specify/scripts/platform_cli.py export-memory      # exportar memory entries para markdown
+python3 .specify/scripts/platform_cli.py gate list <nome>   # listar gates pendentes
+python3 .specify/scripts/platform_cli.py gate approve <id>  # aprovar gate
 ```
+
+### DAG Executor (`dag_executor.py`)
+
+```bash
+# Executar pipeline L1 (plataforma)
+python3 .specify/scripts/dag_executor.py --platform <nome> --dry-run  # preview da ordem
+python3 .specify/scripts/dag_executor.py --platform <nome>            # executar L1
+
+# Executar pipeline L2 (epic)
+python3 .specify/scripts/dag_executor.py --platform <nome> --epic <slug>
+
+# Resume de checkpoint
+python3 .specify/scripts/dag_executor.py --platform <nome> --resume
+```
+
+### Easter — Orquestrador 24/7 (`easter.py`)
+
+```bash
+# Iniciar localmente
+python3 .specify/scripts/easter.py
+
+# Via systemd
+systemctl --user start madruga-easter
+systemctl --user status madruga-easter
+```
+
+Endpoints HTTP:
+
+| Endpoint | Descricao |
+|----------|-----------|
+| `GET /health` | Liveness check (sempre 200) |
+| `GET /status` | Estado completo do Easter em JSON |
+| `GET /api/traces` | Lista traces com paginacao |
+| `GET /api/traces/{trace_id}` | Detalhe do trace com spans e evals |
+| `GET /api/evals` | Eval scores com filtros |
+| `GET /api/stats` | Stats agregados por dia |
+| `GET /api/export/csv` | Export traces/spans/evals como CSV |
 
 ### Memory Sync (`sync_memory.py`)
 
@@ -564,6 +688,14 @@ python3 .specify/scripts/post_save.py --reseed --platform fulano
 python3 .specify/scripts/post_save.py --reseed-all
 ```
 
+### Skill Lint (`skill-lint.py`)
+
+```bash
+python3 .specify/scripts/skill-lint.py                 # lint all skills
+python3 .specify/scripts/skill-lint.py --skill <name>  # lint one skill
+python3 .specify/scripts/skill-lint.py --json           # JSON output
+```
+
 ### Verificacao de Pre-requisitos
 
 ```bash
@@ -584,14 +716,6 @@ python3 .specify/scripts/post_save.py --reseed-all
   --json --platform fulano --epic 001-onboarding --skill specify
 ```
 
-### LikeC4 Build Pipeline (`vision-build.py`)
-
-```bash
-python3 .specify/scripts/vision-build.py fulano                  # exportar tudo
-python3 .specify/scripts/vision-build.py fulano --validate-only  # apenas validar
-python3 .specify/scripts/vision-build.py fulano --export-png     # tambem gerar PNGs
-```
-
 ### Portal
 
 ```bash
@@ -600,15 +724,6 @@ npm install          # instalar dependencias
 npm run dev          # http://localhost:4321 (auto-descobre plataformas)
 npm run build        # build de producao
 ```
-
-### LikeC4 Standalone
-
-```bash
-cd platforms/<nome>/model
-likec4 serve         # http://localhost:5173 (hot reload)
-```
-
----
 
 ## Copier Template System
 
@@ -633,7 +748,7 @@ python3 .specify/scripts/platform_cli.py sync
 # ou: copier update platforms/<nome>
 ```
 
-Arquivos em `_skip_if_exists` (decisoes, epics, vision, etc.) nao sao sobrescritos. Apenas `model/spec.likec4` e arquivos estruturais sincronizam.
+Arquivos em `_skip_if_exists` (decisoes, epics, vision, etc.) nao sao sobrescritos. Apenas arquivos estruturais sincronizam.
 
 ---
 
@@ -657,7 +772,7 @@ O arquivo `.specify/memory/constitution.md` (v1.1.0) define 9 principios:
 
 | Namespace | Escopo | Exemplos |
 |-----------|--------|----------|
-| **`madruga:*`** | Pipeline de plataforma | `/vision`, `/adr`, `/pipeline`, `/getting-started` |
+| **`madruga:*`** | Pipeline de plataforma | `/vision`, `/adr`, `/judge`, `/pipeline`, `/getting-started` |
 | **`speckit.*`** | Ciclo de implementacao (dentro de epic) | `/speckit.specify`, `/speckit.plan`, `/speckit.implement` |
 
 ---
@@ -667,22 +782,47 @@ O arquivo `.specify/memory/constitution.md` (v1.1.0) define 9 principios:
 | Componente | Tecnologia |
 |-----------|-----------|
 | Skills | Markdown (Claude Code custom commands) + YAML frontmatter |
-| Scripts | Bash 5.x + Python 3.11+ (stdlib + pyyaml) |
-| Estado | SQLite WAL em `.pipeline/madruga.db` |
-| Modelos | LikeC4 (.likec4) |
-| Portal | Astro + Starlight + LikeC4 React |
+| Scripts | Python 3.11+ (stdlib + pyyaml) + Bash 5.x |
+| Estado | SQLite WAL em `.pipeline/madruga.db` (13 tabelas + 2 FTS5) |
+| Diagramas | Mermaid (inline em .md, renderizado por astro-mermaid) |
+| Portal | Astro + Starlight + Mermaid + observability dashboard |
+| Easter | FastAPI + uvicorn + aiogram 3.x + structlog + Sentry |
+| Notificacao | Telegram Bot API (aiogram) + ntfy.sh fallback |
 | Templates | Copier >= 9.4.0 |
+| CI | GitHub Actions (lint, db-tests, smoke-test, templates, bash-tests, portal-build) |
 | Formatacao | ruff (Python) |
+| Testes | pytest (29 arquivos, ~10.800 LOC) |
+
+---
+
+## Epics Shipped
+
+| # | Epic | Descricao |
+|---|------|-----------|
+| 006 | SQLite Foundation | BD SQLite (WAL mode) como state store. db.py, migrations, CI, guardrails |
+| 007 | Directory Unification | SpecKit opera em epics/. DAG dois niveis (L1+L2). platform.yaml como manifesto |
+| 008 | Quality & DX | Knowledge files, skills enxutas, auto-review por tier, verify + QA + reconcile |
+| 009 | Decision Log BD | BD como source of truth para decisions e memory. FTS5, CLI import/export |
+| 010 | Pipeline Dashboard | Dashboard visual no portal Starlight. CLI status com tabela + JSON + Mermaid |
+| 011 | CI/CD Pipeline | GitHub Actions: 6 jobs (lint, db-tests, smoke-test, templates, bash, portal) |
+| 012 | Multi-repo Implement | git worktree para repos externos. ensure_repo, worktree isolado, implement_remote + PR |
+| 013 | DAG Executor + Bridge | Custom DAG executor: Kahn's topological sort, claude -p dispatch, human gates, retry/circuit breaker |
+| 014 | Telegram Notifications | Bot Telegram (aiogram 3.x): notifica human gates, inline keyboard approve/reject, backoff exponencial |
+| 015 | Subagent Judge | Tech-reviewers: 4 personas paralelas + Judge pass. Decision Classifier (risk score). Substitui verify |
+| 016 | Easter 24/7 | FastAPI + asyncio: dag_scheduler, Telegram gates, health_checker + systemd watchdog, Sentry |
+| 017 | Observability & Evals | Traces hierarquicos, eval scoring (4 dimensoes), API REST, portal dashboard (4 tabs), cleanup 90 dias |
+
+---
 
 ## Pre-requisitos
 
 - Node.js 20+
 - Python 3.11+ com `pyyaml`
-- `likec4` CLI: `npm i -g likec4`
 - `copier` >= 9.4.0: `pip install copier`
+- Para Easter: `pip install fastapi uvicorn aiogram structlog sentry-sdk`
 
 ---
 
 ## Referencia
 
-Detalhes completos em [CLAUDE.md](CLAUDE.md).
+Detalhes completos em [CLAUDE.md](CLAUDE.md). Regras de contribuicao em [CONTRIBUTING.md](CONTRIBUTING.md). Modelo de seguranca em [SECURITY.md](SECURITY.md).

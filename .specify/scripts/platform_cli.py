@@ -9,7 +9,7 @@ Usage:
     python3 .specify/scripts/platform_cli.py lint <name>        # validate structure
     python3 .specify/scripts/platform_cli.py lint --all         # validate all platforms
     python3 .specify/scripts/platform_cli.py sync [name]        # copier update (one or all)
-    python3 .specify/scripts/platform_cli.py register <name>    # inject LikeC4 loader + validate model
+    python3 .specify/scripts/platform_cli.py register <name>    # register platform in portal
     python3 .specify/scripts/platform_cli.py list               # list all platforms
     python3 .specify/scripts/platform_cli.py check-stale <name>  # detect stale pipeline nodes
     python3 .specify/scripts/platform_cli.py import-adrs <name> # import ADRs into DB
@@ -41,10 +41,7 @@ from log_utils import setup_logging as _setup_logging
 log = logging.getLogger("platform_cli")
 
 
-CANONICAL_SPEC = TEMPLATE_DIR / "template" / "model" / "spec.likec4"
-LIKEC4_DIAGRAM_TSX = PORTAL_DIR / "src" / "components" / "viewers" / "LikeC4Diagram.tsx"
-
-REQUIRED_DIRS = ["business", "engineering", "decisions", "epics", "model"]
+REQUIRED_DIRS = ["business", "engineering", "decisions", "epics"]
 REQUIRED_FILES = [
     "platform.yaml",
     "business/vision.md",
@@ -53,8 +50,6 @@ REQUIRED_FILES = [
     "engineering/context-map.md",
     "engineering/integrations.md",
     "engineering/blueprint.md",
-    "model/spec.likec4",
-    "model/likec4.config.json",
 ]
 AUTO_MARKERS = {
     "engineering/context-map.md": ["domains", "relations"],
@@ -80,39 +75,6 @@ def _error(msg: str) -> None:
 def _discover_platforms() -> list[str]:
     """Return sorted list of platform names that have platform.yaml."""
     return sorted(d.name for d in PLATFORMS_DIR.iterdir() if d.is_dir() and (d / "platform.yaml").exists())
-
-
-def _inject_platform_loader(name: str) -> bool:
-    """Add a platform import to LikeC4Diagram.tsx platformLoaders map.
-
-    Returns True if injected, False if already present.
-    """
-    if not LIKEC4_DIAGRAM_TSX.exists():
-        _warn(f"LikeC4Diagram.tsx not found at {LIKEC4_DIAGRAM_TSX}")
-        return False
-
-    content = LIKEC4_DIAGRAM_TSX.read_text()
-
-    # Check if already registered
-    if f"'likec4:react/{name}'" in content:
-        _ok(f"Platform '{name}' already in LikeC4Diagram.tsx")
-        return False
-
-    # Find the closing brace of platformLoaders and insert before it
-    # Pattern: line with just `};` after the loader entries
-    new_entry = f"  '{name}': () => import('likec4:react/{name}'),"
-    pattern = r"(const platformLoaders:[^{]*\{[^}]*)(})"
-    match = re.search(pattern, content, re.DOTALL)
-    if not match:
-        _error("Could not find platformLoaders in LikeC4Diagram.tsx")
-        return False
-
-    # Insert the new entry before the closing brace
-    before = match.group(1).rstrip()
-    updated = content[: match.start()] + before + "\n" + new_entry + "\n" + match.group(2) + content[match.end() :]
-    LIKEC4_DIAGRAM_TSX.write_text(updated)
-    _ok(f"Injected '{name}' into LikeC4Diagram.tsx platformLoaders")
-    return True
 
 
 # -- Commands --
@@ -156,7 +118,7 @@ def cmd_list() -> None:
 
 
 def cmd_new(name: str) -> None:
-    """Scaffold a new platform via copier copy, register in portal, inject LikeC4 loader."""
+    """Scaffold a new platform via copier copy and register in portal."""
     if not re.match(r"^[a-z][a-z0-9-]*$", name):
         _error(
             f"Invalid platform name '{name}'. "
@@ -184,10 +146,7 @@ def cmd_new(name: str) -> None:
         sys.exit(1)
     _ok(f"Platform scaffolded at {dst}")
 
-    # 2. Inject LikeC4 loader import
-    _inject_platform_loader(name)
-
-    # 3. Portal symlinks are auto-managed by Vite plugin in astro.config.mjs
+    # 2. Portal symlinks are auto-managed by Vite plugin in astro.config.mjs
     _ok("Portal symlinks auto-managed by Vite plugin (no manual step needed)")
 
     # 4. Validate
@@ -272,23 +231,6 @@ def _lint_platform(name: str) -> bool:
                 else:
                     _warn(f"AUTO:{marker} markers missing in {filepath}")
 
-    # Check spec.likec4 matches canonical
-    spec_path = pdir / "model" / "spec.likec4"
-    if spec_path.exists() and CANONICAL_SPEC.exists():
-        if spec_path.read_bytes() == CANONICAL_SPEC.read_bytes():
-            _ok("model/spec.likec4 matches canonical")
-        else:
-            _warn("model/spec.likec4 differs from canonical template")
-
-    # Check likec4.config.json
-    config_path = pdir / "model" / "likec4.config.json"
-    if config_path.exists():
-        config = json.loads(config_path.read_text())
-        if config.get("name") == name:
-            _ok("likec4.config.json name matches")
-        else:
-            _warn(f"likec4.config.json name '{config.get('name')}' != '{name}'")
-
     # Check ADR frontmatter
     adr_dir = pdir / "decisions"
     if adr_dir.is_dir():
@@ -356,32 +298,14 @@ def cmd_sync(name: str | None) -> None:
 
 
 def cmd_register(name: str) -> None:
-    """Inject LikeC4 loader and validate model. Symlinks are auto-managed by Vite plugin."""
+    """Register platform. Portal symlinks are auto-managed by Vite plugin."""
     pdir = PLATFORMS_DIR / name
     if not pdir.exists():
         _error(f"Platform '{name}' not found")
         sys.exit(1)
 
-    # Inject LikeC4 loader import (idempotent — skips if already present)
-    _inject_platform_loader(name)
-
     # Portal symlinks are auto-managed by Vite plugin in astro.config.mjs
     _ok("Portal symlinks auto-managed by Vite plugin")
-
-    # Validate LikeC4 model
-    model_dir = pdir / "model"
-    if model_dir.exists():
-        log.info("Validating LikeC4 model at %s...", model_dir)
-        result = subprocess.run(
-            ["npx", "likec4", "build", str(model_dir)],
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
-        if result.returncode == 0:
-            _ok("LikeC4 model validates")
-        else:
-            _warn(f"LikeC4 model has warnings: {result.stderr[:200]}")
 
     log.info("Platform '%s' registered. Run: cd portal && npm run dev", name)
 
@@ -705,7 +629,7 @@ def _build_parser():  # -> argparse.ArgumentParser
     p.add_argument("name", nargs="?", help="Platform name (omit for all)")
 
     # register
-    p = sub.add_parser("register", help="Inject LikeC4 loader and validate model")
+    p = sub.add_parser("register", help="Register platform in portal")
     p.add_argument("name", help="Platform name")
 
     # check-stale

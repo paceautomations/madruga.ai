@@ -112,7 +112,7 @@ const PipelineNode = memo(({ data }: NodeProps<Node<PipelineNodeData>>) => {
       if (override) {
         window.location.href = `/${data.platform}${override}`;
       } else {
-        const path = data.outputs[0].replace(/\.md$/, '').replace(/\.likec4$/, '');
+        const path = data.outputs[0].replace(/\.md$/, '');
         window.location.href = `/${data.platform}/${path}/`;
       }
     }

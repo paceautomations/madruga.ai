@@ -161,6 +161,23 @@ You **MUST** consider the user input before proceeding (if not empty).
    - Suggest next steps if implementation cannot proceed
    - **IMPORTANT** For completed tasks, make sure to mark the task off as [X] in the tasks file.
 
+8b. **Decision Capture** (epic context only):
+
+   After completing each task, if `SPECIFY_BASE_DIR` points to an epic directory (`platforms/<name>/epics/<NNN>/`) AND `decisions.md` exists in that directory:
+
+   1. Compare the task's actual implementation against what `plan.md` and `tasks.md` prescribed
+   2. If ANY of these conditions are true, append a decision entry to `decisions.md`:
+      - Implementation deviated from plan (different approach, library, or pattern)
+      - A non-trivial trade-off was made (performance vs simplicity, one library over another)
+      - A constraint was discovered not in the plan (API limitation, compatibility issue)
+      - An ambiguous task description required a specific interpretation
+   3. Format: `N. [YYYY-MM-DD implement] <decision text> (ref: <task-id or architectural doc>)`
+   4. Read the file first, find the last numbered entry, and increment
+   5. Update the `updated:` field in decisions.md frontmatter
+
+   If no deviations occurred for a task, do NOT add an entry — avoid noise.
+   If `decisions.md` does not exist, skip silently (epic may predate this feature).
+
 9. Completion validation:
    - Verify all required tasks are completed
    - Check that implemented features match the original specification

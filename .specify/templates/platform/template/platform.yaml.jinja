@@ -10,27 +10,6 @@ repo:
   base_branch: {{ repo_base_branch }}
   epic_branch_prefix: "epic/{{ platform_name }}/"
 {%- endif %}
-model: model/
-views:
-  structural:
-    - id: index
-      label: "System Landscape"
-    - id: containers
-      label: "C4 L2 — Containers"
-    - id: contextMap
-      label: "DDD Context Map"
-  flows:
-{%- if include_business_flow %}
-    - id: businessFlow
-      label: "Business Process"
-{%- endif %}
-serve:
-  command: "likec4 serve"
-  port: 5173
-build:
-  command: "likec4 build"
-  export_json: "likec4 export json --pretty --skip-layout -o output/likec4.json"
-  cwd: "model/"
 pipeline:
   nodes:
     - id: platform-new
@@ -92,14 +71,14 @@ pipeline:
 
     - id: domain-model
       skill: "madruga:domain-model"
-      outputs: ["engineering/domain-model.md", "model/ddd-contexts.likec4"]
+      outputs: ["engineering/domain-model.md"]
       depends: ["blueprint", "business-process"]
       layer: engineering
       gate: human
 
     - id: containers
       skill: "madruga:containers"
-      outputs: ["model/platform.likec4", "model/views.likec4"]
+      outputs: ["engineering/blueprint.md"]
       depends: ["domain-model", "blueprint"]
       layer: engineering
       gate: human
@@ -144,8 +123,6 @@ pipeline:
         outputs: ["{epic}/spec.md"]
         depends: ["specify"]
         gate: human
-        optional: true
-        skip_condition: "spec.md has 0 [NEEDS CLARIFICATION] markers"
 
       - id: plan
         skill: "speckit.plan"
@@ -167,7 +144,7 @@ pipeline:
 
       - id: implement
         skill: "speckit.implement"
-        outputs: ["{epic}/tasks.md"]
+        outputs: ["{epic}/implement-report.md"]
         depends: ["analyze"]
         gate: auto
 
@@ -177,16 +154,16 @@ pipeline:
         depends: ["implement"]
         gate: auto
 
-      - id: verify
-        skill: "madruga:verify"
-        outputs: ["{epic}/verify-report.md"]
+      - id: judge
+        skill: "madruga:judge"
+        outputs: ["{epic}/judge-report.md"]
         depends: ["analyze-post"]
         gate: auto-escalate
 
       - id: qa
         skill: "madruga:qa"
         outputs: ["{epic}/qa-report.md"]
-        depends: ["verify"]
+        depends: ["judge"]
         gate: human
 
       - id: reconcile
@@ -194,5 +171,9 @@ pipeline:
         outputs: ["{epic}/reconcile-report.md"]
         depends: ["qa"]
         gate: human
-        optional: true
-        skip_condition: "verify score >= 95% and zero drift"
+
+      - id: roadmap-reassess
+        skill: "madruga:roadmap"
+        outputs: ["{epic}/roadmap-reassess-report.md"]
+        depends: ["reconcile"]
+        gate: auto

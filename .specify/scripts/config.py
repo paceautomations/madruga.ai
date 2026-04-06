@@ -18,3 +18,6 @@ PORTAL_DIR = REPO_ROOT / "portal"
 # Override via env vars when pricing changes.
 SONNET_INPUT_PRICE = float(os.environ.get("MADRUGA_INPUT_PRICE_PER_TOKEN", "0.000003"))
 SONNET_OUTPUT_PRICE = float(os.environ.get("MADRUGA_OUTPUT_PRICE_PER_TOKEN", "0.000015"))
+
+# Markers that indicate an unfilled template artifact (used by verify_outputs + post_save)
+UNFILLED_TEMPLATE_MARKERS = ("[FEATURE]", "ACTION REQUIRED: Replace")

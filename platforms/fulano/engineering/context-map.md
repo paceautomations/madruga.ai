@@ -15,4 +15,4 @@ title: "Context Map"
 
 ## Diagrama
 
-<!-- Insira diagrama Mermaid ou use o viewer interativo LikeC4. -->
+<!-- Veja o Context Map completo no [Domain Model](../domain-model/#context-map-l3). -->
