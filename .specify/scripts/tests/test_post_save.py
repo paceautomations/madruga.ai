@@ -395,8 +395,8 @@ def test_inject_ship_fields_updates_status(setup_platform):
         post_save.REPO_ROOT = original_repo
 
 
-def test_record_save_skips_when_hash_unchanged(setup_platform):
-    """record_save should NOT overwrite completed_at when hash is unchanged."""
+def test_record_save_bumps_timestamp_when_hash_unchanged(setup_platform):
+    """record_save bumps completed_at even when hash is unchanged (DAG ordering)."""
     tmp_path, db_path = setup_platform
     import post_save
     import db_core as db_mod
@@ -422,10 +422,10 @@ def test_record_save_skips_when_hash_unchanged(setup_platform):
         original_ts = next(n for n in nodes if n["node_id"] == "vision")["completed_at"]
         conn.close()
 
-        # Second save — same file, same hash (simulates hook from side-effect edit)
+        # Second save — same file, same hash
         import time
 
-        time.sleep(0.1)  # ensure datetime.now() would differ
+        time.sleep(1.1)  # ensure datetime seconds differ
         post_save.record_save(
             platform="test-plat",
             node="vision",
@@ -433,13 +433,13 @@ def test_record_save_skips_when_hash_unchanged(setup_platform):
             artifact="business/vision.md",
         )
 
-        # completed_at should NOT have changed
+        # completed_at SHOULD have been bumped (prevents stale after dep re-registration)
         conn = get_conn(db_path)
         nodes = get_pipeline_nodes(conn, "test-plat")
         new_ts = next(n for n in nodes if n["node_id"] == "vision")["completed_at"]
         conn.close()
 
-        assert new_ts == original_ts, f"completed_at changed from {original_ts} to {new_ts}"
+        assert new_ts > original_ts, f"completed_at not bumped: {original_ts} → {new_ts}"
     finally:
         post_save.REPO_ROOT = original_repo
         db_mod.DB_PATH = original_db

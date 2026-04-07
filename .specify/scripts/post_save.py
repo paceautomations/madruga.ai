@@ -306,14 +306,25 @@ def record_save(
                     and existing_node.get("completed_by")
                     and not existing_node["completed_by"].startswith("seed")
                 )
-                skip_update = (
+                hash_unchanged = (
                     existing_node
                     and existing_node["status"] == "done"
                     and was_completed_by_skill
                     and existing_node.get("output_hash")
                     and output_hash == existing_node["output_hash"]
                 )
-                if not skip_update:
+                if hash_unchanged:
+                    # Hash identical — still bump completed_at so DAG ordering
+                    # stays correct after review passes (prevents stale detection
+                    # when a dependency was re-registered between saves).
+                    upsert_pipeline_node(
+                        txn,
+                        platform,
+                        node,
+                        "done",
+                        completed_at=now,
+                    )
+                else:
                     upsert_pipeline_node(
                         txn,
                         platform,
