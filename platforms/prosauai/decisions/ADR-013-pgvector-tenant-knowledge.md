@@ -96,3 +96,7 @@ pgvector 0.8.x + **pgvectorscale** muda o cenario competitivo:
 - **Suporte ate 16.000 dimensoes** (vs 2.000 do pgvector nativo)
 - **HNSW desde o inicio**: Usar HNSW (nao IVFFlat) — sem necessidade de re-index periodico, performance superior para o volume esperado
 - Avaliar pgvectorscale quando volume de vetores crescer significativamente (>1M por tenant)
+
+---
+
+> **Proximo passo:** `/madruga:blueprint prosauai` — consolidar stack de engenharia a partir dos ADRs aprovados.

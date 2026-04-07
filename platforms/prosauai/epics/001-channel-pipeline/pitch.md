@@ -9,6 +9,7 @@ features:
   - "Agente em grupos WhatsApp"
 owner: ""
 created: 2026-03-25
+updated: 2026-04-07
 target: ""
 outcome: ""
 arch:
@@ -171,3 +172,7 @@ class EvolutionProvider(MessagingProvider):
 ## Notas
 
 (Append-only — adicionar descobertas durante implementacao)
+
+---
+
+> **Proximo passo:** `/madruga:roadmap prosauai` — sequenciar epics no roadmap de entrega.

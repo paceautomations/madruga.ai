@@ -2,7 +2,7 @@
 title: 'ADR-007: LangFuse v3 self-hosted para observabilidade'
 status: Accepted
 decision: LangFuse v3 (self-hosted)
-alternatives: LangSmith, Phoenix (Arize)
+alternatives: LangSmith, Phoenix (Arize), Helicone
 rationale: Visibilidade completa de traces, custo e latencia por agente/modelo
 ---
 # ADR-007: LangFuse v3 self-hosted para observabilidade
@@ -30,6 +30,10 @@ Motivos:
 - Pros: Forte em evals automatizados, bom para deteccao de drift, open-source
 - Cons: Foco mais em ML observability que LLM ops, community menor, prompt management limitado
 
+### Helicone (cloud proxy)
+- Pros: Setup em 1 linha (proxy URL), dashboard automatico, rate limiting e caching built-in, free tier generoso (100K requests)
+- Cons: SaaS-only (dados fora do ambiente — mesmo problema do LangSmith), sem prompt management nativo, menos profundidade em traces multi-step que LangFuse
+
 ## Consequencias
 - [+] Visibilidade completa de traces, custo e latencia por agente/modelo
 - [+] Prompt management centralizado — versoes, A/B, rollback
@@ -56,3 +60,7 @@ Adotar **OpenTelemetry GenAI Semantic Conventions** como padrao de instrumentaca
 - Span types: `invoke_agent`, `chat {model_name}`, `tool_call`
 - Atributos: `gen_ai.request.model`, `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`
 - `tenant_id` como atributo obrigatorio em todo span — permite filtrar dashboards e cost attribution por tenant
+
+---
+
+> **Proximo passo:** `/madruga:blueprint prosauai` — consolidar stack de engenharia a partir dos ADRs aprovados.

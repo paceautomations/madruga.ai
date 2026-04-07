@@ -41,3 +41,7 @@ Motivos:
 - [-] Duas ferramentas para manter e aprender
 - [-] DeepEval em CI pode ser lento (mitiga com subset de test cases)
 - [-] Custo de LLM-as-judge para rodar evals (tokens adicionais)
+
+---
+
+> **Proximo passo:** `/madruga:blueprint prosauai` — consolidar stack de engenharia a partir dos ADRs aprovados.

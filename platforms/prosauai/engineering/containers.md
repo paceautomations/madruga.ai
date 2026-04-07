@@ -1,5 +1,6 @@
 ---
 title: "Containers"
+updated: 2026-04-07
 sidebar:
   order: 4
 ---
@@ -158,3 +159,7 @@ graph LR
 | 2 | Redis como message broker (nao RabbitMQ/Kafka) | RabbitMQ — rejeitado: overhead operacional. Kafka — overkill para ~500 RPM | Redis Streams cobre consumer groups + DLQ + backpressure |
 | 3 | Bifrost como proxy LLM separado | SDK direto no worker — rejeitado: rate limiting centralizado + fallback chain | Go binary leve, stateless, horizontal |
 | 4 | Next.js para admin (nao React SPA) | SPA puro — rejeitado: SSR melhora SEO/perf para dashboards | Next.js 15 + shadcn/ui — produtividade alta |
+
+---
+
+> **Proximo passo:** `/madruga:context-map prosauai` — mapear relacionamentos DDD entre bounded contexts.

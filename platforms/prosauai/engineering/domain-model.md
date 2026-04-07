@@ -1,5 +1,6 @@
 ---
 title: "Domain Model"
+updated: 2026-04-07
 sidebar:
   order: 2
 ---
@@ -1038,3 +1039,7 @@ ORDER BY avg_score ASC;
 ---
 
 > Glossario de termos → ver [blueprint.md](../blueprint/)
+
+---
+
+> **Proximo passo:** `/madruga:containers prosauai` — definir containers C4 L2 a partir do domain model.

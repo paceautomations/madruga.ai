@@ -1,5 +1,6 @@
 ---
 title: "Engineering Blueprint"
+updated: 2026-04-07
 sidebar:
   order: 1
 ---
@@ -111,9 +112,9 @@ graph LR
 | Unit tests | pytest | Blocking |
 | RLS isolation tests | pytest + Supabase test DB | Blocking |
 | Prompt regression | Promptfoo | Warning |
-| Security scan | — (a definir) | Blocking |
-| Deploy staging | — (a definir) | Automatico |
-| Deploy production | — (a definir) | Manual approval |
+| Security scan | — (a definir no epic 001) | Blocking |
+| Deploy staging | — (a definir no epic 001) | Automatico |
+| Deploy production | — (a definir no epic 001) | Manual approval |
 
 ---
 
@@ -312,3 +313,7 @@ prosauai-api/
 | **Sandwich Pattern** | Defesa contra prompt injection: system prompt antes e depois do input do usuario | Seguranca |
 | **SAR** | Subject Access Request — requisicao do titular de dados (LGPD Art. 18) | Compliance |
 | **RPM** | Requests Per Minute — metrica primaria de rate limiting por tenant | Metricas |
+
+---
+
+> **Proximo passo:** `/madruga:domain-model prosauai` — modelar bounded contexts, aggregates e invariantes.

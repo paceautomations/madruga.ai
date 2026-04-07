@@ -1,5 +1,6 @@
 ---
 title: "Context Map"
+updated: 2026-04-07
 sidebar:
   order: 3
 ---
@@ -155,3 +156,7 @@ flowchart LR
 | Shared Kernel excessivo | Acoplamento forte | OK — zero shared kernels |
 | God Context | 1 contexto faz tudo | ATENCAO — Conversation tem 5 modulos (M4-M9) |
 | Contexto isolado | Contexto sem relacoes | OK — todos os BCs tem relacoes |
+
+---
+
+> **Proximo passo:** `/madruga:epic-breakdown prosauai` — quebrar o projeto em epics Shape Up.

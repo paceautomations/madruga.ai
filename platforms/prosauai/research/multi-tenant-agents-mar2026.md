@@ -1,5 +1,6 @@
 ---
 title: "Deep Research: Multi-Tenant Conversational AI Agent Platforms"
+updated: 2026-04-07
 ---
 # Deep Research: Multi-Tenant Conversational AI Agent Platforms
 
@@ -533,3 +534,7 @@ Fase 10 (Q1 2027)  → Sales agent template + E-commerce template
 | Twilio docs | WhatsApp API | ISV Tech Provider Program, Verify API, multi-WABA |
 | Microsoft Azure Architecture | Multi-tenant patterns | Silo/pool/bridge models, tenant isolation, checklist |
 | GPT Runner (GitHub) | Config patterns | .gpt.md agent definitions, file-based config, preset sharing |
+
+---
+
+> **Proximo passo:** `/madruga:adr prosauai` — gerar Architecture Decision Records a partir das decisoes tecnologicas validadas nesta pesquisa.

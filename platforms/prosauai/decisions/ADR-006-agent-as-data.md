@@ -85,3 +85,7 @@ Campos configuráveis por tenant/agent:
 - [-] Requer validacao robusta (JSON Schema ou Pydantic) para evitar configs invalidas
 - [-] Debugging mais dificil — stack trace nao aponta direto pro "codigo" do agente
 - [-] Guardrails JSONB pode virar "mega config" — mitiga com colunas explicitas e validacao strict
+
+---
+
+> **Proximo passo:** `/madruga:blueprint prosauai` — consolidar stack de engenharia a partir dos ADRs aprovados.

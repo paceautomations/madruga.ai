@@ -2,7 +2,7 @@
 title: 'ADR-003: Redis Streams + DLQ para mensageria'
 status: Accepted
 decision: Redis Streams + DLQ
-alternatives: RabbitMQ, BullMQ
+alternatives: RabbitMQ, BullMQ, Celery
 rationale: Sem infra adicional — aproveita Redis existente
 ---
 # ADR-003: Redis Streams + DLQ para mensageria
@@ -30,6 +30,10 @@ Motivos:
 - Pros: API moderna, bom para filas de jobs, dashboard incluso (Bull Board)
 - Cons: SDK Python nao e production-ready (focado em Node.js), adiciona dependencia de Node no stack Python
 
+### Celery + Redis broker
+- Pros: Padrao de facto para task queues em Python, comunidade enorme, battle-tested, suporte nativo a retry/scheduling/priority
+- Cons: Overhead significativo (worker processes, beat scheduler), consumer groups menos eficientes que Redis Streams nativo, nao aproveita XREADGROUP — usa LPUSH/BRPOP internamente
+
 ## Consequencias
 - [+] Sem infra adicional — aproveita Redis existente
 - [+] Performance excelente para o volume projetado (< 10k msgs/min)
@@ -45,3 +49,7 @@ Motivos:
 - Footprint operacional dramaticamente menor que Kafka ou Redis Streams standalone
 
 Recomendacao: manter Redis Streams para Phase 1-4 (volume <10K msgs/min). Avaliar migracao para NATS JetStream no Phase 5+ quando escalar para multi-tenant de verdade. Redis continua no stack como state store e cache — apenas o papel de message broker principal seria migrado.
+
+---
+
+> **Proximo passo:** `/madruga:blueprint prosauai` — consolidar stack de engenharia a partir dos ADRs aprovados.

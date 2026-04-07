@@ -37,3 +37,7 @@ Motivos:
 - [-] Next.js adiciona complexidade de deploy (Node.js server ou Vercel)
 - [-] Socket.io requer server-side handler (pode rodar no mesmo Next.js API route ou servico separado)
 - [-] Time precisa dominar React + Next.js App Router (curva de aprendizado moderada)
+
+---
+
+> **Proximo passo:** `/madruga:blueprint prosauai` — consolidar stack de engenharia a partir dos ADRs aprovados.

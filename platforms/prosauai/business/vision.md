@@ -1,16 +1,20 @@
 ---
 title: "Vision"
-updated: 2026-03-27
+updated: 2026-04-07
 sidebar:
   order: 1
 ---
 # ProsaUAI — Business Vision
 
+> Framework: Playing to Win (Lafley & Martin). Ultima atualizacao: 2026-04-07.
+
+---
+
 ## 1. Tese & Aspiracao
 
 ProsaUAI transforma WhatsApp no canal de atendimento inteligente de qualquer PME brasileira. A plataforma e **configuration-driven**: cada novo cliente e uma configuracao — persona, tom de voz, catalogo, regras de negocio — sem escrever codigo. O primeiro cliente e o ResenhAI (app de futevolei), mas a arquitetura nasce multi-tenant desde o dia zero.
 
-O diferencial estrutural e o **agente de grupo**: ProsaUAI e o unico player que faz IA conversacional em grupos WhatsApp — espaco nao-contestado por nenhum concorrente relevante.
+O diferencial estrutural e o **agente de grupo**: ProsaUAI e o unico player que faz IA conversacional em grupos WhatsApp — espaco nao-contestado por nenhum concorrente relevante. Quanto mais comunidades usam, mais dados de interacao em grupo alimentam a qualidade do agente — criando um flywheel defensavel.
 
 **North Star Metric:** conversas resolvidas autonomamente / mes.
 
@@ -38,6 +42,15 @@ O diferencial estrutural e o **agente de grupo**: ProsaUAI e o unico player que 
 | **Alternativa atual** | Responde manualmente ou usa chatbot tree-based (rigido, sem IA) |
 | **Job-to-be-Done** | "Quero atender meus clientes fora do horario sem contratar mais gente" |
 
+### Personas
+
+| Persona | O que faz | O que ganha | Jornada principal |
+|---------|-----------|-------------|-------------------|
+| **Dono(a) da PME** | Configura agente, define regras de negocio, acompanha metricas de atendimento | Atendimento 24/7 sem contratar, mais vendas, menos mensagens perdidas | Cadastro → config agente → conecta WhatsApp → monitora painel |
+| **Cliente final** | Envia mensagem no WhatsApp, interage com agente ou humano | Resposta rapida, fora do horario, sem esperar em fila | Envia duvida → recebe resposta IA → resolve ou fala com humano |
+| **Operador / Atendente** | Recebe conversas escaladas, responde com contexto completo | Produtividade maior, sem repetir perguntas ao cliente | Recebe notificacao → ve resumo IA → responde → encerra |
+| **Admin ProsaUAI** | Gerencia plataforma, monitora saude dos tenants, resolve incidentes | Visibilidade operacional, acao rapida em problemas | Monitora dashboard → identifica anomalias → intervem → documenta |
+
 ### Segmentos prioritarios
 
 1. **Comunidades esportivas** — ResenhAI como caso de referencia. Agente em grupo que publica ranking, responde stats, organiza jogos. Nenhum player faz isso.
@@ -51,6 +64,7 @@ O diferencial estrutural e o **agente de grupo**: ProsaUAI e o unico player que 
 | **CRM** | Nao gerencia pipeline de vendas. Integra com CRMs existentes. |
 | **Call center** | Nao faz voz nem telefonia. Foco em mensageria. |
 | **Marketplace** | Nao intermedia transacoes nem cobra comissao. |
+| **Plataforma de anuncios** | Nao faz marketing automation nem campanhas em massa. Foco em atendimento. |
 
 ---
 
@@ -83,9 +97,9 @@ ProsaUAI nao compete no eixo "chatbot generico". A categoria e **community AI ag
 | Player | Foco | Preco entry | Grupo AI |
 |--------|------|-------------|----------|
 | **Blip** | Enterprise BR, grandes contas | R$ 5K+/mes | Nao |
+| **Zenvia** | Enterprise BR, omnichannel | R$ 1K+/mes | Nao |
 | **Botpress** | Agent builder global, SMB | Free tier (PAYG) | Nao |
 | **Respond.io** | Messaging platform, mid-market | $79/mo | Nao |
-| **Octadesk** | Suporte BR, AI (WOZ 2.0) | Segmentado | Nao |
 | **ProsaUAI** | Community AI, PME BR | R$ 0-997/mo | **Sim** |
 
 **Tese competitiva:** O mercado de chatbots 1:1 e lotado e comoditizado. ProsaUAI nao entra nessa briga. A aposta e criar a categoria "community AI agent" — onde ninguem compete — e expandir lateralmente para 1:1 e proativo a partir dessa base. A profundidade vertical (comunidades esportivas → e-commerce → servicos) cria switching costs que "adicionar portugues" nao replica.
@@ -100,20 +114,20 @@ ProsaUAI nao compete no eixo "chatbot generico". A categoria e **community AI ag
 |---|-------|-------|---------|-----------|
 | 1 | Meta muda pricing da API WhatsApp | Media | Alto | Monitorar announcements. Respostas a msgs do usuario sao gratis desde Nov/2024. |
 | 2 | Concorrente copia Group AI | Media | Medio | First-mover + vertical depth. Copiar feature e facil; copiar dados de comunidade, nao. |
-| 3 | Custo de LLM explode | Media | Alto | Classificador leve como router. Cache de respostas frequentes. |
+| 3 | Custo de IA por conversa explode | Media | Alto | Classificador leve como router. Cache de respostas frequentes. Fallback para modelos menores. |
 | 4 | Ban de numero WhatsApp | Media | Alto | Quality score monitoring, opt-in rigoroso, rate limiting, warm-up. |
 | 5 | Conteudo toxico gerado pela IA | Media | Alto | Filtros de entrada e saida, avaliador antes de enviar, blocklist por tenant. |
-| 6 | Commoditization de IA | Alta | Medio | Se toda IA e boa, diferencial morre. Moat esta na verticalizacao, nao na IA generica. |
-| 7 | Dependencia de canal unico (WhatsApp) | Media | Alto | WhatsApp-first, nao WhatsApp-only. Adapter para expansao futura. Nao dispersar foco agora. |
+| 6 | Commoditization de IA conversacional | Alta | Alto | Se toda IA e boa, diferencial morre. Moat esta na verticalizacao e dados de grupo, nao na IA generica. |
+| 7 | Dependencia de canal unico (WhatsApp) | Media | Alto | WhatsApp-first, nao WhatsApp-only. Adaptador para expansao futura. Nao dispersar foco agora. |
 
 ### Premissas criticas
 
 Se qualquer uma for falsa, a tese precisa ser revisada:
 
-1. **PMEs pagam por atendimento automatizado** — willingness to pay validada? R$197/mes e acessivel?
-2. **70% de resolucao autonoma e atingivel** — para PMEs genericas, nao so para o caso controlado do ResenhAI.
+1. **PMEs pagam por atendimento automatizado** — R$197/mes e acessivel para o publico-alvo. Validar com 10+ entrevistas antes do lancamento.
+2. **70% de resolucao autonoma e atingivel** — para PMEs genericas, nao so para o caso controlado do ResenhAI. Validar com metricas reais nos primeiros 3 meses.
 3. **WhatsApp continua dominante no BR** — nenhum canal alternativo ganha tracao significativa em 18 meses.
-4. **Custo de LLM continua caindo** — tendencia historica se mantem, viabilizando margem >70%.
+4. **Custo de IA por conversa continua caindo** — tendencia historica se mantem, viabilizando margem >70%.
 5. **Churn de PME e gerenciavel** — taxa de mortalidade de pequenos negocios nao inviabiliza SOM de 500.
 
 ---
@@ -136,10 +150,29 @@ Desde novembro de 2024, **respostas a mensagens iniciadas pelo usuario sao grati
 
 ### Unit economics
 
-- **Custo de LLM:** pass-through sem markup. Estimativa: ~R$0.05/conversa.
+- **Custo de IA:** pass-through sem markup. Estimativa: ~R$0.05/conversa [VALIDAR com dados reais nos primeiros 30 dias].
 - **Margem bruta target:** >70% a partir do tier Starter.
-- **Break-even por tenant:** ~R$60/mes (infra + LLM). Starter (R$197) ja e positivo.
+- **Break-even por tenant:** ~R$60/mes (infra + IA). Starter (R$197) ja e positivo.
 
 ---
 
-*Framework: Playing to Win (Lafley & Martin). Ultima atualizacao: 2026-03-27.*
+## 7. Linguagem Ubiqua
+
+> Padronizar estes termos em todos os documentos, codigo e comunicacao do projeto.
+
+| Termo | Definicao | Exemplo |
+|-------|-----------|---------|
+| **Tenant** | Empresa/negocio que usa ProsaUAI. Cada tenant tem dados, configuracao e cobranca isolados | "O tenant ResenhAI tem 3 agentes configurados" |
+| **Agente** | Assistente conversacional configurado pelo tenant. Tem persona, tom de voz e regras proprias | "O agente do ResenhAI responde sobre ranking e jogos" |
+| **Conversa** | Troca de mensagens entre cliente final e agente (ou humano) num canal | "A conversa foi resolvida autonomamente em 3 turnos" |
+| **Resolucao autonoma** | Conversa encerrada pelo agente sem intervencao humana | "Meta: 70% de resolucao autonoma em 18 meses" |
+| **Handoff** | Transferencia de conversa do agente para atendente humano com todo o contexto | "Score baixo dispara handoff para o operador" |
+| **Pipeline** | Sequencia de etapas que cada mensagem percorre: recepcao → analise → resposta → entrega | "A mensagem entrou no pipeline e foi respondida em 3 segundos" |
+| **Guardrails** | Filtros de seguranca que bloqueiam conteudo indesejado antes e depois da resposta do agente | "Os guardrails barraram uma tentativa de manipulacao" |
+| **Debounce** | Agrupamento de mensagens rapidas numa unica interacao (evita respostas multiplas) | "O cliente digitou 3 msgs em 2s — debounce agrupou em 1" |
+| **Canal** | Meio de comunicacao (WhatsApp, futuro: outros). Cada canal tem um adaptador | "ProsaUAI e WhatsApp-first mas suporta multiplos canais" |
+| **Trigger** | Mensagem proativa enviada pelo agente por evento ou agendamento | "Trigger de lembrete enviado 1h antes do jogo" |
+
+---
+
+> **Proximo passo:** `/madruga:solution-overview prosauai` — gerar visao de solucao a partir desta visao validada.

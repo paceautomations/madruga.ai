@@ -176,3 +176,7 @@ pii_patterns = {
 - [EDPB — Right to Erasure Coordinated Enforcement (Mar/2025)](https://www.edpb.europa.eu/our-work-tools/our-documents/other/coordinated-enforcement-framework-right-erasure_en)
 - [GDPR and AI Right to Be Forgotten](https://keferboeck.com/en-gb/articles/gdpr-and-ai-right-to-be-forgotten-now-means-unlearning)
 - [CVE-2025-48757 — Supabase RLS Exposure](https://mattpalmer.io/posts/2025/05/CVE-2025-48757/)
+
+---
+
+> **Proximo passo:** `/madruga:blueprint prosauai` — consolidar stack de engenharia a partir dos ADRs aprovados.

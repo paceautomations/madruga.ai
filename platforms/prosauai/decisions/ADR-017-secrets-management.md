@@ -158,3 +158,7 @@ Logs imutaveis no LangFuse ou storage separado. Retention: 1 ano (compliance).
 - [-] Latencia adicional para decrypt em runtime (~1-5ms por secret read, mitiga com cache em memoria com TTL curto)
 - [-] Complexidade de rotation — precisa de graceful handoff (periodo onde old e new key sao validos)
 - [-] Time precisa aprender Infisical (curva de aprendizado baixa, mas e mais uma ferramenta)
+
+---
+
+> **Proximo passo:** `/madruga:blueprint prosauai` — consolidar stack de engenharia a partir dos ADRs aprovados.

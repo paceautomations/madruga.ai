@@ -38,3 +38,7 @@ Motivos:
 - [-] Ciclo de melhoria mais lento (semanal vs continuo)
 - [-] Requer disciplina do time para manter a cadencia semanal
 - [-] Melhorias obvias ficam "na fila" ate a proxima revisao
+
+---
+
+> **Proximo passo:** `/madruga:blueprint prosauai` — consolidar stack de engenharia a partir dos ADRs aprovados.

@@ -103,3 +103,7 @@ async def test_rls_isolation():
     result = await db.fetch("SELECT * FROM messages")
     assert len(result) == 0, "RLS BREACH: tenant_b viu dados de tenant_a"
 ```
+
+---
+
+> **Proximo passo:** `/madruga:blueprint prosauai` — consolidar stack de engenharia a partir dos ADRs aprovados.

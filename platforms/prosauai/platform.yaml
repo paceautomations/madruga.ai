@@ -41,7 +41,7 @@ pipeline:
 
     - id: tech-research
       skill: "madruga:tech-research"
-      outputs: ["research/tech-alternatives.md"]
+      outputs: ["research/multi-tenant-agents-mar2026.md"]
       depends: ["business-process"]
       layer: research
       gate: 1-way-door

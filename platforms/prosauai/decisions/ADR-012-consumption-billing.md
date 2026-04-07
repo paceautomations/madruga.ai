@@ -2,8 +2,8 @@
 title: 'ADR-012: Modelo de billing para tenants'
 status: Proposed
 decision: Modelo de billing
-alternatives: ''
-rationale: ''
+alternatives: 'Consumo por mensagem, Per-seat, Credits, Actions-based, AI spend at-cost'
+rationale: 'Decisao pendente — validar unit economics com dados reais antes de escolher modelo'
 ---
 # ADR-012: Modelo de billing para tenants
 **Status:** Proposed (decisao pendente) | **Data:** 2026-03-25
@@ -67,3 +67,7 @@ Referencia de tiers inicial (a ser validada):
 
 ## Proximo passo
 Validar unit economics com dados reais de custo LLM por conversa (pos-Phase 0) antes de decidir modelo e pricing.
+
+---
+
+> **Proximo passo:** `/madruga:blueprint prosauai` — consolidar stack de engenharia a partir dos ADRs aprovados.

@@ -2,7 +2,7 @@
 title: 'ADR-004: PG LISTEN/NOTIFY para eventos real-time'
 status: Accepted
 decision: PG LISTEN/NOTIFY
-alternatives: Supabase Realtime, Polling com HTTP
+alternatives: Supabase Realtime, Polling com HTTP, Redis Pub/Sub
 rationale: Garantia de entrega vinculada a transacao — sem eventos fantasma
 ---
 # ADR-004: PG LISTEN/NOTIFY para eventos real-time
@@ -30,6 +30,10 @@ Motivos:
 - Pros: Simples de implementar, sem conexao persistente
 - Cons: Latencia alta (intervalo de polling), desperdicio de recursos, nao escala bem
 
+### Redis Pub/Sub
+- Pros: Redis ja esta no stack (ADR-003), baixa latencia, suporte a pattern matching nos canais, sem conexao PG adicional
+- Cons: At-most-once delivery (sem garantia de entrega), eventos nao vinculados a transacao DB (pode emitir evento sem commit), requer publisher explicito no codigo (nao automatico como trigger)
+
 ## Consequencias
 - [+] Garantia de entrega vinculada a transacao — sem eventos fantasma
 - [+] Zero infra adicional
@@ -42,3 +46,7 @@ Motivos:
 1. **NOTIFY sempre em transacao isolada** — NUNCA dentro de transacao de negocio (reduz contencao do lock global)
 2. **Threshold de escala**: se >50 concurrent listeners ou >1K notificacoes/min, migrar para bridge pattern (PG trigger → NATS/Redis pub)
 3. **PgDog proxy** como alternativa para escalar sem trocar de tecnologia — implementa pub/sub no proxy layer
+
+---
+
+> **Proximo passo:** `/madruga:blueprint prosauai` — consolidar stack de engenharia a partir dos ADRs aprovados.

@@ -1,6 +1,7 @@
 ---
 title: "Business Process"
 description: 'Fluxo de negocio da plataforma ProsaUAI: mensagem individual (1:1), grupo (@mention), handoff humano, triggers proativos.'
+updated: 2026-04-07
 sidebar:
   order: 3
 ---
@@ -327,3 +328,7 @@ flowchart LR
 - **Prompt versions**: source of truth no LangFuse
 
 </details>
+
+---
+
+> **Proximo passo:** `/madruga:tech-research prosauai` — pesquisar alternativas tecnologicas para implementar este pipeline.

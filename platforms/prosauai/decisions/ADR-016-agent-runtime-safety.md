@@ -124,3 +124,7 @@ Budget de latencia: max 100ms total para guardrails em mensagem normal de WhatsA
 - [OWASP LLM01:2025 Prompt Injection](https://genai.owasp.org/llmrisk/llm01-prompt-injection/)
 - [$47K Agent Loop Incident](https://rocketedge.com/2026/03/15/your-ai-agent-bill-is-30x-higher-than-it-needs-to-be-the-6-tier-fix/)
 - [Vercel AI SDK — Agent Loop Control](https://ai-sdk.dev/docs/agents/loop-control)
+
+---
+
+> **Proximo passo:** `/madruga:blueprint prosauai` — consolidar stack de engenharia a partir dos ADRs aprovados.

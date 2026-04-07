@@ -119,3 +119,7 @@ Streaming responses mantem conexoes abertas por longos periodos. Um tenant com m
 
 ### Anti-pattern: retry loop em 429
 Agente recebendo HTTP 429 que retenta em loop apertado sem backoff = DoS auto-infligido. Regra: tratar 429 como circuit breaker trigger (abrir circuito), nao como "tente de novo imediatamente". Usar exponential backoff com jitter apos circuit re-close
+
+---
+
+> **Proximo passo:** `/madruga:blueprint prosauai` — consolidar stack de engenharia a partir dos ADRs aprovados.

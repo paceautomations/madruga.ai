@@ -2,7 +2,7 @@
 title: 'ADR-002: Bifrost (Go) como LLM proxy'
 status: Accepted
 decision: Bifrost (Go, MIT)
-alternatives: LiteLLM, Proxy custom (httpx + FastAPI)
+alternatives: LiteLLM, Proxy custom (httpx + FastAPI), OpenRouter
 rationale: Latencia minima no proxy layer — usuarios nao percebem overhead
 ---
 # ADR-002: Bifrost (Go) como LLM proxy
@@ -30,9 +30,17 @@ Motivos:
 - Pros: Controle total, sem dependencia externa
 - Cons: Reinventar roda (retry, fallback, rate limiting), custo de manutencao alto, tempo de desenvolvimento
 
+### OpenRouter (managed proxy)
+- Pros: Zero infra — servico gerenciado, suporte a 200+ modelos, pricing transparente, rate limiting incluso
+- Cons: Dependencia de servico externo (dados passam por terceiro), latencia adicional de hop, custo de markup sobre provider rates, sem controle de fallback chain custom
+
 ## Consequencias
 - [+] Latencia minima no proxy layer — usuarios nao percebem overhead
 - [+] Footprint pequeno — roda como sidecar sem impacto nos recursos
 - [+] Deploy simples com binario unico
 - [-] Linguagem diferente do stack principal (Go vs Python) — contribuicoes requerem conhecimento Go
 - [-] Menos providers suportados out-of-the-box que LiteLLM
+
+---
+
+> **Proximo passo:** `/madruga:blueprint prosauai` — consolidar stack de engenharia a partir dos ADRs aprovados.

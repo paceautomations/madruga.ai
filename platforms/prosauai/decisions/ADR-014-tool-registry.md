@@ -96,3 +96,7 @@ Tenant salva agent config com tools_enabled: ["search_kb", "make_reservation"]
 2. **Schema Pydantic estrito**: Nenhum parametro `Any` ou `dict` generico em tools. Cada tool tem modelo Pydantic com validators explicitos
 3. **Tool call rate limiting**: Max N chamadas por tool por conversa (configuravel no registry metadata). Previne loops de tool call (ADR-016)
 4. **Whitelist enforcement**: Runtime checa `tools_enabled` do agent config (ADR-006) antes de cada chamada — tool nao habilitada = exception, nunca fallback silencioso
+
+---
+
+> **Proximo passo:** `/madruga:blueprint prosauai` — consolidar stack de engenharia a partir dos ADRs aprovados.

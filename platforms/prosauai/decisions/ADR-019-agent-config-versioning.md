@@ -147,3 +147,7 @@ Regra de promocao: `eval_current[metric] >= eval_baseline[metric] - margem` para
 - ADR-008: Eval Stack (DeepEval + Promptfoo — fonte dos eval scores)
 - ADR-009: Human-Gated Flywheel (cadencia semanal de revisao)
 - LaunchDarkly Agent Graphs: inspiracao para config changes sem deploy + metricas por node
+
+---
+
+> **Proximo passo:** `/madruga:blueprint prosauai` — consolidar stack de engenharia a partir dos ADRs aprovados.

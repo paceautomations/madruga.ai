@@ -2,7 +2,7 @@
 title: 'ADR-001: pydantic-ai v1.70 como framework de agentes'
 status: Accepted
 decision: pydantic-ai v1.70
-alternatives: LangGraph, Claude Agent SDK
+alternatives: LangGraph, Claude Agent SDK, CrewAI
 rationale: Type safety end-to-end com Pydantic models como input/output de cada agent
 ---
 # ADR-001: pydantic-ai v1.70 como framework de agentes
@@ -30,6 +30,10 @@ Motivos:
 - Pros: Integração direta com Claude, bem mantido pela Anthropic
 - Cons: Lock-in em Claude (sem model-agnostic), menos flexivel para orquestração custom, ecossistema menor
 
+### CrewAI
+- Pros: Multi-agent orchestration nativo, role-based agents, bom para workflows complexos com delegacao entre agentes
+- Cons: Abstracoes de alto nivel que escondem controle fino, performance inferior para single-agent use cases (overhead de crew management), dependencia de LangChain internamente
+
 ## Consequencias
 - [+] Type safety end-to-end com Pydantic models como input/output de cada agent
 - [+] Troca de modelo (OpenAI, Claude, Gemini) via config sem refactor
@@ -37,3 +41,7 @@ Motivos:
 - [-] Ecossistema menor que LangChain — menos exemplos e community recipes
 - [-] Versao 1.x ainda evoluindo rapido — possivel breaking changes em minor versions
 - [-] V2 previsto para Abr/2026 — monitorar breaking changes. V1 tera 6 meses de suporte apos V2 launch
+
+---
+
+> **Proximo passo:** `/madruga:blueprint prosauai` — consolidar stack de engenharia a partir dos ADRs aprovados.

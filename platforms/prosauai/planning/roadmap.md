@@ -1,18 +1,19 @@
 ---
 title: "Roadmap"
-updated: 2026-03-30
+updated: 2026-04-07
 ---
 # ProsaUAI — Delivery Roadmap
 
-> Sequenciamento de epics, milestones e definicao de MVP. Atualizado: 2026-03-30.
+> Sequenciamento de epics, milestones e definicao de MVP. Atualizado: 2026-04-07.
 
 ---
 
 ## Status
 
 **Lifecycle:** design — nenhum codigo implementado ainda.
-**L1 Pipeline:** 7/13 nodes completos (platform-new, vision, solution-overview, adr, blueprint, domain-model, epic-breakdown).
-**L1 Pendente:** business-process, tech-research, codebase-map, containers, context-map, roadmap.
+**L1 Pipeline:** 12/13 nodes completos. Revisao completa realizada em 2026-04-07.
+**L1 Pendente:** codebase-map (opcional — plataforma greenfield, sem valor agregado).
+**Proximo marco:** iniciar epic 001 (Channel Pipeline) via `/epic-context prosauai 001`.
 
 ---
 
@@ -47,7 +48,7 @@ gantt
 
 ## Epic Table
 
-> **Convenção:** apenas o epic 001 tem pitch file criado. Demais são sugestões no roadmap — arquivos serão criados sob demanda quando o epic for iniciado via `/epic-context`.
+> **Convencao:** apenas o epic 001 tem pitch file criado. Demais sao sugestoes no roadmap — arquivos serao criados sob demanda quando o epic for iniciado via `/epic-context`.
 
 | Ordem | Epic | Appetite | Deps | Risco | Milestone | Status |
 |-------|------|----------|------|-------|-----------|--------|
@@ -106,8 +107,11 @@ graph LR
 | Evolution API payload muda entre versoes | Medio | Media | Adapter pattern + testes com payloads reais |
 | Custo LLM acima do esperado no MVP | Alto | Baixa | Bifrost com fallback Sonnet → Haiku |
 | Complexidade de grupo subestimada | Medio | Media | Grupo separado em epic dedicado (003) |
-| L1 incompleto bloqueia L2 | Alto | Media | Completar business-process e containers antes do epic 001 |
 
 ---
 
-*Proximos passos: completar L1 pendente (business-process, containers, context-map) → iniciar epic 001 via `/epic-context prosauai 001`.*
+*Proximos passos: L1 revisado e completo (12/13). Iniciar epic 001 via `/epic-context prosauai 001` para criar branch e entrar no ciclo L2.*
+
+---
+
+> **Proximo passo:** `/epic-context prosauai 001` — iniciar o ciclo L2 com o epic Channel Pipeline.

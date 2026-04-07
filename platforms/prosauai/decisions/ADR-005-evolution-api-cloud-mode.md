@@ -4,7 +4,7 @@ title: 'ADR-005: Evolution API Cloud mode como primeiro channel adapter (estrate
 status: Accepted
 decision: Evolution API Cloud mode
 alternatives: Baileys (via Evolution API modo Baileys), WhatsApp Business API direta
-  (sem Evolution)
+  (sem Evolution), Twilio WhatsApp
 rationale: Zero risco de ban — API oficial com aprovacao do Meta
 ---
 # ADR-005: Evolution API Cloud mode como primeiro channel adapter (estrategia omnichannel)
@@ -59,6 +59,10 @@ Motivos para Evolution API Cloud mode:
 - Pros: Controle total, sem intermediario
 - Cons: API complexa (webhooks, token refresh, template approval), mais codigo para manter, sem valor agregado sobre Evolution
 
+### Twilio WhatsApp (BSP gerenciado)
+- Pros: BSP confiavel, ISV Tech Provider Program (multi-WABA), SDKs maduros, suporte enterprise, SLA garantido
+- Cons: Markup sobre precos Meta (custo por mensagem maior), sem suporte a grupos WhatsApp, vendor lock-in no canal, menos controle sobre webhooks e payloads
+
 ## Consequencias
 - [+] Zero risco de ban — API oficial com aprovacao do Meta
 - [+] Sessao estavel — sem reconexoes ou QR code
@@ -82,3 +86,7 @@ Evolution API v2.x tem instabilidades documentadas em producao:
 2. **Health checks agressivos**: endpoint de status a cada 30s + auto-restart se unhealthy por >2min
 3. **Meta Cloud API como fallback**: tenants enterprise que podem fazer business verification devem ter opcao de usar API oficial direta (sem Evolution)
 4. **Webhook HMAC-SHA256**: validar signature de TODA webhook recebida — rejeitar requests sem signature valida (ADR-017)
+
+---
+
+> **Proximo passo:** `/madruga:blueprint prosauai` — consolidar stack de engenharia a partir dos ADRs aprovados.
