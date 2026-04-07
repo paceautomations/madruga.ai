@@ -313,28 +313,17 @@ def record_save(
                     and existing_node.get("output_hash")
                     and output_hash == existing_node["output_hash"]
                 )
-                if hash_unchanged:
-                    # Hash identical — still bump completed_at so DAG ordering
-                    # stays correct after review passes (prevents stale detection
-                    # when a dependency was re-registered between saves).
-                    upsert_pipeline_node(
-                        txn,
-                        platform,
-                        node,
-                        "done",
-                        completed_at=now,
-                    )
-                else:
-                    upsert_pipeline_node(
-                        txn,
-                        platform,
-                        node,
-                        "done",
+                # Always bump completed_at (even on identical hash) so DAG
+                # ordering stays correct after review passes.
+                upsert_kwargs: dict = dict(completed_at=now)
+                if not hash_unchanged:
+                    upsert_kwargs.update(
                         output_hash=output_hash,
                         output_files=json.dumps([artifact]),
                         completed_by=skill,
-                        completed_at=now,
                     )
+                upsert_pipeline_node(txn, platform, node, "done", **upsert_kwargs)
+                if not hash_unchanged:
                     insert_event(
                         txn,
                         platform,

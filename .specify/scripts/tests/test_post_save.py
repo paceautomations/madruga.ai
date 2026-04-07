@@ -422,16 +422,20 @@ def test_record_save_bumps_timestamp_when_hash_unchanged(setup_platform):
         original_ts = next(n for n in nodes if n["node_id"] == "vision")["completed_at"]
         conn.close()
 
-        # Second save — same file, same hash
-        import time
+        # Second save — same file, same hash, mocked future timestamp
+        from unittest.mock import patch
+        from datetime import datetime as _dt, timezone as _tz
 
-        time.sleep(1.1)  # ensure datetime seconds differ
-        post_save.record_save(
-            platform="test-plat",
-            node="vision",
-            skill="madruga:vision",
-            artifact="business/vision.md",
-        )
+        future = _dt(2099, 1, 1, tzinfo=_tz.utc)
+        with patch("post_save.datetime") as mock_dt:
+            mock_dt.now.return_value = future
+            mock_dt.side_effect = lambda *a, **kw: _dt(*a, **kw)
+            post_save.record_save(
+                platform="test-plat",
+                node="vision",
+                skill="madruga:vision",
+                artifact="business/vision.md",
+            )
 
         # completed_at SHOULD have been bumped (prevents stale after dep re-registration)
         conn = get_conn(db_path)
