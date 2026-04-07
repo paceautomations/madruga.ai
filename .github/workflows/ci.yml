@@ -65,7 +65,7 @@ jobs:
           for f in easter.py platform_cli.py dag_executor.py post_save.py \
                    skill-lint.py telegram_bot.py worktree.py \
                    ensure_repo.py implement_remote.py sync_memory.py \
-                   hook_post_save.py hook_skill_lint.py; do
+                   hook_post_save.py hook_skill_lint.py memory_consolidate.py; do
             echo "Checking $f..."
             timeout 30 python3 -c "
           import importlib.util, sys

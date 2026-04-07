@@ -3,7 +3,8 @@
 
 PLATFORM := .specify/scripts/platform_cli.py
 
-.PHONY: help test coverage lint ruff format status seed portal-dev portal-build \
+.PHONY: help test coverage lint ruff ruff-fix format status status-json seed \
+       portal-dev portal-build portal-install \
        install-services up down restart logs logs-easter logs-portal
 
 help: ## Show available targets

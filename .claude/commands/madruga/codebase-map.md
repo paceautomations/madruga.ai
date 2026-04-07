@@ -5,6 +5,10 @@ arguments:
     description: "Platform/product name. If empty, prompt for it."
     required: false
 argument-hint: "[platform-name]"
+handoffs:
+  - label: Continue to Tech Research
+    agent: madruga/tech-research
+    prompt: "Codebase context is available. Continue with technology alternatives research."
 ---
 
 # Codebase Map — Codebase Analysis

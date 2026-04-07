@@ -1022,6 +1022,8 @@ async def dispatch_node_async(
 
 def _make_abort_check(conn, epic_slug: str | None):
     """Create a callable that returns True if the epic is no longer in_progress."""
+    import sqlite3
+
     if not conn or not epic_slug:
         return None
 
@@ -1029,7 +1031,7 @@ def _make_abort_check(conn, epic_slug: str | None):
         try:
             row = conn.execute("SELECT status FROM epics WHERE epic_id=?", (epic_slug,)).fetchone()
             return row is not None and row[0] != "in_progress"
-        except Exception:
+        except sqlite3.Error:
             return False
 
     return check

@@ -77,7 +77,7 @@ pipeline:
 
     - id: containers
       skill: "madruga:containers"
-      outputs: ["engineering/blueprint.md"]
+      outputs: ["engineering/containers.md"]
       depends: ["domain-model", "blueprint"]
       layer: engineering
       gate: human

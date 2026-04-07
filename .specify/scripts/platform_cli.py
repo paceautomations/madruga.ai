@@ -789,35 +789,32 @@ def cmd_gate_approve(run_id: str) -> None:
     """Approve a pending human gate."""
     from db import approve_gate, get_conn
 
-    conn = get_conn()
-    if approve_gate(conn, run_id):
-        _ok(f"Gate approved: {run_id}")
-    else:
-        _error(f"No pending gate found for run_id: {run_id}")
-        sys.exit(1)
-    conn.close()
+    with get_conn() as conn:
+        if approve_gate(conn, run_id):
+            _ok(f"Gate approved: {run_id}")
+        else:
+            _error(f"No pending gate found for run_id: {run_id}")
+            sys.exit(1)
 
 
 def cmd_gate_reject(run_id: str) -> None:
     """Reject a pending human gate."""
     from db import get_conn, reject_gate
 
-    conn = get_conn()
-    if reject_gate(conn, run_id):
-        _ok(f"Gate rejected: {run_id}")
-    else:
-        _error(f"No pending gate found for run_id: {run_id}")
-        sys.exit(1)
-    conn.close()
+    with get_conn() as conn:
+        if reject_gate(conn, run_id):
+            _ok(f"Gate rejected: {run_id}")
+        else:
+            _error(f"No pending gate found for run_id: {run_id}")
+            sys.exit(1)
 
 
 def cmd_gate_list(name: str) -> None:
     """List pending gates for a platform."""
     from db import get_conn, get_pending_gates
 
-    conn = get_conn()
-    gates = get_pending_gates(conn, name)
-    conn.close()
+    with get_conn() as conn:
+        gates = get_pending_gates(conn, name)
     if not gates:
         print("No pending gates.")
         return
