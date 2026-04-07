@@ -264,12 +264,15 @@ async def test_stats_custom_days(seeded_app):
 
 
 @pytest.mark.asyncio
-async def test_stats_400_missing_platform_id(seeded_app):
+async def test_stats_global_without_platform_id(seeded_app):
+    """When platform_id is omitted, /api/stats returns global aggregated data."""
     app, conn, ids = seeded_app
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.get("/api/stats")
-    assert resp.status_code == 400
-    assert resp.json()["error"] == "platform_id is required"
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "summary" in data
+    assert "stats" in data
 
 
 @pytest.mark.asyncio
