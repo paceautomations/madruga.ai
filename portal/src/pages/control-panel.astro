@@ -70,6 +70,11 @@ const selectedId = Astro.url.searchParams.get('platform') || allPlatformIds[0] |
 </script>
 
 <style>
+  /* Reset Starlight's inherited margins on React-rendered content */
+  .cp-tab-panel :where(div, span, p, h2, h3, section, a, code, details, summary) {
+    margin: 0;
+  }
+
   /* ── Tab Bar ── */
   .cp-tab-bar {
     display: flex;

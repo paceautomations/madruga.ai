@@ -149,7 +149,6 @@ def sync(
 
 
 def _is_memory_path(file_path: str) -> bool:
-    """Check if a file path is inside a memory directory."""
     return "/memory/" in file_path and file_path.endswith(".md")
 
 
@@ -157,8 +156,6 @@ def main() -> None:
     # When invoked as a PostToolUse hook, stdin contains JSON with tool_input.
     # Filter early: only proceed if the written file is in a memory directory.
     if not sys.stdin.isatty():
-        import json
-
         try:
             data = json.loads(sys.stdin.read())
             file_path = data.get("tool_input", {}).get("file_path", "")

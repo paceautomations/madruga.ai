@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { formatCostRounded } from '../observability/formatters';
+import { EASTER_BASE } from '../../lib/constants';
 
 // ── Types ──
 
@@ -25,8 +26,6 @@ interface PlatformCardsProps {
   selected: string;
   onSelect?: (platformId: string) => void;
 }
-
-const EASTER_BASE = 'http://localhost:18789';
 
 // ── Component ──
 

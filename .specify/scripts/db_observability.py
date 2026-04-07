@@ -336,20 +336,18 @@ def get_stats(
         params,
     ).fetchone()
 
-    # Top nodes by cost
+    # Top nodes: cost + duration combined (saves 1 query vs separate)
+    cost_filter = f"{where} AND pr.cost_usd > 0" if where else "WHERE pr.cost_usd > 0"
     top_nodes = conn.execute(
-        "SELECT pr.node_id, SUM(pr.cost_usd) as total_cost, COUNT(*) as run_count "
-        f"FROM pipeline_runs pr {where} AND pr.cost_usd > 0 "
-        "GROUP BY pr.node_id ORDER BY total_cost DESC LIMIT 10"
-        if where
-        else "SELECT pr.node_id, SUM(pr.cost_usd) as total_cost, COUNT(*) as run_count "
-        "FROM pipeline_runs pr WHERE pr.cost_usd > 0 "
+        "SELECT pr.node_id, SUM(pr.cost_usd) as total_cost, "
+        "  AVG(pr.duration_ms) as avg_duration_ms, COUNT(*) as run_count "
+        f"FROM pipeline_runs pr {cost_filter} "
         "GROUP BY pr.node_id ORDER BY total_cost DESC LIMIT 10",
         params,
     ).fetchall()
 
-    # Avg eval
-    where_eval, params_eval = _stats_where(platform_id, start_date, end_date, days)
+    # Avg eval (reuse same WHERE for eval joins)
+    where_eval, params_eval = where, list(params)
     avg_eval_row = conn.execute(
         "SELECT AVG(es.score) as avg_eval FROM eval_scores es "
         f"JOIN pipeline_runs pr ON pr.run_id = es.run_id {where_eval}",
@@ -371,14 +369,14 @@ def get_stats(
         "SELECT date(pr.started_at) as day, es.dimension, AVG(es.score) as avg_score "
         f"FROM eval_scores es JOIN pipeline_runs pr ON pr.run_id = es.run_id {where_eval} "
         "GROUP BY date(pr.started_at), es.dimension ORDER BY day",
-        params_eval,
+        list(params_eval),
     ).fetchall()
 
-    # Top nodes by avg duration (for horizontal bar chart)
-    where_dur = f"{where} AND pr.duration_ms IS NOT NULL" if where else "WHERE pr.duration_ms IS NOT NULL"
+    # Top nodes by avg duration (separate from cost — different filtering)
+    dur_filter = f"{where} AND pr.duration_ms IS NOT NULL" if where else "WHERE pr.duration_ms IS NOT NULL"
     avg_duration_by_node = conn.execute(
-        f"SELECT pr.node_id, AVG(pr.duration_ms) as avg_duration_ms, COUNT(*) as run_count "
-        f"FROM pipeline_runs pr {where_dur} "
+        "SELECT pr.node_id, AVG(pr.duration_ms) as avg_duration_ms, COUNT(*) as run_count "
+        f"FROM pipeline_runs pr {dur_filter} "
         "GROUP BY pr.node_id ORDER BY avg_duration_ms DESC LIMIT 10",
         params,
     ).fetchall()

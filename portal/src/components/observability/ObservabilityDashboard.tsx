@@ -73,7 +73,7 @@ export interface SessionsData {
 
 // ── Constants ──
 
-const EASTER_BASE = 'http://localhost:18789';
+import { EASTER_BASE } from '../../lib/constants';
 const POLL_INTERVAL = 10_000;
 const STATUS_POLL_INTERVAL = 5_000;
 

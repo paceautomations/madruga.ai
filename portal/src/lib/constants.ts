@@ -1,7 +1,9 @@
 /**
  * Shared constants for the portal.
- * Single source of truth for route overrides and node navigation.
+ * Single source of truth for route overrides, node navigation, and API config.
  */
+
+export const EASTER_BASE = 'http://localhost:18789';
 
 /** Maps pipeline node IDs to portal route overrides (when default path resolution won't work). */
 export const NODE_ROUTE_OVERRIDES: Record<string, string> = {

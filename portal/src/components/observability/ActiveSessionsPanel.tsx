@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { SessionsData, ActiveSession } from './ObservabilityDashboard';
-import { formatCostRounded, formatRelativeTime } from './formatters';
+import { formatCostRounded, formatRelativeTime, formatUptime } from './formatters';
 
 // ── L2 Pipeline Nodes ──
 
@@ -53,12 +53,7 @@ function getSessionStatus(session: ActiveSession): { label: string; bg: string; 
 function formatWallTime(startedAt: string | null, now: number): string {
   if (!startedAt) return '\u2014';
   const diff = Math.max(0, Math.floor((now - new Date(startedAt).getTime()) / 1000));
-  if (diff < 60) return `${diff}s`;
-  const m = Math.floor(diff / 60);
-  const s = diff % 60;
-  if (m < 60) return `${m}m ${String(s).padStart(2, '0')}s`;
-  const h = Math.floor(m / 60);
-  return `${h}h ${m % 60}m`;
+  return formatUptime(diff);
 }
 
 function getNodeStatus(session: ActiveSession, nodeId: string): string {

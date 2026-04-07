@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import PlatformCards from './PlatformCards';
 import PipelineDAG from './PipelineDAG';
 import { NODE_LABELS, resolveNodeHref } from '../../lib/constants';
@@ -167,13 +167,17 @@ export default function ExecutionTab({ allPlatforms, initialPlatformId }: Execut
     total_epics: (p.l2?.epics || []).length,
   })), [allPlatforms]);
 
-  const layers = hasData ? groupByLayer(platform.l1.nodes) : [];
-  const staleNodes = hasData ? platform.l1.nodes.filter((n) => n.status === 'stale') : [];
-  const nextStep = hasData ? findNextStep(platform.l1.nodes) : null;
-  const kanban = hasData ? buildKanban(platform.l2.epics) : {};
-  const totalEpics = hasData ? platform.l2.epics.length : 0;
-  const shippedEpics = hasData ? (kanban['shipped']?.length || 0) : 0;
-  const activeEpics = hasData ? totalEpics - (kanban['backlog']?.length || 0) - shippedEpics : 0;
+  const { layers, staleNodes, nextStep, kanban, totalEpics, shippedEpics, activeEpics } = useMemo(() => {
+    if (!platform) return { layers: [], staleNodes: [], nextStep: null, kanban: {} as Record<string, (EpicData & { subStage: string })[]>, totalEpics: 0, shippedEpics: 0, activeEpics: 0 };
+    const layers = groupByLayer(platform.l1.nodes);
+    const staleNodes = platform.l1.nodes.filter((n) => n.status === 'stale');
+    const nextStep = findNextStep(platform.l1.nodes);
+    const kanban = buildKanban(platform.l2.epics);
+    const totalEpics = platform.l2.epics.length;
+    const shippedEpics = kanban['shipped']?.length || 0;
+    const activeEpics = totalEpics - (kanban['backlog']?.length || 0) - shippedEpics;
+    return { layers, staleNodes, nextStep, kanban, totalEpics, shippedEpics, activeEpics };
+  }, [platform]);
 
   const handleSelect = (id: string) => {
     setSelectedId(id);

@@ -3,7 +3,8 @@ import {
   AreaChart, Area, BarChart, Bar, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell,
 } from 'recharts';
-import { formatCostRounded } from '../observability/formatters';
+import { formatCostRounded, formatDuration } from '../observability/formatters';
+import { EASTER_BASE } from '../../lib/constants';
 
 // ── Types ──
 
@@ -32,7 +33,6 @@ interface DashboardChartsProps {
 
 // ── Constants ──
 
-const EASTER_BASE = 'http://localhost:18789';
 const STATUS_COLORS: Record<string, string> = {
   completed: '#4CAF50', failed: '#F44336', cancelled: '#9E9E9E', running: '#2196F3',
 };
@@ -54,10 +54,15 @@ function shortDay(iso: string): string {
   catch { return iso; }
 }
 
-function msToMin(ms: number): string {
-  if (ms < 60000) return `${(ms / 1000).toFixed(0)}s`;
-  return `${(ms / 60000).toFixed(1)}m`;
-}
+const TOOLTIP_STYLE: React.CSSProperties = {
+  background: 'var(--sl-color-gray-7, #1a1a1a)', border: '1px solid var(--sl-color-gray-5, #333)',
+  color: 'var(--sl-color-white, #fff)', borderRadius: 6, fontSize: '0.72rem',
+};
+
+const FILTER_INPUT_STYLE: React.CSSProperties = {
+  fontSize: '0.72rem', background: 'var(--sl-color-gray-7, #111)', color: 'var(--sl-color-white, #fff)',
+  border: CHART_BORDER, borderRadius: 4, padding: '0.25rem 0.4rem', margin: 0,
+};
 
 // ── Styles ──
 
@@ -224,17 +229,17 @@ export default function DashboardCharts({ platformIds }: DashboardChartsProps) {
         <label style={{ fontSize: '0.72rem', color: TEXT_COLOR, margin: 0 }}>
           From{' '}
           <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)}
-            style={{ fontSize: '0.72rem', background: 'var(--sl-color-gray-7, #111)', color: 'var(--sl-color-white, #fff)', border: CHART_BORDER, borderRadius: 4, padding: '0.25rem 0.4rem', margin: 0 }} />
+            style={FILTER_INPUT_STYLE} />
         </label>
         <label style={{ fontSize: '0.72rem', color: TEXT_COLOR, margin: 0 }}>
           To{' '}
           <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)}
-            style={{ fontSize: '0.72rem', background: 'var(--sl-color-gray-7, #111)', color: 'var(--sl-color-white, #fff)', border: CHART_BORDER, borderRadius: 4, padding: '0.25rem 0.4rem', margin: 0 }} />
+            style={FILTER_INPUT_STYLE} />
         </label>
         <select
           value={platformFilter}
           onChange={(e) => setPlatformFilter(e.target.value)}
-          style={{ fontSize: '0.72rem', background: 'var(--sl-color-gray-7, #111)', color: 'var(--sl-color-white, #fff)', border: CHART_BORDER, borderRadius: 4, padding: '0.25rem 0.4rem', margin: 0 }}
+          style={FILTER_INPUT_STYLE}
         >
           <option value="">All Platforms</option>
           {platformIds.map((id) => <option key={id} value={id}>{id}</option>)}
@@ -258,7 +263,7 @@ export default function DashboardCharts({ platformIds }: DashboardChartsProps) {
               <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
               <XAxis dataKey="day" tickFormatter={shortDay} tick={{ fontSize: 10, fill: TEXT_COLOR }} />
               <YAxis tick={{ fontSize: 10, fill: TEXT_COLOR }} tickFormatter={(v: number) => `$${v.toFixed(0)}`} />
-              <Tooltip contentStyle={{ background: 'var(--sl-color-gray-7, #1a1a1a)', border: '1px solid var(--sl-color-gray-5, #333)', color: 'var(--sl-color-white, #fff)', borderRadius: 6, fontSize: '0.72rem' }} />
+              <Tooltip contentStyle={TOOLTIP_STYLE} />
               <Area type="monotone" dataKey="total_cost" stroke="#6366f1" fill="#6366f130" name="Cost (USD)" />
             </AreaChart>
           </ResponsiveContainer>
@@ -271,7 +276,7 @@ export default function DashboardCharts({ platformIds }: DashboardChartsProps) {
               <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
               <XAxis dataKey="day" tickFormatter={shortDay} tick={{ fontSize: 10, fill: TEXT_COLOR }} />
               <YAxis tick={{ fontSize: 10, fill: TEXT_COLOR }} />
-              <Tooltip contentStyle={{ background: 'var(--sl-color-gray-7, #1a1a1a)', border: '1px solid var(--sl-color-gray-5, #333)', color: 'var(--sl-color-white, #fff)', borderRadius: 6, fontSize: '0.72rem' }} />
+              <Tooltip contentStyle={TOOLTIP_STYLE} />
               {Object.entries(STATUS_COLORS).map(([key, color]) => (
                 <Bar key={key} dataKey={key} stackId="status" fill={color} name={key} />
               ))}
@@ -286,7 +291,7 @@ export default function DashboardCharts({ platformIds }: DashboardChartsProps) {
               <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
               <XAxis dataKey="day" tickFormatter={shortDay} tick={{ fontSize: 10, fill: TEXT_COLOR }} />
               <YAxis domain={[0, 10]} tick={{ fontSize: 10, fill: TEXT_COLOR }} />
-              <Tooltip contentStyle={{ background: 'var(--sl-color-gray-7, #1a1a1a)', border: '1px solid var(--sl-color-gray-5, #333)', color: 'var(--sl-color-white, #fff)', borderRadius: 6, fontSize: '0.72rem' }} />
+              <Tooltip contentStyle={TOOLTIP_STYLE} />
               <Legend wrapperStyle={{ fontSize: '0.65rem' }} />
               {Object.entries(EVAL_COLORS).map(([dim, color]) => (
                 <Line key={dim} type="monotone" dataKey={dim} stroke={color} dot={false}
@@ -303,7 +308,7 @@ export default function DashboardCharts({ platformIds }: DashboardChartsProps) {
               <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
               <XAxis type="number" tick={{ fontSize: 10, fill: TEXT_COLOR }} tickFormatter={(v: number) => `$${v.toFixed(0)}`} />
               <YAxis type="category" dataKey="node_id" tick={{ fontSize: 9, fill: TEXT_COLOR }} width={100} />
-              <Tooltip contentStyle={{ background: 'var(--sl-color-gray-7, #1a1a1a)', border: '1px solid var(--sl-color-gray-5, #333)', color: 'var(--sl-color-white, #fff)', borderRadius: 6, fontSize: '0.72rem' }} />
+              <Tooltip contentStyle={TOOLTIP_STYLE} />
               <Bar dataKey="total_cost" fill="#6366f1" name="Cost (USD)" radius={[0, 3, 3, 0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -314,10 +319,10 @@ export default function DashboardCharts({ platformIds }: DashboardChartsProps) {
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={data.avg_duration_by_node || []} layout="vertical">
               <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
-              <XAxis type="number" tick={{ fontSize: 10, fill: TEXT_COLOR }} tickFormatter={(v: number) => msToMin(v)} />
+              <XAxis type="number" tick={{ fontSize: 10, fill: TEXT_COLOR }} tickFormatter={(v: number) => formatDuration(v)} />
               <YAxis type="category" dataKey="node_id" tick={{ fontSize: 9, fill: TEXT_COLOR }} width={100} />
-              <Tooltip contentStyle={{ background: 'var(--sl-color-gray-7, #1a1a1a)', border: '1px solid var(--sl-color-gray-5, #333)', color: 'var(--sl-color-white, #fff)', borderRadius: 6, fontSize: '0.72rem' }}
-                formatter={(v: number) => msToMin(v)} />
+              <Tooltip contentStyle={TOOLTIP_STYLE}
+                formatter={(v: number) => formatDuration(v)} />
               <Bar dataKey="avg_duration_ms" fill="#f59e0b" name="Avg Duration" radius={[0, 3, 3, 0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -330,7 +335,7 @@ export default function DashboardCharts({ platformIds }: DashboardChartsProps) {
               <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
               <XAxis dataKey="bucket" tick={{ fontSize: 10, fill: TEXT_COLOR }} />
               <YAxis tick={{ fontSize: 10, fill: TEXT_COLOR }} />
-              <Tooltip contentStyle={{ background: 'var(--sl-color-gray-7, #1a1a1a)', border: '1px solid var(--sl-color-gray-5, #333)', color: 'var(--sl-color-white, #fff)', borderRadius: 6, fontSize: '0.72rem' }} />
+              <Tooltip contentStyle={TOOLTIP_STYLE} />
               <Bar dataKey="count" name="Runs" radius={[3, 3, 0, 0]}>
                 {(data.score_distribution || []).map((entry) => (
                   <Cell key={entry.bucket} fill={
@@ -351,9 +356,9 @@ export default function DashboardCharts({ platformIds }: DashboardChartsProps) {
             <AreaChart data={data.stats}>
               <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
               <XAxis dataKey="day" tickFormatter={shortDay} tick={{ fontSize: 10, fill: TEXT_COLOR }} />
-              <YAxis tick={{ fontSize: 10, fill: TEXT_COLOR }} tickFormatter={(v: number) => msToMin(v)} />
-              <Tooltip contentStyle={{ background: 'var(--sl-color-gray-7, #1a1a1a)', border: '1px solid var(--sl-color-gray-5, #333)', color: 'var(--sl-color-white, #fff)', borderRadius: 6, fontSize: '0.72rem' }}
-                formatter={(v: number) => msToMin(v)} />
+              <YAxis tick={{ fontSize: 10, fill: TEXT_COLOR }} tickFormatter={(v: number) => formatDuration(v)} />
+              <Tooltip contentStyle={TOOLTIP_STYLE}
+                formatter={(v: number) => formatDuration(v)} />
               <Area type="monotone" dataKey="avg_duration_ms" stroke="#22c55e" fill="#22c55e30" name="Avg Duration" />
             </AreaChart>
           </ResponsiveContainer>
@@ -399,7 +404,7 @@ function PlatformComparisonChart({ platformIds, startDate, endDate }: { platform
         <XAxis dataKey="id" tick={{ fontSize: 10, fill: TEXT_COLOR }} />
         <YAxis yAxisId="cost" tick={{ fontSize: 10, fill: TEXT_COLOR }} tickFormatter={(v: number) => `$${v}`} />
         <YAxis yAxisId="runs" orientation="right" tick={{ fontSize: 10, fill: TEXT_COLOR }} />
-        <Tooltip contentStyle={{ background: 'var(--sl-color-gray-7, #1a1a1a)', border: '1px solid var(--sl-color-gray-5, #333)', color: 'var(--sl-color-white, #fff)', borderRadius: 6, fontSize: '0.72rem' }} />
+        <Tooltip contentStyle={TOOLTIP_STYLE} />
         <Legend wrapperStyle={{ fontSize: '0.65rem' }} />
         <Bar yAxisId="cost" dataKey="cost" fill="#6366f1" name="Cost ($)" />
         <Bar yAxisId="runs" dataKey="runs" fill="#22c55e" name="Runs" />

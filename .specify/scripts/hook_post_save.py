@@ -20,6 +20,10 @@ def main():
     if not file_path:
         return
 
+    # Only trigger for files under platforms/
+    if "platforms/" not in file_path:
+        return
+
     subprocess.run(
         [sys.executable, str(SCRIPTS_DIR / "post_save.py"), "--detect-from-path", file_path],
         capture_output=True,

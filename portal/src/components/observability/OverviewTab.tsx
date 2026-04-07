@@ -369,6 +369,11 @@ export default function OverviewTab({ runs, stats, sessions, connected, platform
     return result;
   }, [runs, statusFilter, platformFilter, search]);
 
+  const todayCompletedCount = useMemo(() => {
+    const today = new Date().toDateString();
+    return runs.filter((r) => r.status === 'completed' && r.started_at && new Date(r.started_at).toDateString() === today).length;
+  }, [runs]);
+
   if (!runs.length && !connected) {
     return (
       <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--sl-color-gray-4, #666)', fontSize: '0.85rem' }}>
@@ -385,12 +390,7 @@ export default function OverviewTab({ runs, stats, sessions, connected, platform
       <EasterStatusBanner
         sessions={sessions}
         connected={connected}
-        todayCompletedCount={runs.filter((r) => {
-          if (r.status !== 'completed' || !r.started_at) return false;
-          const d = new Date(r.started_at);
-          const now = new Date();
-          return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
-        }).length}
+        todayCompletedCount={todayCompletedCount}
       />
 
       {sessions && sessions.running_epics.length > 0 && (
