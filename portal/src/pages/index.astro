@@ -10,12 +10,12 @@ const sidebar = buildSidebar(platforms);
 {singlePlatform ? (
   <html>
     <head>
-      <meta http-equiv="refresh" content={`0;url=/${singlePlatform.name}/dashboard/`} />
-      <link rel="canonical" href={`/${singlePlatform.name}/dashboard/`} />
+      <meta http-equiv="refresh" content={`0;url=/${singlePlatform.name}/control-panel/`} />
+      <link rel="canonical" href={`/${singlePlatform.name}/control-panel/`} />
     </head>
     <body>
-      <p>Redirecionando para <a href={`/${singlePlatform.name}/dashboard/`}>{singlePlatform.title}</a>...</p>
-      <script define:vars={{ url: `/${singlePlatform.name}/dashboard/` }}>
+      <p>Redirecionando para <a href={`/${singlePlatform.name}/control-panel/`}>{singlePlatform.title}</a>...</p>
+      <script define:vars={{ url: `/${singlePlatform.name}/control-panel/` }}>
         window.location.replace(url);
       </script>
     </body>
@@ -25,7 +25,7 @@ const sidebar = buildSidebar(platforms);
     <p>Selecione uma plataforma para visualizar sua documentação arquitetural.</p>
     <div class="platform-cards">
       {platforms.map((p) => (
-        <a href={`/${p.name}/dashboard/`} class="platform-card">
+        <a href={`/${p.name}/control-panel/`} class="platform-card">
           <h2>{p.title}</h2>
           <p>{p.description}</p>
           <span class="badge">{p.lifecycle}</span>

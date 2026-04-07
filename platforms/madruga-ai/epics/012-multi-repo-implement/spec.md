@@ -13,12 +13,12 @@ O arquiteto precisa que o sistema tenha uma copia local do repositorio de codigo
 
 **Why this priority**: Sem o repositorio local, nenhuma operacao de implementacao e possivel. E o pre-requisito fundamental de todo o fluxo.
 
-**Independent Test**: Executar `platform.py ensure-repo fulano` e verificar que o repositorio `fulano-api` existe em `~/repos/paceautomations/fulano-api/` com `.git` valido.
+**Independent Test**: Executar `platform.py ensure-repo prosauai` e verificar que o repositorio `prosauai-api` existe em `~/repos/paceautomations/prosauai-api/` com `.git` valido.
 
 **Acceptance Scenarios**:
 
-1. **Given** plataforma fulano com `repo: {org: paceautomations, name: fulano-api}` em platform.yaml, **When** o arquiteto executa `platform.py ensure-repo fulano`, **Then** o repositorio e clonado em `{repos_base_dir}/paceautomations/fulano-api/` via SSH
-2. **Given** repositorio ja existe localmente, **When** o arquiteto executa `platform.py ensure-repo fulano`, **Then** o sistema executa `git fetch --all --prune` sem re-clonar
+1. **Given** plataforma prosauai com `repo: {org: paceautomations, name: prosauai-api}` em platform.yaml, **When** o arquiteto executa `platform.py ensure-repo prosauai`, **Then** o repositorio e clonado em `{repos_base_dir}/paceautomations/prosauai-api/` via SSH
+2. **Given** repositorio ja existe localmente, **When** o arquiteto executa `platform.py ensure-repo prosauai`, **Then** o sistema executa `git fetch --all --prune` sem re-clonar
 3. **Given** SSH falha (sem chave configurada), **When** clone via SSH retorna erro, **Then** o sistema tenta HTTPS automaticamente e completa o clone
 4. **Given** clone parcial (diretorio existe mas `.git` incompleto), **When** o arquiteto executa ensure-repo, **Then** o sistema detecta inconsistencia, remove o diretorio parcial e re-clona do zero
 5. **Given** plataforma self-referencing (madruga-ai, `repo.name: madruga.ai`), **When** o arquiteto executa ensure-repo, **Then** o sistema identifica self-ref e retorna o path do repo atual sem clonar
@@ -31,11 +31,11 @@ O arquiteto precisa de um ambiente isolado para implementar codigo de um epic se
 
 **Why this priority**: Worktree e o mecanismo de isolamento que permite implementacao segura sem afetar trabalho em andamento no repositorio.
 
-**Independent Test**: Executar `platform.py worktree fulano 001-channel-pipeline` e verificar que o worktree existe com a branch correta.
+**Independent Test**: Executar `platform.py worktree prosauai 001-channel-pipeline` e verificar que o worktree existe com a branch correta.
 
 **Acceptance Scenarios**:
 
-1. **Given** repositorio fulano-api clonado localmente, **When** o arquiteto executa `platform.py worktree fulano 001-channel-pipeline`, **Then** um worktree e criado em `{repos_base_dir}/fulano-api-worktrees/001-channel-pipeline/` com branch `epic/fulano/001-channel-pipeline` baseada em `main`
+1. **Given** repositorio prosauai-api clonado localmente, **When** o arquiteto executa `platform.py worktree prosauai 001-channel-pipeline`, **Then** um worktree e criado em `{repos_base_dir}/prosauai-api-worktrees/001-channel-pipeline/` com branch `epic/prosauai/001-channel-pipeline` baseada em `main`
 2. **Given** worktree ja existe (crash recovery), **When** o arquiteto executa o mesmo comando, **Then** o sistema reutiliza o worktree existente sem erro
 3. **Given** worktree criado anteriormente, **When** o arquiteto executa cleanup apos merge, **Then** o sistema remove o worktree e deleta a branch local
 4. **Given** platform.yaml define `base_branch: develop`, **When** worktree e criado, **Then** a branch e baseada em `develop` e nao em `main`
@@ -48,11 +48,11 @@ O arquiteto executa o ciclo de implementacao de um epic e o sistema automaticame
 
 **Why this priority**: E o caso de uso principal — o orquestrador que conecta documentacao (madruga.ai) com codigo (repo externo).
 
-**Independent Test**: Executar `implement_remote.py --platform fulano --epic 001-channel-pipeline` e verificar que `claude -p` foi invocado com cwd no worktree correto e prompt contendo spec+plan+tasks.
+**Independent Test**: Executar `implement_remote.py --platform prosauai --epic 001-channel-pipeline` e verificar que `claude -p` foi invocado com cwd no worktree correto e prompt contendo spec+plan+tasks.
 
 **Acceptance Scenarios**:
 
-1. **Given** epic 001 tem spec.md, plan.md e tasks.md em `platforms/fulano/epics/001-channel-pipeline/`, **When** o arquiteto executa implement_remote.py, **Then** o sistema le os artefatos, compoe um prompt concatenado e invoca `claude -p --cwd={worktree_path}` com o conteudo
+1. **Given** epic 001 tem spec.md, plan.md e tasks.md em `platforms/prosauai/epics/001-channel-pipeline/`, **When** o arquiteto executa implement_remote.py, **Then** o sistema le os artefatos, compoe um prompt concatenado e invoca `claude -p --cwd={worktree_path}` com o conteudo
 2. **Given** repositorio nao existe localmente, **When** implement_remote.py e executado, **Then** o sistema executa ensure_repo automaticamente antes de criar o worktree
 3. **Given** `claude -p` excede o timeout (30min default), **When** timeout e atingido, **Then** o processo e encerrado com mensagem de erro clara e o worktree e preservado para retry
 4. **Given** plataforma self-referencing (madruga-ai), **When** implement_remote.py e executado, **Then** o sistema pula clone/worktree e opera diretamente no repo atual
@@ -122,10 +122,10 @@ Apos a implementacao, o sistema faz push da branch e cria um Pull Request no rep
 
 ### Measurable Outcomes
 
-- **SC-001**: Arquiteto consegue clonar repositorio externo (fulano-api) em menos de 2 minutos via um unico comando
+- **SC-001**: Arquiteto consegue clonar repositorio externo (prosauai-api) em menos de 2 minutos via um unico comando
 - **SC-002**: Worktree e criado com branch correta em menos de 5 segundos
 - **SC-003**: Implementacao remota (ensure_repo → worktree → claude -p) funciona end-to-end sem intervencao manual alem do comando inicial
-- **SC-004**: PR e criado no repositorio correto (fulano-api) e nao no madruga.ai
+- **SC-004**: PR e criado no repositorio correto (prosauai-api) e nao no madruga.ai
 - **SC-005**: Crash recovery funciona — apos interrupcao, o proximo run reutiliza o worktree existente sem erro
 - **SC-006**: Plataformas self-referencing (madruga-ai) continuam funcionando sem regressao
 
@@ -134,7 +134,7 @@ Apos a implementacao, o sistema faz push da branch e cria um Pull Request no rep
 - SSH keys estao configuradas para o GitHub do operador (fallback HTTPS disponivel)
 - `gh` CLI esta instalado e autenticado para criar PRs
 - `claude` CLI esta instalado com subscription ativa
-- `platform.yaml` de plataformas com repo externo ja tem o bloco `repo:` configurado (fulano ja tem)
+- `platform.yaml` de plataformas com repo externo ja tem o bloco `repo:` configurado (prosauai ja tem)
 - `repos_base_dir` default e `~/repos/` — consistente com a convencao do general
 - Operador unico — concorrencia de clones e edge case, lockfile e precaucao
 - `pyyaml` ja e dependencia do projeto — nao viola constraint stdlib-only

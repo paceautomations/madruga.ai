@@ -235,7 +235,7 @@ After L1 completes (roadmap done), the pipeline continues into L2. Each epic fro
 
 **Every epic MUST run on a dedicated branch.** NEVER commit epic work directly to main.
 
-- **Branch naming**: `epic/<platform>/<NNN-slug>` (e.g., `epic/fulano/001-channel-pipeline`)
+- **Branch naming**: `epic/<platform>/<NNN-slug>` (e.g., `epic/prosauai/001-channel-pipeline`)
 - **Created by**: `epic-context` (normal mode) — the first skill in the cycle creates the branch
 - **Merged by**: User after reconcile completes — via PR or manual merge
 - **Guard**: All epic cycle skills check `git branch --show-current` and STOP if on main (see pipeline-contract-base.md Step 0)

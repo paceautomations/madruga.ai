@@ -90,7 +90,7 @@
 
 **Validation Phase 3**:
 - `cd .specify/scripts && python3 -m pytest tests/ -v` → all pass
-- `python3 -c "from db import *; migrate(); conn=get_conn(); seed_from_filesystem(conn,'fulano','../../platforms/fulano'); print(get_platform_status(conn,'fulano'))"` → shows real status
+- `python3 -c "from db import *; migrate(); conn=get_conn(); seed_from_filesystem(conn,'prosauai','../../platforms/prosauai'); print(get_platform_status(conn,'prosauai'))"` → shows real status
 
 ---
 
@@ -113,14 +113,14 @@
 
 **Purpose**: `--use-db` flag in prerequisites checker for DB-backed status queries.
 
-**Independent Test**: `check-platform-prerequisites.sh --json --status --platform fulano --use-db` returns DB-enhanced output.
+**Independent Test**: `check-platform-prerequisites.sh --json --status --platform prosauai --use-db` returns DB-enhanced output.
 
 - [x] T024 [US3] Add `--use-db` flag parsing to `.specify/scripts/bash/check-platform-prerequisites.sh`. When flag present and `.pipeline/madruga.db` exists: call Python via `python3 -c "import sys; sys.path.insert(0, '$REPO_ROOT/.specify/scripts'); from db import get_conn, get_pipeline_nodes; ..."` to query DB for node status (with output_hash, completed_at, stale detection). When DB doesn't exist: fallback to file-existence with warning "DB not found, using filesystem". Preserve all existing functionality when `--use-db` is not passed.
 - [x] T025 [US3] Add stale detection to `--use-db` mode in `.specify/scripts/bash/check-platform-prerequisites.sh`. For each node in status output, add `"stale": true/false` field. Stale = any dependency node has `completed_at` > this node's `completed_at`. Parse DAG edges from platform.yaml to determine dependencies.
 
 **Validation Phase 5**:
-- `bash .specify/scripts/bash/check-platform-prerequisites.sh --json --status --platform fulano` → works as before (no --use-db)
-- Seed fulano first, then: `bash .specify/scripts/bash/check-platform-prerequisites.sh --json --status --platform fulano --use-db` → output includes hash and stale fields
+- `bash .specify/scripts/bash/check-platform-prerequisites.sh --json --status --platform prosauai` → works as before (no --use-db)
+- Seed prosauai first, then: `bash .specify/scripts/bash/check-platform-prerequisites.sh --json --status --platform prosauai --use-db` → output includes hash and stale fields
 
 ---
 
@@ -148,7 +148,7 @@
 **Purpose**: Final integration, documentation update.
 
 - [x] T030 Run full test suite: `cd .specify/scripts && python3 -m pytest tests/ -v --tb=short`. All tests must pass.
-- [x] T031 Run `python3 -c "from db import *; migrate(); conn=get_conn(); seed_from_filesystem(conn,'fulano','../../platforms/fulano'); seed_from_filesystem(conn,'madruga-ai','../../platforms/madruga-ai'); print(get_platform_status(conn,'fulano')); print(get_platform_status(conn,'madruga-ai'))"` — verify both platforms seeded correctly.
+- [x] T031 Run `python3 -c "from db import *; migrate(); conn=get_conn(); seed_from_filesystem(conn,'prosauai','../../platforms/prosauai'); seed_from_filesystem(conn,'madruga-ai','../../platforms/madruga-ai'); print(get_platform_status(conn,'prosauai')); print(get_platform_status(conn,'madruga-ai'))"` — verify both platforms seeded correctly.
 - [x] T032 Validate CI workflow: `python3 -c "import yaml; d=yaml.safe_load(open('.github/workflows/ci.yml')); assert len(d['jobs'])==3; print('CI valid')"`.
 
 ---

@@ -13,7 +13,7 @@ Usage (unchanged):
     from db import get_conn, migrate, upsert_platform, insert_decision, create_trace
     with get_conn() as conn:
         migrate(conn)
-        upsert_platform(conn, 'fulano', name='Fulano', repo_path='platforms/fulano')
+        upsert_platform(conn, 'prosauai', name='ProsaUAI', repo_path='platforms/prosauai')
 """
 
 from db_core import *  # noqa: F401, F403

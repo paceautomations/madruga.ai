@@ -65,7 +65,7 @@
 
 - [x] T014 [US2] Create Judge skill in .claude/commands/madruga/judge.md — follows pipeline-contract-base steps 0+5, reads judge-knowledge.md, runs tech-reviewers team against implemented code + spec + tasks + architecture, generates judge-report.md per contract, gate: auto-escalate (score ≥80 = auto, <80 = escalate)
 - [x] T015 [US2] Update epic_cycle in platforms/madruga-ai/platform.yaml — change node id from `verify` to `judge`, skill from `madruga:verify` to `madruga:judge`, outputs from `verify-report.md` to `judge-report.md`, keep depends: ["analyze-post"] and gate: auto-escalate
-- [x] T016 [P] [US2] Update epic_cycle in platforms/fulano/platform.yaml — same changes as T015 for fulano platform
+- [x] T016 [P] [US2] Update epic_cycle in platforms/prosauai/platform.yaml — same changes as T015 for prosauai platform
 - [x] T017 [US2] Deprecate verify skill — update .claude/commands/madruga/verify.md to redirect to judge.md with deprecation notice
 - [x] T018 [US2] Update pipeline-dag-knowledge.md in .claude/knowledge/pipeline-dag-knowledge.md — replace verify references with judge in L2 tables, update node descriptions
 

@@ -22,16 +22,16 @@ def run_status(*args: str) -> subprocess.CompletedProcess:
 
 class TestStatusTable:
     def test_single_platform(self):
-        result = run_status("fulano")
+        result = run_status("prosauai")
         assert result.returncode == 0
-        assert "Fulano" in result.stdout
+        assert "ProsaUAI" in result.stdout
         assert "L1 Progress:" in result.stdout
         assert "platform-new" in result.stdout
 
     def test_all_platforms(self):
         result = run_status("--all")
         assert result.returncode == 0
-        assert "fulano" in result.stdout.lower() or "Fulano" in result.stdout
+        assert "prosauai" in result.stdout.lower() or "ProsaUAI" in result.stdout
         assert "madruga" in result.stdout.lower()
 
     def test_unknown_platform(self):
@@ -89,8 +89,8 @@ class TestStatusJSON:
                 assert "nodes" in e
 
     def test_single_platform_json(self):
-        result = run_status("fulano", "--json")
+        result = run_status("prosauai", "--json")
         assert result.returncode == 0
         data = json.loads(result.stdout)
         assert len(data["platforms"]) == 1
-        assert data["platforms"][0]["id"] == "fulano"
+        assert data["platforms"][0]["id"] == "prosauai"

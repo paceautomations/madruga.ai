@@ -130,21 +130,28 @@ async def dag_scheduler(conn, semaphore, shutdown_event, poll_interval=15, platf
                 logger.info("dispatching_epic", epic_id=epic_id, platform=epic_platform_id)
 
                 # F3: Proactive branch checkout before dispatch
+                # For external repos, worktree handles branching — skip checkout.
                 branch = epic.get("branch_name")
                 if branch:
                     import subprocess as _sp
 
                     from config import REPO_ROOT as _repo_root
+                    from ensure_repo import _is_self_ref, _load_repo_binding
 
-                    checkout = await asyncio.to_thread(
-                        _sp.run,
-                        ["git", "checkout", branch],
-                        cwd=str(_repo_root),
-                        capture_output=True,
-                        text=True,
-                    )
-                    if checkout.returncode != 0:
-                        logger.warning("branch_checkout_failed", branch=branch, stderr=checkout.stderr.strip())
+                    binding = _load_repo_binding(epic_platform_id)
+                    if _is_self_ref(binding["name"]):
+                        checkout = await asyncio.to_thread(
+                            _sp.run,
+                            ["git", "checkout", branch],
+                            cwd=str(_repo_root),
+                            capture_output=True,
+                            text=True,
+                            timeout=30,
+                        )
+                        if checkout.returncode != 0:
+                            logger.warning("branch_checkout_failed", branch=branch, stderr=checkout.stderr.strip())
+                    else:
+                        logger.info("external_repo_skip_checkout", branch=branch, platform=epic_platform_id)
 
                 try:
                     result = await run_pipeline_async(
@@ -489,6 +496,93 @@ async def status():
     }
 
 
+# --- Session Monitoring ---
+
+
+@app.get("/api/sessions")
+async def sessions(request: Request, platform_id: str | None = Query(default=None)):
+    """Active and queued sessions with per-session detail."""
+    conn = request.app.state.db_conn
+
+    result = {
+        "easter_state": _easter_state.easter_state,
+        "telegram_status": _easter_state.telegram_status,
+        "uptime_seconds": int(time.time() - _easter_state.start_time),
+        "pid": os.getpid(),
+        "poll_interval_seconds": 15,
+        "running_epics": [],
+        "queued_epics": [],
+    }
+
+    all_active = poll_active_epics(conn, platform_id=platform_id)
+    running_ids = set(_running_epics)
+
+    for epic in all_active:
+        eid = epic["epic_id"]
+        pid = epic["platform_id"]
+        if eid in running_ids:
+            session: dict = {"epic_id": eid, "platform_id": pid}
+            trace_row = conn.execute(
+                "SELECT trace_id, started_at, total_nodes FROM traces "
+                "WHERE epic_id=? AND status='running' ORDER BY started_at DESC LIMIT 1",
+                (eid,),
+            ).fetchone()
+            if trace_row:
+                tid = trace_row["trace_id"]
+                running_node = conn.execute(
+                    "SELECT node_id, started_at FROM pipeline_runs "
+                    "WHERE trace_id=? AND status='running' ORDER BY started_at DESC LIMIT 1",
+                    (tid,),
+                ).fetchone()
+                agg = conn.execute(
+                    "SELECT SUM(cost_usd) AS cost, SUM(tokens_in) AS tin, SUM(tokens_out) AS tout, "
+                    "COUNT(CASE WHEN status='completed' THEN 1 END) AS completed, "
+                    "MAX(COALESCE(completed_at, started_at)) AS last_activity "
+                    "FROM pipeline_runs WHERE trace_id=?",
+                    (tid,),
+                ).fetchone()
+                nodes = conn.execute(
+                    "SELECT node_id, status FROM pipeline_runs WHERE trace_id=? ORDER BY started_at",
+                    (tid,),
+                ).fetchall()
+                session.update(
+                    {
+                        "trace_id": tid,
+                        "started_at": trace_row["started_at"],
+                        "current_node": running_node["node_id"] if running_node else None,
+                        "current_node_started_at": running_node["started_at"] if running_node else None,
+                        "session_cost_usd": agg["cost"] or 0,
+                        "tokens_in": agg["tin"] or 0,
+                        "tokens_out": agg["tout"] or 0,
+                        "completed_nodes": agg["completed"] or 0,
+                        "total_nodes": trace_row["total_nodes"] or 12,
+                        "last_activity": agg["last_activity"],
+                        "node_statuses": [{"node_id": n["node_id"], "status": n["status"]} for n in nodes],
+                    }
+                )
+            else:
+                session.update(
+                    {
+                        "trace_id": None,
+                        "started_at": None,
+                        "current_node": None,
+                        "current_node_started_at": None,
+                        "session_cost_usd": 0,
+                        "tokens_in": 0,
+                        "tokens_out": 0,
+                        "completed_nodes": 0,
+                        "total_nodes": 12,
+                        "last_activity": None,
+                        "node_statuses": [],
+                    }
+                )
+            result["running_epics"].append(session)
+        else:
+            result["queued_epics"].append({"epic_id": eid, "platform_id": pid})
+
+    return result
+
+
 # --- Observability Endpoints ---
 
 
@@ -528,12 +622,16 @@ async def list_runs(
     status: str | None = Query(default=None),
     epic_id: str | None = Query(default=None),
 ):
-    if not platform_id:
-        return JSONResponse(status_code=400, content={"error": "platform_id is required"})
-
     from db import get_runs_with_evals
 
-    runs, total = get_runs_with_evals(request.app.state.db_conn, platform_id, limit, offset, status, epic_id)
+    runs, total = get_runs_with_evals(
+        request.app.state.db_conn,
+        platform_id,
+        limit,
+        offset,
+        status,
+        epic_id,
+    )
     return {"runs": runs, "total": total, "limit": limit, "offset": offset}
 
 
@@ -559,18 +657,27 @@ async def stats(
     request: Request,
     platform_id: str | None = Query(default=None),
     days: int = Query(default=30, ge=1, le=90),
+    start_date: str | None = Query(default=None),
+    end_date: str | None = Query(default=None),
 ):
-    if not platform_id:
-        return JSONResponse(status_code=400, content={"error": "platform_id is required"})
-
     from db import get_stats
 
-    result = get_stats(request.app.state.db_conn, platform_id, days)
+    result = get_stats(
+        request.app.state.db_conn,
+        platform_id,
+        days,
+        start_date=start_date,
+        end_date=end_date,
+    )
     return {
         "stats": result["stats"],
         "period_days": days,
         "summary": result["summary"],
         "top_nodes": result["top_nodes"],
+        "stats_by_status": result["stats_by_status"],
+        "avg_scores_by_day": result["avg_scores_by_day"],
+        "avg_duration_by_node": result["avg_duration_by_node"],
+        "score_distribution": result["score_distribution"],
     }
 
 

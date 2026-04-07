@@ -17,7 +17,7 @@ Remove LikeC4 dependency (16 `.likec4` files, Vite plugin, React component, 5 de
 **Project Type**: Documentation system (portal + CLI tools)
 **Performance Goals**: Portal build < 30s (NFR Q1 from blueprint)
 **Constraints**: No new dependencies. `astro-mermaid` already installed. Python: stdlib + pyyaml only.
-**Scale/Scope**: 2 platforms (fulano, madruga-ai), ~28 files removed, ~20 files modified, 1 file created
+**Scale/Scope**: 2 platforms (prosauai, madruga-ai), ~28 files removed, ~20 files modified, 1 file created
 
 ## Constitution Check
 
@@ -62,7 +62,7 @@ portal/src/pages/[platform]/containers.astro
 portal/src/pages/[platform]/context-map.astro
 portal/src/pages/[platform]/bc/[context].astro
 portal/src/pages/[platform]/business-flow.astro
-platforms/fulano/model/          (10 files: 8 .likec4 + config + output/)
+platforms/prosauai/model/          (10 files: 8 .likec4 + config + output/)
 platforms/madruga-ai/model/      (10 files: 8 .likec4 + config + output/)
 .specify/scripts/vision-build.py
 .specify/scripts/tests/test_vision_build.py
@@ -74,11 +74,11 @@ portal/src/lib/platforms.mjs
 portal/src/lib/constants.ts
 portal/src/components/dashboard/PipelineDAG.tsx
 portal/package.json
-platforms/fulano/platform.yaml
+platforms/prosauai/platform.yaml
 platforms/madruga-ai/platform.yaml
-platforms/fulano/engineering/blueprint.md        # Add L1 + L2 Mermaid
-platforms/fulano/engineering/domain-model.md     # Add L3 context map section
-platforms/fulano/engineering/context-map.md      # Populate with Mermaid (was empty)
+platforms/prosauai/engineering/blueprint.md        # Add L1 + L2 Mermaid
+platforms/prosauai/engineering/domain-model.md     # Add L3 context map section
+platforms/prosauai/engineering/context-map.md      # Populate with Mermaid (was empty)
 platforms/madruga-ai/engineering/blueprint.md    # Add L2, update stack table
 platforms/madruga-ai/decisions/ADR-001-*.md      # Status: Superseded
 platforms/madruga-ai/decisions/ADR-003-*.md      # Remove LikeC4VitePlugin refs
@@ -102,10 +102,10 @@ See [research.md](research.md) for full findings. Key results:
 1. **astro-mermaid v2.0.1** supports all required diagram types (graph, flowchart, classDiagram, sequenceDiagram).
 2. **L4 already exists**: Both platforms' `domain-model.md` already have Mermaid classDiagrams for BCs.
 3. **L1 partially exists**: madruga-ai's `blueprint.md` already has a deploy topology Mermaid diagram.
-4. **Business flow decomposition**: Fulano's 315 LOC dynamic view → overview flowchart + 8 phase deep-dives (~125 LOC total).
+4. **Business flow decomposition**: ProsaUAI's 315 LOC dynamic view → overview flowchart + 8 phase deep-dives (~125 LOC total).
 5. **platform_cli.py** requires `model/` in `REQUIRED_DIRS` and `model/spec.likec4` in `REQUIRED_FILES` — must be updated.
 6. **CI smoke test** references `vision-build.py` — must be removed from entrypoint list.
-7. **Fulano has no `business/process.md`** — must be created for L5 business flow diagrams.
+7. **ProsaUAI has no `business/process.md`** — must be created for L5 business flow diagrams.
 
 ---
 
@@ -113,22 +113,22 @@ See [research.md](research.md) for full findings. Key results:
 
 ### 1.1 Mermaid Diagram Specifications
 
-#### L1 — Deploy Topology (Fulano `blueprint.md`)
+#### L1 — Deploy Topology (ProsaUAI `blueprint.md`)
 
 New section "Deploy Topology" with `graph LR` showing:
 - Actors: agent (WhatsApp user), admin (operator)
-- Platform containers: fulano-api, fulano-worker, fulano-admin
-- Infrastructure: Redis, Supabase Fulano, Bifrost
+- Platform containers: prosauai-api, prosauai-worker, prosauai-admin
+- Infrastructure: Redis, Supabase ProsaUAI, Bifrost
 - External: Evolution API, Supabase ResenhAI, Claude Sonnet/Haiku, LangFuse, Infisical
 - Connections: key protocol/technology on edges
 
 Source: `actors.likec4` + `externals.likec4` + `infrastructure.likec4` + `platform.likec4` + `relationships.likec4` (container-level only)
 
-#### L2 — Containers (Fulano `blueprint.md`)
+#### L2 — Containers (ProsaUAI `blueprint.md`)
 
 New section "Containers" with `graph LR` + subgraphs showing:
-- Subgraph "Fulano Platform": fulano-api, fulano-worker, fulano-admin (with technology labels)
-- Subgraph "Storage": Redis, Supabase Fulano
+- Subgraph "ProsaUAI Platform": prosauai-api, prosauai-worker, prosauai-admin (with technology labels)
+- Subgraph "Storage": Redis, Supabase ProsaUAI
 - Subgraph "External": Evolution API, Bifrost, Claude Sonnet/Haiku, LangFuse, Infisical
 - Connections with protocol labels (HTTPS, Redis Streams, asyncpg, Socket.io)
 
@@ -143,7 +143,7 @@ Enhance existing deploy topology diagram OR add separate "Containers" section wi
 
 Source: existing diagram at line 102-135 + `platform.likec4` + `relationships.likec4`
 
-#### L3 — Context Map (Fulano `domain-model.md`)
+#### L3 — Context Map (ProsaUAI `domain-model.md`)
 
 New "Context Map" section at the top of domain-model.md with `flowchart LR` showing:
 - 5 bounded contexts as subgraphs: Channel, Conversation (Core), Safety, Operations, Observability
@@ -152,15 +152,15 @@ New "Context Map" section at the top of domain-model.md with `flowchart LR` show
 
 Source: `relationships.likec4` (DDD-level relationships, lines 157-232)
 
-Note: Fulano's `engineering/context-map.md` currently has only empty AUTO markers. The content will be absorbed into domain-model.md. The context-map.md file can be either:
+Note: ProsaUAI's `engineering/context-map.md` currently has only empty AUTO markers. The content will be absorbed into domain-model.md. The context-map.md file can be either:
 - **Option A**: Populated with a redirect/link to domain-model.md (keeps URL working)
 - **Option B**: Left with a simplified version (just the flowchart, no details)
 
 Decision: **Option A** — minimal content with cross-reference to avoid 404s for anyone who bookmarked the URL.
 
-#### L5 — Business Flow (Fulano — new `business/process.md`)
+#### L5 — Business Flow (ProsaUAI — new `business/process.md`)
 
-Fulano does not have `business/process.md`. Create it with:
+ProsaUAI does not have `business/process.md`. Create it with:
 - Title and overview text
 - Overview `flowchart TD` (~25 lines): high-level pipeline phases
 - 8 `<details>` sections, each with phase-specific diagram:
@@ -333,11 +333,11 @@ Note: Skills themselves (`.claude/commands/`) must be updated via `/madruga:skil
 ### Fase 2: Convert Diagrams — P1
 **Why second**: Adds Mermaid content to existing docs. Required before model/ can be removed.
 
-12. Add L1 deploy topology Mermaid to `platforms/fulano/engineering/blueprint.md`
-13. Add L2 containers Mermaid to `platforms/fulano/engineering/blueprint.md`
-14. Add L3 context map Mermaid to `platforms/fulano/engineering/domain-model.md`
-15. Update `platforms/fulano/engineering/context-map.md` with cross-reference to domain-model.md
-16. Create `platforms/fulano/business/process.md` with L5 business flow Mermaid (overview + 8 deep-dives)
+12. Add L1 deploy topology Mermaid to `platforms/prosauai/engineering/blueprint.md`
+13. Add L2 containers Mermaid to `platforms/prosauai/engineering/blueprint.md`
+14. Add L3 context map Mermaid to `platforms/prosauai/engineering/domain-model.md`
+15. Update `platforms/prosauai/engineering/context-map.md` with cross-reference to domain-model.md
+16. Create `platforms/prosauai/business/process.md` with L5 business flow Mermaid (overview + 8 deep-dives)
 17. Add L2 containers detail to `platforms/madruga-ai/engineering/blueprint.md`
 18. Update madruga-ai `blueprint.md` stack table: LikeC4 → Mermaid, remove LikeC4 error handling row
 19. Check if madruga-ai needs business flow conversion (process.md)
@@ -349,7 +349,7 @@ Note: Skills themselves (`.claude/commands/`) must be updated via `/madruga:skil
 ### Fase 3: Manifests & Template — P2
 **Why third**: Updates configs after content is migrated.
 
-24. Update `platforms/fulano/platform.yaml`: remove `model:`, `views:`, `serve:`, `build:` blocks; update outputs
+24. Update `platforms/prosauai/platform.yaml`: remove `model:`, `views:`, `serve:`, `build:` blocks; update outputs
 25. Update `platforms/madruga-ai/platform.yaml`: same changes
 26. Update `platform_cli.py`: remove `model` from `REQUIRED_DIRS`, remove `.likec4` files from `REQUIRED_FILES`, update `register` command
 27. Update Copier template `platform.yaml.jinja`: remove LikeC4 blocks, update outputs
@@ -385,7 +385,7 @@ Note: Skills themselves (`.claude/commands/`) must be updated via `/madruga:skil
 | Information loss during diagram conversion | Low | High | Systematic line-by-line audit of each .likec4 file. Research.md has full inventory. |
 | Platform lint fails on missing model/ | High | Low | Update REQUIRED_DIRS/FILES in platform_cli.py before running lint. |
 | Copier template tests fail | Medium | Low | Update template and tests together. |
-| Fulano process.md creation adds unexpected sidebar entry | Low | Low | buildSidebar() already handles optional process.md via `platformFileExists()`. |
+| ProsaUAI process.md creation adds unexpected sidebar entry | Low | Low | buildSidebar() already handles optional process.md via `platformFileExists()`. |
 | astro-mermaid renders poorly on complex diagrams | Low | Medium | Decompose complex diagrams. Max ~50 lines per diagram block. |
 
 ---

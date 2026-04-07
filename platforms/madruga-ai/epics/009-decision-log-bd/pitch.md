@@ -34,7 +34,7 @@ Pesquisa em 4 frameworks (Gas Town, PaperClip, OpenClaw, BMAD) revelou:
 | # | Area | Decisao | Referencia Arquitetural |
 |---|------|---------|------------------------|
 | 1 | Storage | SQLite (`.pipeline/madruga.db`) como source of truth — tabela `decisions` existente | 001_initial.sql (epic 006-sqlite-foundation) |
-| 2 | Export | Markdown exportado no formato Nygard identico ao atual (zero breaking change no portal) | Formato existente em ADR-001 a ADR-019 (fulano) |
+| 2 | Export | Markdown exportado no formato Nygard identico ao atual (zero breaking change no portal) | Formato existente em ADR-001 a ADR-019 (prosauai) |
 | 3 | Import | Retroativo — parsear frontmatter + conteudo dos 19 ADRs existentes e popular BD | — |
 | 4 | Memory | Tabela `memory_entries` no BD (tipos: user, feedback, project, reference) | .claude/memory/ pattern atual |
 | 5 | Escopo | Decisions + Memory juntos neste epic | Decisao do usuario |
@@ -70,7 +70,7 @@ Pesquisa em 4 frameworks (Gas Town, PaperClip, OpenClaw, BMAD) revelou:
 **Rationale**: Constitution Principio II — Automate Repetitive Tasks.
 
 ### 6. BD e central para todas as plataformas?
-**Pergunta**: O BD em `.pipeline/madruga.db` serve Fulano e madruga-ai e futuras plataformas?
+**Pergunta**: O BD em `.pipeline/madruga.db` serve ProsaUAI e madruga-ai e futuras plataformas?
 **Resposta**: Sim. Toda tabela tem `platform_id` como FK. IDs unicos com referencias corretas cross-platform.
 **Rationale**: Design existente no 001_initial.sql ja suporta N plataformas.
 
@@ -104,7 +104,7 @@ Pesquisa em 4 frameworks (Gas Town, PaperClip, OpenClaw, BMAD) revelou:
 
 ### Fase 3 — Import retroativo
 - Comando `--import-adrs` em post_save.py
-- Parsear frontmatter YAML + conteudo dos 19 ADRs de Fulano
+- Parsear frontmatter YAML + conteudo dos 19 ADRs de ProsaUAI
 - Popular tabela `decisions` com hash de conteudo
 - Detectar links entre ADRs (superseded_by ja existe no schema)
 

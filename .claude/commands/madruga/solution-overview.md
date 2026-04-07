@@ -39,7 +39,7 @@ Product Designer — user-focused, simple language, prioritizes clarity. Write g
 
 ## Usage
 
-- `/solution-overview fulano` — Generate solution overview for platform "fulano"
+- `/solution-overview prosauai` — Generate solution overview for platform "prosauai"
 - `/solution-overview` — Prompt for the platform name and collect context
 
 ## Output Directory
@@ -57,7 +57,7 @@ Check whether `platforms/<name>/business/solution-overview.md` already exists. I
 
 Check whether `business/vision.md` exists — if so, read it to extract business context and personas (personas live there, not here).
 Check whether `research/` exists — if so, read it to extract use cases.
-If `platforms/fulano/business/solution-overview.md` exists, read it as a **tone reference** for business-oriented writing.
+If `platforms/prosauai/business/solution-overview.md` exists, read it as a **tone reference** for business-oriented writing.
 
 Collect the following from the user (ask everything at once):
 

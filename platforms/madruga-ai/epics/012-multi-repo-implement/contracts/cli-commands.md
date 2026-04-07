@@ -6,7 +6,7 @@
 Usage: platform.py ensure-repo <name>
 
 Argumentos:
-  name    Nome da plataforma (ex: fulano)
+  name    Nome da plataforma (ex: prosauai)
 
 Comportamento:
   1. Le repo.org e repo.name de platforms/<name>/platform.yaml
@@ -33,7 +33,7 @@ Stdout:
 Usage: platform.py worktree <name> <epic-slug>
 
 Argumentos:
-  name        Nome da plataforma (ex: fulano)
+  name        Nome da plataforma (ex: prosauai)
   epic-slug   Slug do epic (ex: 001-channel-pipeline)
 
 Comportamento:

@@ -127,11 +127,11 @@ Plataforma documentada no madruga.ai.
 
 | Field | Type | Constraints | Description |
 |-------|------|-------------|-------------|
-| platform_id | TEXT | PK | Kebab-case identifier (ex: "fulano") |
+| platform_id | TEXT | PK | Kebab-case identifier (ex: "prosauai") |
 | name | TEXT | NOT NULL | Display name |
 | title | TEXT | | Full title with description |
 | lifecycle | TEXT | CHECK IN (design, development, production, deprecated) | Current lifecycle stage |
-| repo_path | TEXT | NOT NULL | Path relative to repo root (ex: "platforms/fulano") |
+| repo_path | TEXT | NOT NULL | Path relative to repo root (ex: "platforms/prosauai") |
 | metadata | TEXT | DEFAULT '{}' | JSON: views, build configs from platform.yaml |
 | created_at | TEXT | NOT NULL, DEFAULT now | ISO 8601 timestamp |
 | updated_at | TEXT | NOT NULL, DEFAULT now | ISO 8601 timestamp |

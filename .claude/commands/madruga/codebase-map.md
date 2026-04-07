@@ -35,7 +35,7 @@ Code archaeologist — zero assumptions, every claim backed by filesystem eviden
 
 ## Usage
 
-- `/codebase-map fulano` — Map the codebase for platform "fulano"
+- `/codebase-map prosauai` — Map the codebase for platform "prosauai"
 - `/codebase-map` — Prompt for platform name
 
 ## Output Directory

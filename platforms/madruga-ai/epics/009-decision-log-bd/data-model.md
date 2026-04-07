@@ -105,7 +105,7 @@ No formal states — CRUD lifecycle (create, read, update, delete).
 
 | Entity | Current | 6-month projection |
 |--------|---------|-------------------|
-| decisions | 19 (Fulano ADRs) | ~50-80 (ADRs + micro-decisions across platforms) |
+| decisions | 19 (ProsaUAI ADRs) | ~50-80 (ADRs + micro-decisions across platforms) |
 | decision_links | 0 | ~20-40 |
 | memory_entries | ~5 (current .claude/memory/) | ~30-50 |
 | events | ~0 (unused) | ~200+ (every decision/memory operation) |

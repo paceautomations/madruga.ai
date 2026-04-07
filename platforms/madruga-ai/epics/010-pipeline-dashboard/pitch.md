@@ -87,7 +87,7 @@ Dashboard visual no portal Starlight para acompanhar o pipeline L1+L2 de todas a
 
 Novo subcomando `status`:
 ```
-python3 .specify/scripts/platform.py status fulano          # 1 plataforma
+python3 .specify/scripts/platform.py status prosauai          # 1 plataforma
 python3 .specify/scripts/platform.py status --all           # todas (humano)
 python3 .specify/scripts/platform.py status --all --json    # todas (máquina)
 ```
@@ -98,8 +98,8 @@ Output JSON:
   "generated_at": "2026-03-30T12:00:00Z",
   "platforms": [
     {
-      "id": "fulano",
-      "title": "Fulano — Agentes WhatsApp",
+      "id": "prosauai",
+      "title": "ProsaUAI — Agentes WhatsApp",
       "lifecycle": "design",
       "l1": {
         "total": 13, "done": 7, "pending": 6, "progress_pct": 53.8,

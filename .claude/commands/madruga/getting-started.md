@@ -43,7 +43,7 @@ Present a summary table:
 
 | Plataforma | Lifecycle | Pipeline | Proximo Passo |
 |-----------|-----------|----------|--------------|
-| fulano | design | 7/13 (54%) | /madruga:business-process fulano |
+| prosauai | design | 7/13 (54%) | /madruga:business-process prosauai |
 | madruga-ai | development | 11/13 (85%) | /madruga:business-process madruga-ai |
 ```
 

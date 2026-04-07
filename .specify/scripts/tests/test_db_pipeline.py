@@ -325,8 +325,8 @@ def test_get_active_platform(tmp_db):
     from db_pipeline import set_local_config, get_active_platform
 
     assert get_active_platform(tmp_db) is None
-    set_local_config(tmp_db, "active_platform", "fulano")
-    assert get_active_platform(tmp_db) == "fulano"
+    set_local_config(tmp_db, "active_platform", "prosauai")
+    assert get_active_platform(tmp_db) == "prosauai"
 
 
 def test_resolve_repo_path_external(tmp_db):

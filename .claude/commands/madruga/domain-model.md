@@ -36,7 +36,7 @@ DDD practitioner — fewer contexts is better, real invariants, zero anemic mode
 
 ## Usage
 
-- `/domain-model fulano` — Generate domain model for platform "fulano"
+- `/domain-model prosauai` — Generate domain model for platform "prosauai"
 - `/domain-model` — Prompt for platform name and collect context
 
 ## Output Directory

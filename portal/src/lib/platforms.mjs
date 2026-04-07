@@ -55,10 +55,20 @@ export function discoverPlatforms(platformsDir) {
 /**
  * Load pipeline-status.json (fresh read every call — no stale cache in dev).
  */
+function findStatusFile() {
+  // Try __dirname-relative first (works in dev mode when __dirname = src/lib)
+  const fromDirname = path.join(__dirname, '..', 'data', 'pipeline-status.json');
+  if (fs.existsSync(fromDirname)) return fromDirname;
+  // Fallback for build/prerender (where __dirname = dist/.prerender/chunks)
+  const fromCwd = path.join(process.cwd(), 'src', 'data', 'pipeline-status.json');
+  if (fs.existsSync(fromCwd)) return fromCwd;
+  return null;
+}
+
 export function loadStatusData() {
   try {
-    const statusPath = path.join(__dirname, '..', 'data', 'pipeline-status.json');
-    if (!fs.existsSync(statusPath)) return null;
+    const statusPath = findStatusFile();
+    if (!statusPath) return null;
     return JSON.parse(fs.readFileSync(statusPath, 'utf8'));
   } catch {
     return null;
@@ -149,8 +159,8 @@ export function buildSidebar(platforms) {
       collapsed: false,
       items: [
         {
-          label: 'Dashboard',
-          link: `/${p.name}/dashboard/`,
+          label: 'Control Panel',
+          link: `/control-panel/?platform=${p.name}`,
           attrs: { style: 'font-weight: 600' },
         },
         {

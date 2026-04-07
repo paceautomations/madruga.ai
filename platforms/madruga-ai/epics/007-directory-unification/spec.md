@@ -9,15 +9,15 @@
 
 ### User Story 1 — Operador executa SpecKit dentro do epic dir (Priority: P1)
 
-O operador (engenheiro/arquiteto) invoca `/speckit.specify fulano 001` e o sistema cria `spec.md` dentro de `platforms/fulano/epics/001-channel-pipeline/` em vez de `specs/001/`. Todos os artefatos SpecKit (spec, plan, tasks, checklists, contracts, data-model) vivem no epic dir. O operador encontra tudo num lugar só.
+O operador (engenheiro/arquiteto) invoca `/speckit.specify prosauai 001` e o sistema cria `spec.md` dentro de `platforms/prosauai/epics/001-channel-pipeline/` em vez de `specs/001/`. Todos os artefatos SpecKit (spec, plan, tasks, checklists, contracts, data-model) vivem no epic dir. O operador encontra tudo num lugar só.
 
 **Why this priority**: Sem isso, o epic inteiro não faz sentido. É a mudança central que elimina a fragmentação entre `specs/` e `epics/`.
 
-**Independent Test**: Rodar `create-new-feature.sh --base-dir platforms/fulano/epics/001-test` e verificar que `spec.md` é criado no path correto.
+**Independent Test**: Rodar `create-new-feature.sh --base-dir platforms/prosauai/epics/001-test` e verificar que `spec.md` é criado no path correto.
 
 **Acceptance Scenarios**:
 
-1. **Given** um epic existente em `platforms/fulano/epics/001-channel-pipeline/`, **When** operador roda `create-new-feature.sh --base-dir platforms/fulano/epics/001-channel-pipeline/`, **Then** `spec.md` é criado dentro do epic dir
+1. **Given** um epic existente em `platforms/prosauai/epics/001-channel-pipeline/`, **When** operador roda `create-new-feature.sh --base-dir platforms/prosauai/epics/001-channel-pipeline/`, **Then** `spec.md` é criado dentro do epic dir
 2. **Given** scripts `setup-plan.sh` e `check-prerequisites.sh`, **When** invocados com `--base-dir` apontando para epic dir, **Then** leem e escrevem artefatos no epic dir
 3. **Given** nenhum `--base-dir` passado, **When** operador roda scripts SpecKit, **Then** comportamento default em `specs/` é preservado
 
@@ -41,7 +41,7 @@ O operador invoca `/pipeline madruga-ai` e vê: (1) tabela com status dos 13 nó
 
 ### User Story 3 — Skills renomeados funcionam com novos nomes (Priority: P1)
 
-O operador invoca `/vision fulano` (antes: `/vision-one-pager fulano`), `/epic-context fulano 001` (antes: `/discuss fulano 001`), `/adr fulano` (antes: `/adr-gen fulano`), `/qa fulano 001` (antes: `/test-ai fulano 001`). Nomes antigos não existem. Todas as referências em CLAUDE.md, knowledge, e DAG estão atualizadas.
+O operador invoca `/vision prosauai` (antes: `/vision-one-pager prosauai`), `/epic-context prosauai 001` (antes: `/discuss prosauai 001`), `/adr prosauai` (antes: `/adr-gen prosauai`), `/qa prosauai 001` (antes: `/test-ai prosauai 001`). Nomes antigos não existem. Todas as referências em CLAUDE.md, knowledge, e DAG estão atualizadas.
 
 **Why this priority**: Nomes confusos causam atrito diário. Rename é baixo esforço com resultado permanente.
 
@@ -49,7 +49,7 @@ O operador invoca `/vision fulano` (antes: `/vision-one-pager fulano`), `/epic-c
 
 **Acceptance Scenarios**:
 
-1. **Given** skill `discuss.md` renomeado para `epic-context.md`, **When** operador invoca `/epic-context fulano 007`, **Then** skill executa normalmente
+1. **Given** skill `discuss.md` renomeado para `epic-context.md`, **When** operador invoca `/epic-context prosauai 007`, **Then** skill executa normalmente
 2. **Given** rename concluído, **When** busca por nomes antigos no repo, **Then** zero referências encontradas (exceto em commits/histórico)
 3. **Given** DAG knowledge atualizado, **When** `/pipeline` lista nós, **Then** nomes novos aparecem (vision, adr, qa, epic-context)
 
@@ -77,7 +77,7 @@ Após cada skill com gate `human` gerar seu artefato, o footer contém um bloco 
 
 **Why this priority**: Decisões se perdem entre skills hoje. HANDOFF resolve isso de forma estruturada e prepara para automação futura.
 
-**Independent Test**: Rodar um skill (ex: `/vision fulano`), verificar que o artefato gerado contém bloco HANDOFF YAML válido no footer.
+**Independent Test**: Rodar um skill (ex: `/vision prosauai`), verificar que o artefato gerado contém bloco HANDOFF YAML válido no footer.
 
 **Acceptance Scenarios**:
 
@@ -97,8 +97,8 @@ O template do blueprint ganha seção "Folder Structure" com o conteúdo que ant
 
 **Acceptance Scenarios**:
 
-1. **Given** blueprint template atualizado, **When** operador roda `/blueprint fulano`, **Then** output inclui seção "Folder Structure"
-2. **Given** DAG knowledge com 13 nós, **When** `/pipeline fulano`, **Then** folder-arch não aparece na lista de nós
+1. **Given** blueprint template atualizado, **When** operador roda `/blueprint prosauai`, **Then** output inclui seção "Folder Structure"
+2. **Given** DAG knowledge com 13 nós, **When** `/pipeline prosauai`, **Then** folder-arch não aparece na lista de nós
 3. **Given** nó `domain-model` dependia de `folder-arch`, **When** DAG é atualizado, **Then** `domain-model` depende de `blueprint` (que já inclui folder structure)
 
 ---
@@ -129,7 +129,7 @@ O template Copier (`platform.yaml.jinja`) ganha seção `epic_cycle` com os 10 n
 **Acceptance Scenarios**:
 
 1. **Given** template Copier atualizado, **When** `copier copy .specify/templates/platform/ platforms/test-platform/`, **Then** `platform.yaml` contém `epic_cycle.nodes` com 10 nós
-2. **Given** plataforma existente `fulano`, **When** `copier update platforms/fulano/`, **Then** `platform.yaml` ganha seção `epic_cycle` (não sobrescreve conteúdo existente customizado)
+2. **Given** plataforma existente `prosauai`, **When** `copier update platforms/prosauai/`, **Then** `platform.yaml` ganha seção `epic_cycle` (não sobrescreve conteúdo existente customizado)
 3. **Given** nó `clarify` marcado `optional: true`, **When** lê `platform.yaml`, **Then** campo `optional` e `skip_condition` presentes
 
 ---

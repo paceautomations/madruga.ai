@@ -43,7 +43,7 @@
 
 **Goal**: `platform.py ensure-repo <name>` clona ou atualiza repositorio externo automaticamente
 
-**Independent Test**: `python3 .specify/scripts/platform.py ensure-repo fulano` → repo existe em `~/repos/paceautomations/fulano-api/`
+**Independent Test**: `python3 .specify/scripts/platform.py ensure-repo prosauai` → repo existe em `~/repos/paceautomations/prosauai-api/`
 
 ### Tests for User Story 1
 
@@ -60,7 +60,7 @@
 - [x] T014 [US1] Add `ensure-repo` subcommand to `.specify/scripts/platform.py` — add parser `sub.add_parser("ensure-repo", ...)` with `name` argument, implement `cmd_ensure_repo(name)` that calls `ensure_repo.ensure_repo(name)` and prints the resulting path
 - [x] T015 [US1] Run tests for US1 and verify all pass
 
-**Checkpoint**: `platform.py ensure-repo fulano` works end-to-end
+**Checkpoint**: `platform.py ensure-repo prosauai` works end-to-end
 
 ---
 
@@ -68,7 +68,7 @@
 
 **Goal**: `platform.py worktree <name> <epic>` cria worktree isolado com branch correta
 
-**Independent Test**: `python3 .specify/scripts/platform.py worktree fulano 001-channel-pipeline` → worktree exists with correct branch
+**Independent Test**: `python3 .specify/scripts/platform.py worktree prosauai 001-channel-pipeline` → worktree exists with correct branch
 
 ### Tests for User Story 2
 
@@ -86,13 +86,13 @@
 - [x] T024 [US2] Add `worktree-cleanup` subcommand to `.specify/scripts/platform.py` — parser with `name` + `epic_slug` args, calls `worktree.cleanup_worktree(name, slug)`
 - [x] T025 [US2] Run tests for US2 and verify all pass
 
-**Checkpoint**: `platform.py worktree fulano 001-channel-pipeline` creates isolated worktree
+**Checkpoint**: `platform.py worktree prosauai 001-channel-pipeline` creates isolated worktree
 
 ---
 
 ## Phase 5: User Story 3 — Implementar em Repositorio Externo (Priority: P1)
 
-**Goal**: `implement_remote.py --platform fulano --epic 001-channel-pipeline` orquestra ensure → worktree → prompt → claude -p
+**Goal**: `implement_remote.py --platform prosauai --epic 001-channel-pipeline` orquestra ensure → worktree → prompt → claude -p
 
 **Independent Test**: Run with `--dry-run` and verify composed prompt contains spec+plan+tasks content
 
@@ -112,7 +112,7 @@
 - [x] T034 [US3] Add argparse CLI in `.specify/scripts/implement_remote.py` `__main__` block — `--platform`, `--epic`, `--timeout` (default from `MADRUGA_IMPLEMENT_TIMEOUT` env or 1800), `--dry-run` flag
 - [x] T035 [US3] Run tests for US3 and verify all pass
 
-**Checkpoint**: `implement_remote.py --platform fulano --epic 001 --dry-run` shows composed prompt
+**Checkpoint**: `implement_remote.py --platform prosauai --epic 001 --dry-run` shows composed prompt
 
 ---
 
@@ -213,7 +213,7 @@ Task: T015 "Run and verify all US1 tests"
 1. Complete Phase 1: Setup
 2. Complete Phase 2: Foundational helpers
 3. Complete Phase 3: US1 — Clone repo
-4. **STOP and VALIDATE**: `platform.py ensure-repo fulano` works
+4. **STOP and VALIDATE**: `platform.py ensure-repo prosauai` works
 
 ### Incremental Delivery
 

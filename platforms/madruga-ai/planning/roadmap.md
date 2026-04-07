@@ -11,7 +11,7 @@ updated: 2026-04-05
 ## MVP
 
 **MVP Epics:** 012 + 013 + 014 + 015 + 016 (todos os candidatos)
-**MVP Criterion:** Pipeline executa pelo menos 1 epic completo (pitch-to-PR) em repo externo (Fulano) com autonomia — human gates notificados via Telegram, specs revisadas por Subagent Judge, easter operando 24/7.
+**MVP Criterion:** Pipeline executa pelo menos 1 epic completo (pitch-to-PR) em repo externo (ProsaUAI) com autonomia — human gates notificados via Telegram, specs revisadas por Subagent Judge, easter operando 24/7.
 **Total MVP Appetite:** ~14w (team size: 1)
 
 ---
@@ -23,7 +23,7 @@ updated: 2026-04-05
 | Autonomia do pipeline | % skills executaveis via CLI sem interacao manual | 0% | 80% | 013, 016 |
 | Tempo de resposta a gates | Tempo medio entre notificacao e aprovacao de human gate | ∞ (manual) | < 30min | 014 |
 | Qualidade de specs autonomas | % specs com review multi-perspectiva antes de implement | 0% | 100% | 015 |
-| Pipeline cross-repo | Ciclos L2 executados em repos externos | 0 | Fulano operacional | 012 |
+| Pipeline cross-repo | Ciclos L2 executados em repos externos | 0 | ProsaUAI operacional | 012 |
 | Uptime do pipeline | Horas/dia de easter operacional | 0 | 24h | 016 |
 
 ---
@@ -99,7 +99,7 @@ gantt
 
 | Ordem | Epic | Appetite | Risco | Justificativa da Posicao |
 |-------|------|----------|-------|--------------------------|
-| 1 | 012 Multi-repo Implement | 2w (real: 1d) | Medio | Value-first: desbloqueia Fulano imediatamente. Escopo bem definido + reutilizacao de db.py reduziu appetite de 2w para 1d. |
+| 1 | 012 Multi-repo Implement | 2w (real: 1d) | Medio | Value-first: desbloqueia ProsaUAI imediatamente. Escopo bem definido + reutilizacao de db.py reduziu appetite de 2w para 1d. |
 | 2 | 013 DAG Executor + SpeckitBridge | 6w | Alto | Value: runtime funcional. Real: ~1d. Infraestrutura existente (db.py, post_save.py) + decisoes bem capturadas em context.md reduziram escopo. |
 | 3 | 014 Telegram Notifications | 2w (real: 1d) | Baixo | Depende da gate state machine de 013. aiogram e framework maduro — baixo risco tecnico. Appetite reduzido: scope claro + framework maduro. |
 | 3 | 015 Subagent Judge + Decision Classifier | 2w (real: 1d) | Medio→Baixo | Paralelo com 014. Agent tool ja provado. Knowledge files = maioria do deliverable. Calibracao validada com 7 ADRs reais. |
@@ -135,9 +135,9 @@ graph LR
 
 | Milestone | Epics | Criterio de Sucesso | Estimativa |
 |-----------|-------|---------------------|------------|
-| **Fulano Operacional** | 012 | `speckit.implement` executa em repo Fulano via worktree, PR criado com `gh` | Semana 2 | Tooling pronto (ensure_repo, worktree, implement_remote). Falta teste end-to-end com Fulano real. |
+| **ProsaUAI Operacional** | 012 | `speckit.implement` executa em repo ProsaUAI via worktree, PR criado com `gh` | Semana 2 | Tooling pronto (ensure_repo, worktree, implement_remote). Falta teste end-to-end com ProsaUAI real. |
 | **Runtime Funcional** | 012, 013 | DAG executor processa 1 pipeline L1 completo via CLI, human gates pausam/resumem corretamente | Semana 8 | Tooling pronto (ensure_repo, worktree, dag_executor). Falta teste end-to-end com claude -p real. |
-| **Autonomia MVP** | 012-016 | 1 epic completo (pitch-to-PR) processado pelo easter em repo Fulano, com Telegram notifications e Subagent Judge review | **Alcancado 2026-04-01** — todos os 5 epics MVP shipped. MADRUGA_MODE=auto habilita execucao end-to-end. Falta validacao end-to-end com Fulano real. |
+| **Autonomia MVP** | 012-016 | 1 epic completo (pitch-to-PR) processado pelo easter em repo ProsaUAI, com Telegram notifications e Subagent Judge review | **Alcancado 2026-04-01** — todos os 5 epics MVP shipped. MADRUGA_MODE=auto habilita execucao end-to-end. Falta validacao end-to-end com ProsaUAI real. |
 
 ---
 
@@ -147,7 +147,7 @@ graph LR
 
 | # | Candidato | Problema | Prioridade | Status |
 |---|-----------|----------|------------|--------|
-| — | Fulano end-to-end | Primeiro epic completo processado pelo Easter em repo externo Fulano — validacao real do pipeline autonomo pitch-to-PR | P0 | candidato |
+| — | ProsaUAI end-to-end | Primeiro epic completo processado pelo Easter em repo externo ProsaUAI — validacao real do pipeline autonomo pitch-to-PR | P0 | candidato |
 | — | Roadmap auto-atualizado | Roadmap gerado automaticamente do estado real dos ciclos, com drift score e status de milestones | P2 | candidato |
 
 ---

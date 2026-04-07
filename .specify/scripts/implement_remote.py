@@ -178,11 +178,10 @@ def run_implement(
         skip_condition=None,
     )
     cmd = build_dispatch_cmd(impl_node, prompt, platform_name)
-    cmd.extend(["--cwd", str(work_dir)])
 
     log.info("Invoking claude -p in %s (timeout: %ds)", work_dir, timeout)
     try:
-        result = subprocess.run(cmd, timeout=timeout)
+        result = subprocess.run(cmd, cwd=str(work_dir), timeout=timeout)
     except subprocess.TimeoutExpired:
         log.error("claude -p timed out after %ds", timeout)
         return 3

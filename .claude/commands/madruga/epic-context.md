@@ -32,8 +32,8 @@ Staff Engineer. Bridge architecture and implementation. Write all generated arti
 
 ## Usage
 
-- `/epic-context --draft fulano 002` — Draft context on main (no branch, planning ahead)
-- `/epic-context fulano 001` — Activate epic (if draft exists: delta review + branch; if not: full context + branch)
+- `/epic-context --draft prosauai 002` — Draft context on main (no branch, planning ahead)
+- `/epic-context prosauai 001` — Activate epic (if draft exists: delta review + branch; if not: full context + branch)
 - `/epic-context` — Prompt for platform and epic
 
 ## Output Directory
@@ -89,7 +89,7 @@ else
 fi
 ```
 
-Branch naming: `epic/<platform>/<NNN-slug>` (e.g., `epic/fulano/001-channel-pipeline`).
+Branch naming: `epic/<platform>/<NNN-slug>` (e.g., `epic/prosauai/001-channel-pipeline`).
 Cascade: if currently on another epic branch, the new branch starts from its HEAD — this is intentional. All epics are sequential, so the previous epic's reconcile (Phase 9) will have already pushed its branch before this runs.
 
 **Always** create or checkout an epic branch before proceeding.

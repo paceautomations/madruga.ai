@@ -7,10 +7,10 @@ venv/
 .ruff_cache/
 *.pyc
 *.log
-.pipeline/madruga.db
 .pipeline/madruga.db-wal
 .pipeline/madruga.db-shm
 .pipeline/madruga.lock
+.pipeline/*.bak*
 platforms/*/model/output/
 .env
 htmlcov/

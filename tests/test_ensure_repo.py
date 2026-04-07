@@ -24,12 +24,12 @@ from ensure_repo import (
 
 
 class TestLoadRepoBinding:
-    def test_loads_fulano_binding(self):
-        binding = _load_repo_binding("fulano")
+    def test_loads_prosauai_binding(self):
+        binding = _load_repo_binding("prosauai")
         assert binding["org"] == "paceautomations"
-        assert binding["name"] == "fulano-api"
+        assert binding["name"] == "prosauai-api"
         assert binding["base_branch"] == "main"
-        assert binding["epic_branch_prefix"] == "epic/fulano/"
+        assert binding["epic_branch_prefix"] == "epic/prosauai/"
 
     def test_missing_platform_exits(self):
         with pytest.raises(SystemExit, match="not found"):
@@ -41,7 +41,7 @@ class TestIsSelfRef:
         assert _is_self_ref("madruga.ai") is True
 
     def test_external_repo_is_not_self_ref(self):
-        assert _is_self_ref("fulano-api") is False
+        assert _is_self_ref("prosauai-api") is False
 
 
 class TestResolveReposBase:

@@ -93,7 +93,7 @@
 
 **Goal**: Operator runs SpecKit commands and all artifacts land in `epics/<NNN>/`.
 
-**Independent Test**: `create-new-feature.sh --base-dir platforms/fulano/epics/001-test` creates `spec.md` in epic dir.
+**Independent Test**: `create-new-feature.sh --base-dir platforms/prosauai/epics/001-test` creates `spec.md` in epic dir.
 
 **Note**: This story depends on Phase 2 (`--base-dir` working) and Phase 3+4 (renamed skills, updated DAG).
 

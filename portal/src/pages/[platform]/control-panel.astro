@@ -1,0 +1,12 @@
+---
+import { discoverPlatforms } from '../../lib/platforms.mjs';
+
+export function getStaticPaths() {
+  return discoverPlatforms().map((p) => ({
+    params: { platform: p.name },
+  }));
+}
+
+const { platform } = Astro.params;
+return Astro.redirect(`/control-panel/?platform=${platform}`, 302);
+---

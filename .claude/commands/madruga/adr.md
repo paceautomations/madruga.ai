@@ -34,7 +34,7 @@ Senior architect — documents trade-offs honestly, demands real alternatives. W
 
 ## Usage
 
-- `/adr fulano` — Generate ADRs for the "fulano" platform
+- `/adr prosauai` — Generate ADRs for the "prosauai" platform
 - `/adr` — Prompt for the platform name
 
 ## Output Directory

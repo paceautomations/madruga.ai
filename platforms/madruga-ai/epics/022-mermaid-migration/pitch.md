@@ -72,7 +72,7 @@ Sem modelo unificado LikeC4, a coerencia entre niveis e garantida por convencao:
 | L5 | `flowchart TD` + `sequenceDiagram` | process.md | Fluxo de negocio end-to-end |
 
 **Regras de coerencia:**
-1. **Nomenclatura consistente** — mesmo nome em todos os niveis (ex: `fulano-api` no L1 = `fulano-api` no L2 = `FulanoApi` no L4)
+1. **Nomenclatura consistente** — mesmo nome em todos os niveis (ex: `prosauai-api` no L1 = `prosauai-api` no L2 = `ProsaUAIApi` no L4)
 2. **Cross-reference via links** — cada secao aponta para o proximo nivel de detalhe
 3. **Top-down generation** — skills geram de cima para baixo: `blueprint` (L1+L2), `domain-model` (L3+L4), `business-process` (L5)
 
@@ -112,7 +112,7 @@ Em vez de manter a hierarquia formal C4 (Context/Container/Component/Code), usam
 - [ ] `vision-build.py` removido
 - [ ] Paginas dedicadas de diagrama removidas (landscape, containers, context-map, bc/[context], business-flow)
 - [ ] Sidebar do portal simplificada (sem links para paginas de diagrama)
-- [ ] Diagramas Mermaid inline nos `.md` de ambas plataformas (madruga-ai + fulano)
+- [ ] Diagramas Mermaid inline nos `.md` de ambas plataformas (madruga-ai + prosauai)
 - [ ] `platform.yaml` sem bloco `views:` (ambas plataformas)
 - [ ] Template Copier atualizado (sem `.likec4`, sem `model/`)
 - [ ] CI sem job `likec4 build`
@@ -168,7 +168,7 @@ Removidos. Nenhum componente React substituto necessario — `astro-mermaid` ren
 5. Remover `resolveNodeHref` references a `.likec4`
 6. Remover dep `likec4` do `package.json`
 
-### Fase 2: Converter diagramas (Fulano + Madruga-AI)
+### Fase 2: Converter diagramas (ProsaUAI + Madruga-AI)
 7. Converter `views.likec4` → Mermaid inline no `business/process.md` (businessFlow)
 8. Converter `platform.likec4` + `infrastructure.likec4` → Mermaid inline no `engineering/blueprint.md`
 9. Converter `ddd-contexts.likec4` → Mermaid inline no `engineering/domain-model.md`
@@ -192,7 +192,7 @@ Removidos. Nenhum componente React substituto necessario — `astro-mermaid` ren
 21. Remover job `likec4 build` do CI
 22. Remover `.claude/rules/likec4.md`
 23. Atualizar CLAUDE.md (remover mencoes a LikeC4)
-24. Atualizar `platforms/madruga-ai/CLAUDE.md` e `platforms/fulano/CLAUDE.md`
+24. Atualizar `platforms/madruga-ai/CLAUDE.md` e `platforms/prosauai/CLAUDE.md`
 25. `make test` + `make lint` + portal build
 
 ## Inventario de Arquivos Impactados
@@ -222,17 +222,17 @@ Removidos. Nenhum componente React substituto necessario — `astro-mermaid` ren
 | `portal/src/components/dashboard/PipelineDAG.tsx` | Remover refs LikeC4 se houver |
 | `portal/package.json` | Remover dep `likec4` |
 | `platforms/madruga-ai/platform.yaml` | Remover blocos views, serve, build |
-| `platforms/fulano/platform.yaml` | Remover blocos views, serve, build |
+| `platforms/prosauai/platform.yaml` | Remover blocos views, serve, build |
 | `platforms/madruga-ai/engineering/blueprint.md` | Adicionar Mermaid deploy topology + containers |
 | `platforms/madruga-ai/engineering/domain-model.md` | Adicionar Mermaid context map + remover classes LikeC4 |
 | `platforms/madruga-ai/business/process.md` | Adicionar Mermaid business flow (se aplicavel) |
-| `platforms/fulano/engineering/blueprint.md` | Adicionar Mermaid deploy topology + containers |
-| `platforms/fulano/engineering/domain-model.md` | Adicionar Mermaid context map |
-| `platforms/fulano/business/process.md` | Converter businessFlow para Mermaid |
+| `platforms/prosauai/engineering/blueprint.md` | Adicionar Mermaid deploy topology + containers |
+| `platforms/prosauai/engineering/domain-model.md` | Adicionar Mermaid context map |
+| `platforms/prosauai/business/process.md` | Converter businessFlow para Mermaid |
 | `.claude/knowledge/pipeline-dag-knowledge.md` | Outputs de domain-model e containers |
 | `.specify/templates/platform/template/` | Remover model/, atualizar platform.yaml.jinja |
 | `platforms/madruga-ai/CLAUDE.md` | Remover LikeC4 do stack |
-| `platforms/fulano/CLAUDE.md` | Remover LikeC4 do stack (se mencionado) |
+| `platforms/prosauai/CLAUDE.md` | Remover LikeC4 do stack (se mencionado) |
 | `CLAUDE.md` | Remover refs LikeC4, prerequisito likec4 CLI |
 
 ### Criar

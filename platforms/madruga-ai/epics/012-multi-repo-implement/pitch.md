@@ -11,11 +11,11 @@ updated: 2026-03-31
 
 ## Problem
 
-O pipeline so opera no proprio repo (madruga.ai). Para gerar valor real, precisa executar ciclos L2 em repos externos (ex: Fulano). Hoje, `speckit.implement` assume que codigo e docs estao no mesmo repositorio — nao ha mecanismo de repo binding end-to-end.
+O pipeline so opera no proprio repo (madruga.ai). Para gerar valor real, precisa executar ciclos L2 em repos externos (ex: ProsaUAI). Hoje, `speckit.implement` assume que codigo e docs estao no mesmo repositorio — nao ha mecanismo de repo binding end-to-end.
 
 ## Appetite
 
-**2w** — Menor e mais rapido. Value-first: desbloqueia Fulano imediatamente. Repo binding validado end-to-end antes do runtime.
+**2w** — Menor e mais rapido. Value-first: desbloqueia ProsaUAI imediatamente. Repo binding validado end-to-end antes do runtime.
 
 ## Dependencies
 
@@ -30,7 +30,7 @@ O pipeline so opera no proprio repo (madruga.ai). Para gerar valor real, precisa
 |---|------|---------|------------------------|
 | 1 | Estrategia de isolamento | **Git worktree** para operacoes em repos externos. Cria worktree temporario, implementa la, cria PR via `gh`. Nao interfere no working tree do dev. | ADR-010 (claude -p cwd), general/src/git/worktree.py |
 | 2 | Auto-clone | **ensure_repo()** clona automaticamente se repo nao existe (SSH first, fallback HTTPS). Fetch se ja existe. Per-repo lock para serializar. | general/src/git/worktree.py:53, platform.yaml repo binding |
-| 3 | Repo binding | **platform.yaml** como source of truth: `repo.org`, `repo.name`, `repo.base_branch`, `repo.epic_branch_prefix`. Ja existe em fulano e madruga-ai. | domain-model (Platform entity), db.py resolve_repo_path() |
+| 3 | Repo binding | **platform.yaml** como source of truth: `repo.org`, `repo.name`, `repo.base_branch`, `repo.epic_branch_prefix`. Ja existe em prosauai e madruga-ai. | domain-model (Platform entity), db.py resolve_repo_path() |
 | 4 | Separacao docs/codigo | **Docs em madruga.ai, codigo em repo externo.** spec.md/plan.md/tasks.md ficam em `platforms/<name>/epics/NNN/`. Codigo vai para worktree do repo externo. | blueprint (filesystem-first), ADR-004 (file-based storage) |
 | 5 | Implementacao | **Script wrapper** (~100-200 LOC Python) em `.specify/scripts/`. Faz ensure_repo → create_worktree → injeta contexto (spec/plan/tasks) → invoca `claude -p --cwd=worktree`. Skills SpecKit nao mudam. | ADR-010 (claude -p), general/src/phases/implement.py |
 | 6 | PR creation | **`gh pr create`** com `cwd=worktree_path`. Push branch, cria PR no repo correto. Base branch vem de platform.yaml. | general/src/git/pr.py, blueprint (CI/CD) |
@@ -62,9 +62,9 @@ O pipeline so opera no proprio repo (madruga.ai). Para gerar valor real, precisa
 ```yaml
 repo:
   org: paceautomations
-  name: fulano-api
+  name: prosauai-api
   base_branch: main
-  epic_branch_prefix: "epic/fulano/"
+  epic_branch_prefix: "epic/prosauai/"
 ```
 
 **Racional:** Source of truth unico. `resolve_repo_path()` no db.py ja usa esses campos. `ensure_repo()` recebe org+name e resolve o path. Convention: `{repos_base_dir}/{org}/{repo_name}` (default: `~/repos/`).
@@ -121,7 +121,7 @@ T2: worktree.py + testes
 T3: implement_remote.py (orquestrador)
 T4: pr.py + integracao com worktree
 T5: platform.py clone/worktree commands
-T6: integration test end-to-end (fulano-api)
+T6: integration test end-to-end (prosauai-api)
 T7: post_save.py update + docs
 ```
 

@@ -736,7 +736,7 @@ Re-execute ONLY the relevant layer/scenario for the fix:
 
 ## QA Report — Epic 007
 Success rate: 100% (20 PASS + 3 HEALED) | WARN: 1
-Report saved: platforms/fulano/epics/007/qa-report.md
+Report saved: platforms/prosauai/epics/007/qa-report.md
 ```
 
 ## Example — Full Pipeline (web feature)
@@ -759,6 +759,6 @@ Report saved: platforms/fulano/epics/007/qa-report.md
 ## QA Report — Dashboard Feature
 Layers: L1 ✅ L2 ✅ L3 ✅ L4 ✅ L5 ✅ L6 ✅
 Success rate: 95% (38 PASS + 4 HEALED + 2 WARN) | UNRESOLVED: 0
-Report saved: platforms/fulano/epics/001/qa-report.md
+Report saved: platforms/prosauai/epics/001/qa-report.md
 ```
 

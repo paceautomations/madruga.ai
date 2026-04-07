@@ -36,7 +36,7 @@ Como consumidor da documentacao arquitetural (dev, tech lead, stakeholder), quer
 1. **Given** `engineering/blueprint.md` de uma plataforma, **When** renderizado no portal, **Then** exibe diagrama de Deploy Topology (`graph LR`) e diagrama de Containers (`graph LR` com subgraphs).
 2. **Given** `engineering/domain-model.md` de uma plataforma, **When** renderizado no portal, **Then** exibe diagrama de Context Map (`flowchart LR`) e diagramas de Bounded Contexts (`classDiagram`) em blocos `<details>`.
 3. **Given** `business/process.md` de uma plataforma (quando aplicavel), **When** renderizado no portal, **Then** exibe overview flowchart e deep-dives com `sequenceDiagram` por fase.
-4. **Given** ambas plataformas (madruga-ai e fulano), **When** inspecionadas, **Then** todos os diagramas que existiam em LikeC4 tem equivalente Mermaid inline nos respectivos `.md`.
+4. **Given** ambas plataformas (madruga-ai e prosauai), **When** inspecionadas, **Then** todos os diagramas que existiam em LikeC4 tem equivalente Mermaid inline nos respectivos `.md`.
 
 ---
 
@@ -51,7 +51,7 @@ Como usuario do portal, quero uma sidebar sem links para paginas de diagrama ded
 **Acceptance Scenarios**:
 
 1. **Given** o portal rodando, **When** navego pela sidebar de qualquer plataforma, **Then** nao vejo links para "System Landscape", "Containers", "Context Map", "Bounded Contexts", ou "Business Flow" como paginas separadas.
-2. **Given** as URLs antigas de paginas de diagrama (ex: `/fulano/landscape`), **When** acessadas, **Then** retornam 404 (paginas removidas).
+2. **Given** as URLs antigas de paginas de diagrama (ex: `/prosauai/landscape`), **When** acessadas, **Then** retornam 404 (paginas removidas).
 3. **Given** a sidebar de Engineering, **When** inspecionada, **Then** mostra: ADRs, Blueprint, Domain Model, Integrations (sem paginas de diagrama dedicadas).
 
 ---
@@ -67,7 +67,7 @@ Como criador de novas plataformas, quero que o template Copier nao gere mais o d
 **Acceptance Scenarios**:
 
 1. **Given** o template Copier atualizado, **When** uma nova plataforma e criada, **Then** nao existe diretorio `model/` e `platform.yaml` nao contem blocos `views:`, `serve:`, `build:`.
-2. **Given** `platform.yaml` de ambas plataformas existentes (madruga-ai, fulano), **When** inspecionados, **Then** nao contem blocos `views:`, `serve:`, `build:`.
+2. **Given** `platform.yaml` de ambas plataformas existentes (madruga-ai, prosauai), **When** inspecionados, **Then** nao contem blocos `views:`, `serve:`, `build:`.
 
 ---
 
@@ -142,7 +142,7 @@ Como executor do pipeline (LLM ou dev), quero que os skills de geracao de diagra
 
 - **Diagrama Mermaid**: Bloco de codigo Mermaid (` ```mermaid `) embutido em um documento `.md`. Tipos: graph, flowchart, classDiagram, sequenceDiagram.
 - **Documento Hospedeiro**: Arquivo `.md` existente que recebe diagramas inline (blueprint.md, domain-model.md, process.md).
-- **Plataforma**: Diretorio `platforms/<name>/` com seus artefatos. Ambas (madruga-ai e fulano) sao impactadas.
+- **Plataforma**: Diretorio `platforms/<name>/` com seus artefatos. Ambas (madruga-ai e prosauai) sao impactadas.
 - **Template Copier**: Template em `.specify/templates/platform/template/` usado para criar novas plataformas.
 
 ## Success Criteria
@@ -165,7 +165,7 @@ Como executor do pipeline (LLM ou dev), quero que os skills de geracao de diagra
 - Diagramas Mermaid estaticos sao suficientes — a interatividade do LikeC4 (pan, zoom, drill-down) nao agrega valor proporcional a sua complexidade.
 - A convencao de nomenclatura consistente (Pyramid of Detail) e suficiente para manter coerencia entre niveis — nao e necessario um modelo unificado.
 - Os diagramas LikeC4 de `businessFlow` (315 LOC) podem ser simplificados para overview + deep-dives por fase sem perda de informacao essencial.
-- Todas as plataformas existentes (madruga-ai e fulano) tem os documentos hospedeiros necessarios (`blueprint.md`, `domain-model.md`, `process.md`).
+- Todas as plataformas existentes (madruga-ai e prosauai) tem os documentos hospedeiros necessarios (`blueprint.md`, `domain-model.md`, `process.md`).
 - O CI tem um job `likec4 build` que precisa ser removido (se nao existir, este passo e no-op).
 - Skills impactados serao atualizados via `/madruga:skills-mgmt` conforme politica do repositorio.
 

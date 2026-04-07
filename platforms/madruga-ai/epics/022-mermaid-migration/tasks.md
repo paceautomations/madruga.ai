@@ -19,9 +19,9 @@
 
 **Purpose**: Understand current state, ensure no information is lost during migration.
 
-- [X] T001 Read all LikeC4 source files for Fulano platform in `platforms/fulano/model/` (actors.likec4, externals.likec4, platform.likec4, infrastructure.likec4, ddd-contexts.likec4, relationships.likec4, views.likec4, spec.likec4) to extract architectural content for conversion
+- [X] T001 Read all LikeC4 source files for ProsaUAI platform in `platforms/prosauai/model/` (actors.likec4, externals.likec4, platform.likec4, infrastructure.likec4, ddd-contexts.likec4, relationships.likec4, views.likec4, spec.likec4) to extract architectural content for conversion
 - [X] T002 [P] Read all LikeC4 source files for Madruga-AI platform in `platforms/madruga-ai/model/` (actors.likec4, externals.likec4, platform.likec4, infrastructure.likec4, ddd-contexts.likec4, relationships.likec4, views.likec4, spec.likec4) to extract architectural content for conversion
-- [X] T003 [P] Read current state of target documents: `platforms/fulano/engineering/blueprint.md`, `platforms/fulano/engineering/domain-model.md`, `platforms/fulano/business/process.md`
+- [X] T003 [P] Read current state of target documents: `platforms/prosauai/engineering/blueprint.md`, `platforms/prosauai/engineering/domain-model.md`, `platforms/prosauai/business/process.md`
 - [X] T004 [P] Read current state of target documents: `platforms/madruga-ai/engineering/blueprint.md`, `platforms/madruga-ai/engineering/domain-model.md`
 
 ---
@@ -57,14 +57,14 @@
 
 **Independent Test**: Open each document in the portal (Starlight) and verify Mermaid diagrams render correctly via `astro-mermaid`. Verify via `npm run build`.
 
-### Fulano Platform Conversion
+### ProsaUAI Platform Conversion
 
-- [X] T019 [US2] Convert Fulano deploy topology (from `platform.likec4`, `infrastructure.likec4`, `actors.likec4`, `externals.likec4`) to `graph LR` Mermaid diagram in `platforms/fulano/engineering/blueprint.md` section "Deploy Topology"
-- [X] T020 [US2] Convert Fulano containers (from `platform.likec4`, `views.likec4` containers view) to `graph LR` with subgraphs Mermaid diagram in `platforms/fulano/engineering/blueprint.md` section "Containers"
-- [X] T021 [US2] Convert Fulano DDD context map (from `ddd-contexts.likec4`, `relationships.likec4`) to `flowchart LR` Mermaid diagram in `platforms/fulano/engineering/domain-model.md` section "Context Map"
-- [X] T022 [US2] Convert Fulano bounded context detail views (from `views.likec4` *Detail views, `ddd-contexts.likec4`) to `classDiagram` Mermaid diagrams in `<details>` blocks per BC in `platforms/fulano/engineering/domain-model.md`
-- [X] T023 [US2] Convert Fulano business flow (from `views.likec4` businessFlow — ~315 LOC) to overview `flowchart TD` + `sequenceDiagram` deep-dives per phase in `<details>` blocks in `platforms/fulano/business/process.md`
-- [X] T024 [US2] Add cross-references between diagram levels in Fulano docs: blueprint.md L1↔L2, domain-model.md L3↔L4, process.md L5, and inter-document links
+- [X] T019 [US2] Convert ProsaUAI deploy topology (from `platform.likec4`, `infrastructure.likec4`, `actors.likec4`, `externals.likec4`) to `graph LR` Mermaid diagram in `platforms/prosauai/engineering/blueprint.md` section "Deploy Topology"
+- [X] T020 [US2] Convert ProsaUAI containers (from `platform.likec4`, `views.likec4` containers view) to `graph LR` with subgraphs Mermaid diagram in `platforms/prosauai/engineering/blueprint.md` section "Containers"
+- [X] T021 [US2] Convert ProsaUAI DDD context map (from `ddd-contexts.likec4`, `relationships.likec4`) to `flowchart LR` Mermaid diagram in `platforms/prosauai/engineering/domain-model.md` section "Context Map"
+- [X] T022 [US2] Convert ProsaUAI bounded context detail views (from `views.likec4` *Detail views, `ddd-contexts.likec4`) to `classDiagram` Mermaid diagrams in `<details>` blocks per BC in `platforms/prosauai/engineering/domain-model.md`
+- [X] T023 [US2] Convert ProsaUAI business flow (from `views.likec4` businessFlow — ~315 LOC) to overview `flowchart TD` + `sequenceDiagram` deep-dives per phase in `<details>` blocks in `platforms/prosauai/business/process.md`
+- [X] T024 [US2] Add cross-references between diagram levels in ProsaUAI docs: blueprint.md L1↔L2, domain-model.md L3↔L4, process.md L5, and inter-document links
 
 ### Madruga-AI Platform Conversion
 
@@ -77,7 +77,7 @@
 
 ### Cleanup LikeC4 Source Files
 
-- [X] T031 [US2] Delete entire `platforms/fulano/model/` directory (8 files: actors.likec4, externals.likec4, platform.likec4, infrastructure.likec4, ddd-contexts.likec4, relationships.likec4, views.likec4, spec.likec4, plus likec4.config.json and output/)
+- [X] T031 [US2] Delete entire `platforms/prosauai/model/` directory (8 files: actors.likec4, externals.likec4, platform.likec4, infrastructure.likec4, ddd-contexts.likec4, relationships.likec4, views.likec4, spec.likec4, plus likec4.config.json and output/)
 - [X] T032 [P] [US2] Delete entire `platforms/madruga-ai/model/` directory (8 files: actors.likec4, externals.likec4, platform.likec4, infrastructure.likec4, ddd-contexts.likec4, relationships.likec4, views.likec4, spec.likec4, plus likec4.config.json and output/)
 
 **Checkpoint**: All LikeC4 diagrams converted to Mermaid inline. Zero `.likec4` files remain. Portal build passes with diagrams rendering.
@@ -104,7 +104,7 @@
 **Independent Test**: Inspect platform.yaml files — no `views:`, `serve:`, `build:` blocks. Copier template generates no `model/` directory.
 
 - [X] T035 [US4] Remove `model:`, `views:`, `serve:`, `build:` blocks from `platforms/madruga-ai/platform.yaml` and update `outputs` for `domain-model` node (remove `model/ddd-contexts.likec4`, keep `engineering/domain-model.md`) and `containers` node (change outputs from `model/platform.likec4`, `model/views.likec4` to Mermaid sections in `engineering/blueprint.md`)
-- [X] T036 [P] [US4] Remove `model:`, `views:`, `serve:`, `build:` blocks from `platforms/fulano/platform.yaml` and update `outputs` for `domain-model` node and `containers` node (same changes as T035)
+- [X] T036 [P] [US4] Remove `model:`, `views:`, `serve:`, `build:` blocks from `platforms/prosauai/platform.yaml` and update `outputs` for `domain-model` node and `containers` node (same changes as T035)
 - [X] T037 [US4] Update Copier template: delete all `.likec4.jinja` files and `likec4.config.json.jinja` from `.specify/templates/platform/template/model/`, remove the `model/` directory from template, update `.specify/templates/platform/template/platform.yaml.jinja` to not generate `views:`, `serve:`, `build:`, `model:` blocks
 - [X] T038 [US4] Delete `.specify/scripts/vision-build.py` (LikeC4 JSON → AUTO markers script — no longer needed)
 
@@ -135,7 +135,7 @@
 - [X] T042 [US6] Update `.claude/knowledge/pipeline-dag-knowledge.md` — change outputs for `domain-model` node from `model/ddd-contexts.likec4` to Mermaid sections in `engineering/domain-model.md`, and for `containers` node from `model/platform.likec4, model/views.likec4` to Mermaid sections in `engineering/blueprint.md`
 - [X] T043 [P] [US6] Update `CLAUDE.md` (root) — remove `likec4` from Prerequisites section, remove LikeC4 mentions from Active Technologies or conventions, remove `likec4 CLI` reference
 - [X] T044 [P] [US6] Update `platforms/madruga-ai/CLAUDE.md` — remove LikeC4 from tech stack, update any diagram references to Mermaid inline
-- [X] T045 [P] [US6] Update `platforms/fulano/CLAUDE.md` — remove LikeC4 from tech stack if mentioned
+- [X] T045 [P] [US6] Update `platforms/prosauai/CLAUDE.md` — remove LikeC4 from tech stack if mentioned
 - [X] T046 [US6] Delete `.claude/rules/likec4.md` (LikeC4 conventions file — no longer applicable)
 
 **Checkpoint**: All documentation and knowledge files reference Mermaid inline. Zero LikeC4 mentions.
@@ -185,13 +185,13 @@
 
 - Tasks marked [P] can run in parallel
 - Sequential tasks depend on prior tasks in the same phase
-- Fulano and Madruga-AI conversions can run in parallel within Phase 3
+- ProsaUAI and Madruga-AI conversions can run in parallel within Phase 3
 
 ### Parallel Opportunities
 
 - Phase 1: All T001-T004 read tasks can run in parallel
 - Phase 2: T006-T012 file deletions can all run in parallel, then T005/T013-T017 modifications
-- Phase 3: Fulano conversion (T019-T024) and Madruga-AI conversion (T025-T030) can run in parallel
+- Phase 3: ProsaUAI conversion (T019-T024) and Madruga-AI conversion (T025-T030) can run in parallel
 - Phase 5-7: US4, US5, US6 can all run in parallel after Phase 3 completes
 
 ---
@@ -221,13 +221,13 @@ Task: "cd portal && npm run build"
 ## Parallel Example: Phase 3 (Diagram Conversion)
 
 ```bash
-# Fulano and Madruga-AI can run in parallel:
-# Worker A: Fulano
-Task: "Convert Fulano deploy topology to blueprint.md"
-Task: "Convert Fulano containers to blueprint.md"
-Task: "Convert Fulano context map to domain-model.md"
-Task: "Convert Fulano BC details to domain-model.md"
-Task: "Convert Fulano business flow to process.md"
+# ProsaUAI and Madruga-AI can run in parallel:
+# Worker A: ProsaUAI
+Task: "Convert ProsaUAI deploy topology to blueprint.md"
+Task: "Convert ProsaUAI containers to blueprint.md"
+Task: "Convert ProsaUAI context map to domain-model.md"
+Task: "Convert ProsaUAI BC details to domain-model.md"
+Task: "Convert ProsaUAI business flow to process.md"
 
 # Worker B: Madruga-AI (all [P] marked)
 Task: "Convert Madruga-AI deploy topology to blueprint.md"

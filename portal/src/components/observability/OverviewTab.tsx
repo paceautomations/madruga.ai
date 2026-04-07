@@ -1,6 +1,8 @@
 import { useState, useMemo } from 'react';
-import type { RunEntry, StatsData } from './ObservabilityDashboard';
+import type { RunEntry, StatsData, SessionsData } from './ObservabilityDashboard';
 import { formatDuration, formatCost, formatCostRounded, formatTime, formatTokens } from './formatters';
+import EasterStatusBanner from './EasterStatusBanner';
+import ActiveSessionsPanel from './ActiveSessionsPanel';
 
 const EVAL_TIP_CSS = `
 .eval-tip { position: relative; }
@@ -33,7 +35,9 @@ const EVAL_TIP_CSS = `
 interface OverviewTabProps {
   runs: RunEntry[];
   stats: StatsData | null;
+  sessions: SessionsData | null;
   connected: boolean;
+  platformIds?: string[];
 }
 
 type StatusFilter = 'all' | 'running' | 'completed' | 'failed' | 'cancelled';
@@ -206,6 +210,9 @@ function SummaryCards({ stats }: { stats: StatsData | null }) {
 function FilterBar({
   statusFilter,
   onStatusChange,
+  platformFilter,
+  onPlatformChange,
+  platformIds,
   search,
   onSearchChange,
   resultCount,
@@ -213,6 +220,9 @@ function FilterBar({
 }: {
   statusFilter: StatusFilter;
   onStatusChange: (f: StatusFilter) => void;
+  platformFilter: string;
+  onPlatformChange: (f: string) => void;
+  platformIds: string[];
   search: string;
   onSearchChange: (v: string) => void;
   resultCount: number;
@@ -220,6 +230,32 @@ function FilterBar({
 }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', margin: 0 }}>
+      {/* Platform filter chips */}
+      {platformIds.length > 0 && (
+        <div style={{ display: 'flex', gap: '0.25rem', margin: 0 }}>
+          {[{ id: 'all', label: 'All' }, ...platformIds.map((id) => ({ id, label: id }))].map((p) => {
+            const active = platformFilter === p.id;
+            const chipColor = 'var(--sl-color-accent, #0284c7)';
+            return (
+              <button
+                key={p.id}
+                onClick={() => onPlatformChange(p.id)}
+                style={{
+                  padding: '0.25rem 0.6rem', margin: 0, borderRadius: '9999px',
+                  fontSize: '0.7rem', fontWeight: active ? 600 : 400,
+                  border: `1px solid ${active ? chipColor : 'var(--sl-color-gray-5, #333)'}`,
+                  background: active ? `${chipColor}18` : 'transparent',
+                  color: active ? chipColor : 'var(--sl-color-gray-3, #888)',
+                  cursor: 'pointer', transition: 'all 0.15s',
+                }}
+              >
+                {p.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       <div style={{ display: 'flex', gap: '0.25rem', margin: 0 }}>
         {STATUS_FILTERS.map((f) => {
           const active = statusFilter === f.id;
@@ -274,7 +310,7 @@ function FilterBar({
   );
 }
 
-function RunRow({ run }: { run: RunEntry }) {
+function RunRow({ run, showPlatform }: { run: RunEntry; showPlatform: boolean }) {
   return (
     <tr
       style={{ transition: 'background 0.15s' }}
@@ -282,6 +318,7 @@ function RunRow({ run }: { run: RunEntry }) {
       onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
     >
       <td style={tdStyle}><StatusBadge status={run.status} /></td>
+      {showPlatform && <td style={{ ...tdStyle, ...monoStyle, fontSize: '0.7rem' }}>{run.platform_id ?? '—'}</td>}
       <td style={{ ...tdStyle, ...monoStyle }}>{run.epic_id ?? '—'}</td>
       <td style={{ ...tdStyle, ...monoStyle, fontWeight: 500 }}>{run.node_id}</td>
       <td style={tdStyle}>{formatDuration(run.duration_ms)}</td>
@@ -304,12 +341,17 @@ function RunRow({ run }: { run: RunEntry }) {
 
 // ── Main Component ──
 
-export default function OverviewTab({ runs, stats, connected }: OverviewTabProps) {
+export default function OverviewTab({ runs, stats, sessions, connected, platformIds = [] }: OverviewTabProps) {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [platformFilter, setPlatformFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
+  const showPlatformCol = platformIds.length > 0;
 
   const filtered = useMemo(() => {
     let result = runs;
+    if (platformFilter !== 'all') {
+      result = result.filter((r) => r.platform_id === platformFilter);
+    }
     if (statusFilter !== 'all') {
       result = result.filter((r) => r.status === statusFilter);
     }
@@ -317,6 +359,7 @@ export default function OverviewTab({ runs, stats, connected }: OverviewTabProps
       const q = search.trim().toLowerCase();
       result = result.filter(
         (r) =>
+          (r.platform_id ?? '').toLowerCase().includes(q) ||
           (r.epic_id ?? '').toLowerCase().includes(q) ||
           r.node_id.toLowerCase().includes(q) ||
           r.run_id.toLowerCase().includes(q) ||
@@ -324,7 +367,7 @@ export default function OverviewTab({ runs, stats, connected }: OverviewTabProps
       );
     }
     return result;
-  }, [runs, statusFilter, search]);
+  }, [runs, statusFilter, platformFilter, search]);
 
   if (!runs.length && !connected) {
     return (
@@ -339,6 +382,21 @@ export default function OverviewTab({ runs, stats, connected }: OverviewTabProps
       <style dangerouslySetInnerHTML={{ __html: EVAL_TIP_CSS }} />
       <SummaryCards stats={stats} />
 
+      <EasterStatusBanner
+        sessions={sessions}
+        connected={connected}
+        todayCompletedCount={runs.filter((r) => {
+          if (r.status !== 'completed' || !r.started_at) return false;
+          const d = new Date(r.started_at);
+          const now = new Date();
+          return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+        }).length}
+      />
+
+      {sessions && sessions.running_epics.length > 0 && (
+        <ActiveSessionsPanel sessions={sessions} />
+      )}
+
       <div style={{ fontSize: '0.68rem', color: 'var(--sl-color-gray-4, #666)', lineHeight: 1.4 }}>
         {DIMENSIONS.map((d, i) => (
           <span key={d.key}>
@@ -351,6 +409,9 @@ export default function OverviewTab({ runs, stats, connected }: OverviewTabProps
       <FilterBar
         statusFilter={statusFilter}
         onStatusChange={setStatusFilter}
+        platformFilter={platformFilter}
+        onPlatformChange={setPlatformFilter}
+        platformIds={platformIds}
         search={search}
         onSearchChange={setSearch}
         resultCount={filtered.length}
@@ -367,6 +428,7 @@ export default function OverviewTab({ runs, stats, connected }: OverviewTabProps
             <thead>
               <tr>
                 <th style={thStyle}>Status</th>
+                {showPlatformCol && <th style={thStyle}>Platform</th>}
                 <th style={thStyle}>Epic</th>
                 <th style={thStyle}>Node</th>
                 <th style={thStyle}>Duration</th>
@@ -383,7 +445,7 @@ export default function OverviewTab({ runs, stats, connected }: OverviewTabProps
             </thead>
             <tbody>
               {filtered.map((run) => (
-                <RunRow key={run.run_id} run={run} />
+                <RunRow key={run.run_id} run={run} showPlatform={showPlatformCol} />
               ))}
             </tbody>
           </table>

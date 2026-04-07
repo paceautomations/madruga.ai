@@ -469,14 +469,14 @@ class TestHandleGatesCommand:
         from telegram_bot import handle_gates
 
         conn = _make_conn()
-        _insert_gate(conn, "run-1", platform_id="fulano", node_id="specify", notified=False)
+        _insert_gate(conn, "run-1", platform_id="prosauai", node_id="specify", notified=False)
         adapter = AsyncMock()
         message = MagicMock()
         asyncio.get_event_loop().run_until_complete(handle_gates(message, adapter, 123, conn))
         adapter.send.assert_called_once()
         text = adapter.send.call_args[0][1]
         assert "specify" in text
-        assert "fulano" in text
+        assert "prosauai" in text
 
 
 class TestHandleStatus:

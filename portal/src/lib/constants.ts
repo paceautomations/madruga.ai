@@ -5,7 +5,7 @@
 
 /** Maps pipeline node IDs to portal route overrides (when default path resolution won't work). */
 export const NODE_ROUTE_OVERRIDES: Record<string, string> = {
-  'platform-new': '/dashboard/',
+  'platform-new': '/control-panel/',
   'epic-breakdown': '/planning/roadmap/',
 };
 

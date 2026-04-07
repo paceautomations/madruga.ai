@@ -14,7 +14,7 @@ const platforms = discoverPlatforms();
       <ul>
         {platforms.map((p) => (
           <li>
-            <a href={`/${p.name}/dashboard/`}>{p.title || p.name}</a>
+            <a href={`/${p.name}/control-panel/`}>{p.title || p.name}</a>
             {p.lifecycle && <span> — {p.lifecycle}</span>}
           </li>
         ))}

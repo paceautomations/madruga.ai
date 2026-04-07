@@ -26,7 +26,7 @@ graph TD
         bflow_page["business-flow.astro"]
     end
 
-    subgraph model_fulano["Fulano model/ (10 arquivos)"]
+    subgraph model_prosauai["ProsaUAI model/ (10 arquivos)"]
         f_actors["actors.likec4"]
         f_ext["externals.likec4"]
         f_infra["infrastructure.likec4"]
@@ -70,11 +70,11 @@ graph TD
 | `portal/src/lib/constants.ts` | Remove .likec4 extension handling |
 | `portal/src/components/dashboard/PipelineDAG.tsx` | Remove .likec4 extension handling |
 | `portal/package.json` | Remove likec4 dependency |
-| `platforms/fulano/platform.yaml` | Remove model:, views:, serve:, build: blocks. Update domain-model/containers outputs |
-| `platforms/madruga-ai/platform.yaml` | Same as fulano |
-| `platforms/fulano/engineering/blueprint.md` | Add L1 deploy topology + L2 containers Mermaid diagrams |
-| `platforms/fulano/engineering/domain-model.md` | Add L3 context map section (was empty AUTO markers in context-map.md) |
-| `platforms/fulano/engineering/context-map.md` | Populate with Mermaid context map (was empty AUTO markers) or redirect to domain-model.md |
+| `platforms/prosauai/platform.yaml` | Remove model:, views:, serve:, build: blocks. Update domain-model/containers outputs |
+| `platforms/madruga-ai/platform.yaml` | Same as prosauai |
+| `platforms/prosauai/engineering/blueprint.md` | Add L1 deploy topology + L2 containers Mermaid diagrams |
+| `platforms/prosauai/engineering/domain-model.md` | Add L3 context map section (was empty AUTO markers in context-map.md) |
+| `platforms/prosauai/engineering/context-map.md` | Populate with Mermaid context map (was empty AUTO markers) or redirect to domain-model.md |
 | `platforms/madruga-ai/engineering/blueprint.md` | Add L2 containers, update stack table (LikeC4 → Mermaid), remove LikeC4 refs |
 | `platforms/madruga-ai/engineering/domain-model.md` | Minor: remove context-map.md cross-ref if needed |
 | `platforms/madruga-ai/decisions/ADR-001-likec4-source-of-truth.md` | Status: Superseded by ADR-020 |
@@ -96,7 +96,7 @@ graph TD
 
 ## 2. Mermaid Diagram Inventory (Post-Migration)
 
-### Fulano Platform
+### ProsaUAI Platform
 
 | Documento | Diagrama | Tipo Mermaid | Nivel | Status |
 |-----------|----------|-------------|-------|--------|
@@ -127,19 +127,19 @@ graph TD
 
 Nomenclatura consistente entre niveis de diagrama:
 
-### Fulano
+### ProsaUAI
 
 | Entidade | L1 (Topology) | L2 (Containers) | L3 (Context Map) | L4 (Class) |
 |----------|--------------|-----------------|-------------------|------------|
-| API Server | fulano-api | fulano-api | — | — |
-| Worker | fulano-worker | fulano-worker | — | — |
-| Admin Panel | fulano-admin | fulano-admin | — | — |
+| API Server | prosauai-api | prosauai-api | — | — |
+| Worker | prosauai-worker | prosauai-worker | — | — |
+| Admin Panel | prosauai-admin | prosauai-admin | — | — |
 | Channel BC | — | — | Channel | Channel (classDiagram) |
 | Conversation BC | — | — | Conversation | Conversation (classDiagram) |
 | Safety BC | — | — | Safety | Safety (classDiagram) |
 | Operations BC | — | — | Operations | Operations (classDiagram) |
 | Redis | redis | redis | — | — |
-| Supabase | supabase-fulano | supabase-fulano | — | — |
+| Supabase | supabase-prosauai | supabase-prosauai | — | — |
 | Evolution API | evolution-api | evolution-api | — | — |
 
 ### Madruga-AI
@@ -171,7 +171,7 @@ Cada secao de diagrama aponta para o proximo nivel de detalhe:
 handoff:
   from: data-model
   to: plan
-  context: "Inventory complete. 28 files removed, 20 modified, 1 created. Mermaid diagrams: 5 new for fulano, 2 new for madruga-ai. L4 already exists in both platforms."
+  context: "Inventory complete. 28 files removed, 20 modified, 1 created. Mermaid diagrams: 5 new for prosauai, 2 new for madruga-ai. L4 already exists in both platforms."
   blockers: []
   confidence: Alta
   kill_criteria: "Platform lint fails on missing model:/views: fields without updating lint script"

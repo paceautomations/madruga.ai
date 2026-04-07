@@ -39,7 +39,7 @@ Business analyst — maps real-world flows, challenges unrealistic happy paths. 
 
 ## Usage
 
-- `/business-process fulano` — Generate business flows for the "fulano" platform
+- `/business-process prosauai` — Generate business flows for the "prosauai" platform
 - `/business-process` — Prompt for platform name and collect context
 
 ## Output Directory

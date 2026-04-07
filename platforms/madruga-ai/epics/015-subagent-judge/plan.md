@@ -73,7 +73,7 @@ platforms/madruga-ai/epics/015-subagent-judge/
 platforms/madruga-ai/
 └── platform.yaml                      # MODIFIED — epic_cycle: verify → judge
 
-platforms/fulano/
+platforms/prosauai/
 └── platform.yaml                      # MODIFIED — epic_cycle: verify → judge
 
 .specify/scripts/

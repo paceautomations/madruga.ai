@@ -180,7 +180,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: '20' }
-      - run: npx likec4 build platforms/fulano/model/
+      - run: npx likec4 build platforms/prosauai/model/
       - run: npx likec4 build platforms/madruga-ai/model/
 
   templates:

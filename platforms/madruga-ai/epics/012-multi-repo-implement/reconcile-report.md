@@ -69,19 +69,19 @@ E atualizar Gantt:
 
 ---
 
-### D6.2 — roadmap.md: Milestone "Fulano Operacional" parcialmente atingido
+### D6.2 — roadmap.md: Milestone "ProsaUAI Operacional" parcialmente atingido
 
 **Severidade**: medium
 **Doc**: `platforms/madruga-ai/planning/roadmap.md`
 
 **Estado atual** (linha 108):
 ```markdown
-| **Fulano Operacional** | 012 | `speckit.implement` executa em repo Fulano via worktree, PR criado com `gh` | Semana 2 |
+| **ProsaUAI Operacional** | 012 | `speckit.implement` executa em repo ProsaUAI via worktree, PR criado com `gh` | Semana 2 |
 ```
 
 **Estado esperado**: Atualizar com nota de progresso:
 ```markdown
-| **Fulano Operacional** | 012 | `speckit.implement` executa em repo Fulano via worktree, PR criado com `gh` | Semana 2 | **Tooling pronto** — ensure_repo, worktree, implement_remote implementados. Falta teste end-to-end com repo Fulano real. |
+| **ProsaUAI Operacional** | 012 | `speckit.implement` executa em repo ProsaUAI via worktree, PR criado com `gh` | Semana 2 | **Tooling pronto** — ensure_repo, worktree, implement_remote implementados. Falta teste end-to-end com repo ProsaUAI real. |
 ```
 
 ---
@@ -163,7 +163,7 @@ E remover "Recent Changes" section (linhas 313-314) que e temporaria.
 |-------|----------|------|--------|
 | Appetite | 2w | ~1d | Sim (significativamente menor) |
 | Status | Candidato | Implementado | Sim — mover para Shipped |
-| Milestone | Fulano Operacional | Tooling pronto | Parcial — falta teste com Fulano real |
+| Milestone | ProsaUAI Operacional | Tooling pronto | Parcial — falta teste com ProsaUAI real |
 
 ### Dependencias Descobertas
 

@@ -17,7 +17,7 @@ export const onRequest = defineRouteMiddleware((context) => {
 		return;
 	}
 
-	// Extract platform slug from URL: /fulano/... → "fulano"
+	// Extract platform slug from URL: /prosauai/... → "prosauai"
 	const match = pathname.match(/^\/([^/]+)\//);
 	if (!match) return;
 	const currentPlatform = match[1];

@@ -9,9 +9,9 @@
 ```yaml
 repo:
   org: str          # GitHub org (ex: "paceautomations")
-  name: str         # Repo name (ex: "fulano-api")
+  name: str         # Repo name (ex: "prosauai-api")
   base_branch: str  # Branch base (ex: "main")
-  epic_branch_prefix: str  # Prefixo para branches de epic (ex: "epic/fulano/")
+  epic_branch_prefix: str  # Prefixo para branches de epic (ex: "epic/prosauai/")
 ```
 
 **Fonte**: `platforms/<name>/platform.yaml > repo:`

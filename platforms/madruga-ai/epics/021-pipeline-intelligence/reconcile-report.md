@@ -53,7 +53,7 @@ scope: "Reconcile pos-merge de epics 017-021 em main"
 |---|----|-------------|---------------|----------------|----------|
 | 1 | D1.1 | solution-overview.md | "Observabilidade e tracing" na secao **Next** | Ja implementado (epic 017) — mover para **Implementado** | high |
 | 2 | D1.2 | solution-overview.md | Secao **Implementado** nao inclui features dos epics 020-021 | Adicionar: cost tracking, hallucination guard, quick-fix, db module split, structured logging, governance (CODEOWNERS, CONTRIBUTING, SECURITY) | medium |
-| 3 | D1.3 | solution-overview.md | Secao **Next** vazia apos mover observabilidade | Atualizar com candidatos reais: Fulano end-to-end, roadmap auto-atualizado | low |
+| 3 | D1.3 | solution-overview.md | Secao **Next** vazia apos mover observabilidade | Atualizar com candidatos reais: ProsaUAI end-to-end, roadmap auto-atualizado | low |
 | 4 | D1.4 | process.md | Flow 2 referencia `/verify + /qa` (linha 30) | verify foi deprecado → deve ser `/judge + /qa` | medium |
 
 ### D2 — Architecture Drift
@@ -147,7 +147,7 @@ Nenhuma nova dependencia inter-epic descoberta.
 
 Nenhum epic futuro encontrado no roadmap. Todos os 21 epics foram shipped (006-021).
 
-**Recomendacao:** Proxima acao deveria ser validacao end-to-end com plataforma Fulano (primeiro epic real em repo externo) ou definicao de novos epics candidatos.
+**Recomendacao:** Proxima acao deveria ser validacao end-to-end com plataforma ProsaUAI (primeiro epic real em repo externo) ou definicao de novos epics candidatos.
 
 ---
 
@@ -181,5 +181,5 @@ Nenhum epic futuro encontrado no roadmap. Todos os 21 epics foram shipped (006-0
 handoff:
   from: reconcile
   to: null
-  context: "Reconcile completo. Todos os 21 epics shipped. Proximo passo: validacao Fulano ou novos epics."
+  context: "Reconcile completo. Todos os 21 epics shipped. Proximo passo: validacao ProsaUAI ou novos epics."
   blockers: []

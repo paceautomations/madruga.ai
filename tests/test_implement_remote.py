@@ -90,7 +90,7 @@ class TestComposePrompt:
 class TestRunImplement:
     @patch("implement_remote.compose_prompt", return_value="test prompt")
     def test_invoke_claude_correct_args(self, mock_compose):
-        """US3: claude -p called with --cwd pointing to worktree."""
+        """US3: claude -p called with subprocess cwd pointing to worktree."""
         with (
             patch("ensure_repo._load_repo_binding") as mock_bind,
             patch("ensure_repo._is_self_ref", return_value=False),
@@ -111,8 +111,9 @@ class TestRunImplement:
         cmd = mock_run.call_args[0][0]
         assert cmd[0] == "claude"
         assert cmd[1] == "-p"
-        assert "--cwd" in cmd
-        assert "/tmp/wt" in cmd
+        # --cwd is NOT a valid Claude CLI flag; subprocess cwd= is used instead
+        assert "--cwd" not in cmd
+        assert mock_run.call_args.kwargs.get("cwd") == "/tmp/wt"
 
     @patch("implement_remote.compose_prompt", return_value="test prompt")
     def test_timeout_returns_exit_3(self, mock_compose):
@@ -159,9 +160,8 @@ class TestRunImplement:
 
         assert result == 0
         mock_wt.assert_not_called()
-        # claude -p should use REPO_ROOT as cwd
-        cmd = mock_run.call_args[0][0]
-        assert "/repo" in cmd
+        # Self-ref uses subprocess cwd=REPO_ROOT, not --cwd flag
+        assert mock_run.call_args.kwargs.get("cwd") == "/repo"
 
 
 # ── PR Tests ─────────────────────────────────────────────────────────

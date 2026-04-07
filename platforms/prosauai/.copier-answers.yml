@@ -1,0 +1,11 @@
+# Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
+_src_path: ../../.specify/templates/platform
+platform_name: prosauai
+platform_title: "ProsaUAI — Agentes WhatsApp"
+platform_description: "Plataforma multi-tenant de agentes conversacionais WhatsApp"
+lifecycle: design
+repo_org: paceautomations
+repo_name: prosauai-api
+repo_base_branch: main
+include_business_flow: true
+register_portal: false

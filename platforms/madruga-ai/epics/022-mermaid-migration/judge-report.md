@@ -46,7 +46,7 @@ updated: 2026-04-06
 | W3 | (found during test run) | `test_epic_cycle.py` expected 11 nodes and "verify" node — now 12 nodes with "judge" and "roadmap-reassess" | `.specify/templates/platform/tests/test_epic_cycle.py` | [FIXED] | Rewrote: 12 nodes, correct IDs (judge replaces verify), all mandatory |
 | W4 | arch-reviewer | `copier.yml` `_skip_if_exists` lists 7 `model/*.likec4` entries for deleted template files | `.specify/templates/platform/copier.yml:14-20` | [FIXED] | Removed all 7 `.likec4` entries |
 | W5 | arch-reviewer | Template jinja files reference LikeC4: `context-map.md.jinja:18`, `integrations.md.jinja:13` | `.specify/templates/platform/template/engineering/*.jinja` | [FIXED] | Updated to Mermaid-only references |
-| W6 | arch-reviewer | `platforms/fulano/engineering/context-map.md:18` says "use o viewer interativo LikeC4" | `platforms/fulano/engineering/context-map.md:18` | [FIXED] | Replaced with cross-reference to domain-model.md |
+| W6 | arch-reviewer | `platforms/prosauai/engineering/context-map.md:18` says "use o viewer interativo LikeC4" | `platforms/prosauai/engineering/context-map.md:18` | [FIXED] | Replaced with cross-reference to domain-model.md |
 | W7 | arch-reviewer | `commands.md` still documents LikeC4 section with `likec4 serve` and stale register description | `.claude/knowledge/commands.md:11,30-33` | [OPEN — protected file] | Requires `/madruga:skills-mgmt` |
 
 ### NITs (3 — 3/3 fixed)
@@ -88,7 +88,7 @@ Nenhuma — 4/4 personas completaram com sucesso.
 | `.specify/templates/platform/copier.yml` | W4 | Removed 7 model/*.likec4 from _skip_if_exists |
 | `.specify/templates/platform/template/engineering/context-map.md.jinja` | W5 | Removed LikeC4 viewer reference |
 | `.specify/templates/platform/template/engineering/integrations.md.jinja` | W5 | Removed LikeC4 viewer reference |
-| `platforms/fulano/engineering/context-map.md` | W6 | Replaced LikeC4 viewer with domain-model cross-reference |
+| `platforms/prosauai/engineering/context-map.md` | W6 | Replaced LikeC4 viewer with domain-model cross-reference |
 
 ---
 

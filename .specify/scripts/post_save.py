@@ -8,17 +8,17 @@ into a single command that the AI can call after saving any artifact.
 Usage:
     # L1 (platform DAG):
     python3 .specify/scripts/post_save.py \
-        --platform fulano --node vision --skill madruga:vision \
+        --platform prosauai --node vision --skill madruga:vision \
         --artifact business/vision.md
 
     # L2 (epic cycle):
     python3 .specify/scripts/post_save.py \
-        --platform fulano --epic 001-channel-pipeline \
+        --platform prosauai --epic 001-channel-pipeline \
         --node specify --skill speckit.specify \
         --artifact epics/001-channel-pipeline/spec.md
 
     # Re-seed from filesystem:
-    python3 .specify/scripts/post_save.py --reseed --platform fulano
+    python3 .specify/scripts/post_save.py --reseed --platform prosauai
 
     # Re-seed all platforms:
     python3 .specify/scripts/post_save.py --reseed-all
@@ -196,6 +196,13 @@ def record_save(
             except OSError:
                 pass
 
+        # Pre-read pipeline data outside transaction to avoid I/O inside txn
+        pipeline_data = {}
+        if epic:
+            yaml_path = REPO_ROOT / "platforms" / platform / "platform.yaml"
+            if yaml_path.exists():
+                pipeline_data = yaml.safe_load(yaml_path.read_text(encoding="utf-8")).get("pipeline", {})
+
         # Batch all writes into a single transaction for atomicity
         now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         shipped_delivered_at = None  # track ship transition for post-txn filesystem write
@@ -252,12 +259,6 @@ def record_save(
                     )
 
                 # Backfill missing predecessor nodes whose artifacts exist on disk
-                yaml_path = REPO_ROOT / "platforms" / platform / "platform.yaml"
-                pipeline_data = (
-                    yaml.safe_load(yaml_path.read_text(encoding="utf-8")).get("pipeline", {})
-                    if yaml_path.exists()
-                    else {}
-                )
                 completed_ids = _backfill_epic_predecessors(txn, platform, epic, pipeline_data)
 
                 # Auto-transition epic status using centralized logic
@@ -440,11 +441,12 @@ def detect_from_path(file_path: str) -> dict | None:
             if len(matches) > 1:
                 # Disambiguate: pick first unfinished node in DAG order
                 try:
-                    conn = get_conn()
-                    done_nodes = {
-                        n["node_id"] for n in get_epic_nodes(conn, platform, epic) if n["status"] in ("done", "skipped")
-                    }
-                    conn.close()
+                    with get_conn() as conn:
+                        done_nodes = {
+                            n["node_id"]
+                            for n in get_epic_nodes(conn, platform, epic)
+                            if n["status"] in ("done", "skipped")
+                        }
                     for m in matches:
                         if m["id"] not in done_nodes:
                             matches = [m]
@@ -481,7 +483,7 @@ def detect_from_path(file_path: str) -> dict | None:
 
 def main():
     parser = argparse.ArgumentParser(description="Record pipeline state after artifact save")
-    parser.add_argument("--platform", help="Platform name (e.g., fulano)")
+    parser.add_argument("--platform", help="Platform name (e.g., prosauai)")
     parser.add_argument("--node", help="DAG node ID (e.g., vision, specify)")
     parser.add_argument("--skill", help="Skill that generated the artifact (e.g., madruga:vision)")
     parser.add_argument(

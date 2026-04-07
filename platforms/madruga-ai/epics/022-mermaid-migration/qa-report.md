@@ -65,11 +65,11 @@ unresolved: 24
 | LikeC4VitePlugin removido do astro.config | ✅ PASS | Nenhuma referencia |
 | buildViewPaths removido de platforms.mjs | ✅ PASS | Funcao nao existe mais |
 | vision-build.py removido | ✅ PASS | Arquivo deletado |
-| model/ removido (fulano) | ✅ PASS | Diretorio deletado |
+| model/ removido (prosauai) | ✅ PASS | Diretorio deletado |
 | model/ removido (madruga-ai) | ✅ PASS | Diretorio deletado |
-| Mermaid diagramas em blueprint.md (fulano) | ✅ PASS | Deploy topology + containers presentes |
-| Mermaid diagramas em domain-model.md (fulano) | ✅ PASS | Context map + BC classDiagrams |
-| Mermaid diagramas em process.md (fulano) | ✅ PASS | Overview + deep-dives por fase |
+| Mermaid diagramas em blueprint.md (prosauai) | ✅ PASS | Deploy topology + containers presentes |
+| Mermaid diagramas em domain-model.md (prosauai) | ✅ PASS | Context map + BC classDiagrams |
+| Mermaid diagramas em process.md (prosauai) | ✅ PASS | Overview + deep-dives por fase |
 | Mermaid diagramas em blueprint.md (madruga-ai) | ✅ PASS | Deploy topology + containers |
 | Mermaid diagramas em domain-model.md (madruga-ai) | ✅ PASS | Context map + BC classDiagrams |
 | ADR-020 criado | ✅ PASS | `ADR-020-mermaid-inline-diagrams.md` existe |
@@ -131,7 +131,7 @@ unresolved: 24
 |---------|-----------|---------|
 | `cd portal && npm run build` | ✅ PASS | 42.65s (86 paginas) |
 | `make test` (pytest) | ✅ PASS | 168.10s (633 testes) |
-| `make lint` (platform lint) | ✅ PASS | fulano ✅, madruga-ai ✅ |
+| `make lint` (platform lint) | ✅ PASS | prosauai ✅, madruga-ai ✅ |
 
 ---
 

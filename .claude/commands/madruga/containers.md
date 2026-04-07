@@ -33,7 +33,7 @@ Platform engineer — one responsibility per container, explicit protocols. Writ
 
 ## Usage
 
-- `/containers fulano` — Generate containers for "fulano"
+- `/containers prosauai` — Generate containers for "prosauai"
 - `/containers` — Prompt for name
 
 ## Output Directory

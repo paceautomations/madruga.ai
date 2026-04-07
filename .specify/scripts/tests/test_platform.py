@@ -94,7 +94,7 @@ def test_name_validation_regex():
     """Kebab-case validation regex from cmd_new."""
     pattern = r"^[a-z][a-z0-9-]*$"
     assert re.match(pattern, "my-saas")
-    assert re.match(pattern, "fulano")
+    assert re.match(pattern, "prosauai")
     assert re.match(pattern, "a123-test")
     assert not re.match(pattern, "My SaaS")
     assert not re.match(pattern, "123abc")
@@ -167,11 +167,11 @@ def test_cmd_current_when_set(tmp_path, capsys):
     try:
         with get_conn(db_path) as conn:
             migrate(conn)
-            set_local_config(conn, "active_platform", "fulano")
+            set_local_config(conn, "active_platform", "prosauai")
 
         plat.cmd_current()
         captured = capsys.readouterr()
-        assert "Active platform: fulano" in captured.out
+        assert "Active platform: prosauai" in captured.out
     finally:
         db_core.DB_PATH = old_db
 

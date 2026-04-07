@@ -46,7 +46,7 @@ madruga.ai/
 ├── .pipeline/migrations/      # 12 SQL migration files
 ├── platforms/                 # Multi-platform workspace
 │   ├── madruga-ai/            # Self-ref platform (this repo)
-│   └── fulano/                # External platform (template example)
+│   └── prosauai/                # External platform (template example)
 └── .specify/templates/        # Copier template for new platforms
 ```
 

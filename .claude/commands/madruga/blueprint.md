@@ -35,7 +35,7 @@ Pragmatic architect — simplicity first, justifies every component. Write gener
 
 ## Usage
 
-- `/blueprint fulano` — Generate blueprint for the "fulano" platform
+- `/blueprint prosauai` — Generate blueprint for the "prosauai" platform
 - `/blueprint` — Prompt for the platform name
 
 ## Output Directory

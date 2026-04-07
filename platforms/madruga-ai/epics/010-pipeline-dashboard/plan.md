@@ -183,7 +183,7 @@ Tabela HTML pura renderizada server-side no Astro (zero JS):
 
 ```
          | platform-new | vision | solution | ... | roadmap | Progress |
-fulano   |     ●        |   ●    |    ●     | ... |    ○    |  53.8%   |
+prosauai   |     ●        |   ●    |    ●     | ... |    ○    |  53.8%   |
 madruga  |     ●        |   ●    |    ●     | ... |    ○    |  69.2%   |
 ```
 

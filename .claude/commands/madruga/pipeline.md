@@ -23,7 +23,7 @@ Pipeline Observer + Advisor. Factual, visual, concise. Write output in Brazilian
 
 ## Usage
 
-- `/pipeline fulano` — Full pipeline status for "fulano"
+- `/pipeline prosauai` — Full pipeline status for "prosauai"
 - `/pipeline` — Prompt for platform
 
 ## Instructions

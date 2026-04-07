@@ -206,7 +206,7 @@ def get_eval_scores(
 
 def get_runs_with_evals(
     conn: sqlite3.Connection,
-    platform_id: str,
+    platform_id: str | None = None,
     limit: int = 100,
     offset: int = 0,
     status_filter: str | None = None,
@@ -216,20 +216,25 @@ def get_runs_with_evals(
 
     Returns (runs, total_count). Each run has an 'evals' dict mapping
     dimension → score (latest score per dimension for that run).
+    When platform_id is None, returns runs across all platforms.
     """
-    where = "WHERE pr.platform_id = ?"
-    params: list = [platform_id]
+    clauses: list[str] = []
+    params: list = []
+    if platform_id:
+        clauses.append("pr.platform_id = ?")
+        params.append(platform_id)
     if status_filter:
-        where += " AND pr.status = ?"
+        clauses.append("pr.status = ?")
         params.append(status_filter)
     if epic_filter:
-        where += " AND pr.epic_id = ?"
+        clauses.append("pr.epic_id = ?")
         params.append(epic_filter)
+    where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
 
     total = conn.execute(f"SELECT COUNT(*) FROM pipeline_runs pr {where}", params).fetchone()[0]
 
     rows = conn.execute(
-        f"SELECT pr.run_id, pr.epic_id, pr.node_id, pr.status, pr.tokens_in, "
+        f"SELECT pr.run_id, pr.platform_id, pr.epic_id, pr.node_id, pr.status, pr.tokens_in, "
         f"pr.tokens_out, pr.cost_usd, pr.duration_ms, pr.error, "
         f"pr.started_at, pr.completed_at "
         f"FROM pipeline_runs pr {where} "
@@ -270,65 +275,129 @@ def get_runs_with_evals(
 # ══════════════════════════════════════
 
 
-def get_stats(conn: sqlite3.Connection, platform_id: str, days: int = 30) -> dict:
-    """Aggregate stats by day for a platform. Returns {stats, summary, top_nodes}.
+def _stats_where(
+    platform_id: str | None,
+    start_date: str | None,
+    end_date: str | None,
+    days: int,
+    *,
+    table_alias: str = "pr",
+) -> tuple[str, list]:
+    """Build WHERE clause + params for stats queries. Shared by get_stats."""
+    clauses: list[str] = []
+    params: list = []
+    if platform_id:
+        clauses.append(f"{table_alias}.platform_id = ?")
+        params.append(platform_id)
+    if start_date and end_date:
+        clauses.append(f"date({table_alias}.started_at) >= ?")
+        params.append(start_date)
+        clauses.append(f"date({table_alias}.started_at) <= ?")
+        params.append(end_date)
+    else:
+        clauses.append(f"{table_alias}.started_at >= date('now', ?)")
+        params.append(f"-{min(days, 90)} days")
+    return ("WHERE " + " AND ".join(clauses)) if clauses else "", params
 
-    Aggregates from pipeline_runs (source of truth) instead of traces,
-    because traces often have NULL metrics (cancelled/running traces
-    never called complete_trace).
+
+def get_stats(
+    conn: sqlite3.Connection,
+    platform_id: str | None = None,
+    days: int = 30,
+    start_date: str | None = None,
+    end_date: str | None = None,
+) -> dict:
+    """Aggregate stats by day. Returns {stats, summary, top_nodes, ...}.
+
+    When platform_id is None, aggregates across all platforms.
+    When start_date/end_date provided, overrides 'days' param.
+    Includes extra chart data: stats_by_status, avg_scores_by_day,
+    avg_duration_by_node, score_distribution.
     """
-    days = min(days, 90)
-    day_offset = f"-{days} days"
+    where, params = _stats_where(platform_id, start_date, end_date, days)
 
+    # Daily stats
     stats_rows = conn.execute(
-        "SELECT "
-        "  date(pr.started_at) as day, "
-        "  COUNT(*) as runs, "
-        "  SUM(pr.cost_usd) as total_cost, "
-        "  SUM(pr.tokens_in) as total_tokens_in, "
-        "  SUM(pr.tokens_out) as total_tokens_out, "
-        "  AVG(pr.duration_ms) as avg_duration_ms "
-        "FROM pipeline_runs pr "
-        "WHERE pr.platform_id = ? AND pr.started_at >= date('now', ?) "
-        "GROUP BY date(pr.started_at) "
-        "ORDER BY day",
-        (platform_id, day_offset),
+        "SELECT date(pr.started_at) as day, COUNT(*) as runs, "
+        "  SUM(pr.cost_usd) as total_cost, SUM(pr.tokens_in) as total_tokens_in, "
+        "  SUM(pr.tokens_out) as total_tokens_out, AVG(pr.duration_ms) as avg_duration_ms "
+        f"FROM pipeline_runs pr {where} "
+        "GROUP BY date(pr.started_at) ORDER BY day",
+        params,
     ).fetchall()
 
+    # Summary
     summary_row = conn.execute(
-        "SELECT "
-        "  COUNT(*) as total_runs, "
-        "  SUM(cost_usd) as total_cost, "
-        "  SUM(tokens_in) as total_tokens_in, "
-        "  SUM(tokens_out) as total_tokens_out, "
+        "SELECT COUNT(*) as total_runs, SUM(cost_usd) as total_cost, "
+        "  SUM(tokens_in) as total_tokens_in, SUM(tokens_out) as total_tokens_out, "
         "  AVG(cost_usd) as avg_cost_per_run, "
-        "  SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed_runs "
-        "FROM pipeline_runs "
-        "WHERE platform_id = ? AND started_at >= date('now', ?)",
-        (platform_id, day_offset),
+        "  SUM(CASE WHEN status='failed' THEN 1 ELSE 0 END) as failed_runs "
+        f"FROM pipeline_runs pr {where}",
+        params,
     ).fetchone()
 
+    # Top nodes by cost
     top_nodes = conn.execute(
-        "SELECT pr.node_id, "
-        "  SUM(pr.cost_usd) as total_cost, "
-        "  COUNT(*) as run_count "
-        "FROM pipeline_runs pr "
-        "WHERE pr.platform_id = ? AND pr.started_at >= date('now', ?) "
-        "  AND pr.cost_usd > 0 "
-        "GROUP BY pr.node_id "
-        "ORDER BY total_cost DESC "
-        "LIMIT 5",
-        (platform_id, day_offset),
+        "SELECT pr.node_id, SUM(pr.cost_usd) as total_cost, COUNT(*) as run_count "
+        f"FROM pipeline_runs pr {where} AND pr.cost_usd > 0 "
+        "GROUP BY pr.node_id ORDER BY total_cost DESC LIMIT 10"
+        if where
+        else "SELECT pr.node_id, SUM(pr.cost_usd) as total_cost, COUNT(*) as run_count "
+        "FROM pipeline_runs pr WHERE pr.cost_usd > 0 "
+        "GROUP BY pr.node_id ORDER BY total_cost DESC LIMIT 10",
+        params,
     ).fetchall()
 
-    # Avg eval across all runs in the period (not limited by page size)
+    # Avg eval
+    where_eval, params_eval = _stats_where(platform_id, start_date, end_date, days)
     avg_eval_row = conn.execute(
-        "SELECT AVG(es.score) as avg_eval "
-        "FROM eval_scores es "
-        "JOIN pipeline_runs pr ON pr.run_id = es.run_id "
-        "WHERE pr.platform_id = ? AND pr.started_at >= date('now', ?)",
-        (platform_id, day_offset),
+        "SELECT AVG(es.score) as avg_eval FROM eval_scores es "
+        f"JOIN pipeline_runs pr ON pr.run_id = es.run_id {where_eval}",
+        params_eval,
     ).fetchone()
+
+    # --- Chart data ---
+
+    # Daily runs by status (for stacked bar chart)
+    stats_by_status = conn.execute(
+        "SELECT date(pr.started_at) as day, pr.status, COUNT(*) as count "
+        f"FROM pipeline_runs pr {where} "
+        "GROUP BY date(pr.started_at), pr.status ORDER BY day",
+        params,
+    ).fetchall()
+
+    # Daily avg eval scores by dimension (for multi-line chart)
+    avg_scores_by_day = conn.execute(
+        "SELECT date(pr.started_at) as day, es.dimension, AVG(es.score) as avg_score "
+        f"FROM eval_scores es JOIN pipeline_runs pr ON pr.run_id = es.run_id {where_eval} "
+        "GROUP BY date(pr.started_at), es.dimension ORDER BY day",
+        params_eval,
+    ).fetchall()
+
+    # Top nodes by avg duration (for horizontal bar chart)
+    where_dur = f"{where} AND pr.duration_ms IS NOT NULL" if where else "WHERE pr.duration_ms IS NOT NULL"
+    avg_duration_by_node = conn.execute(
+        f"SELECT pr.node_id, AVG(pr.duration_ms) as avg_duration_ms, COUNT(*) as run_count "
+        f"FROM pipeline_runs pr {where_dur} "
+        "GROUP BY pr.node_id ORDER BY avg_duration_ms DESC LIMIT 10",
+        params,
+    ).fetchall()
+
+    # Score distribution (histogram buckets)
+    score_distribution = conn.execute(
+        "SELECT "
+        "  CASE "
+        "    WHEN es.score < 2 THEN '0-2' "
+        "    WHEN es.score < 4 THEN '2-4' "
+        "    WHEN es.score < 6 THEN '4-6' "
+        "    WHEN es.score < 8 THEN '6-8' "
+        "    ELSE '8-10' "
+        "  END as bucket, "
+        "  COUNT(*) as count "
+        f"FROM eval_scores es JOIN pipeline_runs pr ON pr.run_id = es.run_id {where_eval} "
+        "GROUP BY bucket ORDER BY bucket",
+        params_eval,
+    ).fetchall()
 
     summary = dict(summary_row) if summary_row else {}
     summary["avg_eval"] = avg_eval_row["avg_eval"] if avg_eval_row else None
@@ -337,6 +406,10 @@ def get_stats(conn: sqlite3.Connection, platform_id: str, days: int = 30) -> dic
         "stats": [dict(r) for r in stats_rows],
         "summary": summary,
         "top_nodes": [dict(r) for r in top_nodes],
+        "stats_by_status": [dict(r) for r in stats_by_status],
+        "avg_scores_by_day": [dict(r) for r in avg_scores_by_day],
+        "avg_duration_by_node": [dict(r) for r in avg_duration_by_node],
+        "score_distribution": [dict(r) for r in score_distribution],
     }
 
 

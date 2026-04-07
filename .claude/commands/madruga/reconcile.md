@@ -37,8 +37,8 @@ Architect / Documentation Guardian. Skeptical, systematic. You do not trust that
 
 ## Usage
 
-- `/reconcile fulano 001` — Reconcile after epic 001 of platform "fulano"
-- `/reconcile fulano` — Prompt for epic number
+- `/reconcile prosauai 001` — Reconcile after epic 001 of platform "prosauai"
+- `/reconcile prosauai` — Prompt for epic number
 - `/reconcile` — Prompt for platform and epic
 
 ## Output Directory

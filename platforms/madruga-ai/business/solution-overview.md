@@ -54,7 +54,7 @@ Tudo vive em um unico lugar, versionado, consultavel por qualquer membro do time
 
 | Feature | Descricao | Por que é importante |
 |---------|-----------|---------------------|
-| **Fulano end-to-end** | Primeiro epic completo processado pelo Easter em repo externo Fulano — validacao real do pipeline autonomo pitch-to-PR | Prova que o sistema funciona fora do self-ref — valor real entregue |
+| **ProsaUAI end-to-end** | Primeiro epic completo processado pelo Easter em repo externo ProsaUAI — validacao real do pipeline autonomo pitch-to-PR | Prova que o sistema funciona fora do self-ref — valor real entregue |
 | **Roadmap auto-atualizado** | Roadmap gerado automaticamente do estado real dos ciclos, com drift score e status de milestones | Planejamento sempre reflete a realidade — nunca desatualizado |
 
 ---

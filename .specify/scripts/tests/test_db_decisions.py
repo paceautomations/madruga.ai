@@ -1,7 +1,7 @@
 """Tests for decisions, memory, and FTS5 features in db.py.
 
 ADR frontmatter variations documented from T001 survey (2026-03-29):
-- All 19 Fulano ADRs use consistent frontmatter: title, status, decision, alternatives, rationale
+- All 19 ProsaUAI ADRs use consistent frontmatter: title, status, decision, alternatives, rationale
 - Section headers: ## Contexto (33), ## Decisao (32), ## Alternativas consideradas (32), ## Consequencias (32)
 - Some ADRs have extra sections: ## Referencias, ## Regras obrigatorias, etc.
 - Frontmatter values are quoted strings or plain text

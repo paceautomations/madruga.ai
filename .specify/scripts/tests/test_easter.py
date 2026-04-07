@@ -11,6 +11,8 @@ from httpx import ASGITransport, AsyncClient
 
 # --- Helpers ---
 
+_SELF_REF_BINDING = {"name": "madruga.ai", "org": "p", "base_branch": "main", "epic_branch_prefix": "epic/test/"}
+
 
 def _make_app():
     """Import and return the FastAPI app."""
@@ -87,6 +89,11 @@ async def test_dag_scheduler_detects_active_epic():
         ),
         patch("easter.run_pipeline_async", new_callable=AsyncMock, return_value=0) as mock_run,
         patch("easter._running_epics", set()),
+        patch(
+            "ensure_repo._load_repo_binding",
+            return_value=_SELF_REF_BINDING,
+        ),
+        patch("ensure_repo._is_self_ref", return_value=True),
     ):
         # Run one iteration then stop
         async def _stop_after_poll(*args, **kwargs):
@@ -230,6 +237,11 @@ async def test_gate_approval_resumes_pipeline():
         patch("easter.run_pipeline_async", new_callable=AsyncMock, return_value=0) as mock_run,
         patch("easter._running_epics", set()),
         patch("easter.asyncio.sleep", new_callable=AsyncMock),
+        patch(
+            "ensure_repo._load_repo_binding",
+            return_value=_SELF_REF_BINDING,
+        ),
+        patch("ensure_repo._is_self_ref", return_value=True),
     ):
         await dag_scheduler(mock_conn, asyncio.Semaphore(3), shutdown, poll_interval=0.01)
 
@@ -369,6 +381,11 @@ async def test_auto_gates_continue_in_degraded_mode():
         ),
         patch("easter.run_pipeline_async", new_callable=AsyncMock, return_value=0) as mock_run,
         patch("easter._running_epics", set()),
+        patch(
+            "ensure_repo._load_repo_binding",
+            return_value=_SELF_REF_BINDING,
+        ),
+        patch("ensure_repo._is_self_ref", return_value=True),
     ):
 
         async def _stop(*args, **kwargs):
@@ -538,6 +555,11 @@ async def test_dag_scheduler_ntfy_on_pipeline_failure():
         patch("easter._running_epics", set()),
         patch("easter.ntfy_alert", return_value=True) as mock_ntfy,
         patch.dict("os.environ", {"MADRUGA_NTFY_TOPIC": "test-topic"}),
+        patch(
+            "ensure_repo._load_repo_binding",
+            return_value=_SELF_REF_BINDING,
+        ),
+        patch("ensure_repo._is_self_ref", return_value=True),
     ):
 
         async def _stop(*args, **kwargs):
@@ -650,6 +672,11 @@ async def test_dag_scheduler_proactive_branch_checkout():
         patch("easter.run_pipeline_async", new_callable=AsyncMock, return_value=0) as mock_run,
         patch("easter._running_epics", set()),
         patch("subprocess.run", side_effect=mock_subprocess_run),
+        patch(
+            "ensure_repo._load_repo_binding",
+            return_value=_SELF_REF_BINDING,
+        ),
+        patch("ensure_repo._is_self_ref", return_value=True),
     ):
 
         async def _stop(*args, **kwargs):

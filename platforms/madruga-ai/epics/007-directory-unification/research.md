@@ -15,7 +15,7 @@
 ## R3. `find_feature_dir_by_prefix` with `--base-dir`
 
 **Decision**: Quando `SPECIFY_BASE_DIR` é setado, `find_feature_dir_by_prefix` retorna `$base_dir` diretamente sem prefix matching.
-**Rationale**: No modo epic dir, o path completo já é conhecido (ex: `platforms/fulano/epics/001-channel-pipeline/`). Prefix matching é desnecessário e potencialmente incorreto (branch name não corresponde a epic dir name).
+**Rationale**: No modo epic dir, o path completo já é conhecido (ex: `platforms/prosauai/epics/001-channel-pipeline/`). Prefix matching é desnecessário e potencialmente incorreto (branch name não corresponde a epic dir name).
 **Alternatives considered**: Aplicar prefix matching dentro do epic dir — complicação desnecessária, pois epic dirs já têm naming definido por `epic-breakdown`.
 
 ## R4. Copier `_skip_if_exists` for epic_cycle

@@ -32,7 +32,7 @@ Staff Engineer + QA Lead. Skeptical, evidence-based. Write generated artifacts i
 
 ## Usage
 
-- `/judge fulano 001` — Judge epic 001 of platform "fulano"
+- `/judge prosauai 001` — Judge epic 001 of platform "prosauai"
 - `/judge` — Prompt for the platform and epic
 
 ## Output

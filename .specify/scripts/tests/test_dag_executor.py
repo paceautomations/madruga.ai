@@ -32,6 +32,7 @@ async def test_run_pipeline_async_no_trace_when_gate_pending(tmp_path):
 
     with (
         patch("dag_executor.REPO_ROOT", tmp_path),
+        patch("dag_executor._resolve_code_dir", return_value=tmp_path),
         patch("dag_executor.parse_dag") as mock_parse,
         patch("dag_executor.topological_sort") as mock_topo,
         patch("db.get_resumable_nodes", return_value=set()),
@@ -83,6 +84,7 @@ async def test_run_pipeline_async_transitions_epic_to_shipped(tmp_path):
     try:
         with (
             patch("dag_executor.REPO_ROOT", tmp_path),
+            patch("dag_executor._resolve_code_dir", return_value=tmp_path),
             patch("dag_executor.parse_dag", return_value=[node]),
             patch("dag_executor.topological_sort", return_value=[node]),
             patch("post_save._refresh_portal_status"),
@@ -122,6 +124,7 @@ async def test_run_pipeline_async_resume_does_not_cancel_traces(tmp_path):
 
     with (
         patch("dag_executor.REPO_ROOT", tmp_path),
+        patch("dag_executor._resolve_code_dir", return_value=tmp_path),
         patch("dag_executor.parse_dag", return_value=[_make_node("specify", "speckit.specify")]),
         patch("dag_executor.topological_sort", return_value=[_make_node("specify", "speckit.specify")]),
         patch("db.get_resumable_nodes", return_value=set()),
@@ -400,6 +403,7 @@ async def test_gate_approved_triggers_dispatch(tmp_path):
         with (
             patch("dag_executor.parse_dag", return_value=nodes),
             patch("dag_executor.topological_sort", return_value=nodes),
+            patch("dag_executor._resolve_code_dir", return_value=tmp_path),
             patch("dag_executor.dispatch_with_retry_async", side_effect=mock_dispatch),
             patch("dag_executor.verify_outputs", return_value=(True, None)),
             patch("dag_executor.compose_skill_prompt", return_value=("test prompt", "guardrail")),
@@ -463,6 +467,7 @@ async def test_auto_mode_skips_gate_approval(tmp_path):
         with (
             patch("dag_executor.parse_dag", return_value=nodes),
             patch("dag_executor.topological_sort", return_value=nodes),
+            patch("dag_executor._resolve_code_dir", return_value=tmp_path),
             patch("dag_executor.dispatch_with_retry_async", side_effect=mock_dispatch),
             patch("dag_executor.verify_outputs", return_value=(True, None)),
             patch("dag_executor.compose_skill_prompt", return_value=("test", "guardrail")),

@@ -33,7 +33,7 @@ Head of Product — outcome-driven, cuts scope, sequences by risk and dependency
 
 ## Usage
 
-- `/roadmap fulano` — Generate roadmap for "fulano"
+- `/roadmap prosauai` — Generate roadmap for "prosauai"
 - `/roadmap` — Prompt for name
 
 ## Output Directory

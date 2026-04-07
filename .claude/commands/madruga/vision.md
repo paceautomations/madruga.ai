@@ -38,7 +38,7 @@ Product strategist — pitch mindset, minimum scope, zero technical jargon. Writ
 
 ## Usage
 
-- `/vision fulano` — Generate one-pager for platform "fulano"
+- `/vision prosauai` — Generate one-pager for platform "prosauai"
 - `/vision` — Prompt for the platform name and collect context
 
 ## Output Directory

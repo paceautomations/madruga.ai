@@ -33,7 +33,7 @@ Product Manager (Shape Up) — problem before solution, appetite as constraint. 
 
 ## Usage
 
-- `/epic-breakdown fulano` — Break platform "fulano" into epics
+- `/epic-breakdown prosauai` — Break platform "prosauai" into epics
 - `/epic-breakdown` — Prompt for name
 
 ## Output

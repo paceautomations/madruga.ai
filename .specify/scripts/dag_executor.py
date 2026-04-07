@@ -54,6 +54,8 @@ HUMAN_GATES = frozenset({"human", "1-way-door"})
 VALID_GATE_MODES = frozenset({"manual", "interactive", "auto"})
 DEFAULT_GATE_MODE = os.environ.get("MADRUGA_MODE", "manual")
 DISALLOWED_TOOLS = "Bash(git checkout:*) Bash(git branch -:*) Bash(git switch:*)"
+# Nodes that need to run in the external code repo (not in REPO_ROOT).
+CODE_CWD_NODES = frozenset({"implement", "judge", "qa"})
 # Quick mode flag — set by run_pipeline/run_pipeline_async when --quick is active.
 # Checked by build_dispatch_cmd to inject quick-fix context into system prompt.
 # Uses contextvars for async safety (avoids shared mutable state between coroutines).
@@ -601,6 +603,29 @@ def _is_sensitive_path(filepath: str) -> bool:
     return any(pat in lower for pat in _SENSITIVE_PATTERNS)
 
 
+def _resolve_code_dir(platform_name: str, epic_slug: str | None) -> Path:
+    """Resolve working directory for nodes that read/write source code.
+
+    For self-ref platforms: returns REPO_ROOT.
+    For external platforms with an epic: creates/reuses a worktree.
+    For L1 (no epic): returns REPO_ROOT (L1 nodes don't touch code).
+    """
+    if not epic_slug:
+        return REPO_ROOT
+    from ensure_repo import _is_self_ref, _load_repo_binding
+    from worktree import create_worktree
+
+    binding = _load_repo_binding(platform_name)
+    if _is_self_ref(binding["name"]):
+        return REPO_ROOT
+    return create_worktree(platform_name, epic_slug)
+
+
+def _needs_code_cwd(node: Node) -> bool:
+    """Return True if this node should run in the external code repo."""
+    return node.id in CODE_CWD_NODES or node.id.startswith("implement:")
+
+
 def _auto_commit_epic(cwd: str | Path, platform_name: str, epic_slug: str) -> bool:
     """Commit working tree changes to the epic branch after implement.
 
@@ -955,8 +980,9 @@ def dispatch_with_retry(
     last_stdout = None
     for attempt, backoff in enumerate([0] + RETRY_BACKOFFS, 1):
         if backoff > 0:
-            log.info("Retry %d/%d for node '%s' after %ds", attempt - 1, len(RETRY_BACKOFFS), node.id, backoff)
-            time.sleep(backoff)
+            jittered = backoff + random.uniform(0, backoff * 0.3)
+            log.info("Retry %d/%d for node '%s' after %.1fs", attempt - 1, len(RETRY_BACKOFFS), node.id, jittered)
+            time.sleep(jittered)
 
         success, error, stdout = dispatch_node(node, cwd, prompt, timeout, guardrail, platform_name)
         if success:
@@ -1215,6 +1241,9 @@ async def run_pipeline_async(
 
     breaker = CircuitBreaker()
     cwd = REPO_ROOT
+    code_dir = _resolve_code_dir(platform_name, epic_slug)
+    if code_dir != REPO_ROOT:
+        log.info("External repo code_dir: %s", code_dir)
 
     for node in ordered:
         if node.id in completed_nodes:
@@ -1289,7 +1318,7 @@ async def run_pipeline_async(
                 epic_slug,
                 platform_dir,
                 conn,
-                cwd,
+                code_dir,
                 trace_id=trace_id,
                 guardrail=guardrail,
                 timeout_per_task=TASK_TIMEOUT,
@@ -1312,7 +1341,7 @@ async def run_pipeline_async(
             completed_nodes.add(node.id)
             log.info("Node '%s' completed successfully (task-by-task)", node.id)
             # F9: Auto-commit implement changes to epic branch
-            _auto_commit_epic(cwd, platform_name, epic_slug)
+            _auto_commit_epic(code_dir, platform_name, epic_slug)
             continue
 
         else:
@@ -1320,11 +1349,12 @@ async def run_pipeline_async(
             abort_fn = _make_abort_check(conn, epic_slug)
             # Insert "running" record before dispatch so it appears in real-time
             run_id = insert_run(conn, platform_name, node.id, epic_id=epic_slug, trace_id=trace_id)
+            node_cwd = code_dir if _needs_code_cwd(node) else cwd
             if semaphore:
                 async with semaphore:
                     success, error, stdout = await dispatch_with_retry_async(
                         node,
-                        cwd,
+                        node_cwd,
                         prompt,
                         timeout,
                         breaker,
@@ -1335,7 +1365,7 @@ async def run_pipeline_async(
             else:
                 success, error, stdout = await dispatch_with_retry_async(
                     node,
-                    cwd,
+                    node_cwd,
                     prompt,
                     timeout,
                     breaker,
@@ -1359,12 +1389,12 @@ async def run_pipeline_async(
         # Layer 4: verify branch didn't change
         if epic_slug:
             branch_check = subprocess.run(
-                ["git", "branch", "--show-current"], capture_output=True, text=True, cwd=str(cwd)
+                ["git", "branch", "--show-current"], capture_output=True, text=True, cwd=str(node_cwd)
             )
             expected_branch = f"epic/{platform_name}/{epic_slug}"
             actual_branch = branch_check.stdout.strip()
             if actual_branch != expected_branch:
-                subprocess.run(["git", "checkout", expected_branch], cwd=str(cwd), capture_output=True)
+                subprocess.run(["git", "checkout", expected_branch], cwd=str(node_cwd), capture_output=True)
                 log.error("claude -p changed branch to '%s', reverted to '%s'", actual_branch, expected_branch)
 
         # Layer 5: save stdout as missing output for read-only skills
@@ -1825,6 +1855,9 @@ def run_pipeline(
 
     breaker = CircuitBreaker()
     cwd = REPO_ROOT
+    code_dir = _resolve_code_dir(platform_name, epic_slug)
+    if code_dir != REPO_ROOT:
+        log.info("External repo code_dir: %s", code_dir)
 
     for node in ordered:
         # Skip completed nodes
@@ -1890,8 +1923,9 @@ def run_pipeline(
         prompt, guardrail = compose_skill_prompt(platform_name, node, platform_dir, epic_slug)
 
         # Dispatch with retry + circuit breaker
+        node_cwd = code_dir if _needs_code_cwd(node) else cwd
         success, error, stdout = dispatch_with_retry(
-            node, cwd, prompt, timeout, breaker, guardrail, platform_name=platform_name
+            node, node_cwd, prompt, timeout, breaker, guardrail, platform_name=platform_name
         )
 
         if not success:
@@ -1909,12 +1943,12 @@ def run_pipeline(
         # Layer 4: verify branch didn't change
         if epic_slug:
             branch_check = subprocess.run(
-                ["git", "branch", "--show-current"], capture_output=True, text=True, cwd=str(cwd)
+                ["git", "branch", "--show-current"], capture_output=True, text=True, cwd=str(node_cwd)
             )
             expected_branch = f"epic/{platform_name}/{epic_slug}"
             actual_branch = branch_check.stdout.strip()
             if actual_branch != expected_branch:
-                subprocess.run(["git", "checkout", expected_branch], cwd=str(cwd), capture_output=True)
+                subprocess.run(["git", "checkout", expected_branch], cwd=str(node_cwd), capture_output=True)
                 log.error("claude -p changed branch to '%s', reverted to '%s'", actual_branch, expected_branch)
 
         # Layer 5: save stdout as missing output for read-only skills

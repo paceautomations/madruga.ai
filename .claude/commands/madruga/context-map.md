@@ -33,7 +33,7 @@ Integration architect — every relationship has a named DDD pattern and directi
 
 ## Usage
 
-- `/context-map fulano` — Generate context map for "fulano"
+- `/context-map prosauai` — Generate context map for "prosauai"
 - `/context-map` — Prompt for name
 
 ## Output Directory

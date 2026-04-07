@@ -51,7 +51,7 @@ updated: 2026-04-01
 
 ### Milestone "Autonomia MVP"
 
-Todos os 5 epics MVP (012-016) estao shipped. Tooling completo. Falta validacao end-to-end: rodar easter contra Fulano real com epic completo (pitch-to-PR).
+Todos os 5 epics MVP (012-016) estao shipped. Tooling completo. Falta validacao end-to-end: rodar easter contra ProsaUAI real com epic completo (pitch-to-PR).
 
 ### Dependencias Descobertas
 

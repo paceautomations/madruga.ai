@@ -44,7 +44,7 @@ def _make_run_result(findings: list) -> subprocess.CompletedProcess:
 
 def test_non_claude_file_exits_silently():
     """Files outside .claude/ should not trigger lint."""
-    payload = {"tool_input": {"file_path": "platforms/fulano/business/vision.md"}}
+    payload = {"tool_input": {"file_path": "platforms/prosauai/business/vision.md"}}
     mock_run, output = _run_main(payload)
     mock_run.assert_not_called()
     assert output == ""

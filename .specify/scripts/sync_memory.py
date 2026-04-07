@@ -148,7 +148,25 @@ def sync(
     return stats
 
 
+def _is_memory_path(file_path: str) -> bool:
+    """Check if a file path is inside a memory directory."""
+    return "/memory/" in file_path and file_path.endswith(".md")
+
+
 def main() -> None:
+    # When invoked as a PostToolUse hook, stdin contains JSON with tool_input.
+    # Filter early: only proceed if the written file is in a memory directory.
+    if not sys.stdin.isatty():
+        import json
+
+        try:
+            data = json.loads(sys.stdin.read())
+            file_path = data.get("tool_input", {}).get("file_path", "")
+            if file_path and not _is_memory_path(file_path):
+                sys.exit(0)
+        except (json.JSONDecodeError, AttributeError):
+            pass  # Not hook input — proceed normally (CLI invocation)
+
     parser = argparse.ArgumentParser(description="Sync memory between filesystem and BD")
     parser.add_argument("--import-only", action="store_true", help="Only import filesystem → BD")
     parser.add_argument("--export-only", action="store_true", help="Only export BD → filesystem")

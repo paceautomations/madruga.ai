@@ -672,17 +672,17 @@ python3 .specify/scripts/sync_memory.py --dry-run      # preview sem alteracoes
 ```bash
 # Registrar artefato (L1 — DAG de plataforma)
 python3 .specify/scripts/post_save.py \
-  --platform fulano --node vision --skill madruga:vision \
+  --platform prosauai --node vision --skill madruga:vision \
   --artifact business/vision.md
 
 # Registrar artefato (L2 — ciclo de epic)
 python3 .specify/scripts/post_save.py \
-  --platform fulano --epic 001-channel-pipeline \
+  --platform prosauai --epic 001-channel-pipeline \
   --node specify --skill speckit.specify \
   --artifact epics/001-channel-pipeline/spec.md
 
 # Re-seed plataforma a partir do filesystem
-python3 .specify/scripts/post_save.py --reseed --platform fulano
+python3 .specify/scripts/post_save.py --reseed --platform prosauai
 
 # Re-seed todas as plataformas
 python3 .specify/scripts/post_save.py --reseed-all
@@ -701,19 +701,19 @@ python3 .specify/scripts/skill-lint.py --json           # JSON output
 ```bash
 # Verificar dependencias de uma skill
 .specify/scripts/bash/check-platform-prerequisites.sh \
-  --json --platform fulano --skill domain-model
+  --json --platform prosauai --skill domain-model
 
 # Status completo do pipeline
 .specify/scripts/bash/check-platform-prerequisites.sh \
-  --json --platform fulano --status
+  --json --platform prosauai --status
 
 # Status com dados do DB (hash, staleness)
 .specify/scripts/bash/check-platform-prerequisites.sh \
-  --json --platform fulano --status --use-db
+  --json --platform prosauai --status --use-db
 
 # Verificar node do ciclo de epic
 .specify/scripts/bash/check-platform-prerequisites.sh \
-  --json --platform fulano --epic 001-onboarding --skill specify
+  --json --platform prosauai --epic 001-onboarding --skill specify
 ```
 
 ### Portal

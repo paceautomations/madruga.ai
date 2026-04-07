@@ -75,7 +75,7 @@
 
 **Goal**: Import retroativo dos ADRs existentes de qualquer plataforma para o BD.
 
-**Independent Test**: Rodar `import_all_adrs(conn, "fulano", decisions_dir)` e verificar registros no BD.
+**Independent Test**: Rodar `import_all_adrs(conn, "prosauai", decisions_dir)` e verificar registros no BD.
 
 ### Tests (RED)
 
@@ -90,7 +90,7 @@
 - [x] T027 [US2] Implement `import_adr_from_markdown()` in `.specify/scripts/db.py` — call parser, compute content_hash, call `insert_decision()` with upsert; skip if hash unchanged
 - [x] T028 [US2] Implement `import_all_adrs()` in `.specify/scripts/db.py` — glob `ADR-*.md` in decisions_dir, call `import_adr_from_markdown()` for each, count successes, log warnings for failures
 - [x] T029 [US2] Run tests — verify T022-T025 pass (GREEN)
-- [x] T030 [US2] Validate SC-001: Run `import_all_adrs()` on `platforms/fulano/decisions/` in a manual test script or pytest — verify all 19 ADRs imported with correct fields
+- [x] T030 [US2] Validate SC-001: Run `import_all_adrs()` on `platforms/prosauai/decisions/` in a manual test script or pytest — verify all 19 ADRs imported with correct fields
 
 **Checkpoint**: US2 complete — existing ADRs can be imported into BD. SC-001 validated.
 
@@ -169,8 +169,8 @@
 
 ### Tests (RED)
 
-- [x] T050 [P] Write failing integration test for `platform.py import-adrs fulano` in `.specify/scripts/tests/test_platform.py` — mock filesystem, verify import called with correct args
-- [x] T051 [P] Write failing integration test for `platform.py export-adrs fulano` in `.specify/scripts/tests/test_platform.py`
+- [x] T050 [P] Write failing integration test for `platform.py import-adrs prosauai` in `.specify/scripts/tests/test_platform.py` — mock filesystem, verify import called with correct args
+- [x] T051 [P] Write failing integration test for `platform.py export-adrs prosauai` in `.specify/scripts/tests/test_platform.py`
 
 ### Implementation
 

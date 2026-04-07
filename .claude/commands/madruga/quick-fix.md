@@ -30,7 +30,7 @@ Pragmatic senior engineer. Bias for shipping fast with minimal ceremony. Still d
 
 ## Usage
 
-- `/madruga:quick-fix fulano 042-hotfix-auth` — Direct mode with platform and epic
+- `/madruga:quick-fix prosauai 042-hotfix-auth` — Direct mode with platform and epic
 - `/madruga:quick-fix` — Interactive mode (prompts for platform, bug description, affected files)
 
 ## When to Use

@@ -12,32 +12,32 @@
 ### 1. Clonar repo externo
 
 ```bash
-python3 .specify/scripts/platform.py ensure-repo fulano
-# → ~/repos/paceautomations/fulano-api/
+python3 .specify/scripts/platform.py ensure-repo prosauai
+# → ~/repos/paceautomations/prosauai-api/
 ```
 
 ### 2. Criar worktree para um epic
 
 ```bash
-python3 .specify/scripts/platform.py worktree fulano 001-channel-pipeline
-# → ~/repos/fulano-api-worktrees/001-channel-pipeline/
-# → branch: epic/fulano/001-channel-pipeline
+python3 .specify/scripts/platform.py worktree prosauai 001-channel-pipeline
+# → ~/repos/prosauai-api-worktrees/001-channel-pipeline/
+# → branch: epic/prosauai/001-channel-pipeline
 ```
 
 ### 3. Implementar remotamente
 
 ```bash
 # Dry-run (mostra prompt sem executar)
-python3 .specify/scripts/implement_remote.py --platform fulano --epic 001-channel-pipeline --dry-run
+python3 .specify/scripts/implement_remote.py --platform prosauai --epic 001-channel-pipeline --dry-run
 
 # Execucao real
-python3 .specify/scripts/implement_remote.py --platform fulano --epic 001-channel-pipeline
+python3 .specify/scripts/implement_remote.py --platform prosauai --epic 001-channel-pipeline
 ```
 
 ### 4. Cleanup apos merge
 
 ```bash
-python3 .specify/scripts/platform.py worktree-cleanup fulano 001-channel-pipeline
+python3 .specify/scripts/platform.py worktree-cleanup prosauai 001-channel-pipeline
 ```
 
 ## Self-referencing (madruga-ai)

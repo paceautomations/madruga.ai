@@ -5,6 +5,7 @@ import OverviewTab from './OverviewTab';
 
 export interface RunEntry {
   run_id: string;
+  platform_id?: string;
   epic_id: string | null;
   node_id: string;
   status: string;
@@ -34,10 +35,47 @@ export interface StatsData {
   top_nodes: { node_id: string; total_cost: number; run_count: number }[];
 }
 
+export interface SessionNodeStatus {
+  node_id: string;
+  status: string;
+}
+
+export interface ActiveSession {
+  epic_id: string;
+  platform_id: string;
+  trace_id: string | null;
+  started_at: string | null;
+  current_node: string | null;
+  current_node_started_at: string | null;
+  session_cost_usd: number;
+  tokens_in: number;
+  tokens_out: number;
+  completed_nodes: number;
+  total_nodes: number;
+  last_activity: string | null;
+  node_statuses: SessionNodeStatus[];
+}
+
+export interface QueuedEpic {
+  epic_id: string;
+  platform_id: string;
+}
+
+export interface SessionsData {
+  easter_state: string;
+  telegram_status: string;
+  uptime_seconds: number;
+  pid: number;
+  poll_interval_seconds: number;
+  running_epics: ActiveSession[];
+  queued_epics: QueuedEpic[];
+}
+
 // ── Constants ──
 
 const EASTER_BASE = 'http://localhost:18789';
 const POLL_INTERVAL = 10_000;
+const STATUS_POLL_INTERVAL = 5_000;
 
 // ── Helpers ──
 
@@ -53,42 +91,66 @@ async function fetchJSON<T>(url: string): Promise<FetchResult<T>> {
   }
 }
 
+/** Only call setState when data actually changed (avoids re-rendering 170+ table rows). */
+function setIfChanged<T>(setter: React.Dispatch<React.SetStateAction<T>>, next: T, prev: React.RefObject<string>) {
+  const json = JSON.stringify(next);
+  if (json !== prev.current) {
+    prev.current = json;
+    setter(next);
+  }
+}
+
 // ── Main Component ──
 
 interface ObservabilityDashboardProps {
-  platform: string;
+  platform?: string;      // undefined = global mode (all platforms)
+  platformIds?: string[]; // list of all platform IDs for filter chips
 }
 
-export default function ObservabilityDashboard({ platform }: ObservabilityDashboardProps) {
+export default function ObservabilityDashboard({ platform, platformIds = [] }: ObservabilityDashboardProps) {
   const [runs, setRuns] = useState<RunEntry[]>([]);
   const [stats, setStats] = useState<StatsData | null>(null);
+  const [sessions, setSessions] = useState<SessionsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [connected, setConnected] = useState(true);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const statusIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Dedup refs — avoid re-rendering 170+ rows when polled data hasn't changed
+  const prevRuns = useRef('');
+  const prevStats = useRef('');
+
+  const platformParam = platform ? `platform_id=${encodeURIComponent(platform)}&` : '';
 
   const fetchData = useCallback(async () => {
-    const enc = encodeURIComponent(platform);
-
     const [runsRes, statsRes] = await Promise.all([
-      fetchJSON<{ runs: RunEntry[] }>(`${EASTER_BASE}/api/runs?platform_id=${enc}&limit=200`),
-      fetchJSON<StatsData>(`${EASTER_BASE}/api/stats?platform_id=${enc}&days=30`),
+      fetchJSON<{ runs: RunEntry[] }>(`${EASTER_BASE}/api/runs?${platformParam}limit=200`),
+      fetchJSON<StatsData>(`${EASTER_BASE}/api/stats?${platformParam}days=30`),
     ]);
-    setConnected(runsRes.connected && statsRes.connected);
-    if (runsRes.data) setRuns(runsRes.data.runs);
-    if (statsRes.data) setStats(statsRes.data);
+    const nowConnected = runsRes.connected && statsRes.connected;
+    setConnected((prev) => prev !== nowConnected ? nowConnected : prev);
+    if (runsRes.data) setIfChanged(setRuns, runsRes.data.runs, prevRuns);
+    if (statsRes.data) setIfChanged(setStats, statsRes.data, prevStats);
 
     setLoading(false);
-  }, [platform]);
+  }, [platformParam]);
+
+  const fetchStatus = useCallback(async () => {
+    const res = await fetchJSON<SessionsData>(`${EASTER_BASE}/api/sessions?${platformParam.slice(0, -1)}`);
+    if (res.data) setSessions(res.data);
+  }, [platformParam]);
 
   useEffect(() => {
     setLoading(true);
     fetchData();
+    fetchStatus();
 
     intervalRef.current = setInterval(fetchData, POLL_INTERVAL);
+    statusIntervalRef.current = setInterval(fetchStatus, STATUS_POLL_INTERVAL);
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
+      if (statusIntervalRef.current) clearInterval(statusIntervalRef.current);
     };
-  }, [fetchData]);
+  }, [fetchData, fetchStatus]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -121,7 +183,7 @@ export default function ObservabilityDashboard({ platform }: ObservabilityDashbo
       )}
 
       {!loading && (
-        <OverviewTab runs={runs} stats={stats} connected={connected} />
+        <OverviewTab runs={runs} stats={stats} sessions={sessions} connected={connected} platformIds={platformIds} />
       )}
     </div>
   );

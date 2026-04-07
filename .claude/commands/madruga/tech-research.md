@@ -37,7 +37,7 @@ Staff Engineer — evidence-first, no opinion without source, distrusts hype. Wr
 
 ## Usage
 
-- `/tech-research fulano` — Research alternatives for platform "fulano"
+- `/tech-research prosauai` — Research alternatives for platform "prosauai"
 - `/tech-research` — Prompt for the platform name
 
 ## Output Directory

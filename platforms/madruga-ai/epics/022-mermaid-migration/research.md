@@ -28,14 +28,14 @@ Verified in portal `package.json`: `"astro-mermaid": "^2.0.1"`. The integration 
 
 ## 2. LikeC4 Content Inventory
 
-### Fulano Platform (8 .likec4 files, 877 LOC total)
+### ProsaUAI Platform (8 .likec4 files, 877 LOC total)
 
 | File | LOC | Content | Migration Target |
 |------|-----|---------|-----------------|
 | `actors.likec4` | 10 | 2 personas (agent, admin) | Absorbed into blueprint.md deploy topology |
 | `externals.likec4` | 29 | 4 external services (Evolution API, Supabase ResenhAI, Claude Sonnet, Claude Haiku) | Absorbed into blueprint.md deploy topology |
-| `infrastructure.likec4` | 50 | 6 infra components (Redis, Supabase Fulano, Bifrost, LangFuse, Infisical) | Absorbed into blueprint.md deploy topology + containers |
-| `platform.likec4` | 34 | 3 platform containers (fulano-api, fulano-worker, fulano-admin) | Absorbed into blueprint.md containers |
+| `infrastructure.likec4` | 50 | 6 infra components (Redis, Supabase ProsaUAI, Bifrost, LangFuse, Infisical) | Absorbed into blueprint.md deploy topology + containers |
+| `platform.likec4` | 34 | 3 platform containers (prosauai-api, prosauai-worker, prosauai-admin) | Absorbed into blueprint.md containers |
 | `ddd-contexts.likec4` | 149 | 5 BCs with 14 modules (M1-M14) | Already in domain-model.md as classDiagram (5 existing) |
 | `relationships.likec4` | 232 | Container relationships + DDD relationships + pipeline flow | Split: container rels → blueprint.md, DDD rels → domain-model.md context map |
 | `views.likec4` | 315 | 7 structural views + 1 businessFlow dynamic view | Structural: absorbed into inline sections. businessFlow: overview flowchart + phase deep-dives |
@@ -51,15 +51,15 @@ Verified in portal `package.json`: `"astro-mermaid": "^2.0.1"`. The integration 
 | `platform.likec4` | 56 | 5 platform containers (Portal, Easter, DAG Executor, etc.) | Absorbed into blueprint.md containers |
 | `ddd-contexts.likec4` | 128 | 6 BCs (Documentation, Specification, Execution, Intelligence, Integration, Observability) | Already in domain-model.md as classDiagram (6 existing) |
 | `relationships.likec4` | 174 | Container + DDD relationships | Split: container rels → blueprint.md, DDD rels → context-map.md |
-| `views.likec4` | 272 | Structural views + businessFlow | Same pattern as Fulano |
+| `views.likec4` | 272 | Structural views + businessFlow | Same pattern as ProsaUAI |
 | `spec.likec4` | 138 | LikeC4 spec definitions | Discarded — boilerplate |
 
 ### Key Finding
 Both platforms' `domain-model.md` files **already have Mermaid classDiagrams** for bounded contexts (L4). The migration for L4 is already done. What's missing:
 - L1 (Deploy Topology) — new section in blueprint.md
 - L2 (Containers) — new section in blueprint.md
-- L3 (Context Map) — madruga-ai already has it in context-map.md; fulano needs creation
-- L5 (Business Flow) — fulano needs conversion from 315 LOC dynamic view; madruga-ai needs conversion
+- L3 (Context Map) — madruga-ai already has it in context-map.md; prosauai needs creation
+- L5 (Business Flow) — prosauai needs conversion from 315 LOC dynamic view; madruga-ai needs conversion
 
 ---
 
@@ -143,7 +143,7 @@ Engineering/
 
 ---
 
-## 6. Fulano Business Flow Decomposition
+## 6. ProsaUAI Business Flow Decomposition
 
 ### Decision
 Convert 315-line `businessFlow` dynamic view into overview flowchart + 8 phase deep-dives using `<details>` collapsible sections.
@@ -204,10 +204,10 @@ Remove `model/` directory and LikeC4 config from template. Keep pipeline node ou
 Remove entirely. AUTO markers become manual content.
 
 ### Rationale
-`vision-build.py` reads `model/output/likec4.json` (exported by `likec4 export json`) and populates `<!-- AUTO:name -->` markers in markdown files. With no LikeC4 export, the pipeline is broken. The AUTO markers in fulano's `context-map.md` are already empty (never populated). Madruga-ai's context-map.md already has hand-written Mermaid.
+`vision-build.py` reads `model/output/likec4.json` (exported by `likec4 export json`) and populates `<!-- AUTO:name -->` markers in markdown files. With no LikeC4 export, the pipeline is broken. The AUTO markers in prosauai's `context-map.md` are already empty (never populated). Madruga-ai's context-map.md already has hand-written Mermaid.
 
 ### Impact
-- `platforms/fulano/engineering/context-map.md`: AUTO markers → replace with hand-written Mermaid context map
+- `platforms/prosauai/engineering/context-map.md`: AUTO markers → replace with hand-written Mermaid context map
 - Smoke test in CI references `vision-build.py` — must be removed from the import check list
 
 ---
@@ -215,7 +215,7 @@ Remove entirely. AUTO markers become manual content.
 ## 9. Existing Mermaid Diagrams Audit
 
 ### Already Have Mermaid (no conversion needed for L4)
-- `platforms/fulano/engineering/domain-model.md`: 5 classDiagrams (Channel, Conversation, Safety, Operations, Observability)
+- `platforms/prosauai/engineering/domain-model.md`: 5 classDiagrams (Channel, Conversation, Safety, Operations, Observability)
 - `platforms/madruga-ai/engineering/domain-model.md`: 7 Mermaid blocks (classDiagrams for BCs)
 - `platforms/madruga-ai/engineering/context-map.md`: 1 Mermaid graph (Context Map L3)
 - `platforms/madruga-ai/engineering/blueprint.md`: 1 Mermaid graph (Deploy Topology L1) — already has it!
@@ -223,10 +223,10 @@ Remove entirely. AUTO markers become manual content.
 ### Need New Mermaid Diagrams
 | Platform | Document | Diagram Type | Source |
 |----------|----------|-------------|--------|
-| fulano | blueprint.md | Deploy Topology (L1) | actors + externals + infrastructure + platform.likec4 |
-| fulano | blueprint.md | Containers (L2) | relationships.likec4 (container-level) |
-| fulano | domain-model.md | Context Map (L3) | relationships.likec4 (DDD-level) + context-map.md AUTO markers |
-| fulano | process.md | Business Flow (L5) | views.likec4 businessFlow (315 LOC) |
+| prosauai | blueprint.md | Deploy Topology (L1) | actors + externals + infrastructure + platform.likec4 |
+| prosauai | blueprint.md | Containers (L2) | relationships.likec4 (container-level) |
+| prosauai | domain-model.md | Context Map (L3) | relationships.likec4 (DDD-level) + context-map.md AUTO markers |
+| prosauai | process.md | Business Flow (L5) | views.likec4 businessFlow (315 LOC) |
 | madruga-ai | blueprint.md | Containers (L2) | Add subgraph detail to existing topology |
 | madruga-ai | process.md or business/process.md | Business Flow (L5) | views.likec4 businessFlow (if applicable) |
 
@@ -251,7 +251,7 @@ The deploy topology Mermaid diagram already exists at line 102-135. Only L2 (con
 handoff:
   from: research
   to: design
-  context: "All NEEDS CLARIFICATION resolved. Key findings: L4 Mermaid already exists in domain-model.md for both platforms. L1 exists for madruga-ai. Main work: L1+L2 for fulano, L5 conversion for both, portal cleanup, CI update, template update."
+  context: "All NEEDS CLARIFICATION resolved. Key findings: L4 Mermaid already exists in domain-model.md for both platforms. L1 exists for madruga-ai. Main work: L1+L2 for prosauai, L5 conversion for both, portal cleanup, CI update, template update."
   blockers: []
   confidence: Alta
   kill_criteria: "astro-mermaid does not support required diagram types (verified: it does)"

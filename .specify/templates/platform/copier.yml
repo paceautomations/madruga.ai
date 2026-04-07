@@ -19,7 +19,6 @@ _skip_if_exists:
   - "planning/*"
   - "research/codebase-context.md"
   - "research/tech-alternatives.md"
-  - "CLAUDE.md"
 
 _exclude:
   - tests/
@@ -34,7 +33,7 @@ _tasks:
 
 platform_name:
   type: str
-  help: "Nome da plataforma em kebab-case (ex: fulano, meu-saas)"
+  help: "Nome da plataforma em kebab-case (ex: prosauai, meu-saas)"
   validator: >-
     {% if not platform_name | regex_search('^[a-z][a-z0-9-]*$') %}
     Deve ser kebab-case (minusculas, hifens, comeca com letra)
@@ -42,7 +41,7 @@ platform_name:
 
 platform_title:
   type: str
-  help: "Titulo legivel (ex: 'Fulano — Agentes WhatsApp')"
+  help: "Titulo legivel (ex: 'ProsaUAI — Agentes WhatsApp')"
   default: "{{ platform_name | title }}"
 
 platform_description:
@@ -66,7 +65,7 @@ repo_org:
 
 repo_name:
   type: str
-  help: "Repo name (ex: fulano-api). Deixe vazio se o codigo vive neste repo."
+  help: "Repo name (ex: prosauai-api). Deixe vazio se o codigo vive neste repo."
   default: ""
 
 repo_base_branch:

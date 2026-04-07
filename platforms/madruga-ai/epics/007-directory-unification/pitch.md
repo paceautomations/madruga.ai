@@ -44,9 +44,9 @@ SpecKit e Madruga operam em diretórios separados: SpecKit cria artifacts em `sp
 
 ## Acceptance Criteria
 
-1. `create-new-feature.sh --base-dir platforms/fulano/epics/001-test` cria spec.md no epic dir
+1. `create-new-feature.sh --base-dir platforms/prosauai/epics/001-test` cria spec.md no epic dir
 2. `platform.yaml` gerado pelo Copier tem seção `epic_cycle` com 10 nós
-3. `check-platform-prerequisites.sh --json --platform fulano --epic 001 --use-db` retorna status do epic cycle
+3. `check-platform-prerequisites.sh --json --platform prosauai --epic 001 --use-db` retorna status do epic cycle
 4. `discuss.md` não existe; `epic-context.md` existe e funciona
 5. `folder-arch.md` não existe; `blueprint.md` inclui seção Folder Structure
 6. `/pipeline madruga-ai` mostra DAG nível 1 + progresso per-epic do BD

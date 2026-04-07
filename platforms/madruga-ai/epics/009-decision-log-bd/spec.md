@@ -25,15 +25,15 @@ Um operador do pipeline executa um skill (ex: `madruga:adr`) que toma decisoes a
 
 ### User Story 2 - Importar ADRs existentes para o BD (Priority: P1)
 
-Um operador executa um comando de import retroativo que le todos os arquivos ADR-*.md existentes (19 da Fulano), parseia o frontmatter YAML e conteudo, e popula a tabela `decisions` no BD.
+Um operador executa um comando de import retroativo que le todos os arquivos ADR-*.md existentes (19 da ProsaUAI), parseia o frontmatter YAML e conteudo, e popula a tabela `decisions` no BD.
 
-**Why this priority**: Sem import retroativo, o BD comeca vazio e nao tem valor imediato. Os 19 ADRs da Fulano sao o dataset de validacao.
+**Why this priority**: Sem import retroativo, o BD comeca vazio e nao tem valor imediato. Os 19 ADRs da ProsaUAI sao o dataset de validacao.
 
-**Independent Test**: Executar `--import-adrs --platform fulano` e verificar que 19 registros aparecem no BD com campos corretos.
+**Independent Test**: Executar `--import-adrs --platform prosauai` e verificar que 19 registros aparecem no BD com campos corretos.
 
 **Acceptance Scenarios**:
 
-1. **Given** 19 arquivos ADR-*.md em `platforms/fulano/decisions/`, **When** o comando de import e executado, **Then** 19 registros sao criados na tabela `decisions` com platform_id="fulano"
+1. **Given** 19 arquivos ADR-*.md em `platforms/prosauai/decisions/`, **When** o comando de import e executado, **Then** 19 registros sao criados na tabela `decisions` com platform_id="prosauai"
 2. **Given** um ADR com frontmatter contendo title, status, decision, alternatives, rationale, **When** importado, **Then** os campos correspondentes no BD sao populados corretamente
 3. **Given** um ADR ja importado e sem alteracoes, **When** o import e re-executado, **Then** o registro nao e duplicado (upsert via content_hash)
 
@@ -49,7 +49,7 @@ Um operador ou skill consulta decisoes por plataforma, epic, status, tipo ou tex
 
 **Acceptance Scenarios**:
 
-1. **Given** decisoes de multiplas plataformas no BD, **When** `get_decisions(platform_id="fulano")` e chamado, **Then** retorna apenas decisoes da Fulano ordenadas por data
+1. **Given** decisoes de multiplas plataformas no BD, **When** `get_decisions(platform_id="prosauai")` e chamado, **Then** retorna apenas decisoes da ProsaUAI ordenadas por data
 2. **Given** decisoes com diferentes status, **When** consultado com filtro `status="accepted"`, **Then** retorna apenas decisoes aceitas
 3. **Given** decisoes com texto no campo `context`, **When** busca FTS5 por palavra-chave, **Then** retorna decisoes que contem o termo no contexto, titulo ou consequencias
 
@@ -123,7 +123,7 @@ Um operador consulta quais decisoes dependem de, substituem ou contradizem outra
 
 ### Measurable Outcomes
 
-- **SC-001**: 100% dos 19 ADRs existentes da Fulano sao importados corretamente no BD com zero perda de informacao
+- **SC-001**: 100% dos 19 ADRs existentes da ProsaUAI sao importados corretamente no BD com zero perda de informacao
 - **SC-002**: Markdown exportado do BD e structurally equivalent ao formato Nygard atual (mesmas sections, mesmos frontmatter fields, conteudo semantico preservado; whitespace pode diferir)
 - **SC-003**: Busca full-text retorna resultados relevantes em menos de 100ms para um dataset de 50+ decisoes
 - **SC-004**: Toda decisao registrada via skill gera automaticamente o arquivo markdown correspondente sem intervencao manual

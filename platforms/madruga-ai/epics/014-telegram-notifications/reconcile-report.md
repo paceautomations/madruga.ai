@@ -141,8 +141,8 @@ Adicionar na tabela "Implementado":
 
 5. Atualizar milestone "Runtime Funcional" e "Autonomia MVP":
 ```diff
-- | **Autonomia MVP** | 012-016 | 1 epic completo (pitch-to-PR) processado pelo easter em repo Fulano, com Telegram notifications e Subagent Judge review | Semana 14 |
-+ | **Autonomia MVP** | 012-016 | 1 epic completo (pitch-to-PR) processado pelo easter em repo Fulano, com Telegram notifications e Subagent Judge review | Semana 14 | Telegram notifications entregue (014). Falta: 015 (Subagent Judge) + 016 (Easter). |
+- | **Autonomia MVP** | 012-016 | 1 epic completo (pitch-to-PR) processado pelo easter em repo ProsaUAI, com Telegram notifications e Subagent Judge review | Semana 14 |
++ | **Autonomia MVP** | 012-016 | 1 epic completo (pitch-to-PR) processado pelo easter em repo ProsaUAI, com Telegram notifications e Subagent Judge review | Semana 14 | Telegram notifications entregue (014). Falta: 015 (Subagent Judge) + 016 (Easter). |
 ```
 
 ---

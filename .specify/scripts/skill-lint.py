@@ -48,6 +48,20 @@ UTILITY_SKILLS = {"pipeline", "checkpoint", "getting-started", "skills-mgmt"}
 
 SEVERITY_ORDER = {"BLOCKER": 0, "WARNING": 1, "NIT": 2}
 
+# Cache skill file contents for a single lint run (avoids re-reading per function)
+_skill_text_cache: dict[str, str] = {}
+
+
+def _get_skill_texts() -> dict[str, str]:
+    """Return {skill_name: file_text} for all skills. Cached per process."""
+    if not _skill_text_cache:
+        for skill_path in COMMANDS_DIR.glob("*.md"):
+            try:
+                _skill_text_cache[skill_path.stem] = skill_path.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                log.warning("UnicodeDecodeError reading %s, skipping", skill_path)
+    return _skill_text_cache
+
 
 def parse_frontmatter(text: str) -> dict | None:
     """Extract YAML frontmatter between --- markers."""
@@ -195,9 +209,7 @@ def lint_knowledge_files() -> list[dict]:
         return findings
 
     knowledge_files = list(KNOWLEDGE_DIR.glob("*.md"))
-    all_skill_text = ""
-    for skill_path in COMMANDS_DIR.glob("*.md"):
-        all_skill_text += skill_path.read_text(encoding="utf-8")
+    all_skill_text = "".join(_get_skill_texts().values())
 
     for kf in knowledge_files:
         if kf.name not in all_skill_text and kf.stem not in all_skill_text:
@@ -293,14 +305,7 @@ def build_knowledge_graph() -> dict[str, set[str]]:
 
     knowledge_files = {kf.name for kf in KNOWLEDGE_DIR.glob("*.md")}
 
-    for skill_path in COMMANDS_DIR.glob("*.md"):
-        skill_name = skill_path.stem
-        try:
-            text = skill_path.read_text(encoding="utf-8")
-        except UnicodeDecodeError:
-            log.warning("UnicodeDecodeError reading %s, skipping", skill_path)
-            continue
-
+    for skill_name, text in _get_skill_texts().items():
         for kf_name in knowledge_files:
             if kf_name in text:
                 graph.setdefault(kf_name, set()).add(skill_name)

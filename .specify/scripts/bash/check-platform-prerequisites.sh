@@ -8,7 +8,7 @@
 # Usage: ./check-platform-prerequisites.sh [OPTIONS]
 #
 # OPTIONS:
-#   --platform <name>   Platform name (e.g., madruga-ai, fulano) [REQUIRED]
+#   --platform <name>   Platform name (e.g., madruga-ai, prosauai) [REQUIRED]
 #   --skill <id>        Check prerequisites for a specific pipeline node
 #   --epic <slug>       Check epic cycle node prerequisites (e.g., 001-onboarding)
 #   --status            Show full pipeline status (all nodes)
@@ -57,8 +57,8 @@ EXAMPLES:
   ./check-platform-prerequisites.sh --json --platform madruga-ai --status
   ./check-platform-prerequisites.sh --json --platform madruga-ai --status --use-db
   ./check-platform-prerequisites.sh --json --platform madruga-ai --check-platform-only
-  ./check-platform-prerequisites.sh --json --platform fulano --epic 001-onboarding --status
-  ./check-platform-prerequisites.sh --json --platform fulano --epic 001-onboarding --skill discuss
+  ./check-platform-prerequisites.sh --json --platform prosauai --epic 001-onboarding --status
+  ./check-platform-prerequisites.sh --json --platform prosauai --epic 001-onboarding --skill discuss
 EOF
             exit 0
             ;;

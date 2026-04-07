@@ -27,7 +27,7 @@
 | M3 | Coverage Gap | MEDIUM | `.specify/templates/platform/tests/test_template.py` | Tests template with model/ expectations. | Update tests |
 | M4 | Coverage Gap | MEDIUM | `.specify/templates/platform/template/engineering/context-map.md.jinja` | References LikeC4 viewer. | Remove LikeC4 mention |
 | M5 | Coverage Gap | MEDIUM | `.specify/templates/platform/template/engineering/integrations.md.jinja` | References LikeC4. | Remove LikeC4 mention |
-| M6 | Inconsistency | MEDIUM | `platforms/fulano/engineering/context-map.md:18` | Contains comment "use o viewer interativo LikeC4" — stale after migration. | Remove comment or replace with Mermaid reference |
+| M6 | Inconsistency | MEDIUM | `platforms/prosauai/engineering/context-map.md:18` | Contains comment "use o viewer interativo LikeC4" — stale after migration. | Remove comment or replace with Mermaid reference |
 | M7 | Coverage Gap | MEDIUM | `.claude/commands/madruga/reconcile.md` | References LikeC4 (specifics unknown — listed in grep results). | Update via `/madruga:skills-mgmt edit reconcile` |
 | M8 | Coverage Gap | MEDIUM | `.claude/commands/madruga/skills-mgmt.md` | References LikeC4. | Update via `/madruga:skills-mgmt edit skills-mgmt` |
 | M9 | Coverage Gap | MEDIUM | `.claude/commands/madruga/solution-overview.md` | References LikeC4. | Update via `/madruga:skills-mgmt edit solution-overview` |
@@ -42,7 +42,7 @@
 | FR-001 (Remove .likec4 files) | Yes | T031, T032 | ✅ PASS | Zero .likec4 files found |
 | FR-002 (Remove portal LikeC4 components) | Yes | T005-T007 | ✅ PASS | Zero files found |
 | FR-003 (Remove 5 .astro pages) | Yes | T008-T012 | ✅ PASS | Zero files found |
-| FR-004 (Convert to Mermaid inline) | Yes | T019-T030 | ✅ PASS | Mermaid blocks present: fulano blueprint(2), domain-model(7), process(10); madruga-ai blueprint(2), domain-model(8) |
+| FR-004 (Convert to Mermaid inline) | Yes | T019-T030 | ✅ PASS | Mermaid blocks present: prosauai blueprint(2), domain-model(7), process(10); madruga-ai blueprint(2), domain-model(8) |
 | FR-005 (Nomenclature consistency) | Yes | T056 | ⚠️ NOT VERIFIED | Requires deep content analysis |
 | FR-006 (Cross-references) | Yes | T024, T030 | ✅ PASS | Cross-refs found in both platforms' blueprint.md and domain-model.md |
 | FR-007 (Sidebar simplification) | Yes | T014, T033 | ✅ PASS | No buildViewPaths or diagram links in portal |
@@ -155,7 +155,7 @@ This is a **spec-to-tasks gap**: the spec's assumption (line 170) deferred accou
 9. Update remaining skills: `reconcile`, `solution-overview`, `skills-mgmt`
 10. Update Copier template secondary files (`copier.yml`, `context-map.md.jinja`, `integrations.md.jinja`)
 11. Update test files (`test_platform.py`, `test_template.py`) to remove model/ expectations
-12. Fix `platforms/fulano/engineering/context-map.md` stale LikeC4 comment
+12. Fix `platforms/prosauai/engineering/context-map.md` stale LikeC4 comment
 13. Run `make test && make lint && cd portal && npm run build` to verify nothing is broken
 
 ---

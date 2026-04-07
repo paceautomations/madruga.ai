@@ -32,7 +32,6 @@ Full reference: @.claude/knowledge/commands.md
 
 - platform.yaml: manifest with repo binding, views, lifecycle stage
 - `platform_cli.py use <name>` sets active platform — skills check when no argument given
-- Each `platforms/<name>/` has its own CLAUDE.md with platform-specific context (on-demand)
 - ADRs: Nygard format. Epics: Shape Up pitch. Planned epics live only in roadmap.md
 - Repo binding: `platform.yaml` → `repo:` block. External repos at `{repos_base_dir}/{repo_org}/{repo_name}`
 - Python: stdlib + pyyaml. SQLite WAL mode. Ruff for lint/format.

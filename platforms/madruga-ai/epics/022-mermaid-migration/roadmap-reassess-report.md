@@ -21,11 +21,11 @@ I have a comprehensive picture of epic 022's delivery. Before generating the roa
 
 ### Gaps
 
-**4.** O roadmap atual lista 2 candidatos vagos ("Fulano end-to-end" e "Roadmap auto-atualizado"). Voce tem novos epics em mente ou quer que eu proponha candidatos baseados no estado atual do pipeline? Areas que vejo como candidatas:
+**4.** O roadmap atual lista 2 candidatos vagos ("ProsaUAI end-to-end" e "Roadmap auto-atualizado"). Voce tem novos epics em mente ou quer que eu proponha candidatos baseados no estado atual do pipeline? Areas que vejo como candidatas:
    - Cleanup LikeC4 refs (quick-fix)
    - Skills updates via `/madruga:skills-mgmt` (para os 7 skills com refs stale)
    - Vision.md drift fix ("diagramas interativos" → "diagramas Mermaid estaticos")
-   - Fulano end-to-end validation
+   - ProsaUAI end-to-end validation
 
 ### Provocacao
 

@@ -26,7 +26,7 @@ Times de engenharia de software (1-20 engenheiros) que precisam manter documenta
 
 **TAM:** Todo time de engenharia que sofre com architectural drift.
 **SAM:** Times que ja usam Claude Code e documentam arquitetura em git.
-**SOM:** Plataformas internas da Pace Automations (Fulano, futuras plataformas).
+**SOM:** Plataformas internas da Pace Automations (ProsaUAI, futuras plataformas).
 
 ### Cliente-alvo
 
@@ -43,7 +43,7 @@ Times de engenharia de software (1-20 engenheiros) que precisam manter documenta
 
 ### Segmentos prioritarios
 
-1. **Plataformas internas Pace:** Fulano (WhatsApp agents), proximas plataformas em pipeline.
+1. **Plataformas internas Pace:** ProsaUAI (WhatsApp agents), proximas plataformas em pipeline.
 2. **Projetos greenfield:** Onde a estrutura pode ser adotada desde o inicio.
 3. **Projetos brownfield:** Onde a documentacao precisa ser retroativamente construida e mantida sincronizada.
 
@@ -90,12 +90,12 @@ Uso interno — sem pricing externo. Custo operacional: consumo de API Claude (c
 
 | Metrica | Hoje | 6 meses | 12 meses |
 |---------|------|---------|----------|
-| Plataformas documentadas | 2 (Fulano + Madruga AI) | 5+ | 10+ |
-| Epics processados autonomamente | 0% (tooling pronto, falta end-to-end com Fulano) | 80% | 95% |
+| Plataformas documentadas | 2 (ProsaUAI + Madruga AI) | 5+ | 10+ |
+| Epics processados autonomamente | 0% (tooling pronto, falta end-to-end com ProsaUAI) | 80% | 95% |
 | Architectural drift detection | Auto-detect (reconcile 9 categorias) | Auto-fix (drift < 0.3) | Auto-fix continuo |
 | Time-to-spec (pitch → spec.md) | ~1h (semi-autonomo com skills) | ~30min autonomo | ~15min autonomo |
 | Skills disponiveis | 24 (13 L1 + 11 L2) | 26+ (+ observability, codebase map) | 30+ |
-| Cobertura Vision (artefatos preenchidos) | 100% Madruga AI, ~60% Fulano | 95%+ por plataforma | 100% com auto-sync |
+| Cobertura Vision (artefatos preenchidos) | 100% Madruga AI, ~60% ProsaUAI | 95%+ por plataforma | 100% com auto-sync |
 
 ---
 

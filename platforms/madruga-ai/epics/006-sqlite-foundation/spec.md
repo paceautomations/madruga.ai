@@ -18,10 +18,10 @@ Como arquiteto, quero que toda skill que gera um artefato registre automaticamen
 **Acceptance Scenarios**:
 
 1. **Given** repo sem `.pipeline/madruga.db`, **When** `db.migrate()` é chamado, **Then** BD é criado com 8 tabelas e todos indexes
-2. **Given** BD inicializado, **When** `db.upsert_pipeline_node('fulano', 'vision', 'done', output_hash='sha256:abc')`, **Then** `db.get_pipeline_nodes('fulano')` retorna o nó com status 'done'
-3. **Given** BD com nós existentes, **When** `db.get_stale_nodes('fulano')`, **Then** retorna nós cujas dependências têm `completed_at` mais recente
-4. **Given** BD inicializado, **When** `db.seed_from_filesystem('fulano')` com plataforma existente, **Then** tabelas `platforms`, `pipeline_nodes`, e `epics` são populadas do filesystem
-5. **Given** BD já populado, **When** `db.seed_from_filesystem('fulano')` rodado novamente, **Then** upsert atualiza sem duplicar (idempotente)
+2. **Given** BD inicializado, **When** `db.upsert_pipeline_node('prosauai', 'vision', 'done', output_hash='sha256:abc')`, **Then** `db.get_pipeline_nodes('prosauai')` retorna o nó com status 'done'
+3. **Given** BD com nós existentes, **When** `db.get_stale_nodes('prosauai')`, **Then** retorna nós cujas dependências têm `completed_at` mais recente
+4. **Given** BD inicializado, **When** `db.seed_from_filesystem('prosauai')` com plataforma existente, **Then** tabelas `platforms`, `pipeline_nodes`, e `epics` são populadas do filesystem
+5. **Given** BD já populado, **When** `db.seed_from_filesystem('prosauai')` rodado novamente, **Then** upsert atualiza sem duplicar (idempotente)
 
 ---
 
@@ -48,11 +48,11 @@ Como arquiteto, quero que o check de prerequisites consulte o banco de dados qua
 
 **Why this priority**: Prerequisites robustos previnem execução de skills com inputs desatualizados. Complementa US1.
 
-**Independent Test**: Rodar `check-platform-prerequisites.sh --json --status --platform fulano --use-db` — output JSON inclui hash e timestamps do BD.
+**Independent Test**: Rodar `check-platform-prerequisites.sh --json --status --platform prosauai --use-db` — output JSON inclui hash e timestamps do BD.
 
 **Acceptance Scenarios**:
 
-1. **Given** BD populado via seed, **When** `--use-db --status --platform fulano`, **Then** output JSON inclui `output_hash` e `completed_at` para cada nó done
+1. **Given** BD populado via seed, **When** `--use-db --status --platform prosauai`, **Then** output JSON inclui `output_hash` e `completed_at` para cada nó done
 2. **Given** BD com nó stale, **When** `--use-db --skill blueprint`, **Then** output inclui warning `"stale": true` com razão
 3. **Given** BD não existe, **When** `--use-db` passado, **Then** fallback para file existence com warning "DB not found, using filesystem"
 
@@ -111,7 +111,7 @@ Como arquiteto, quero que skills de research admitam quando não têm dados em v
 
 ### Key Entities
 
-- **Platform**: Plataforma documentada (fulano, madruga-ai). PK: platform_id (kebab-case). Atributos: name, title, lifecycle, repo_path
+- **Platform**: Plataforma documentada (prosauai, madruga-ai). PK: platform_id (kebab-case). Atributos: name, title, lifecycle, repo_path
 - **Pipeline Node**: Nó do DAG nível 1. Status do artefato de documentação. PK: (platform_id, node_id). Atributos: status, output_hash, completed_at, completed_by
 - **Epic**: Epic Shape Up com pitch e ciclo de implementação. PK: (platform_id, epic_id). Atributos: title, status, appetite, branch_name
 - **Epic Node**: Nó do DAG nível 2. Status do step no ciclo per-epic. PK: (platform_id, epic_id, node_id). Atributos: status, output_hash, completed_at
@@ -142,4 +142,4 @@ Como arquiteto, quero que skills de research admitam quando não têm dados em v
 - `copier` >= 9.4.0 instalável via `pip install copier` nos runners
 - Sistema single-user (sem concorrência de writes significativa)
 - BD é estado local — reproduzível via `seed_from_filesystem()` a partir dos artefatos no git
-- Plataformas fulano e madruga-ai já possuem seção `pipeline:` no platform.yaml (pre-work completo)
+- Plataformas prosauai e madruga-ai já possuem seção `pipeline:` no platform.yaml (pre-work completo)

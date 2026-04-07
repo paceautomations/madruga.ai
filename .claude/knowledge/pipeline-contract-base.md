@@ -188,10 +188,10 @@ python3 .specify/scripts/post_save.py --platform <name> --epic <epic-id> --node 
 Example:
 ```bash
 # After /madruga:vision saves business/vision.md:
-python3 .specify/scripts/post_save.py --platform fulano --node vision --skill madruga:vision --artifact business/vision.md
+python3 .specify/scripts/post_save.py --platform prosauai --node vision --skill madruga:vision --artifact business/vision.md
 
 # After /speckit.specify saves spec.md in an epic:
-python3 .specify/scripts/post_save.py --platform fulano --epic 001-channel-pipeline --node specify --skill speckit.specify --artifact epics/001-channel-pipeline/spec.md
+python3 .specify/scripts/post_save.py --platform prosauai --epic 001-channel-pipeline --node specify --skill speckit.specify --artifact epics/001-channel-pipeline/spec.md
 ```
 
 If the script fails or the DB does not exist, proceed normally — the DB is additive, not blocking.
