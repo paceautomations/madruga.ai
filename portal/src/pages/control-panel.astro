@@ -17,24 +17,24 @@ const selectedId = Astro.url.searchParams.get('platform') || allPlatformIds[0] |
 
   {/* ── Tab Bar ── */}
   <div class="cp-tab-bar" role="tablist">
-    <button class="cp-tab active" role="tab" aria-selected="true" data-tab="dashboard">Dashboard</button>
-    <button class="cp-tab" role="tab" aria-selected="false" data-tab="execution">Execution</button>
+    <button class="cp-tab active" role="tab" aria-selected="true" data-tab="execution">Execution</button>
     <button class="cp-tab" role="tab" aria-selected="false" data-tab="observability">Observability</button>
-  </div>
-
-  {/* ── Tab: Dashboard ── */}
-  <div id="tab-dashboard" class="cp-tab-panel" role="tabpanel">
-    <DashboardCharts client:visible platformIds={allPlatformIds} />
+    <button class="cp-tab" role="tab" aria-selected="false" data-tab="dashboard">Dashboard</button>
   </div>
 
   {/* ── Tab: Execution (fully client-side for dynamic platform switching) ── */}
-  <div id="tab-execution" class="cp-tab-panel" style="display: none;" role="tabpanel">
+  <div id="tab-execution" class="cp-tab-panel" role="tabpanel">
     <ExecutionTab client:visible allPlatforms={statusData.platforms || []} initialPlatformId={selectedId} />
   </div>
 
   {/* ── Tab: Observability ── */}
   <div id="tab-observability" class="cp-tab-panel" style="display: none;" role="tabpanel">
     <ObservabilityDashboard client:load platformIds={allPlatformIds} />
+  </div>
+
+  {/* ── Tab: Dashboard ── */}
+  <div id="tab-dashboard" class="cp-tab-panel" style="display: none;" role="tabpanel">
+    <DashboardCharts client:visible platformIds={allPlatformIds} />
   </div>
 
 </StarlightPage>
@@ -62,7 +62,7 @@ const selectedId = Astro.url.searchParams.get('platform') || allPlatformIds[0] |
 
     // Read initial hash
     const hash = location.hash.replace('#', '');
-    if (['execution', 'observability'].includes(hash)) activate(hash);
+    if (['dashboard', 'observability'].includes(hash)) activate(hash);
   }
 
   initTabs();

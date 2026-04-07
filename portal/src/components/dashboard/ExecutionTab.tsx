@@ -1,6 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
 import PlatformCards from './PlatformCards';
-import PipelineDAG from './PipelineDAG';
 import { NODE_LABELS, resolveNodeHref } from '../../lib/constants';
 
 // ── Types ──
@@ -27,6 +26,7 @@ interface EpicData {
   id: string;
   title: string;
   status: string;
+  updated_at?: string;
   total: number;
   done: number;
   progress_pct: number;
@@ -107,6 +107,10 @@ function buildKanban(epics: EpicData[]) {
     const { phaseId, subStage } = getEpicPhase(epic);
     columns[phaseId]?.push({ ...epic, subStage });
   }
+  // Sort each column: most recently updated first
+  for (const col of Object.values(columns)) {
+    col.sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
+  }
   return columns;
 }
 
@@ -150,8 +154,14 @@ const STATUS_ICON: Record<string, { icon: string; color: string }> = {
 
 // ── Main Component ──
 
+function getInitialPlatform(fallback: string): string {
+  if (typeof window === 'undefined') return fallback;
+  const params = new URLSearchParams(window.location.search);
+  return params.get('platform') || fallback;
+}
+
 export default function ExecutionTab({ allPlatforms, initialPlatformId }: ExecutionTabProps) {
-  const [selectedId, setSelectedId] = useState(initialPlatformId);
+  const [selectedId, setSelectedId] = useState(() => getInitialPlatform(initialPlatformId));
 
   const platform = allPlatforms.find((p) => p.id === selectedId);
   const hasData = !!platform;
@@ -330,18 +340,6 @@ export default function ExecutionTab({ allPlatforms, initialPlatformId }: Execut
             </div>
           </div>
 
-          {/* DAG */}
-          <div style={S.section}>
-            <details style={{ border: '1px solid var(--sl-color-gray-5, #333)', borderRadius: 6, overflow: 'hidden' }}>
-              <summary style={{ display: 'flex', alignItems: 'baseline', gap: '0.6rem', padding: '0.6rem 0.85rem', cursor: 'pointer', background: 'var(--sl-color-gray-6, #181818)', userSelect: 'none' }}>
-                <h2 style={{ margin: 0, fontSize: '0.85rem', fontWeight: 600, color: 'var(--sl-color-gray-2, #ccc)' }}>Pipeline DAG</h2>
-                <span style={S.sectionMeta}>Visualizacao interativa de dependencias</span>
-              </summary>
-              <div style={{ height: 550, background: 'var(--sl-color-gray-7, #111)' }}>
-                <PipelineDAG platforms={[platform]} />
-              </div>
-            </details>
-          </div>
         </>
       )}
     </div>

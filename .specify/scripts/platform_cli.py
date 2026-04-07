@@ -542,6 +542,7 @@ def cmd_status(name: str | None, show_all: bool, as_json: bool, output_file: str
                         "id": epic["epic_id"],
                         "title": epic.get("title", ""),
                         "status": epic.get("status", "proposed"),
+                        "updated_at": epic.get("updated_at", ""),
                         "total": epic_status.get("total_nodes", 0),
                         "done": epic_status.get("done", 0),
                         "skipped": epic_status.get("skipped", 0),

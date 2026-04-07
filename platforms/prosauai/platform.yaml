@@ -5,7 +5,7 @@ lifecycle: design
 version: "0.5.0"
 repo:
   org: paceautomations
-  name: prosauai-api
+  name: prosauai
   base_branch: main
   epic_branch_prefix: "epic/prosauai/"
 tags: [whatsapp, conversational-ai, multi-tenant]
