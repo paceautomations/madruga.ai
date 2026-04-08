@@ -22,7 +22,7 @@ class TestComposePrompt:
         """US3: All 4 artifacts included with headers in correct order."""
         epic_dir = tmp_path / "platforms" / "test" / "epics" / "001"
         epic_dir.mkdir(parents=True)
-        (epic_dir / "context.md").write_text("Context content")
+        (epic_dir / "pitch.md").write_text("Pitch content")
         (epic_dir / "spec.md").write_text("Spec content")
         (epic_dir / "plan.md").write_text("Plan content")
         (epic_dir / "tasks.md").write_text("Tasks content")
@@ -30,17 +30,17 @@ class TestComposePrompt:
         with patch("implement_remote.REPO_ROOT", tmp_path):
             prompt = compose_prompt("test", "001")
 
-        assert "## Epic Context" in prompt
+        assert "## Epic Pitch" in prompt
         assert "## Feature Specification" in prompt
         assert "## Implementation Plan" in prompt
         assert "## Tasks" in prompt
-        # Order: context before spec before plan before tasks
-        assert prompt.index("Context") < prompt.index("Spec")
+        # Order: pitch before spec before plan before tasks
+        assert prompt.index("Pitch") < prompt.index("Spec")
         assert prompt.index("Spec") < prompt.index("Plan")
         assert prompt.index("Plan") < prompt.index("Tasks content")
 
     def test_compose_prompt_missing_optional(self, tmp_path):
-        """US3: Works without context.md (optional)."""
+        """US3: Works without pitch.md (optional)."""
         epic_dir = tmp_path / "platforms" / "test" / "epics" / "001"
         epic_dir.mkdir(parents=True)
         (epic_dir / "spec.md").write_text("Spec content")
@@ -50,14 +50,14 @@ class TestComposePrompt:
         with patch("implement_remote.REPO_ROOT", tmp_path):
             prompt = compose_prompt("test", "001")
 
-        assert "## Epic Context" not in prompt
+        assert "## Epic Pitch" not in prompt
         assert "## Feature Specification" in prompt
 
-    def test_compose_prompt_truncates_large_context(self, tmp_path):
-        """US3: context.md truncated when total > 100KB."""
+    def test_compose_prompt_truncates_large_pitch(self, tmp_path):
+        """US3: pitch.md truncated when total > 100KB."""
         epic_dir = tmp_path / "platforms" / "test" / "epics" / "001"
         epic_dir.mkdir(parents=True)
-        (epic_dir / "context.md").write_text("X" * 120_000)  # 120KB
+        (epic_dir / "pitch.md").write_text("X" * 120_000)  # 120KB
         (epic_dir / "spec.md").write_text("Spec")
         (epic_dir / "plan.md").write_text("Plan")
         (epic_dir / "tasks.md").write_text("Tasks")

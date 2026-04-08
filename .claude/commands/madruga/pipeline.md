@@ -42,9 +42,9 @@ nodes = get_pipeline_nodes(conn, '<platform>')
 status = get_platform_status(conn, '<platform>')
 
 # Load DAG edges for staleness check
-with open('platforms/<platform>/platform.yaml') as f:
-    manifest = yaml.safe_load(f)
-edges = {n['id']: n.get('depends', []) for n in manifest.get('pipeline', {}).get('nodes', [])}
+from config import load_pipeline
+pipeline = load_pipeline()
+edges = {n['id']: n.get('depends', []) for n in pipeline.get('nodes', [])}
 stale = get_stale_nodes(conn, '<platform>', edges)
 
 print(json.dumps({'nodes': nodes, 'status': status, 'stale': [s['node_id'] for s in stale]}))
@@ -54,11 +54,11 @@ conn.close()
 
 **Fallback** (if DB not available): Run `.specify/scripts/bash/check-platform-prerequisites.sh --json --status --platform <name>`
 
-Additionally, read `platforms/<name>/platform.yaml` to obtain `depends` relationships for each node (required for Mermaid edges).
+Additionally, load the pipeline definition from `.specify/pipeline.yaml` (via `load_pipeline()` in `config.py`) to obtain `depends` relationships for each node (required for Mermaid edges).
 
 ### 2. Collect L2 Status (Epic Cycle)
 
-Check if `platforms/<name>/platform.yaml` has `epic_cycle` section.
+Check if `.specify/pipeline.yaml` has `epic_cycle` section.
 
 **Primary: Query DB** for each epic:
 ```bash
@@ -221,7 +221,7 @@ Show L1 table + Mermaid + L2 tables + Mermaid + progress + next step. Do NOT exe
 |-------|--------|
 | Script fails (python3 not found) | ERROR: python3 prerequisite not installed |
 | platform.yaml does not exist | ERROR: platform not found. Run `/platform-new` first |
-| Missing pipeline section in platform.yaml | ERROR: platform.yaml has no `pipeline:` section. Run `copier update` on the platform |
+| Missing pipeline definition | ERROR: `.specify/pipeline.yaml` not found or has no `nodes:` section |
 | No epic_cycle section | Skip L2, show only L1 |
 | No epics exist | Skip L2, show only L1 with note "No epics found" |
 | DB not available | Fallback to filesystem-only status |

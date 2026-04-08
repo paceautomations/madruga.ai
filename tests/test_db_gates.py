@@ -94,10 +94,11 @@ class TestGetResumableNodes:
         assert "vision" in nodes
         assert "blueprint" not in nodes
 
-    def test_includes_approved_gates(self, conn):
+    def test_approved_gate_not_resumable_until_done(self, conn):
+        """Approved gates are NOT resumable — 'approved' means ready to execute, not done."""
         _insert_gated_run(conn, "vision", gate_status="approved")
         nodes = get_resumable_nodes(conn, "test-plat")
-        assert "vision" in nodes
+        assert "vision" not in nodes
 
     def test_epic_mode(self, conn):
         from db import upsert_epic, upsert_epic_node

@@ -3,7 +3,6 @@ id: "022"
 title: "Mermaid Migration — LikeC4 to Mermaid Inline"
 status: in_progress
 phase: now
-appetite: 1w
 risk: low
 tags: [portal, diagrams, simplification, dx]
 updated: 2026-04-05
@@ -22,10 +21,6 @@ Os diagramas de arquitetura gerados com LikeC4 nao estao ficando visualmente bon
 - **Manutencao por plataforma**: cada nova plataforma exige adicionar `platformLoaders` em `LikeC4Diagram.tsx`
 
 Enquanto isso, o portal ja tem `astro-mermaid` instalado e funcional. Mermaid renderiza nativamente no GitHub, Starlight, e qualquer viewer Markdown. Os diagramas que realmente agregam valor (domain model, business flow, deploy topology) podem ser expressos como Mermaid inline nos proprios `.md`.
-
-## Appetite
-
-**1 semana** (team size: 1). Escopo bem definido: remover LikeC4, converter diagramas, simplificar portal. Zero funcionalidade nova — e uma simplificacao.
 
 ## Solution
 

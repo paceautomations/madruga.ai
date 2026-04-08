@@ -2,7 +2,7 @@
 """
 dag_executor.py — Custom DAG executor for the Madruga AI pipeline.
 
-Reads platform.yaml, performs topological sort, dispatches skills via
+Reads .specify/pipeline.yaml, performs topological sort, dispatches skills via
 claude -p subprocess. Supports human gates (pause/resume), retry with
 exponential backoff, circuit breaker, watchdog timeout, and resume
 from checkpoint.
@@ -47,7 +47,7 @@ from log_utils import setup_logging as _setup_logging  # noqa: E402
 
 
 DEFAULT_TIMEOUT = int(os.environ.get("MADRUGA_EXECUTOR_TIMEOUT", "3000"))
-RETRY_BACKOFFS = [5, 10, 20]
+RETRY_BACKOFFS = [10, 30, 90]
 CB_MAX_FAILURES = 5
 CB_RECOVERY_SECONDS = 300
 HUMAN_GATES = frozenset({"human", "1-way-door"})
@@ -155,6 +155,19 @@ _CONVENTIONS_HEADER = (
     "Python: stdlib + pyyaml. SQLite WAL mode. Ruff for lint/format.\n"
     "Platforms at platforms/<name>/. Skills at .claude/commands/.\n"
     "Scripts at .specify/scripts/. Portal at portal/.\n"
+)
+
+_AUTONOMOUS_DISPATCH = (
+    "# Autonomous Dispatch Mode\n\n"
+    "You are running as an autonomous pipeline agent (claude -p). "
+    "There is NO human in the loop — stdin is closed.\n\n"
+    "CRITICAL OVERRIDES:\n"
+    "- Do NOT ask questions or wait for approval. Make reasonable decisions autonomously.\n"
+    "- Do NOT pause at gates (human, 1-way-door). Treat ALL gates as auto.\n"
+    "- Do NOT present structured questions and wait for answers. Skip Step 1 questions.\n"
+    "- Go straight to generating and SAVING the output file.\n"
+    "- Use your best judgment for any decision that would normally require human input.\n"
+    "- The output file MUST be written to disk before you finish.\n"
 )
 
 
@@ -484,7 +497,7 @@ async def run_implement_tasks(
     if ctx_path.exists():
         ctx_path.unlink()
 
-    breaker = CircuitBreaker()
+    breaker = CircuitBreaker(conn=conn, platform_id=platform_name, epic_id=epic_slug)
     completed = 0
     failed: list[tuple[str, str]] = []
 
@@ -674,6 +687,33 @@ def _auto_commit_epic(cwd: str | Path, platform_name: str, epic_slug: str) -> bo
         return False
 
 
+def _transition_epic_status(conn, platform_name: str, epic_slug: str) -> None:
+    """Transition epic status (in_progress → shipped) if all required nodes done. Best-effort."""
+    try:
+        from db import compute_epic_status, get_epics, upsert_epic
+        from post_save import _get_required_epic_nodes
+        from config import load_pipeline
+
+        required_nodes = _get_required_epic_nodes(platform_name, load_pipeline())
+        existing = [e for e in get_epics(conn, platform_name) if e["epic_id"] == epic_slug]
+        if existing:
+            new_status, delivered_at = compute_epic_status(
+                conn, platform_name, epic_slug, required_nodes, existing[0]["status"]
+            )
+            if new_status != existing[0]["status"]:
+                upsert_epic(
+                    conn,
+                    platform_name,
+                    epic_slug,
+                    title=existing[0]["title"],
+                    status=new_status,
+                    delivered_at=delivered_at,
+                )
+                log.info("Epic '%s' transitioned: %s → %s", epic_slug, existing[0]["status"], new_status)
+    except Exception:
+        log.debug("Failed to compute epic status — non-blocking")
+
+
 # ── Data Structures ─────────────────────────────────────────────────
 
 
@@ -688,11 +728,10 @@ class Node(NamedTuple):
     skip_condition: str | None
 
 
-def parse_dag(platform_yaml: Path, mode: str = "l1", epic: str | None = None) -> list[Node]:
-    """Parse pipeline nodes from platform.yaml.
+def parse_dag(mode: str = "l1", epic: str | None = None) -> list[Node]:
+    """Parse pipeline nodes from .specify/pipeline.yaml.
 
     Args:
-        platform_yaml: Path to platform.yaml
         mode: 'l1' for platform pipeline, 'l2' for epic cycle,
               'quick' for fast lane (specify → implement → judge)
         epic: Epic slug (required for l2/quick mode, used to resolve {epic} templates)
@@ -700,23 +739,24 @@ def parse_dag(platform_yaml: Path, mode: str = "l1", epic: str | None = None) ->
     Returns:
         List of Node namedtuples.
     """
-    data = yaml.safe_load(platform_yaml.read_text())
-    pipeline = data.get("pipeline", {})
+    from config import load_pipeline
+
+    pipeline = load_pipeline()
 
     if mode == "quick":
         cycle = pipeline.get("quick_cycle", {})
         raw_nodes = cycle.get("nodes", [])
         if not raw_nodes:
-            raise SystemExit("ERROR: No quick_cycle.nodes section in platform.yaml")
+            raise SystemExit("ERROR: No quick_cycle.nodes section in pipeline.yaml")
     elif mode == "l2":
         cycle = pipeline.get("epic_cycle", {})
         raw_nodes = cycle.get("nodes", [])
         if not raw_nodes:
-            raise SystemExit("ERROR: No epic_cycle.nodes section in platform.yaml")
+            raise SystemExit("ERROR: No epic_cycle.nodes section in pipeline.yaml")
     else:
         raw_nodes = pipeline.get("nodes", [])
         if not raw_nodes:
-            raise SystemExit("ERROR: No pipeline.nodes section in platform.yaml")
+            raise SystemExit("ERROR: No nodes section in pipeline.yaml")
 
     nodes = []
     for n in raw_nodes:
@@ -840,8 +880,7 @@ def _handle_auto_escalate(
             # manual: pause for external approval
             esc_run_id = insert_run(conn, platform_name, node.id, epic_id=epic_slug, trace_id=trace_id)
             conn.execute(
-                "UPDATE pipeline_runs SET gate_status='waiting_approval', "
-                "gate_notified_at=datetime('now') WHERE run_id=?",
+                "UPDATE pipeline_runs SET gate_status='waiting_approval' WHERE run_id=?",
                 (esc_run_id,),
             )
             conn.commit()
@@ -856,14 +895,27 @@ def _handle_auto_escalate(
 
 
 class CircuitBreaker:
-    """Simple circuit breaker: closed → open (after max_failures) → half-open (after recovery)."""
+    """Simple circuit breaker: closed → open (after max_failures) → half-open (after recovery).
 
-    def __init__(self, max_failures: int = CB_MAX_FAILURES, recovery_seconds: int = CB_RECOVERY_SECONDS):
+    Optionally seeds from DB on init: counts recent consecutive failures
+    to avoid retry storms after process restart.
+    """
+
+    def __init__(
+        self,
+        max_failures: int = CB_MAX_FAILURES,
+        recovery_seconds: int = CB_RECOVERY_SECONDS,
+        conn=None,
+        platform_id: str | None = None,
+        epic_id: str | None = None,
+    ):
         self.max_failures = max_failures
         self.recovery_seconds = recovery_seconds
         self.failure_count = 0
         self.last_failure_at: float = 0
         self.state = "closed"  # closed, open, half-open
+        if conn and platform_id:
+            self._seed_from_db(conn, platform_id, epic_id)
 
     def check(self) -> bool:
         """Return True if dispatch is allowed."""
@@ -900,8 +952,45 @@ class CircuitBreaker:
                 self.recovery_seconds,
             )
 
+    def _seed_from_db(self, conn, platform_id: str, epic_id: str | None) -> None:
+        """Count recent consecutive failures from DB to persist state across restarts."""
+        import sqlite3
+
+        try:
+            epic_filter = "AND epic_id=?" if epic_id else "AND epic_id IS NULL"
+            params = (platform_id, epic_id) if epic_id else (platform_id,)
+            rows = conn.execute(
+                "SELECT status, completed_at FROM pipeline_runs "
+                f"WHERE platform_id=? {epic_filter} "
+                "ORDER BY started_at DESC LIMIT ?",
+                (*params, self.max_failures),
+            ).fetchall()
+            consecutive = 0
+            for status, completed_at in rows:
+                if status == "failed":
+                    consecutive += 1
+                else:
+                    break
+            if consecutive >= self.max_failures:
+                self.failure_count = consecutive
+                self.state = "open"
+                self.last_failure_at = time.time()
+                log.warning("Circuit breaker seeded OPEN from DB — %d consecutive failures", consecutive)
+            elif consecutive > 0:
+                self.failure_count = consecutive
+                log.info("Circuit breaker seeded with %d prior failures", consecutive)
+        except (sqlite3.Error, TypeError):
+            log.debug("Circuit breaker DB seed failed — starting fresh")
+
 
 # ── Dispatch ─────────────────────────────────────────────────────────
+
+
+def _dispatch_env() -> dict[str, str]:
+    """Return environ with MADRUGA_DISPATCH=1 so user hooks skip in subprocesses."""
+    env = os.environ.copy()
+    env["MADRUGA_DISPATCH"] = "1"
+    return env
 
 
 def dispatch_node(
@@ -924,7 +1013,7 @@ def dispatch_node(
     log.debug("Command: %s", " ".join(cmd[:4]) + " ...")
 
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, cwd=str(cwd))
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, cwd=str(cwd), env=_dispatch_env())
         if result.returncode != 0:
             error = result.stderr.strip()[:500] if result.stderr else f"exitcode {result.returncode}"
             log.error("Node '%s' failed: %s", node.id, error)
@@ -1029,6 +1118,7 @@ async def dispatch_node_async(
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
         cwd=str(cwd),
+        env=_dispatch_env(),
     )
     try:
         stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
@@ -1056,7 +1146,9 @@ def _make_abort_check(conn, epic_slug: str | None):
     def check() -> bool:
         try:
             row = conn.execute("SELECT status FROM epics WHERE epic_id=?", (epic_slug,)).fetchone()
-            return row is not None and row[0] != "in_progress"
+            # Only abort on explicit cancellation/block — NOT on natural completion
+            # (shipped/completed are valid transitions from the pipeline itself)
+            return row is not None and row[0] in ("cancelled", "blocked")
         except sqlite3.Error:
             return False
 
@@ -1175,14 +1267,9 @@ async def run_pipeline_async(
     log.info("Gate mode: %s", gmode)
 
     platform_dir = REPO_ROOT / "platforms" / platform_name
-    yaml_path = platform_dir / "platform.yaml"
-
-    if not yaml_path.exists():
-        log.error("platform.yaml not found: %s", yaml_path)
-        return 1
 
     mode = "quick" if quick else ("l2" if epic_slug else "l1")
-    nodes = parse_dag(yaml_path, mode=mode, epic=epic_slug)
+    nodes = parse_dag(mode=mode, epic=epic_slug)
     ordered = topological_sort(nodes)
 
     log.info("Pipeline async %s — %d nodes in %s mode", platform_name, len(ordered), mode.upper())
@@ -1207,22 +1294,31 @@ async def run_pipeline_async(
         # Cleanup stale 'running' runs from previous crashes/failures.
         # Preserve only runs with gate_status='waiting_approval' — these are
         # real gate checkpoints awaiting human response.
-        # Runs with gate_status='approved' but still 'running' are orphans
-        # (gate was approved but dispatch failed) and must be cancelled.
-        if epic_slug:
-            conn.execute(
-                "UPDATE pipeline_runs SET status='cancelled', completed_at=datetime('now') "
-                "WHERE platform_id=? AND epic_id=? AND status='running' "
-                "AND (gate_status IS NULL OR gate_status != 'waiting_approval')",
-                (platform_name, epic_slug),
-            )
-        else:
-            conn.execute(
-                "UPDATE pipeline_runs SET status='cancelled', completed_at=datetime('now') "
-                "WHERE platform_id=? AND epic_id IS NULL AND status='running' "
-                "AND (gate_status IS NULL OR gate_status != 'waiting_approval')",
-                (platform_name,),
-            )
+        # If the node's artifact was already saved (epic_nodes.status='done'),
+        # mark the run as 'completed' instead of 'cancelled'.
+        epic_filter = "AND epic_id=?" if epic_slug else "AND epic_id IS NULL"
+        params_base = (platform_name, epic_slug) if epic_slug else (platform_name,)
+        stale_runs = conn.execute(
+            "SELECT run_id, node_id FROM pipeline_runs "
+            f"WHERE platform_id=? {epic_filter} AND status='running' "
+            "AND (gate_status IS NULL OR gate_status != 'waiting_approval')",
+            params_base,
+        ).fetchall()
+        if stale_runs:
+            status_table = "epic_nodes" if epic_slug else "pipeline_nodes"
+            done_nodes = {
+                r[0]
+                for r in conn.execute(
+                    f"SELECT node_id FROM {status_table} WHERE platform_id=? {epic_filter} AND status='done'",
+                    params_base,
+                ).fetchall()
+            }
+            for run_id, node_id in stale_runs:
+                final = "completed" if node_id in done_nodes else "cancelled"
+                conn.execute(
+                    "UPDATE pipeline_runs SET status=?, completed_at=datetime('now') WHERE run_id=?",
+                    (final, run_id),
+                )
         conn.commit()
 
         completed_nodes = get_resumable_nodes(conn, platform_name, epic_slug)
@@ -1239,7 +1335,7 @@ async def run_pipeline_async(
 
     trace_id = _resolve_trace_id(conn, platform_name, epic_slug, resume, mode, len(ordered))
 
-    breaker = CircuitBreaker()
+    breaker = CircuitBreaker(conn=conn, platform_id=platform_name, epic_id=epic_slug)
     cwd = REPO_ROOT
     code_dir = _resolve_code_dir(platform_name, epic_slug)
     if code_dir != REPO_ROOT:
@@ -1293,8 +1389,7 @@ async def run_pipeline_async(
                 if not approved_run:
                     run_id = insert_run(conn, platform_name, node.id, epic_id=epic_slug)
                     conn.execute(
-                        "UPDATE pipeline_runs SET gate_status='waiting_approval', gate_notified_at=datetime('now') "
-                        "WHERE run_id=?",
+                        "UPDATE pipeline_runs SET gate_status='waiting_approval' WHERE run_id=?",
                         (run_id,),
                     )
                     conn.commit()
@@ -1374,8 +1469,11 @@ async def run_pipeline_async(
                     abort_check=abort_fn,
                 )
 
+        # Truncate stdout for dispatch_log (debug aid, max 4KB)
+        _dispatch_log = stdout[:4096] if stdout else None
+
         if not success:
-            complete_run(conn, run_id, status="failed", error=error)
+            complete_run(conn, run_id, status="failed", error=error, dispatch_log=_dispatch_log)
             log.error("Node '%s' failed after retries: %s", node.id, error)
             try:
                 if trace_id:
@@ -1418,7 +1516,7 @@ async def run_pipeline_async(
 
         ok, verify_error = verify_outputs(node, platform_dir)
         if not ok:
-            complete_run(conn, run_id, status="failed", error=verify_error)
+            complete_run(conn, run_id, status="failed", error=verify_error, dispatch_log=_dispatch_log)
             log.error("Node '%s': %s", node.id, verify_error)
             try:
                 if trace_id:
@@ -1454,6 +1552,7 @@ async def run_pipeline_async(
             cost_usd=metrics.get("cost_usd"),
             duration_ms=metrics.get("duration_ms"),
             output_lines=_count_output_lines(eval_output),
+            dispatch_log=_dispatch_log,
         )
         _run_eval_scoring(
             conn,
@@ -1489,31 +1588,8 @@ async def run_pipeline_async(
 
     log.info("Pipeline async %s complete — %d nodes executed", mode.upper(), len(completed_nodes))
 
-    # Transition epic status (in_progress → shipped) if all required nodes done
     if epic_slug:
-        try:
-            from db import compute_epic_status, get_epics, upsert_epic
-            from post_save import _get_required_epic_nodes
-
-            pipeline_data = yaml.safe_load(yaml_path.read_text(encoding="utf-8")).get("pipeline", {})
-            required_nodes = _get_required_epic_nodes(platform_name, pipeline_data)
-            existing = [e for e in get_epics(conn, platform_name) if e["epic_id"] == epic_slug]
-            if existing:
-                new_status, delivered_at = compute_epic_status(
-                    conn, platform_name, epic_slug, required_nodes, existing[0]["status"]
-                )
-                if new_status != existing[0]["status"]:
-                    upsert_epic(
-                        conn,
-                        platform_name,
-                        epic_slug,
-                        title=existing[0]["title"],
-                        status=new_status,
-                        delivered_at=delivered_at,
-                    )
-                    log.info("Epic '%s' transitioned: %s → %s", epic_slug, existing[0]["status"], new_status)
-        except Exception:
-            log.debug("Failed to compute epic status — non-blocking")
+        _transition_epic_status(conn, platform_name, epic_slug)
 
     # Refresh portal dashboard JSON (best-effort)
     try:
@@ -1661,7 +1737,7 @@ def build_system_prompt(node: Node, platform_name: str, quick_mode: bool = False
 
     Returns the concatenated system prompt string.
     """
-    parts: list[str] = [_CONVENTIONS_HEADER]
+    parts: list[str] = [_CONVENTIONS_HEADER, _AUTONOMOUS_DISPATCH]
 
     # Base contract (always)
     base_contract = REPO_ROOT / ".claude" / "knowledge" / "pipeline-contract-base.md"
@@ -1727,7 +1803,8 @@ def build_dispatch_cmd(
         prompt,
     ]
 
-    # --bare disables OAuth/keychain — only use with API key auth
+    # --bare isolates the agent: no CLAUDE.md, no hooks, no user settings.
+    # Needs ANTHROPIC_API_KEY (--bare disables OAuth).
     if os.environ.get("ANTHROPIC_API_KEY"):
         cmd.append("--bare")
 
@@ -1796,14 +1873,9 @@ def run_pipeline(
         return 1
 
     platform_dir = REPO_ROOT / "platforms" / platform_name
-    yaml_path = platform_dir / "platform.yaml"
-
-    if not yaml_path.exists():
-        log.error("platform.yaml not found: %s", yaml_path)
-        return 1
 
     mode = "quick" if quick else ("l2" if epic_slug else "l1")
-    nodes = parse_dag(yaml_path, mode=mode, epic=epic_slug)
+    nodes = parse_dag(mode=mode, epic=epic_slug)
     ordered = topological_sort(nodes)
 
     log.info("Pipeline %s — %d nodes in %s mode", platform_name, len(ordered), mode.upper())
@@ -1853,7 +1925,7 @@ def run_pipeline(
     if resume:
         log.info("Resume: %d nodes already completed", len(completed_nodes))
 
-    breaker = CircuitBreaker()
+    breaker = CircuitBreaker(conn=conn, platform_id=platform_name, epic_id=epic_slug)
     cwd = REPO_ROOT
     code_dir = _resolve_code_dir(platform_name, epic_slug)
     if code_dir != REPO_ROOT:
@@ -1902,8 +1974,7 @@ def run_pipeline(
                 # gmode == "manual": pause and wait for external approval
                 run_id = insert_run(conn, platform_name, node.id, epic_id=epic_slug)
                 conn.execute(
-                    "UPDATE pipeline_runs SET gate_status='waiting_approval', gate_notified_at=datetime('now') "
-                    "WHERE run_id=?",
+                    "UPDATE pipeline_runs SET gate_status='waiting_approval' WHERE run_id=?",
                     (run_id,),
                 )
                 conn.commit()
@@ -2050,31 +2121,8 @@ def run_pipeline(
 
     print(f"\nPipeline {mode.upper()} complete — {len(completed_nodes)} nodes executed.")
 
-    # Transition epic status (in_progress → shipped) if all required nodes done
     if epic_slug:
-        try:
-            from db import compute_epic_status, get_epics, upsert_epic
-            from post_save import _get_required_epic_nodes
-
-            pipeline_data = yaml.safe_load(yaml_path.read_text(encoding="utf-8")).get("pipeline", {})
-            required_nodes = _get_required_epic_nodes(platform_name, pipeline_data)
-            existing = [e for e in get_epics(conn, platform_name) if e["epic_id"] == epic_slug]
-            if existing:
-                new_status, delivered_at = compute_epic_status(
-                    conn, platform_name, epic_slug, required_nodes, existing[0]["status"]
-                )
-                if new_status != existing[0]["status"]:
-                    upsert_epic(
-                        conn,
-                        platform_name,
-                        epic_slug,
-                        title=existing[0]["title"],
-                        status=new_status,
-                        delivered_at=delivered_at,
-                    )
-                    log.info("Epic '%s' transitioned: %s → %s", epic_slug, existing[0]["status"], new_status)
-        except Exception:
-            log.debug("Failed to compute epic status — non-blocking")
+        _transition_epic_status(conn, platform_name, epic_slug)
 
     # Refresh portal dashboard JSON (best-effort)
     try:

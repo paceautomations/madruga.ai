@@ -100,7 +100,7 @@ Scan each category systematically. For each drift item found, record: ID, catego
 | D3 | Model | `engineering/containers.md` diagrams | Actual containers/relationships | Mermaid diagrams missing new containers or stale relationships | New `worker` container not in containers.md |
 | D4 | Domain | `engineering/domain-model.md` | Code entities, aggregates, events | New entity/aggregate not in domain model | New `OrderItem` entity undocumented |
 | D5 | Decision | `decisions/ADR-*.md` (Accepted) | Implementation patterns | Code contradicts an accepted ADR | ADR chose REST but code uses GraphQL |
-| D6 | Roadmap | `planning/roadmap.md` | Actual epic outcome | Appetite over/under; milestone status; risk materialized | 2w appetite took 4w |
+| D6 | Roadmap | `planning/roadmap.md` | Actual epic outcome | Milestone status; risk materialized; scope changed | Epic planned for MVP but deferred |
 | D7 | Epic (future) | `epics/*/pitch.md` (unimplemented) | Changes from current epic | Current epic changed APIs/schema/boundaries assumed by future pitches | Future epic assumes `/v1/channels` but it was renamed |
 | D8 | Integration | `engineering/context-map.md` | Actual API contracts, events | Published API changed; new integration not in context map | New webhook not documented |
 | D9 | README | `platforms/<name>/README.md` | Current implementation state | Setup instructions outdated; new dependencies not listed; architecture section stale | README lists old env vars; missing new service |
@@ -126,7 +126,6 @@ For each entry in `decisions.md`, run 3 checks:
 
 | Field | Planned (from roadmap) | Actual (from epic) | Drift? |
 |-------|----------------------|-------------------|--------|
-| Appetite | Xw | Yw | Yes if X != Y |
 | Status | In Progress | Complete/Partial | Update |
 | Milestone | MVP / v1.0 | Reached? | Update |
 | Dependencies | [list] | New ones discovered? | Add |

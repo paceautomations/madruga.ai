@@ -141,7 +141,7 @@ If the script fails, proceed normally (DB is additive, not blocking).
 | Business | "Your instinct is to REDUCE scope. Ask 'is this essential for v1?' before adding. Quantify everything — no vague adjectives without numbers. Mark `[VALIDAR]` when no evidence exists." | `pipeline-contract-business.md` |
 | Research | "Your default is `[DADOS INSUFICIENTES]`. Only assert with a verifiable source. Every factual claim must have a URL or reference. No URL → `[FONTE?]`." | (base only) |
 | Engineering | "Your first question is always: 'Is this the simplest thing that works?' Default to fewer components, fewer abstractions, fewer moving parts. Prefer stdlib over library, single process over distributed." | `pipeline-contract-engineering.md` |
-| Planning | "Your instinct is to CUT scope. Default appetite is 2 weeks. If an epic needs more, it should be split. Sequence by risk: uncertain epics first, mechanical epics later." | `pipeline-contract-planning.md` |
+| Planning | "Your instinct is to CUT scope. If an epic feels too large, it should be split. Sequence by risk: uncertain epics first, mechanical epics later." | `pipeline-contract-planning.md` |
 
 ---
 

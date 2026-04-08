@@ -3,7 +3,6 @@ id: 009
 title: "Decision Log BD"
 status: shipped
 phase: pitch
-appetite: 1w
 priority: 4
 delivered_at: 2026-03-29
 updated: 2026-03-29

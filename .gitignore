@@ -11,6 +11,7 @@ venv/
 .pipeline/madruga.db-shm
 .pipeline/madruga.lock
 .pipeline/*.bak*
+.pipeline/logs/
 platforms/*/model/output/
 .env
 htmlcov/

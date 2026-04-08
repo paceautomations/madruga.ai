@@ -887,32 +887,35 @@ class TestPostSaveHelpers:
     def test_get_required_epic_nodes(self, tmp_path):
         from post_save import _get_required_epic_nodes
 
-        pdir = tmp_path / "platforms" / "myplat"
-        pdir.mkdir(parents=True)
-        manifest = {
-            "pipeline": {
-                "epic_cycle": {
-                    "nodes": [
-                        {"id": "specify", "optional": False},
-                        {"id": "qa", "optional": True},
-                        {"id": "implement", "optional": False},
-                    ]
-                }
+        pipeline = {
+            "epic_cycle": {
+                "nodes": [
+                    {"id": "specify", "optional": False},
+                    {"id": "qa", "optional": True},
+                    {"id": "implement", "optional": False},
+                ]
             }
         }
-        (pdir / "platform.yaml").write_text(yaml.dump(manifest))
+        pipeline_path = tmp_path / "pipeline.yaml"
+        pipeline_path.write_text(yaml.dump(pipeline))
 
-        with patch("post_save.REPO_ROOT", tmp_path):
+        with patch("config.PIPELINE_YAML", pipeline_path):
             result = _get_required_epic_nodes("myplat")
 
         assert "specify" in result
         assert "implement" in result
         assert "qa" not in result
 
-    def test_get_required_epic_nodes_no_yaml(self, tmp_path):
+    def test_get_required_epic_nodes_with_explicit_data(self):
         from post_save import _get_required_epic_nodes
 
-        with patch("post_save.REPO_ROOT", tmp_path):
-            result = _get_required_epic_nodes("nonexistent")
-
-        assert result == set()
+        pipeline_data = {
+            "epic_cycle": {
+                "nodes": [
+                    {"id": "a"},
+                    {"id": "b", "optional": True},
+                ]
+            }
+        }
+        result = _get_required_epic_nodes("any", pipeline_data)
+        assert result == {"a"}

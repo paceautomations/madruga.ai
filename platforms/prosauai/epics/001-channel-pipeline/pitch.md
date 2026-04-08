@@ -3,7 +3,6 @@ id: "001"
 title: "Channel Pipeline"
 status: planned
 phase: now
-appetite: "1 semana"
 features:
   - "Receber e responder mensagens"
   - "Agente em grupos WhatsApp"
@@ -24,17 +23,13 @@ arch:
 
 | Camada | Blocos | Viewer |
 |--------|--------|--------|
-| Modulos | M1 (Recepcao), M2 (Buffer), M3 (Smart Router), M11 (Entrega) | [Containers (Interactive)](/prosauai/containers/) |
-| Contextos | Channel | [Context Map](/prosauai/context-map/) |
-| Containers | prosauai-api, redis, evolution-api | [Containers (Interactive)](/prosauai/containers/) |
+| Modulos | M1 (Recepcao), M2 (Buffer), M3 (Smart Router), M11 (Entrega) | [Containers (Interactive)](../../engineering/containers/) |
+| Contextos | Channel | [Context Map](../../engineering/context-map/) |
+| Containers | prosauai-api, redis, evolution-api | [Containers (Interactive)](../../engineering/containers/) |
 
 ## Problema
 
 Nao existe infraestrutura base para receber mensagens WhatsApp, rotear por tipo (individual/grupo/@mention) e responder. Sem isso, nenhum outro epico pode ser implementado.
-
-## Appetite
-
-1 semana. Se nao cabe nesse tempo, cortamos scope — nao estendemos prazo.
 
 ## Valor de Negocio
 

@@ -2,7 +2,6 @@
 id: 020
 title: "Code Quality & DX"
 status: shipped
-appetite: 2w
 priority: P2
 depends_on: [018]
 blocks: []
@@ -16,10 +15,6 @@ delivered_at: 2026-04-05
 `db.py` tem 2,268 linhas com 6 responsabilidades distintas misturadas (connection/migration, pipeline CRUD, decisions/memory, FTS5, observability, transactions). E o unico arquivo da codebase perto do limite critico — e a maior funcao do Claude Code (3,167 linhas em print.ts) recebeu nota 6.5/10 por razao identica. Logging e inconsistente: mix de `print("[ok]")`, `log.info()`, e `print()` direto — CI nao consegue parsear output sem regex. Skills podem driftar do contrato de 6 passos sem deteccao. Memories acumulam sem pruning — MEMORY.md pode ultrapassar o limite de 200 linhas sem aviso. `vision-build.py` e `sync_memory.py` nao tem nenhum teste automatizado.
 
 **Depende de epic 018:** O split de db.py precisa da error hierarchy (T6 do 018) para que cada modulo use erros tipados em vez de SystemExit.
-
-## Appetite
-
-**2w** — 6 tasks. O split de db.py e o mais complexo (4h) mas e mecanico — mover funcoes entre arquivos mantendo imports. O resto sao extensoes a ferramentas existentes.
 
 ## Solution
 

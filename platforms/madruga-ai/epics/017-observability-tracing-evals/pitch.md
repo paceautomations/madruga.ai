@@ -2,7 +2,6 @@
 id: 017
 title: "Observability, Tracing & Evals"
 status: shipped
-appetite: 2w
 priority: 4
 updated: 2026-04-02
 delivered_at: 2026-04-04
@@ -12,10 +11,6 @@ delivered_at: 2026-04-04
 ## Problem
 
 Adicionar observabilidade real-time, tracing hierarquico e eval scoring ao pipeline L2 automatizado. Dados persistidos em SQLite (extendendo schema existente), dashboards no portal Astro existente, evals via Judge pattern + metricas quantitativas.
-
-## Appetite
-
-**2w** — Epic de observabilidade. Extende schema SQLite existente + portal Astro.
 
 ## Dependencies
 

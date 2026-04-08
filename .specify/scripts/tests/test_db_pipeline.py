@@ -457,3 +457,592 @@ def test_progress_pct_zero_skipped_unchanged(tmp_db):
 
     status = get_epic_status(tmp_db, "p1", "021-test")
     assert status["progress_pct"] == 50.0
+
+
+# ══════════════════════════════════════
+# Commit traceability tests (Epic 023)
+# ══════════════════════════════════════
+
+
+def test_insert_commit_single(tmp_db):
+    """insert_commit stores a single commit with all fields."""
+    from db_pipeline import insert_commit, upsert_platform
+
+    upsert_platform(tmp_db, "p1", name="P1", repo_path="platforms/p1")
+    insert_commit(
+        tmp_db,
+        sha="abc123def456",
+        message="feat: add feature X",
+        author="Dev User",
+        platform_id="p1",
+        epic_id="023-commit-traceability",
+        source="hook",
+        committed_at="2026-04-08T10:00:00Z",
+        files_json='["src/main.py", "tests/test_main.py"]',
+    )
+
+    row = tmp_db.execute("SELECT * FROM commits WHERE sha = 'abc123def456'").fetchone()
+    assert row is not None
+    assert row["sha"] == "abc123def456"
+    assert row["message"] == "feat: add feature X"
+    assert row["author"] == "Dev User"
+    assert row["platform_id"] == "p1"
+    assert row["epic_id"] == "023-commit-traceability"
+    assert row["source"] == "hook"
+    assert row["committed_at"] == "2026-04-08T10:00:00Z"
+    assert row["files_json"] == '["src/main.py", "tests/test_main.py"]'
+    assert row["created_at"] is not None  # auto-populated by DEFAULT
+
+
+def test_insert_commit_duplicate_sha_ignored(tmp_db):
+    """Duplicate SHA is silently ignored (INSERT OR IGNORE for idempotency)."""
+    from db_pipeline import insert_commit, upsert_platform
+
+    upsert_platform(tmp_db, "p1", name="P1", repo_path="platforms/p1")
+    insert_commit(
+        tmp_db,
+        sha="deadbeef1234",
+        message="first insert",
+        author="Dev",
+        platform_id="p1",
+        epic_id=None,
+        source="hook",
+        committed_at="2026-04-08T10:00:00Z",
+        files_json="[]",
+    )
+    # Second insert with same SHA — should be silently ignored
+    insert_commit(
+        tmp_db,
+        sha="deadbeef1234",
+        message="second insert attempt",
+        author="Other Dev",
+        platform_id="p1",
+        epic_id="099-other",
+        source="backfill",
+        committed_at="2026-04-08T11:00:00Z",
+        files_json='["new_file.py"]',
+    )
+
+    count = tmp_db.execute("SELECT COUNT(*) FROM commits WHERE sha = 'deadbeef1234'").fetchone()[0]
+    assert count == 1
+    # Original values preserved (first insert wins)
+    row = tmp_db.execute("SELECT * FROM commits WHERE sha = 'deadbeef1234'").fetchone()
+    assert row["message"] == "first insert"
+    assert row["author"] == "Dev"
+
+
+def test_insert_commit_multi_platform_same_sha(tmp_db):
+    """A commit touching multiple platforms creates one row per platform.
+
+    The SHA UNIQUE constraint is per-row, so multi-platform commits use
+    a composite key pattern: sha + platform_id must be unique together,
+    OR the caller appends a platform suffix to make the SHA unique per row.
+    Based on the migration (sha UNIQUE globally), multi-platform commits
+    need distinct SHA values (e.g. sha:platform_id convention).
+    """
+    from db_pipeline import insert_commit, upsert_platform
+
+    upsert_platform(tmp_db, "p1", name="P1", repo_path="platforms/p1")
+    upsert_platform(tmp_db, "p2", name="P2", repo_path="platforms/p2")
+
+    # Multi-platform commit: same logical commit, one row per platform
+    # SHA must differ per row since commits.sha is UNIQUE
+    insert_commit(
+        tmp_db,
+        sha="aaa111:p1",
+        message="chore: update cross-platform config",
+        author="Dev",
+        platform_id="p1",
+        epic_id=None,
+        source="hook",
+        committed_at="2026-04-08T12:00:00Z",
+        files_json='["platforms/p1/config.yaml"]',
+    )
+    insert_commit(
+        tmp_db,
+        sha="aaa111:p2",
+        message="chore: update cross-platform config",
+        author="Dev",
+        platform_id="p2",
+        epic_id=None,
+        source="hook",
+        committed_at="2026-04-08T12:00:00Z",
+        files_json='["platforms/p2/config.yaml"]',
+    )
+
+    total = tmp_db.execute("SELECT COUNT(*) FROM commits").fetchone()[0]
+    assert total == 2
+    p1_row = tmp_db.execute("SELECT * FROM commits WHERE platform_id = 'p1'").fetchone()
+    p2_row = tmp_db.execute("SELECT * FROM commits WHERE platform_id = 'p2'").fetchone()
+    assert p1_row is not None
+    assert p2_row is not None
+    assert p1_row["message"] == p2_row["message"]  # same commit message
+    assert p1_row["platform_id"] != p2_row["platform_id"]
+
+
+def test_insert_commit_null_epic_id_adhoc(tmp_db):
+    """Ad-hoc commits (not tied to any epic) have NULL epic_id."""
+    from db_pipeline import insert_commit, upsert_platform
+
+    upsert_platform(tmp_db, "p1", name="P1", repo_path="platforms/p1")
+    insert_commit(
+        tmp_db,
+        sha="adhoc999",
+        message="fix: quick typo fix on main",
+        author="Dev",
+        platform_id="p1",
+        epic_id=None,
+        source="hook",
+        committed_at="2026-04-08T09:00:00Z",
+        files_json='["README.md"]',
+    )
+
+    row = tmp_db.execute("SELECT * FROM commits WHERE sha = 'adhoc999'").fetchone()
+    assert row is not None
+    assert row["epic_id"] is None
+    # Verify it's distinguishable from epic-linked commits
+    insert_commit(
+        tmp_db,
+        sha="epic777",
+        message="feat: epic work",
+        author="Dev",
+        platform_id="p1",
+        epic_id="023-commit-traceability",
+        source="hook",
+        committed_at="2026-04-08T09:30:00Z",
+        files_json="[]",
+    )
+    adhoc_rows = tmp_db.execute("SELECT * FROM commits WHERE epic_id IS NULL").fetchall()
+    epic_rows = tmp_db.execute("SELECT * FROM commits WHERE epic_id IS NOT NULL").fetchall()
+    assert len(adhoc_rows) == 1
+    assert len(epic_rows) == 1
+    assert adhoc_rows[0]["sha"] == "adhoc999"
+    assert epic_rows[0]["sha"] == "epic777"
+
+
+# --- T004: Query function tests ---
+
+
+def _seed_commits(tmp_db):
+    """Helper: seed a mix of epic and ad-hoc commits across two platforms."""
+    from db_pipeline import insert_commit, upsert_platform
+
+    upsert_platform(tmp_db, "p1", name="P1", repo_path="platforms/p1")
+    upsert_platform(tmp_db, "p2", name="P2", repo_path="platforms/p2")
+
+    # 3 commits for epic 012 on p1
+    for i in range(3):
+        insert_commit(
+            tmp_db,
+            sha=f"epic012-p1-{i}",
+            message=f"feat: epic 012 work #{i}",
+            author="Dev A",
+            platform_id="p1",
+            epic_id="012-whatsapp-daemon",
+            source="hook",
+            committed_at=f"2026-04-0{i + 1}T10:00:00Z",
+            files_json=f'["platforms/p1/file{i}.py"]',
+        )
+
+    # 2 commits for epic 023 on p1
+    for i in range(2):
+        insert_commit(
+            tmp_db,
+            sha=f"epic023-p1-{i}",
+            message=f"feat: epic 023 work #{i}",
+            author="Dev B",
+            platform_id="p1",
+            epic_id="023-commit-traceability",
+            source="hook",
+            committed_at=f"2026-04-0{i + 5}T10:00:00Z",
+            files_json="[]",
+        )
+
+    # 2 ad-hoc commits on p1 (NULL epic_id)
+    for i in range(2):
+        insert_commit(
+            tmp_db,
+            sha=f"adhoc-p1-{i}",
+            message=f"fix: ad-hoc fix #{i}",
+            author="Dev C",
+            platform_id="p1",
+            epic_id=None,
+            source="hook",
+            committed_at=f"2026-04-0{i + 7}T10:00:00Z",
+            files_json="[]",
+        )
+
+    # 1 commit for epic 012 on p2 (different platform)
+    insert_commit(
+        tmp_db,
+        sha="epic012-p2-0",
+        message="feat: epic 012 cross-platform",
+        author="Dev A",
+        platform_id="p2",
+        epic_id="012-whatsapp-daemon",
+        source="hook",
+        committed_at="2026-04-01T11:00:00Z",
+        files_json='["platforms/p2/config.yaml"]',
+    )
+
+    # 1 ad-hoc commit on p2
+    insert_commit(
+        tmp_db,
+        sha="adhoc-p2-0",
+        message="fix: p2 ad-hoc",
+        author="Dev C",
+        platform_id="p2",
+        epic_id=None,
+        source="hook",
+        committed_at="2026-04-09T10:00:00Z",
+        files_json="[]",
+    )
+
+
+def test_get_commits_by_epic_returns_correct_commits(tmp_db):
+    """get_commits_by_epic returns only commits for the specified epic."""
+    from db_pipeline import get_commits_by_epic
+
+    _seed_commits(tmp_db)
+
+    results = get_commits_by_epic(tmp_db, "012-whatsapp-daemon")
+    # 3 on p1 + 1 on p2 = 4 total for epic 012
+    assert len(results) == 4
+    assert all(r["epic_id"] == "012-whatsapp-daemon" for r in results)
+    # Ordered by committed_at DESC
+    dates = [r["committed_at"] for r in results]
+    assert dates == sorted(dates, reverse=True)
+
+
+def test_get_commits_by_epic_with_platform_filter(tmp_db):
+    """get_commits_by_epic with platform_id filters to that platform only."""
+    from db_pipeline import get_commits_by_epic
+
+    _seed_commits(tmp_db)
+
+    results = get_commits_by_epic(tmp_db, "012-whatsapp-daemon", platform_id="p1")
+    assert len(results) == 3
+    assert all(r["platform_id"] == "p1" for r in results)
+    assert all(r["epic_id"] == "012-whatsapp-daemon" for r in results)
+
+
+def test_get_commits_by_epic_returns_dicts(tmp_db):
+    """get_commits_by_epic returns list of dicts with expected keys."""
+    from db_pipeline import get_commits_by_epic
+
+    _seed_commits(tmp_db)
+
+    results = get_commits_by_epic(tmp_db, "023-commit-traceability")
+    assert len(results) == 2
+    # Verify dict-like access works (Row or dict)
+    first = results[0]
+    for key in ("sha", "message", "author", "platform_id", "epic_id", "committed_at", "files_json"):
+        assert key in first.keys(), f"Missing key: {key}"
+
+
+def test_get_commits_by_epic_empty_result(tmp_db):
+    """Querying a non-existent epic returns an empty list, no error."""
+    from db_pipeline import get_commits_by_epic, upsert_platform
+
+    upsert_platform(tmp_db, "p1", name="P1", repo_path="platforms/p1")
+
+    results = get_commits_by_epic(tmp_db, "999-nonexistent")
+    assert results == []
+
+
+def test_get_commits_by_platform_filters_correctly(tmp_db):
+    """get_commits_by_platform returns only commits for the specified platform."""
+    from db_pipeline import get_commits_by_platform
+
+    _seed_commits(tmp_db)
+
+    results = get_commits_by_platform(tmp_db, "p1")
+    # p1 has: 3 (epic 012) + 2 (epic 023) + 2 (ad-hoc) = 7
+    assert len(results) == 7
+    assert all(r["platform_id"] == "p1" for r in results)
+    # Ordered by committed_at DESC
+    dates = [r["committed_at"] for r in results]
+    assert dates == sorted(dates, reverse=True)
+
+
+def test_get_commits_by_platform_pagination(tmp_db):
+    """get_commits_by_platform respects limit and offset for pagination."""
+    from db_pipeline import get_commits_by_platform
+
+    _seed_commits(tmp_db)
+
+    # p1 has 7 commits total
+    page1 = get_commits_by_platform(tmp_db, "p1", limit=3, offset=0)
+    assert len(page1) == 3
+
+    page2 = get_commits_by_platform(tmp_db, "p1", limit=3, offset=3)
+    assert len(page2) == 3
+
+    page3 = get_commits_by_platform(tmp_db, "p1", limit=3, offset=6)
+    assert len(page3) == 1
+
+    # No overlap between pages
+    shas_p1 = {r["sha"] for r in page1}
+    shas_p2 = {r["sha"] for r in page2}
+    shas_p3 = {r["sha"] for r in page3}
+    assert shas_p1.isdisjoint(shas_p2)
+    assert shas_p1.isdisjoint(shas_p3)
+    assert shas_p2.isdisjoint(shas_p3)
+
+
+def test_get_commits_by_platform_empty_result(tmp_db):
+    """Querying a platform with no commits returns an empty list."""
+    from db_pipeline import get_commits_by_platform, upsert_platform
+
+    upsert_platform(tmp_db, "empty", name="Empty", repo_path="platforms/empty")
+
+    results = get_commits_by_platform(tmp_db, "empty")
+    assert results == []
+
+
+def test_get_adhoc_commits_returns_only_null_epic(tmp_db):
+    """get_adhoc_commits returns only commits with NULL epic_id."""
+    from db_pipeline import get_adhoc_commits
+
+    _seed_commits(tmp_db)
+
+    results = get_adhoc_commits(tmp_db)
+    # 2 ad-hoc on p1 + 1 ad-hoc on p2 = 3
+    assert len(results) == 3
+    assert all(r["epic_id"] is None for r in results)
+
+
+def test_get_adhoc_commits_with_platform_filter(tmp_db):
+    """get_adhoc_commits with platform_id filters to that platform only."""
+    from db_pipeline import get_adhoc_commits
+
+    _seed_commits(tmp_db)
+
+    results = get_adhoc_commits(tmp_db, platform_id="p1")
+    assert len(results) == 2
+    assert all(r["platform_id"] == "p1" for r in results)
+    assert all(r["epic_id"] is None for r in results)
+
+
+def test_get_adhoc_commits_respects_limit(tmp_db):
+    """get_adhoc_commits respects the limit parameter."""
+    from db_pipeline import get_adhoc_commits
+
+    _seed_commits(tmp_db)
+
+    results = get_adhoc_commits(tmp_db, limit=1)
+    assert len(results) == 1
+    assert results[0]["epic_id"] is None
+
+
+def test_get_adhoc_commits_empty_result(tmp_db):
+    """When no ad-hoc commits exist, returns an empty list."""
+    from db_pipeline import get_adhoc_commits, insert_commit, upsert_platform
+
+    upsert_platform(tmp_db, "p1", name="P1", repo_path="platforms/p1")
+    # Only epic commits, no ad-hoc
+    insert_commit(
+        tmp_db,
+        sha="epic-only-1",
+        message="feat: epic work",
+        author="Dev",
+        platform_id="p1",
+        epic_id="023-commit-traceability",
+        source="hook",
+        committed_at="2026-04-08T10:00:00Z",
+        files_json="[]",
+    )
+
+    results = get_adhoc_commits(tmp_db)
+    assert results == []
+
+
+# --- T010: Integration test — epic vs ad-hoc commit partitioning ---
+
+
+def test_integration_epic_vs_adhoc_partitioning(tmp_db):
+    """Insert 5 commits (3 epic-012, 2 ad-hoc) and verify query partitioning.
+
+    Integration test: exercises insert_commit + get_commits_by_epic +
+    get_adhoc_commits together on a single platform to confirm the
+    epic/ad-hoc split is exact with no leaks between partitions.
+    """
+    from db_pipeline import get_adhoc_commits, get_commits_by_epic, insert_commit, upsert_platform
+
+    upsert_platform(tmp_db, "madruga-ai", name="Madruga AI", repo_path="platforms/madruga-ai")
+
+    # 3 commits linked to epic 012
+    epic_shas = []
+    for i in range(3):
+        sha = f"integ-epic012-{i}"
+        epic_shas.append(sha)
+        insert_commit(
+            tmp_db,
+            sha=sha,
+            message=f"feat: epic 012 integration #{i}",
+            author="Dev Integration",
+            platform_id="madruga-ai",
+            epic_id="012-whatsapp-daemon",
+            source="hook",
+            committed_at=f"2026-04-0{i + 1}T08:00:00Z",
+            files_json=f'["platforms/madruga-ai/file{i}.py"]',
+        )
+
+    # 2 ad-hoc commits (no epic)
+    adhoc_shas = []
+    for i in range(2):
+        sha = f"integ-adhoc-{i}"
+        adhoc_shas.append(sha)
+        insert_commit(
+            tmp_db,
+            sha=sha,
+            message=f"fix: ad-hoc integration #{i}",
+            author="Dev Integration",
+            platform_id="madruga-ai",
+            epic_id=None,
+            source="hook",
+            committed_at=f"2026-04-0{i + 4}T08:00:00Z",
+            files_json="[]",
+        )
+
+    # Verify total is 5
+    total = tmp_db.execute("SELECT COUNT(*) FROM commits").fetchone()[0]
+    assert total == 5
+
+    # get_commits_by_epic returns exactly the 3 epic commits
+    epic_results = get_commits_by_epic(tmp_db, "012-whatsapp-daemon")
+    assert len(epic_results) == 3
+    assert {r["sha"] for r in epic_results} == set(epic_shas)
+    assert all(r["epic_id"] == "012-whatsapp-daemon" for r in epic_results)
+
+    # get_adhoc_commits returns exactly the 2 ad-hoc commits
+    adhoc_results = get_adhoc_commits(tmp_db)
+    assert len(adhoc_results) == 2
+    assert {r["sha"] for r in adhoc_results} == set(adhoc_shas)
+    assert all(r["epic_id"] is None for r in adhoc_results)
+
+    # No overlap between the two result sets
+    epic_sha_set = {r["sha"] for r in epic_results}
+    adhoc_sha_set = {r["sha"] for r in adhoc_results}
+    assert epic_sha_set.isdisjoint(adhoc_sha_set)
+    # Together they account for all 5 commits
+    assert len(epic_sha_set | adhoc_sha_set) == 5
+
+
+# --- T011: Integration test — empty epic query with populated DB ---
+
+
+def test_integration_empty_epic_query_with_populated_db(tmp_db):
+    """Querying a non-existent epic returns empty list even when DB has commits.
+
+    Integration test: unlike the unit-level test_get_commits_by_epic_empty_result
+    (which tests against an empty DB), this verifies that querying a non-existent
+    epic returns [] when the DB is populated with commits for OTHER epics — ensuring
+    no false positives leak from unrelated epic_id values or NULL epic_id rows.
+    """
+    from db_pipeline import get_commits_by_epic, insert_commit, upsert_platform
+
+    upsert_platform(tmp_db, "madruga-ai", name="Madruga AI", repo_path="platforms/madruga-ai")
+
+    # Populate DB with commits for real epics + ad-hoc
+    insert_commit(
+        tmp_db,
+        sha="existing-epic-1",
+        message="feat: epic 012 work",
+        author="Dev",
+        platform_id="madruga-ai",
+        epic_id="012-whatsapp-daemon",
+        source="hook",
+        committed_at="2026-04-01T10:00:00Z",
+        files_json="[]",
+    )
+    insert_commit(
+        tmp_db,
+        sha="existing-epic-2",
+        message="feat: epic 023 work",
+        author="Dev",
+        platform_id="madruga-ai",
+        epic_id="023-commit-traceability",
+        source="hook",
+        committed_at="2026-04-02T10:00:00Z",
+        files_json="[]",
+    )
+    insert_commit(
+        tmp_db,
+        sha="existing-adhoc-1",
+        message="fix: quick fix",
+        author="Dev",
+        platform_id="madruga-ai",
+        epic_id=None,
+        source="hook",
+        committed_at="2026-04-03T10:00:00Z",
+        files_json="[]",
+    )
+
+    # Verify DB is populated
+    total = tmp_db.execute("SELECT COUNT(*) FROM commits").fetchone()[0]
+    assert total == 3
+
+    # Query for a non-existent epic — must return empty list, no error
+    results = get_commits_by_epic(tmp_db, "999-nonexistent-epic")
+    assert results == []
+    assert isinstance(results, list)
+
+    # Also verify with platform filter — still empty, no error
+    results_filtered = get_commits_by_epic(tmp_db, "999-nonexistent-epic", platform_id="madruga-ai")
+    assert results_filtered == []
+
+    # Sanity: real epics still return their commits (no side effects)
+    assert len(get_commits_by_epic(tmp_db, "012-whatsapp-daemon")) == 1
+    assert len(get_commits_by_epic(tmp_db, "023-commit-traceability")) == 1
+
+
+# ══════════════════════════════════════
+# get_commit_stats tests (T1 — missing tests found by judge)
+# ══════════════════════════════════════
+
+
+def test_get_commit_stats_with_data(tmp_db):
+    """get_commit_stats returns correct totals, per-epic breakdown, and adhoc percentage."""
+    from db_pipeline import get_commit_stats
+
+    _seed_commits(tmp_db)
+    tmp_db.commit()
+
+    stats = get_commit_stats(tmp_db)
+    # _seed_commits creates: 3 (epic 012 p1) + 2 (epic 023 p1) + 2 (adhoc p1)
+    #   + 1 (epic 012 p2) + 1 (adhoc p2) = 9 total
+    assert stats["total_commits"] == 9
+    assert stats["commits_per_epic"]["012-whatsapp-daemon"] == 4  # 3 p1 + 1 p2
+    assert stats["commits_per_epic"]["023-commit-traceability"] == 2
+    assert stats["adhoc_count"] == 3  # 2 p1 + 1 p2
+    assert stats["adhoc_percentage"] == round(3 / 9 * 100, 1)
+
+
+def test_get_commit_stats_with_platform_filter(tmp_db):
+    """get_commit_stats filters correctly by platform_id."""
+    from db_pipeline import get_commit_stats
+
+    _seed_commits(tmp_db)
+    tmp_db.commit()
+
+    stats = get_commit_stats(tmp_db, platform_id="p1")
+    # p1 has: 3 (epic 012) + 2 (epic 023) + 2 (adhoc) = 7
+    assert stats["total_commits"] == 7
+    assert stats["commits_per_epic"]["012-whatsapp-daemon"] == 3
+    assert stats["commits_per_epic"]["023-commit-traceability"] == 2
+    assert stats["adhoc_count"] == 2
+    assert stats["adhoc_percentage"] == round(2 / 7 * 100, 1)
+
+
+def test_get_commit_stats_empty_db(tmp_db):
+    """get_commit_stats on empty DB returns zeroes without error."""
+    from db_pipeline import get_commit_stats, upsert_platform
+
+    upsert_platform(tmp_db, "p1", name="P1", repo_path="platforms/p1")
+
+    stats = get_commit_stats(tmp_db)
+    assert stats["total_commits"] == 0
+    assert stats["commits_per_epic"] == {}
+    assert stats["adhoc_count"] == 0
+    assert stats["adhoc_percentage"] == 0.0

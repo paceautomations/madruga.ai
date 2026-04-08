@@ -420,7 +420,6 @@ def _make_conn_with_status():
             epic_id TEXT NOT NULL,
             title TEXT,
             status TEXT NOT NULL DEFAULT 'pending',
-            appetite TEXT,
             priority INTEGER,
             delivered_at TEXT,
             PRIMARY KEY (platform_id, epic_id)

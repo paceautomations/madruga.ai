@@ -56,9 +56,10 @@ async def test_run_pipeline_async_transitions_epic_to_shipped(tmp_path):
     """run_pipeline_async must call compute_epic_status and transition epic to shipped."""
     plat_dir = tmp_path / "platforms" / "test-plat"
     plat_dir.mkdir(parents=True)
-    (plat_dir / "platform.yaml").write_text(
-        "title: Test\npipeline:\n  epic_cycle:\n    nodes:\n      - id: specify\n        optional: false\n"
-    )
+    (plat_dir / "platform.yaml").write_text("title: Test\n")
+    # Create a minimal pipeline.yaml for this test
+    pipeline_path = tmp_path / "pipeline.yaml"
+    pipeline_path.write_text("epic_cycle:\n  nodes:\n    - id: specify\n      optional: false\n")
 
     mock_conn = MagicMock()
     mock_conn.execute.return_value.fetchall.return_value = []
@@ -88,6 +89,7 @@ async def test_run_pipeline_async_transitions_epic_to_shipped(tmp_path):
             patch("dag_executor.parse_dag", return_value=[node]),
             patch("dag_executor.topological_sort", return_value=[node]),
             patch("post_save._refresh_portal_status"),
+            patch("config.PIPELINE_YAML", pipeline_path),
         ):
             from dag_executor import run_pipeline_async
 
@@ -319,7 +321,7 @@ def test_resumable_nodes_excludes_approved_gates():
         "epic_id TEXT, node_id TEXT, status TEXT, gate_status TEXT, "
         "agent TEXT, tokens_in INT, tokens_out INT, cost_usd REAL, "
         "duration_ms INT, error TEXT, started_at TEXT, completed_at TEXT, "
-        "gate_notified_at TEXT, gate_resolved_at TEXT, telegram_message_id TEXT)"
+        "gate_notified_at TEXT, gate_resolved_at TEXT, telegram_message_id TEXT, dispatch_log TEXT)"
     )
     # epic-context is done
     conn.execute("INSERT INTO epic_nodes VALUES ('plat', 'e1', 'epic-context', 'done', NULL, '2026-01-01', 'test')")
@@ -355,7 +357,7 @@ async def test_gate_approved_triggers_dispatch(tmp_path):
         "lifecycle TEXT DEFAULT 'design', repo_path TEXT, metadata TEXT DEFAULT '{}', "
         "created_at TEXT, updated_at TEXT)",
         "CREATE TABLE epics (epic_id TEXT, platform_id TEXT, title TEXT, status TEXT DEFAULT 'proposed', "
-        "appetite TEXT, priority INT, branch_name TEXT, file_path TEXT, created_at TEXT, updated_at TEXT, "
+        "priority INT, branch_name TEXT, file_path TEXT, created_at TEXT, updated_at TEXT, "
         "delivered_at TEXT, PRIMARY KEY (platform_id, epic_id))",
         "CREATE TABLE epic_nodes (platform_id TEXT, epic_id TEXT, node_id TEXT, status TEXT, "
         "output_hash TEXT, completed_at TEXT, completed_by TEXT, "
@@ -367,7 +369,7 @@ async def test_gate_approved_triggers_dispatch(tmp_path):
         "node_id TEXT, status TEXT DEFAULT 'running', gate_status TEXT, agent TEXT, "
         "tokens_in INT, tokens_out INT, cost_usd REAL, duration_ms INT, error TEXT, "
         "trace_id TEXT, output_lines INT, started_at TEXT, completed_at TEXT, gate_notified_at TEXT, "
-        "gate_resolved_at TEXT, telegram_message_id TEXT)",
+        "gate_resolved_at TEXT, telegram_message_id TEXT, dispatch_log TEXT)",
         "CREATE TABLE events (event_id INTEGER PRIMARY KEY AUTOINCREMENT, platform_id TEXT, "
         "entity_type TEXT, entity_id TEXT, action TEXT, actor TEXT, payload TEXT, created_at TEXT)",
     ]:
@@ -439,7 +441,7 @@ async def test_auto_mode_skips_gate_approval(tmp_path):
         "node_id TEXT, status TEXT DEFAULT 'running', gate_status TEXT, agent TEXT, "
         "tokens_in INT, tokens_out INT, cost_usd REAL, duration_ms INT, error TEXT, "
         "trace_id TEXT, output_lines INT, started_at TEXT, completed_at TEXT, gate_notified_at TEXT, "
-        "gate_resolved_at TEXT, telegram_message_id TEXT)",
+        "gate_resolved_at TEXT, telegram_message_id TEXT, dispatch_log TEXT)",
         "CREATE TABLE events (event_id INTEGER PRIMARY KEY AUTOINCREMENT, platform_id TEXT, "
         "entity_type TEXT, entity_id TEXT, action TEXT, actor TEXT, payload TEXT, created_at TEXT)",
     ]:
@@ -1618,84 +1620,9 @@ def test_parse_dag_quick_mode_returns_three_nodes(tmp_path):
     """parse_dag with mode='quick' returns only specify, implement, judge nodes."""
     from dag_executor import parse_dag
 
-    platform_yaml = tmp_path / "platform.yaml"
-    platform_yaml.write_text(
-        "title: Test Platform\n"
-        "pipeline:\n"
-        "  epic_cycle:\n"
-        "    nodes:\n"
-        "      - id: epic-context\n"
-        "        skill: 'madruga:epic-context'\n"
-        "        outputs: ['{epic}/pitch.md']\n"
-        "        depends: []\n"
-        "        gate: human\n"
-        "        layer: business\n"
-        "      - id: specify\n"
-        "        skill: 'speckit.specify'\n"
-        "        outputs: ['{epic}/spec.md']\n"
-        "        depends: [epic-context]\n"
-        "        gate: human\n"
-        "        layer: business\n"
-        "      - id: clarify\n"
-        "        skill: 'speckit.clarify'\n"
-        "        outputs: ['{epic}/spec.md']\n"
-        "        depends: [specify]\n"
-        "        gate: human\n"
-        "        layer: business\n"
-        "        optional: true\n"
-        "      - id: plan\n"
-        "        skill: 'speckit.plan'\n"
-        "        outputs: ['{epic}/plan.md']\n"
-        "        depends: [specify]\n"
-        "        gate: human\n"
-        "        layer: engineering\n"
-        "      - id: tasks\n"
-        "        skill: 'speckit.tasks'\n"
-        "        outputs: ['{epic}/tasks.md']\n"
-        "        depends: [plan]\n"
-        "        gate: human\n"
-        "        layer: engineering\n"
-        "      - id: implement\n"
-        "        skill: 'speckit.implement'\n"
-        "        outputs: ['{epic}/implement-context.md']\n"
-        "        depends: [tasks]\n"
-        "        gate: auto\n"
-        "        layer: engineering\n"
-        "      - id: judge\n"
-        "        skill: 'madruga:judge'\n"
-        "        outputs: ['{epic}/judge-report.md']\n"
-        "        depends: [implement]\n"
-        "        gate: auto-escalate\n"
-        "        layer: engineering\n"
-        "      - id: reconcile\n"
-        "        skill: 'madruga:reconcile'\n"
-        "        outputs: ['{epic}/reconcile-report.md']\n"
-        "        depends: [judge]\n"
-        "        gate: human\n"
-        "        layer: engineering\n"
-        "  quick_cycle:\n"
-        "    nodes:\n"
-        "      - id: specify\n"
-        "        skill: 'speckit.specify'\n"
-        "        outputs: ['{epic}/spec.md']\n"
-        "        depends: []\n"
-        "        gate: human\n"
-        "        layer: business\n"
-        "      - id: implement\n"
-        "        skill: 'speckit.implement'\n"
-        "        outputs: ['{epic}/implement-context.md']\n"
-        "        depends: [specify]\n"
-        "        gate: auto\n"
-        "        layer: engineering\n"
-        "      - id: judge\n"
-        "        skill: 'madruga:judge'\n"
-        "        outputs: ['{epic}/judge-report.md']\n"
-        "        depends: [implement]\n"
-        "        gate: auto-escalate\n"
-        "        layer: engineering\n"
-    )
-
-    nodes = parse_dag(platform_yaml, mode="quick", epic="001-test-fix")
+    pipeline_yaml = _make_quick_cycle_yaml(tmp_path)
+    with patch("config.PIPELINE_YAML", pipeline_yaml):
+        nodes = parse_dag(mode="quick", epic="001-test-fix")
 
     # Exactly 3 nodes in quick mode
     assert len(nodes) == 3
@@ -1724,33 +1651,9 @@ def test_parse_dag_quick_mode_resolves_epic_templates(tmp_path):
     """parse_dag with mode='quick' resolves {epic} templates in outputs."""
     from dag_executor import parse_dag
 
-    platform_yaml = tmp_path / "platform.yaml"
-    platform_yaml.write_text(
-        "title: Test\n"
-        "pipeline:\n"
-        "  quick_cycle:\n"
-        "    nodes:\n"
-        "      - id: specify\n"
-        "        skill: 'speckit.specify'\n"
-        "        outputs: ['{epic}/spec.md']\n"
-        "        depends: []\n"
-        "        gate: human\n"
-        "        layer: business\n"
-        "      - id: implement\n"
-        "        skill: 'speckit.implement'\n"
-        "        outputs: ['{epic}/implement-context.md']\n"
-        "        depends: [specify]\n"
-        "        gate: auto\n"
-        "        layer: engineering\n"
-        "      - id: judge\n"
-        "        skill: 'madruga:judge'\n"
-        "        outputs: ['{epic}/judge-report.md']\n"
-        "        depends: [implement]\n"
-        "        gate: auto-escalate\n"
-        "        layer: engineering\n"
-    )
-
-    nodes = parse_dag(platform_yaml, mode="quick", epic="042-hotfix")
+    pipeline_yaml = _make_quick_cycle_yaml(tmp_path)
+    with patch("config.PIPELINE_YAML", pipeline_yaml):
+        nodes = parse_dag(mode="quick", epic="042-hotfix")
 
     assert nodes[0].outputs == ["epics/042-hotfix/spec.md"]
     assert nodes[1].outputs == ["epics/042-hotfix/implement-context.md"]
@@ -1761,63 +1664,61 @@ def test_parse_dag_quick_mode_errors_when_no_quick_cycle(tmp_path):
     """parse_dag with mode='quick' exits with error if quick_cycle section missing."""
     from dag_executor import parse_dag
 
-    platform_yaml = tmp_path / "platform.yaml"
-    platform_yaml.write_text(
-        "title: Test\n"
-        "pipeline:\n"
-        "  epic_cycle:\n"
-        "    nodes:\n"
-        "      - id: specify\n"
-        "        skill: 'speckit.specify'\n"
-        "        outputs: ['{epic}/spec.md']\n"
-        "        depends: []\n"
-        "        gate: human\n"
-        "        layer: business\n"
+    pipeline_yaml = tmp_path / "pipeline.yaml"
+    pipeline_yaml.write_text(
+        "epic_cycle:\n"
+        "  nodes:\n"
+        "    - id: specify\n"
+        "      skill: 'speckit.specify'\n"
+        "      outputs: ['{epic}/spec.md']\n"
+        "      depends: []\n"
+        "      gate: human\n"
+        "      layer: business\n"
     )
 
-    with pytest.raises(SystemExit, match="quick_cycle"):
-        parse_dag(platform_yaml, mode="quick", epic="001-test")
+    with patch("config.PIPELINE_YAML", pipeline_yaml):
+        with pytest.raises(SystemExit, match="quick_cycle"):
+            parse_dag(mode="quick", epic="001-test")
 
 
 # --- T015: Tests for quick-fix node dependencies ---
 
 
 def _make_quick_cycle_yaml(tmp_path):
-    """Helper: create platform.yaml with quick_cycle section."""
-    platform_yaml = tmp_path / "platform.yaml"
-    platform_yaml.write_text(
-        "title: Test\n"
-        "pipeline:\n"
-        "  quick_cycle:\n"
-        "    nodes:\n"
-        "      - id: specify\n"
-        "        skill: 'speckit.specify'\n"
-        "        outputs: ['{epic}/spec.md']\n"
-        "        depends: []\n"
-        "        gate: human\n"
-        "        layer: business\n"
-        "      - id: implement\n"
-        "        skill: 'speckit.implement'\n"
-        "        outputs: ['{epic}/implement-context.md']\n"
-        "        depends: [specify]\n"
-        "        gate: auto\n"
-        "        layer: engineering\n"
-        "      - id: judge\n"
-        "        skill: 'madruga:judge'\n"
-        "        outputs: ['{epic}/judge-report.md']\n"
-        "        depends: [implement]\n"
-        "        gate: auto-escalate\n"
-        "        layer: engineering\n"
+    """Helper: create pipeline.yaml with quick_cycle section and patch config."""
+    pipeline_yaml = tmp_path / "pipeline.yaml"
+    pipeline_yaml.write_text(
+        "quick_cycle:\n"
+        "  nodes:\n"
+        "    - id: specify\n"
+        "      skill: 'speckit.specify'\n"
+        "      outputs: ['{epic}/spec.md']\n"
+        "      depends: []\n"
+        "      gate: human\n"
+        "      layer: business\n"
+        "    - id: implement\n"
+        "      skill: 'speckit.implement'\n"
+        "      outputs: ['{epic}/implement-context.md']\n"
+        "      depends: [specify]\n"
+        "      gate: auto\n"
+        "      layer: engineering\n"
+        "    - id: judge\n"
+        "      skill: 'madruga:judge'\n"
+        "      outputs: ['{epic}/judge-report.md']\n"
+        "      depends: [implement]\n"
+        "      gate: auto-escalate\n"
+        "      layer: engineering\n"
     )
-    return platform_yaml
+    return pipeline_yaml
 
 
 def test_quick_fix_dependency_chain(tmp_path):
     """Quick-fix DAG has linear chain: specify → implement → judge."""
     from dag_executor import parse_dag
 
-    platform_yaml = _make_quick_cycle_yaml(tmp_path)
-    nodes = parse_dag(platform_yaml, mode="quick", epic="099-bugfix")
+    pipeline_yaml = _make_quick_cycle_yaml(tmp_path)
+    with patch("config.PIPELINE_YAML", pipeline_yaml):
+        nodes = parse_dag(mode="quick", epic="099-bugfix")
     node_map = {n.id: n for n in nodes}
 
     # specify is the root — no dependencies
@@ -1834,8 +1735,9 @@ def test_quick_fix_topological_sort_order(tmp_path):
     """topological_sort on quick-fix DAG produces specify → implement → judge."""
     from dag_executor import parse_dag, topological_sort
 
-    platform_yaml = _make_quick_cycle_yaml(tmp_path)
-    nodes = parse_dag(platform_yaml, mode="quick", epic="099-bugfix")
+    pipeline_yaml = _make_quick_cycle_yaml(tmp_path)
+    with patch("config.PIPELINE_YAML", pipeline_yaml):
+        nodes = parse_dag(mode="quick", epic="099-bugfix")
     sorted_nodes = topological_sort(nodes)
 
     order = [n.id for n in sorted_nodes]
@@ -1846,8 +1748,9 @@ def test_quick_fix_no_skipped_nodes_in_dependencies(tmp_path):
     """Quick-fix nodes do NOT depend on plan, tasks, clarify, analyze, qa, or reconcile."""
     from dag_executor import parse_dag
 
-    platform_yaml = _make_quick_cycle_yaml(tmp_path)
-    nodes = parse_dag(platform_yaml, mode="quick", epic="099-bugfix")
+    pipeline_yaml = _make_quick_cycle_yaml(tmp_path)
+    with patch("config.PIPELINE_YAML", pipeline_yaml):
+        nodes = parse_dag(mode="quick", epic="099-bugfix")
 
     skipped_nodes = {"plan", "tasks", "clarify", "analyze", "analyze-post", "qa", "reconcile", "epic-context"}
     all_deps = set()

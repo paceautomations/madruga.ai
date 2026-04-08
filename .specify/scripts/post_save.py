@@ -39,8 +39,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 
-import yaml
-
 from config import REPO_ROOT, UNFILLED_TEMPLATE_MARKERS  # noqa: F401
 
 log = logging.getLogger("post_save")
@@ -48,6 +46,8 @@ log = logging.getLogger("post_save")
 
 from log_utils import setup_logging as _setup_logging  # noqa: E402
 
+
+from db_pipeline import get_commit_stats  # noqa: E402
 
 from db import (  # noqa: E402, F401 — compute_epic_status used in record_save
     compute_epic_status,
@@ -94,6 +94,177 @@ def _refresh_portal_status() -> None:
     except Exception:
         pass  # best-effort — never block the save
 
+    # Also regenerate commits-status.json (best-effort)
+    try:
+        export_commits_json()
+    except Exception:
+        pass
+
+
+def export_commits_json(output_path: str | Path | None = None) -> Path:
+    """Export all commits from DB to a JSON file for portal consumption.
+
+    Queries all commits and computes aggregate stats (by_epic, by_platform,
+    adhoc_pct). Writes to ``portal/src/data/commits-status.json`` by default.
+
+    Args:
+        output_path: Destination file path. Defaults to
+            ``REPO_ROOT / portal/src/data/commits-status.json``.
+
+    Returns:
+        The resolved output Path that was written.
+    """
+    if output_path is None:
+        output_path = REPO_ROOT / "portal" / "src" / "data" / "commits-status.json"
+    output_path = Path(output_path)
+
+    with get_conn() as conn:
+        migrate(conn)
+
+        # Fetch all commits ordered by committed_at DESC
+        rows = conn.execute(
+            "SELECT sha, message, author, platform_id, epic_id, source, committed_at, files_json "
+            "FROM commits ORDER BY committed_at DESC"
+        ).fetchall()
+
+        commits = []
+        by_platform: dict[str, int] = {}
+        for row in rows:
+            r = dict(row)
+            # Parse files_json back to list for cleaner JSON output
+            try:
+                r["files"] = json.loads(r.pop("files_json"))
+            except (json.JSONDecodeError, TypeError):
+                r["files"] = []
+                r.pop("files_json", None)
+            commits.append(r)
+            # Accumulate by_platform counts
+            pid = r["platform_id"]
+            by_platform[pid] = by_platform.get(pid, 0) + 1
+
+        # Use existing stats function for by_epic and adhoc_pct
+        stats = get_commit_stats(conn)
+
+    payload = {
+        "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "commits": commits,
+        "stats": {
+            "by_epic": stats["commits_per_epic"],
+            "by_platform": by_platform,
+            "adhoc_pct": stats["adhoc_percentage"],
+        },
+    }
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    log.info("Exported %d commits to %s", len(commits), output_path)
+    return output_path
+
+
+def sync_commits(conn, platform_id: str) -> int:
+    """Synchronize commits from git history into the DB for a platform.
+
+    Reads the full git log and inserts each commit via INSERT OR IGNORE,
+    so existing records are untouched and only missing ones are added.
+    Reuses epic detection logic from hook_post_commit (branch pattern and
+    message tag).
+
+    For reseed, all commits are attributed to the given ``platform_id``
+    (the caller already scoped the reseed to a specific platform). File-based
+    platform detection is not used here — that's the hook's job at capture
+    time. Reseed is a recovery mechanism, not a classification mechanism.
+
+    Args:
+        conn: SQLite connection (caller owns transaction boundary).
+        platform_id: Platform to attribute commits to.
+
+    Returns:
+        Number of commits processed (not necessarily inserted — INSERT OR
+        IGNORE skips existing).
+    """
+    from hook_post_commit import parse_branch, parse_epic_tag
+
+    from db_pipeline import insert_commit
+
+    # Get current branch for epic detection
+    try:
+        br = subprocess.run(
+            ["git", "branch", "--show-current"],
+            capture_output=True,
+            text=True,
+            cwd=str(REPO_ROOT),
+        )
+        branch = br.stdout.strip() if br.returncode == 0 else ""
+    except OSError:
+        branch = ""
+
+    _branch_platform, branch_epic = parse_branch(branch)
+
+    # Fetch full git log: SHA, message, author, date — separated by blank lines
+    try:
+        result = subprocess.run(
+            ["git", "log", "--format=%H%n%s%n%an%n%aI", "--all"],
+            capture_output=True,
+            text=True,
+            cwd=str(REPO_ROOT),
+        )
+        if result.returncode != 0:
+            log.warning("git log failed (rc=%d), skipping commit sync", result.returncode)
+            return 0
+    except OSError as exc:
+        log.warning("git not available, skipping commit sync: %s", exc)
+        return 0
+
+    # Parse log output into commit records (4 lines per commit, blank-line separated)
+    raw = result.stdout.strip()
+    if not raw:
+        return 0
+
+    blocks = raw.split("\n\n")
+    count = 0
+
+    for block in blocks:
+        lines = block.strip().split("\n")
+        if len(lines) < 4:
+            continue
+
+        sha, message, author, committed_at = lines[0], lines[1], lines[2], lines[3]
+
+        # Get changed files for this commit
+        try:
+            tree_result = subprocess.run(
+                ["git", "diff-tree", "--no-commit-id", "--name-only", "-r", sha],
+                capture_output=True,
+                text=True,
+                cwd=str(REPO_ROOT),
+            )
+            files = [f for f in tree_result.stdout.strip().split("\n") if f]
+        except OSError:
+            files = []
+
+        # Epic detection: branch first, then message tag override
+        tag_epic = parse_epic_tag(message)
+        epic_id = tag_epic if tag_epic is not None else branch_epic
+
+        files_json = json.dumps(files)
+
+        insert_commit(
+            conn,
+            sha=sha,
+            message=message,
+            author=author,
+            platform_id=platform_id,
+            epic_id=epic_id,
+            source="reseed",
+            committed_at=committed_at,
+            files_json=files_json,
+        )
+        count += 1
+
+    conn.commit()
+    log.info("sync_commits: processed %d commits for platform '%s'", count, platform_id)
+    return count
+
 
 def _validate_artifact_path(platform: str, artifact: str) -> Path:
     """Validate artifact path is within the platform directory (prevent path traversal)."""
@@ -134,12 +305,11 @@ def _inject_ship_fields(platform: str, epic: str, delivered_at: str) -> None:
 
 
 def _get_required_epic_nodes(platform: str, pipeline_data: dict | None = None) -> set[str]:
-    """Read required (non-optional) epic cycle node IDs from platform.yaml."""
+    """Read required (non-optional) epic cycle node IDs from pipeline.yaml."""
     if pipeline_data is None:
-        yaml_path = REPO_ROOT / "platforms" / platform / "platform.yaml"
-        if not yaml_path.exists():
-            return set()
-        pipeline_data = yaml.safe_load(yaml_path.read_text(encoding="utf-8")).get("pipeline", {})
+        from config import load_pipeline
+
+        pipeline_data = load_pipeline()
     cycle_nodes = pipeline_data.get("epic_cycle", {}).get("nodes", [])
     return {n["id"] for n in cycle_nodes if not n.get("optional", False)}
 
@@ -199,9 +369,9 @@ def record_save(
         # Pre-read pipeline data outside transaction to avoid I/O inside txn
         pipeline_data = {}
         if epic:
-            yaml_path = REPO_ROOT / "platforms" / platform / "platform.yaml"
-            if yaml_path.exists():
-                pipeline_data = yaml.safe_load(yaml_path.read_text(encoding="utf-8")).get("pipeline", {})
+            from config import load_pipeline
+
+            pipeline_data = load_pipeline()
 
         # Batch all writes into a single transaction for atomicity
         now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -364,13 +534,25 @@ def record_save(
 
 
 def reseed(platform: str) -> dict:
-    """Re-seed a platform from filesystem."""
+    """Re-seed a platform from filesystem.
+
+    After seeding pipeline nodes and epics, also synchronizes commits from
+    git history (best-effort). This fills gaps when the post-commit hook
+    missed commits (e.g. hook not installed, DB unavailable at commit time).
+    """
     pdir = REPO_ROOT / "platforms" / platform
     if not pdir.exists():
         return {"status": "error", "reason": f"Platform dir not found: {pdir}"}
     with get_conn() as conn:
         migrate(conn)
         result = seed_from_filesystem(conn, platform, pdir)
+        # Sync commits from git history (best-effort — never fail the reseed)
+        try:
+            commits_synced = sync_commits(conn, platform)
+            result["commits_synced"] = commits_synced
+        except Exception as exc:
+            log.warning("sync_commits failed for '%s': %s", platform, exc)
+            result["commits_synced"] = 0
     return result
 
 
@@ -414,11 +596,12 @@ def detect_from_path(file_path: str) -> dict | None:
     platform = parts[0]
     artifact = str(Path(*parts[1:]))  # relative to platform dir
 
-    yaml_path = platforms_dir / platform / "platform.yaml"
-    if not yaml_path.exists():
+    # Verify platform directory exists
+    if not (platforms_dir / platform / "platform.yaml").exists():
         return None
-    data = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
-    pipeline = data.get("pipeline", {})
+    from config import load_pipeline
+
+    pipeline = load_pipeline()
 
     # Check if this is an epic artifact: epics/<epic-id>/...
     epic = None

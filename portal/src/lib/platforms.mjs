@@ -160,7 +160,7 @@ export function buildSidebar(platforms) {
       items: [
         {
           label: 'Control Panel',
-          link: `/control-panel/?platform=${p.name}`,
+          link: `/${p.name}/control-panel/`,
           attrs: { style: 'font-weight: 600' },
         },
         {

@@ -2,6 +2,7 @@
 
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -15,30 +16,42 @@ def setup_platform(tmp_path):
     db_path = tmp_path / ".pipeline" / "madruga.db"
     db_path.parent.mkdir(parents=True)
 
-    # Create platform dir with platform.yaml
+    # Create platform dir with platform.yaml (metadata only)
     pdir = tmp_path / "platforms" / "test-plat"
     pdir.mkdir(parents=True)
-    (pdir / "platform.yaml").write_text(
-        "name: test-plat\ntitle: Test\nlifecycle: design\n"
-        "pipeline:\n"
+    (pdir / "platform.yaml").write_text("name: test-plat\ntitle: Test\nlifecycle: design\n")
+
+    # Create pipeline.yaml and patch config.PIPELINE_YAML
+    pipeline_path = tmp_path / "pipeline.yaml"
+    pipeline_path.write_text(
+        "nodes:\n"
+        "  - id: vision\n"
+        "    outputs: ['business/vision.md']\n"
+        "    depends: []\n"
+        "    gate: human\n"
+        "epic_cycle:\n"
         "  nodes:\n"
-        "    - id: vision\n      outputs: ['business/vision.md']\n"
-        "      depends: []\n      gate: human\n"
-        "  epic_cycle:\n"
-        "    nodes:\n"
-        "      - id: specify\n        skill: speckit.specify\n"
-        "        outputs: ['{epic}/spec.md']\n"
-        "        depends: []\n        gate: human\n"
-        "      - id: plan\n        skill: speckit.plan\n"
-        "        outputs: ['{epic}/plan.md']\n"
-        "        depends: [specify]\n        gate: human\n"
-        "      - id: implement\n        skill: speckit.implement\n"
-        "        outputs: ['{epic}/code']\n"
-        "        depends: [plan]\n        gate: auto\n"
-        "      - id: clarify\n        skill: speckit.clarify\n"
-        "        outputs: ['{epic}/spec.md']\n"
-        "        depends: [specify]\n        gate: human\n"
-        "        optional: true\n"
+        "    - id: specify\n"
+        "      skill: speckit.specify\n"
+        "      outputs: ['{epic}/spec.md']\n"
+        "      depends: []\n"
+        "      gate: human\n"
+        "    - id: plan\n"
+        "      skill: speckit.plan\n"
+        "      outputs: ['{epic}/plan.md']\n"
+        "      depends: [specify]\n"
+        "      gate: human\n"
+        "    - id: implement\n"
+        "      skill: speckit.implement\n"
+        "      outputs: ['{epic}/code']\n"
+        "      depends: [plan]\n"
+        "      gate: auto\n"
+        "    - id: clarify\n"
+        "      skill: speckit.clarify\n"
+        "      outputs: ['{epic}/spec.md']\n"
+        "      depends: [specify]\n"
+        "      gate: human\n"
+        "      optional: true\n"
     )
 
     # Create an artifact
@@ -68,7 +81,9 @@ def setup_platform(tmp_path):
     migrate(conn, migrations_dir)
     conn.close()
 
-    return tmp_path, db_path
+    # Patch is active for the entire test — caller uses `with` or fixture scope
+    with patch("config.PIPELINE_YAML", pipeline_path):
+        yield tmp_path, db_path
 
 
 def test_record_save_l1(setup_platform):
@@ -608,3 +623,424 @@ def test_is_valid_output_rejects_md_without_heading(tmp_path):
     no_heading = tmp_path / "bad.md"
     no_heading.write_text("This is just plain text without any heading markers at all, long enough to pass size check.")
     assert _is_valid_output(no_heading) is False
+
+
+# ══════════════════════════════════════
+# export_commits_json (T027)
+# ══════════════════════════════════════
+
+
+def test_export_commits_json_empty_db(setup_platform):
+    """export_commits_json produces valid JSON with empty commits list when DB has no commits."""
+    import json as _json
+
+    tmp_path, db_path = setup_platform
+    import post_save
+    import db_core as db_mod
+
+    original_repo = post_save.REPO_ROOT
+    original_db = db_mod.DB_PATH
+    post_save.REPO_ROOT = tmp_path
+    db_mod.DB_PATH = db_path
+
+    try:
+        out_file = tmp_path / "output" / "commits-status.json"
+        result_path = post_save.export_commits_json(out_file)
+
+        assert result_path == out_file
+        assert out_file.exists()
+
+        data = _json.loads(out_file.read_text(encoding="utf-8"))
+
+        # Top-level structure
+        assert "generated_at" in data
+        assert "commits" in data
+        assert "stats" in data
+
+        # Empty commits
+        assert data["commits"] == []
+
+        # Stats structure with zero values
+        assert data["stats"]["by_epic"] == {}
+        assert data["stats"]["by_platform"] == {}
+        assert data["stats"]["adhoc_pct"] == 0.0
+    finally:
+        post_save.REPO_ROOT = original_repo
+        db_mod.DB_PATH = original_db
+
+
+def test_export_commits_json_with_data(setup_platform):
+    """export_commits_json produces correct JSON structure with commits and stats."""
+    import json as _json
+
+    tmp_path, db_path = setup_platform
+    import post_save
+    import db_core as db_mod
+
+    original_repo = post_save.REPO_ROOT
+    original_db = db_mod.DB_PATH
+    post_save.REPO_ROOT = tmp_path
+    db_mod.DB_PATH = db_path
+
+    try:
+        from db_pipeline import insert_commit
+
+        conn = get_conn(db_path)
+        migrate(conn)
+
+        # Insert 3 epic commits and 2 ad-hoc commits across 2 platforms
+        insert_commit(
+            conn,
+            "aaa1111",
+            "feat: add login",
+            "Alice",
+            "plat-a",
+            "012-auth",
+            "hook",
+            "2026-04-01T10:00:00Z",
+            '["src/login.py"]',
+        )
+        insert_commit(
+            conn,
+            "bbb2222",
+            "fix: password hash",
+            "Bob",
+            "plat-a",
+            "012-auth",
+            "hook",
+            "2026-04-02T11:00:00Z",
+            '["src/auth.py"]',
+        )
+        insert_commit(
+            conn,
+            "ccc3333",
+            "feat: signup flow",
+            "Alice",
+            "plat-b",
+            "015-signup",
+            "backfill",
+            "2026-04-03T09:00:00Z",
+            '["src/signup.py", "tests/test_signup.py"]',
+        )
+        insert_commit(
+            conn,
+            "ddd4444",
+            "chore: update deps",
+            "Charlie",
+            "plat-a",
+            None,
+            "hook",
+            "2026-04-04T08:00:00Z",
+            "[]",
+        )
+        insert_commit(
+            conn,
+            "eee5555",
+            "fix: typo in readme",
+            "Bob",
+            "plat-b",
+            None,
+            "hook",
+            "2026-04-05T07:00:00Z",
+            '["README.md"]',
+        )
+        conn.commit()
+        conn.close()
+
+        out_file = tmp_path / "commits-status.json"
+        post_save.export_commits_json(out_file)
+
+        data = _json.loads(out_file.read_text(encoding="utf-8"))
+
+        # Verify generated_at is ISO 8601
+        assert "T" in data["generated_at"]
+        assert data["generated_at"].endswith("Z")
+
+        # Verify commits list
+        assert len(data["commits"]) == 5
+
+        # Verify ordering: most recent first (committed_at DESC)
+        dates = [c["committed_at"] for c in data["commits"]]
+        assert dates == sorted(dates, reverse=True)
+
+        # Verify commit fields
+        first = data["commits"][0]
+        assert "sha" in first
+        assert "message" in first
+        assert "author" in first
+        assert "platform_id" in first
+        assert "epic_id" in first  # can be None
+        assert "source" in first
+        assert "committed_at" in first
+        assert "files" in first  # parsed from files_json
+        assert isinstance(first["files"], list)
+
+        # Verify files_json was parsed into files list
+        signup_commit = next(c for c in data["commits"] if c["sha"] == "ccc3333")
+        assert signup_commit["files"] == ["src/signup.py", "tests/test_signup.py"]
+
+        # Verify ad-hoc commit has epic_id = None
+        adhoc_commit = next(c for c in data["commits"] if c["sha"] == "ddd4444")
+        assert adhoc_commit["epic_id"] is None
+
+        # Verify stats.by_epic
+        assert data["stats"]["by_epic"] == {"012-auth": 2, "015-signup": 1}
+
+        # Verify stats.by_platform
+        assert data["stats"]["by_platform"] == {"plat-a": 3, "plat-b": 2}
+
+        # Verify stats.adhoc_pct (2 ad-hoc out of 5 total = 40.0%)
+        assert data["stats"]["adhoc_pct"] == 40.0
+    finally:
+        post_save.REPO_ROOT = original_repo
+        db_mod.DB_PATH = original_db
+
+
+# ══════════════════════════════════════
+# reseed commit sync (T041)
+# ══════════════════════════════════════
+
+
+def test_reseed_commit_sync_restores_deleted(setup_platform):
+    """Reseed restores a deleted commit from git history.
+
+    Scenario: 3 commits exist in both git and DB. One is deleted from DB.
+    After reseed, all 3 must be present again (sync_commits fills gaps).
+    """
+    tmp_path, db_path = setup_platform
+    import post_save
+    import db_core as db_mod
+
+    original_repo = post_save.REPO_ROOT
+    original_db = db_mod.DB_PATH
+    post_save.REPO_ROOT = tmp_path
+    db_mod.DB_PATH = db_path
+
+    try:
+        from db_pipeline import insert_commit
+
+        conn = get_conn(db_path)
+        migrate(conn)
+
+        # Step 1: Insert 3 commits (simulating hook captures)
+        commits_data = [
+            (
+                "aaa1111", "feat: add widget", "Alice", "test-plat",
+                "001-test-epic", "hook", "2026-04-01T10:00:00Z",
+                '["src/widget.py"]',
+            ),
+            (
+                "bbb2222", "fix: widget border", "Bob", "test-plat",
+                "001-test-epic", "hook", "2026-04-02T11:00:00Z",
+                '["src/widget.py"]',
+            ),
+            (
+                "ccc3333", "chore: update config", "Alice", "test-plat",
+                None, "hook", "2026-04-03T09:00:00Z",
+                '["config.yaml"]',
+            ),
+        ]
+        for c in commits_data:
+            insert_commit(conn, *c)
+        conn.commit()
+
+        # Verify all 3 present
+        count_before = conn.execute("SELECT COUNT(*) FROM commits WHERE platform_id='test-plat'").fetchone()[0]
+        assert count_before == 3
+
+        # Step 2: Delete one commit (simulate gap — hook missed it or DB corruption)
+        conn.execute("DELETE FROM commits WHERE sha='bbb2222'")
+        conn.commit()
+        count_after_delete = conn.execute("SELECT COUNT(*) FROM commits WHERE platform_id='test-plat'").fetchone()[0]
+        assert count_after_delete == 2
+        conn.close()
+
+        # Step 3: Mock git log to return all 3 commits (simulating real git history)
+        # sync_commits calls git log to discover commits, then INSERT OR IGNORE each
+        git_log_output = (
+            "aaa1111\n"
+            "feat: add widget\n"
+            "Alice\n"
+            "2026-04-01T10:00:00+00:00\n"
+            "\n"
+            "bbb2222\n"
+            "fix: widget border\n"
+            "Bob\n"
+            "2026-04-02T11:00:00+00:00\n"
+            "\n"
+            "ccc3333\n"
+            "chore: update config\n"
+            "Alice\n"
+            "2026-04-03T09:00:00+00:00\n"
+        )
+        # git diff-tree returns file paths per commit
+        def mock_subprocess_run(cmd, **kwargs):
+            """Mock subprocess.run for git commands used by sync_commits."""
+            from unittest.mock import MagicMock
+
+            result = MagicMock()
+            result.returncode = 0
+            cmd_str = " ".join(cmd) if isinstance(cmd, list) else cmd
+
+            if "git log" in cmd_str and "--format=" in cmd_str:
+                result.stdout = git_log_output
+            elif "git diff-tree" in cmd_str:
+                # Return file list for each SHA
+                sha = cmd[-1] if isinstance(cmd, list) else cmd.split()[-1]
+                file_map = {
+                    "aaa1111": "src/widget.py\n",
+                    "bbb2222": "src/widget.py\n",
+                    "ccc3333": "config.yaml\n",
+                }
+                result.stdout = file_map.get(sha, "")
+            elif "git branch" in cmd_str:
+                result.stdout = "main\n"
+            else:
+                result.stdout = ""
+            return result
+
+        with patch("post_save.subprocess.run", side_effect=mock_subprocess_run):
+            result = post_save.reseed("test-plat")
+            assert result["status"] == "ok"
+
+        # Step 4: Verify all 3 commits are present again
+        conn = get_conn(db_path)
+        count_after_reseed = conn.execute("SELECT COUNT(*) FROM commits WHERE platform_id='test-plat'").fetchone()[0]
+        assert count_after_reseed == 3, f"Expected 3 commits after reseed, got {count_after_reseed}"
+
+        # Verify the deleted commit was restored
+        restored = conn.execute("SELECT * FROM commits WHERE sha='bbb2222'").fetchone()
+        assert restored is not None, "Commit bbb2222 was not restored by reseed"
+        assert dict(restored)["message"] == "fix: widget border"
+        assert dict(restored)["author"] == "Bob"
+        assert dict(restored)["platform_id"] == "test-plat"
+        conn.close()
+    finally:
+        post_save.REPO_ROOT = original_repo
+        db_mod.DB_PATH = original_db
+
+
+# ══════════════════════════════════════
+# reseed commit sync idempotency (T042)
+# ══════════════════════════════════════
+
+
+def test_reseed_commit_sync_idempotent(setup_platform):
+    """Reseed with all commits already present creates no duplicates and no errors.
+
+    Scenario: 3 commits exist in both git and DB. Reseed runs twice.
+    After each run, the count remains exactly 3 — INSERT OR IGNORE prevents dupes.
+    """
+    tmp_path, db_path = setup_platform
+    import post_save
+    import db_core as db_mod
+
+    original_repo = post_save.REPO_ROOT
+    original_db = db_mod.DB_PATH
+    post_save.REPO_ROOT = tmp_path
+    db_mod.DB_PATH = db_path
+
+    try:
+        from db_pipeline import insert_commit
+
+        conn = get_conn(db_path)
+        migrate(conn)
+
+        # Pre-populate DB with 3 commits (all already present before reseed)
+        commits_data = [
+            (
+                "aaa1111", "feat: add widget", "Alice", "test-plat",
+                "001-test-epic", "hook", "2026-04-01T10:00:00Z",
+                '["src/widget.py"]',
+            ),
+            (
+                "bbb2222", "fix: widget border", "Bob", "test-plat",
+                "001-test-epic", "hook", "2026-04-02T11:00:00Z",
+                '["src/widget.py"]',
+            ),
+            (
+                "ccc3333", "chore: update config", "Alice", "test-plat",
+                None, "hook", "2026-04-03T09:00:00Z",
+                '["config.yaml"]',
+            ),
+        ]
+        for c in commits_data:
+            insert_commit(conn, *c)
+        conn.commit()
+
+        count_before = conn.execute("SELECT COUNT(*) FROM commits WHERE platform_id='test-plat'").fetchone()[0]
+        assert count_before == 3
+        conn.close()
+
+        # Mock git log returning the same 3 commits that are already in the DB
+        git_log_output = (
+            "aaa1111\n"
+            "feat: add widget\n"
+            "Alice\n"
+            "2026-04-01T10:00:00+00:00\n"
+            "\n"
+            "bbb2222\n"
+            "fix: widget border\n"
+            "Bob\n"
+            "2026-04-02T11:00:00+00:00\n"
+            "\n"
+            "ccc3333\n"
+            "chore: update config\n"
+            "Alice\n"
+            "2026-04-03T09:00:00+00:00\n"
+        )
+
+        def mock_subprocess_run(cmd, **kwargs):
+            """Mock subprocess.run for git commands used by sync_commits."""
+            from unittest.mock import MagicMock
+
+            result = MagicMock()
+            result.returncode = 0
+            cmd_str = " ".join(cmd) if isinstance(cmd, list) else cmd
+
+            if "git log" in cmd_str and "--format=" in cmd_str:
+                result.stdout = git_log_output
+            elif "git diff-tree" in cmd_str:
+                sha = cmd[-1] if isinstance(cmd, list) else cmd.split()[-1]
+                file_map = {
+                    "aaa1111": "src/widget.py\n",
+                    "bbb2222": "src/widget.py\n",
+                    "ccc3333": "config.yaml\n",
+                }
+                result.stdout = file_map.get(sha, "")
+            elif "git branch" in cmd_str:
+                result.stdout = "main\n"
+            else:
+                result.stdout = ""
+            return result
+
+        # First reseed — all commits already present, should be a no-op for commits
+        with patch("post_save.subprocess.run", side_effect=mock_subprocess_run):
+            result1 = post_save.reseed("test-plat")
+            assert result1["status"] == "ok"
+
+        conn = get_conn(db_path)
+        count_after_first = conn.execute("SELECT COUNT(*) FROM commits WHERE platform_id='test-plat'").fetchone()[0]
+        assert count_after_first == 3, f"Expected 3 after first reseed, got {count_after_first}"
+        conn.close()
+
+        # Second reseed — verify idempotency holds on repeated runs
+        with patch("post_save.subprocess.run", side_effect=mock_subprocess_run):
+            result2 = post_save.reseed("test-plat")
+            assert result2["status"] == "ok"
+
+        conn = get_conn(db_path)
+        count_after_second = conn.execute("SELECT COUNT(*) FROM commits WHERE platform_id='test-plat'").fetchone()[0]
+        assert count_after_second == 3, f"Expected 3 after second reseed, got {count_after_second}"
+
+        # Verify original data integrity is preserved (no field corruption)
+        row = conn.execute("SELECT * FROM commits WHERE sha='aaa1111'").fetchone()
+        assert row is not None
+        d = dict(row)
+        assert d["message"] == "feat: add widget"
+        assert d["author"] == "Alice"
+        assert d["source"] == "hook"  # original source preserved, not overwritten to 'reseed'
+        conn.close()
+    finally:
+        post_save.REPO_ROOT = original_repo
+        db_mod.DB_PATH = original_db

@@ -129,7 +129,7 @@ class IncomingMessage(BaseModel):
 
 ### Tabelas Fundamentais (Multi-Tenant)
 
-> **Obrigatorio**: TODA tabela de dados DEVE ter `tenant_id UUID NOT NULL REFERENCES tenants(id)` + index + RLS policy. Ver [ADR-011](/prosauai/decisions/adr-011-pool-rls-multi-tenant/) para hardening completo.
+> **Obrigatorio**: TODA tabela de dados DEVE ter `tenant_id UUID NOT NULL REFERENCES tenants(id)` + index + RLS policy. Ver [ADR-011](../decisions/ADR-011-pool-rls-multi-tenant/) para hardening completo.
 
 ```sql
 -- Wrapper function para RLS (ADR-011 hardening)
@@ -577,7 +577,7 @@ CREATE INDEX idx_eval_conversation ON eval_scores (tenant_id, conversation_id, m
 ### Row-Level Security (RLS)
 
 > **CRITICO**: Todas as tabelas acima ja incluem RLS habilitado + policy `tenant_isolation` inline.
-> O padrao completo de hardening esta documentado em [ADR-011](/prosauai/decisions/adr-011-pool-rls-multi-tenant/).
+> O padrao completo de hardening esta documentado em [ADR-011](../decisions/ADR-011-pool-rls-multi-tenant/).
 
 ```sql
 -- Wrapper function (definida uma vez, usada em todas as policies)

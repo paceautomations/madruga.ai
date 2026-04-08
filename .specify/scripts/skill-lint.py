@@ -320,10 +320,12 @@ def cmd_impact_of(filename: str) -> list[dict]:
     return [{"skill": name, "archetype": get_archetype(name)} for name in sorted(skill_names)]
 
 
-def _extract_pipeline_node_ids(data: dict) -> set[str]:
-    """Extract all pipeline node IDs from an already-parsed platform.yaml dict."""
+def _extract_pipeline_node_ids() -> set[str]:
+    """Extract all pipeline node IDs from .specify/pipeline.yaml."""
+    from config import load_pipeline
+
     node_ids: set[str] = set()
-    pipeline = data.get("pipeline") or {}
+    pipeline = load_pipeline()
     if not isinstance(pipeline, dict):
         return node_ids
     for node in pipeline.get("nodes") or []:
@@ -337,17 +339,9 @@ def _extract_pipeline_node_ids(data: dict) -> set[str]:
     return node_ids
 
 
-def resolve_all_pipeline(yaml_path: Path) -> set[str]:
-    """Resolve 'all-pipeline' token to all node IDs from a platform.yaml file."""
-    try:
-        import yaml as _yaml
-
-        data = _yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
-    except Exception:
-        return set()
-    if not isinstance(data, dict):
-        return set()
-    return _extract_pipeline_node_ids(data)
+def resolve_all_pipeline() -> set[str]:
+    """Resolve 'all-pipeline' token to all node IDs from pipeline.yaml."""
+    return _extract_pipeline_node_ids()
 
 
 def lint_knowledge_declarations(yaml_path: Path) -> list[dict]:
@@ -372,7 +366,7 @@ def lint_knowledge_declarations(yaml_path: Path) -> list[dict]:
     if not isinstance(knowledge_section, list):
         knowledge_section = []
 
-    all_pipeline_nodes = _extract_pipeline_node_ids(data)
+    all_pipeline_nodes = _extract_pipeline_node_ids()
 
     # Build declared map: {filename -> set of declared consumer skill IDs}
     declared: dict[str, set[str]] = {}

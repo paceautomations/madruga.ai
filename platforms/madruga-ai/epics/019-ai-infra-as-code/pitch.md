@@ -2,7 +2,6 @@
 id: 019
 title: "AI Infrastructure as Code"
 status: shipped
-appetite: 2w
 priority: P1
 depends_on: []
 blocks: []
@@ -16,10 +15,6 @@ delivered_at: 2026-04-05
 Qualquer commit em `.claude/` (22 skills, 7+ knowledge files, 4 rules, contracts) mergeia no main sem review obrigatorio. Um knowledge file renomeado silenciosamente quebra 5+ skills — e o CI nao detecta. Nao existe scan de seguranca para secrets hardcoded ou patterns perigosos. Nao ha como ver o blast radius de uma mudanca em AI instructions. Faltam SECURITY.md (trust model), CONTRIBUTING.md (regras de PR/AI code) e PR template — as 3 camadas de governanca mais basicas apos o CLAUDE.md.
 
 O resultado: regressoes silenciosas em skills, sem auditoria de mudancas, e decisoes de seguranca implicitas.
-
-## Appetite
-
-**2w** — 9 tasks, maioria de criacao de arquivos e pequenas extensoes ao skill-lint.py existente. Nenhuma decisao arquitetural complexa. CODEOWNERS e 5 minutos. SECURITY.md e CONTRIBUTING.md sao documentos one-shot.
 
 ## Solution
 

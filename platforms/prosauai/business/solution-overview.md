@@ -12,7 +12,7 @@ O dono de uma PME conecta seu numero WhatsApp, importa seu catalogo ou FAQ, esco
 
 Em grupos WhatsApp, o agente participa quando mencionado — publica ranking, responde perguntas, organiza eventos. O dono acompanha tudo por um painel: conversas, metricas de resolucao, configuracoes do agente. Nao precisa de time de TI. Nao precisa de codigo. Paga pelo que usa.
 
-> Personas e jornadas detalhadas → ver [Vision](/prosauai/vision/).
+> Personas e jornadas detalhadas → ver [Vision](./vision/).
 
 ---
 

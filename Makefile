@@ -4,7 +4,7 @@
 PLATFORM := .specify/scripts/platform_cli.py
 
 .PHONY: help test coverage lint ruff ruff-fix format status status-json seed \
-       portal-dev portal-build portal-install \
+       portal-dev portal-build portal-install install-hooks \
        install-services up down restart logs logs-easter logs-portal
 
 help: ## Show available targets
@@ -32,8 +32,9 @@ format: ## Run ruff format on Python scripts
 status: ## Show pipeline status for all platforms
 	python3 $(PLATFORM) status --all
 
-status-json: ## Export pipeline status as JSON
+status-json: ## Export pipeline status as JSON (pipeline + commits)
 	python3 $(PLATFORM) status --all --json --output portal/src/data/pipeline-status.json
+	python3 -c "import sys; sys.path.insert(0,'.specify/scripts'); from post_save import export_commits_json; export_commits_json()"
 
 seed: ## Re-seed all platforms from filesystem
 	python3 .specify/scripts/post_save.py --reseed-all
@@ -46,6 +47,12 @@ portal-build: ## Build portal for production
 
 portal-install: ## Install portal dependencies
 	cd portal && npm install
+
+install-hooks: ## Install git hooks (post-commit traceability)
+	@mkdir -p .git/hooks
+	@cp .specify/scripts/git-hooks/post-commit .git/hooks/post-commit
+	@chmod +x .git/hooks/post-commit
+	@echo "Installed post-commit hook."
 
 # --- Service management (systemd) ---
 

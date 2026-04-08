@@ -3,7 +3,6 @@ id: 008
 title: "Epic 008 — Quality & DX"
 status: shipped
 phase: pitch
-appetite: 2w
 priority: 3
 delivered_at: 2026-03-29
 updated: 2026-03-29
@@ -13,10 +12,6 @@ updated: 2026-03-29
 ## Problema
 
 Skills do pipeline carregam ~15K tokens de boilerplate repetido (contrato de 6 passos, auto-review, personas, structured questions). Cada skill repete o mesmo bloco — manutenção é N×esforço, inconsistência silenciosa cresce com cada nova skill. Auto-review é checkbox theater (mesma lista para gate auto e 1-way-door). Personas são labels decorativos sem impacto no comportamento. E o BD do SQLite (epic 006) tem schema completo mas zero integração real no ciclo das skills — nenhuma skill faz `upsert_pipeline_node()` ou `insert_provenance()` ao salvar artefato.
-
-## Appetite
-
-2 semanas. Escopo cortado para 5 deliverables concretos, todos dentro do sistema de skills existente. Zero infra nova, zero dependências novas.
 
 ## Solução
 
