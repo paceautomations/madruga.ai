@@ -83,7 +83,7 @@ function SessionCard({ session, hasConflict }: { session: ActiveSession; hasConf
       border: `1px solid ${status.label === 'Stalled' ? '#f59e0b60' : 'var(--sl-color-gray-5, #333)'}`,
       borderRadius: 8, padding: '1rem 1rem 1rem 1.15rem',
       background: 'var(--sl-color-gray-7, #0d0d0d)',
-      position: 'relative', overflow: 'hidden', margin: 0,
+      position: 'relative', overflow: 'hidden',
     }}>
       {/* Left accent bar */}
       <div style={{
@@ -93,7 +93,7 @@ function SessionCard({ session, hasConflict }: { session: ActiveSession; hasConf
 
       {/* Top: epic name + status */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '0 0 0.65rem 0' }}>
-        <div style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--sl-color-white, #fff)', margin: 0 }}>
+        <div style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--sl-color-white, #fff)' }}>
           {session.epic_id}
           {hasConflict && (
             <span style={{ fontSize: '0.68rem', color: '#ef4444', marginLeft: '0.5rem' }}>
@@ -104,7 +104,7 @@ function SessionCard({ session, hasConflict }: { session: ActiveSession; hasConf
         <span style={{
           fontSize: '0.68rem', fontWeight: 600, padding: '0.15rem 0.5rem',
           borderRadius: 5, background: status.bg, color: status.color,
-          border: `1px solid ${status.color}40`, margin: 0, lineHeight: 1.4,
+          border: `1px solid ${status.color}40`, lineHeight: 1.4,
         }}>
           {status.label}
         </span>
@@ -118,11 +118,11 @@ function SessionCard({ session, hasConflict }: { session: ActiveSession; hasConf
           { label: 'Session Cost', value: formatCostRounded(session.session_cost_usd), warn: false },
           { label: 'Last Heartbeat', value: formatRelativeTime(session.last_activity), warn: status.label === 'Stalled' },
         ].map((item) => (
-          <div key={item.label} style={{ margin: 0 }}>
-            <div style={{ fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--sl-color-gray-4, #666)', margin: 0, lineHeight: 1.4 }}>
+          <div key={item.label}>
+            <div style={{ fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--sl-color-gray-4, #666)', lineHeight: 1.4 }}>
               {item.label}
             </div>
-            <div style={{ fontSize: '0.8rem', fontWeight: 500, color: item.warn ? '#ef4444' : 'var(--sl-color-white, #fff)', margin: 0, lineHeight: 1.4 }}>
+            <div style={{ fontSize: '0.8rem', fontWeight: 500, color: item.warn ? '#ef4444' : 'var(--sl-color-white, #fff)', lineHeight: 1.4 }}>
               {item.value}
             </div>
           </div>
@@ -132,20 +132,20 @@ function SessionCard({ session, hasConflict }: { session: ActiveSession; hasConf
       {/* Progress bar */}
       <div style={{ margin: '0 0 0.6rem 0' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: 'var(--sl-color-gray-4, #666)', margin: '0 0 0.2rem 0' }}>
-          <span style={{ margin: 0 }}>Pipeline Progress</span>
-          <span style={{ margin: 0 }}>{session.completed_nodes} / {session.total_nodes} nodes</span>
+          <span>Pipeline Progress</span>
+          <span>{session.completed_nodes} / {session.total_nodes} nodes</span>
         </div>
-        <div style={{ height: 6, background: 'var(--sl-color-gray-5, #333)', borderRadius: 3, overflow: 'hidden', margin: 0 }}>
+        <div style={{ height: 6, background: 'var(--sl-color-gray-5, #333)', borderRadius: 3, overflow: 'hidden' }}>
           <div style={{
             height: '100%', borderRadius: 3, transition: 'width 0.5s',
-            width: `${progress}%`, margin: 0,
+            width: `${progress}%`,
             background: status.label === 'Stalled' ? '#f59e0b' : '#6366f1',
           }} />
         </div>
       </div>
 
       {/* Mini pipeline */}
-      <div style={{ display: 'flex', gap: 3, margin: 0 }}>
+      <div style={{ display: 'flex', gap: 3 }}>
         {L2_NODES.map((node) => {
           const nStatus = getNodeStatus(session, node.id);
           const colors = NODE_COLORS[nStatus] ?? NODE_COLORS.pending;
@@ -155,7 +155,7 @@ function SessionCard({ session, hasConflict }: { session: ActiveSession; hasConf
               key={node.id}
               title={`${node.id} (${nStatus})`}
               style={{
-                width: 18, height: 18, borderRadius: 4, flexShrink: 0, margin: 0,
+                width: 18, height: 18, borderRadius: 4, flexShrink: 0,
                 fontSize: '0.5rem', fontWeight: 600,
                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                 background: colors.bg, color: colors.color,
@@ -192,28 +192,28 @@ export default function ActiveSessionsPanel({ sessions }: ActiveSessionsPanelPro
       <div style={{
         background: 'var(--sl-color-gray-6, #1a1a1a)',
         border: '1px solid var(--sl-color-gray-5, #333)',
-        borderRadius: 8, overflow: 'hidden', margin: 0,
+        borderRadius: 8, overflow: 'hidden',
       }}>
         {/* Header */}
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '0.7rem 1.25rem', margin: 0,
+          padding: '0.7rem 1.25rem',
           borderBottom: '1px solid var(--sl-color-gray-5, #333)',
           background: 'var(--sl-color-gray-7, #0d0d0d)',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
-            <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--sl-color-white, #fff)', margin: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--sl-color-white, #fff)' }}>
               Active Sessions
             </span>
             <span style={{
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
               background: '#6366f1', color: '#fff', fontSize: '0.65rem', fontWeight: 600,
-              borderRadius: 10, padding: '0.1rem 0.5rem', minWidth: 20, margin: 0,
+              borderRadius: 10, padding: '0.1rem 0.5rem', minWidth: 20,
             }}>
               {runningCount}
             </span>
           </div>
-          <span style={{ fontSize: '0.68rem', color: 'var(--sl-color-gray-4, #666)', margin: 0 }}>
+          <span style={{ fontSize: '0.68rem', color: 'var(--sl-color-gray-4, #666)' }}>
             Auto-refreshes every 5s
           </span>
         </div>
@@ -222,7 +222,7 @@ export default function ActiveSessionsPanel({ sessions }: ActiveSessionsPanelPro
         <div style={{
           display: 'grid',
           gridTemplateColumns: runningCount > 1 ? '1fr 1fr' : '1fr',
-          gap: '1rem', padding: '1rem 1.25rem', margin: 0,
+          gap: '1rem', padding: '1rem 1.25rem',
         }}>
           {sessions.running_epics.map((session) => (
             <SessionCard
@@ -236,11 +236,11 @@ export default function ActiveSessionsPanel({ sessions }: ActiveSessionsPanelPro
         {/* Poll info bar */}
         <div style={{
           display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap',
-          padding: '0.6rem 1.25rem', fontSize: '0.72rem', margin: 0,
+          padding: '0.6rem 1.25rem', fontSize: '0.72rem',
           color: 'var(--sl-color-gray-4, #666)',
           borderTop: '1px solid var(--sl-color-gray-5, #333)',
         }}>
-          <span style={{ margin: 0 }}>Epics found: <code style={{ fontSize: '0.68rem', background: 'var(--sl-color-gray-5, #333)', padding: '0.12rem 0.35rem', borderRadius: 4, margin: 0 }}>
+          <span>Epics found: <code style={{ fontSize: '0.68rem', background: 'var(--sl-color-gray-5, #333)', padding: '0.12rem 0.35rem', borderRadius: 4, margin: 0 }}>
             {allEpicIds.length > 0 ? allEpicIds.join(', ') : 'none'}
           </code></span>
           <span style={{ marginLeft: 'auto' }}>Poll interval: <code style={{ fontSize: '0.68rem', background: 'var(--sl-color-gray-5, #333)', padding: '0.12rem 0.35rem', borderRadius: 4, margin: 0 }}>

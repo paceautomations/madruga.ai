@@ -53,22 +53,22 @@ const repoUrl = repoOrg && repoName ? `https://github.com/${repoOrg}/${repoName}
   </div>
 
   {/* ── Tab: Execution (fully client-side for dynamic platform switching) ── */}
-  <div id="tab-execution" class="cp-tab-panel" role="tabpanel">
+  <div id="tab-execution" class="cp-tab-panel not-content" role="tabpanel">
     <ExecutionTab client:visible allPlatforms={statusData.platforms || []} initialPlatformId={selectedId} />
   </div>
 
   {/* ── Tab: Observability ── */}
-  <div id="tab-observability" class="cp-tab-panel" style="display: none;" role="tabpanel">
+  <div id="tab-observability" class="cp-tab-panel not-content" style="display: none;" role="tabpanel">
     <ObservabilityDashboard client:load platformIds={allPlatformIds} />
   </div>
 
   {/* ── Tab: Dashboard ── */}
-  <div id="tab-dashboard" class="cp-tab-panel" style="display: none;" role="tabpanel">
+  <div id="tab-dashboard" class="cp-tab-panel not-content" style="display: none;" role="tabpanel">
     <DashboardCharts client:visible platformIds={allPlatformIds} />
   </div>
 
   {/* ── Tab: Changes ── */}
-  <div id="tab-changes" class="cp-tab-panel" style="display: none;" role="tabpanel">
+  <div id="tab-changes" class="cp-tab-panel not-content" style="display: none;" role="tabpanel">
     <ChangesTab client:visible data={commitsData} repoUrl={repoUrl} />
   </div>
 
@@ -105,11 +105,6 @@ const repoUrl = repoOrg && repoName ? `https://github.com/${repoOrg}/${repoName}
 </script>
 
 <style>
-  /* Reset Starlight's inherited margins on React-rendered content */
-  .cp-tab-panel :where(div, span, p, h2, h3, section, a, code, details, summary) {
-    margin: 0;
-  }
-
   /* ── Tab Bar ── */
   .cp-tab-bar {
     display: flex;
@@ -300,7 +295,6 @@ const repoUrl = repoOrg && repoName ? `https://github.com/${repoOrg}/${repoName}
 
   .layer-card {
     flex: 1;
-    margin: 0 !important;  /* override Starlight's * + * margin */
     border: 1px solid var(--d-border);
     border-left: 3px solid var(--layer-color);
     border-radius: var(--d-r);
@@ -337,7 +331,7 @@ const repoUrl = repoOrg && repoName ? `https://github.com/${repoOrg}/${repoName}
     font-weight: 600;
   }
 
-  .layer-nodes { flex: 1; margin: 0 !important; } /* fills remaining card height, override Starlight */
+  .layer-nodes { flex: 1; }
 
   .node-row {
     display: flex;
@@ -404,7 +398,6 @@ const repoUrl = repoOrg && repoName ? `https://github.com/${repoOrg}/${repoName}
 
   .kanban-col {
     flex: 1;
-    margin: 0 !important;  /* override Starlight's * + * margin */
     display: flex;
     flex-direction: column;
     min-width: 0;
@@ -415,7 +408,6 @@ const repoUrl = repoOrg && repoName ? `https://github.com/${repoOrg}/${repoName}
     align-items: center;
     justify-content: space-between;
     padding: 0.3rem 0.45rem;
-    margin: 0 !important;  /* override Starlight */
     background: var(--d-surface);
     border-radius: var(--d-r) var(--d-r) 0 0;
     border: 1px solid var(--d-border);
@@ -445,7 +437,6 @@ const repoUrl = repoOrg && repoName ? `https://github.com/${repoOrg}/${repoName}
 
   .col-body {
     flex: 1;
-    margin: 0 !important;  /* override Starlight */
     padding: 0.3rem;
     background: var(--d-card);
     border: 1px solid var(--d-border);

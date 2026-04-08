@@ -464,6 +464,96 @@ def test_record_save_bumps_timestamp_when_hash_unchanged(setup_platform):
         db_mod.DB_PATH = original_db
 
 
+def test_register_only_skips_already_done_node(setup_platform):
+    """register_only=True does NOT bump completed_at on already-done L1 nodes."""
+    tmp_path, db_path = setup_platform
+    import post_save
+    import db_core as db_mod
+
+    original_repo = post_save.REPO_ROOT
+    original_db = db_mod.DB_PATH
+    post_save.REPO_ROOT = tmp_path
+    db_mod.DB_PATH = db_path
+
+    try:
+        # First save — skill execution, records the node as done
+        result1 = post_save.record_save(
+            platform="test-plat",
+            node="vision",
+            skill="madruga:vision",
+            artifact="business/vision.md",
+        )
+        assert result1["status"] == "ok"
+
+        conn = get_conn(db_path)
+        nodes = get_pipeline_nodes(conn, "test-plat")
+        original_ts = next(n for n in nodes if n["node_id"] == "vision")["completed_at"]
+        conn.close()
+
+        # Second save — register_only=True, mocked future timestamp
+        from datetime import datetime as _dt
+        from datetime import timezone as _tz
+        from unittest.mock import patch
+
+        future = _dt(2099, 1, 1, tzinfo=_tz.utc)
+        with patch("post_save.datetime") as mock_dt:
+            mock_dt.now.return_value = future
+            mock_dt.side_effect = lambda *a, **kw: _dt(*a, **kw)
+            result2 = post_save.record_save(
+                platform="test-plat",
+                node="vision",
+                skill="madruga:vision",
+                artifact="business/vision.md",
+                register_only=True,
+            )
+
+        assert result2["action"] == "skipped_register_only"
+
+        # completed_at must NOT have been bumped
+        conn = get_conn(db_path)
+        nodes = get_pipeline_nodes(conn, "test-plat")
+        new_ts = next(n for n in nodes if n["node_id"] == "vision")["completed_at"]
+        conn.close()
+
+        assert new_ts == original_ts, f"completed_at wrongly bumped: {original_ts} → {new_ts}"
+    finally:
+        post_save.REPO_ROOT = original_repo
+        db_mod.DB_PATH = original_db
+
+
+def test_register_only_allows_first_completion(setup_platform):
+    """register_only=True still records a node that was never done."""
+    tmp_path, db_path = setup_platform
+    import post_save
+    import db_core as db_mod
+
+    original_repo = post_save.REPO_ROOT
+    original_db = db_mod.DB_PATH
+    post_save.REPO_ROOT = tmp_path
+    db_mod.DB_PATH = db_path
+
+    try:
+        result = post_save.record_save(
+            platform="test-plat",
+            node="vision",
+            skill="madruga:vision",
+            artifact="business/vision.md",
+            register_only=True,
+        )
+        assert result["status"] == "ok"
+        assert result.get("action") != "skipped_register_only"
+
+        conn = get_conn(db_path)
+        nodes = get_pipeline_nodes(conn, "test-plat")
+        node = next(n for n in nodes if n["node_id"] == "vision")
+        assert node["status"] == "done"
+        assert node["completed_at"] is not None
+        conn.close()
+    finally:
+        post_save.REPO_ROOT = original_repo
+        db_mod.DB_PATH = original_db
+
+
 def test_backfill_epic_predecessors(setup_platform):
     """Backfill fills missing nodes whose artifacts exist on disk."""
     tmp_path, db_path = setup_platform
@@ -825,18 +915,33 @@ def test_reseed_commit_sync_restores_deleted(setup_platform):
         # Step 1: Insert 3 commits (simulating hook captures)
         commits_data = [
             (
-                "aaa1111", "feat: add widget", "Alice", "test-plat",
-                "001-test-epic", "hook", "2026-04-01T10:00:00Z",
+                "aaa1111",
+                "feat: add widget",
+                "Alice",
+                "test-plat",
+                "001-test-epic",
+                "hook",
+                "2026-04-01T10:00:00Z",
                 '["src/widget.py"]',
             ),
             (
-                "bbb2222", "fix: widget border", "Bob", "test-plat",
-                "001-test-epic", "hook", "2026-04-02T11:00:00Z",
+                "bbb2222",
+                "fix: widget border",
+                "Bob",
+                "test-plat",
+                "001-test-epic",
+                "hook",
+                "2026-04-02T11:00:00Z",
                 '["src/widget.py"]',
             ),
             (
-                "ccc3333", "chore: update config", "Alice", "test-plat",
-                None, "hook", "2026-04-03T09:00:00Z",
+                "ccc3333",
+                "chore: update config",
+                "Alice",
+                "test-plat",
+                None,
+                "hook",
+                "2026-04-03T09:00:00Z",
                 '["config.yaml"]',
             ),
         ]
@@ -873,6 +978,7 @@ def test_reseed_commit_sync_restores_deleted(setup_platform):
             "Alice\n"
             "2026-04-03T09:00:00+00:00\n"
         )
+
         # git diff-tree returns file paths per commit
         def mock_subprocess_run(cmd, **kwargs):
             """Mock subprocess.run for git commands used by sync_commits."""
@@ -949,18 +1055,33 @@ def test_reseed_commit_sync_idempotent(setup_platform):
         # Pre-populate DB with 3 commits (all already present before reseed)
         commits_data = [
             (
-                "aaa1111", "feat: add widget", "Alice", "test-plat",
-                "001-test-epic", "hook", "2026-04-01T10:00:00Z",
+                "aaa1111",
+                "feat: add widget",
+                "Alice",
+                "test-plat",
+                "001-test-epic",
+                "hook",
+                "2026-04-01T10:00:00Z",
                 '["src/widget.py"]',
             ),
             (
-                "bbb2222", "fix: widget border", "Bob", "test-plat",
-                "001-test-epic", "hook", "2026-04-02T11:00:00Z",
+                "bbb2222",
+                "fix: widget border",
+                "Bob",
+                "test-plat",
+                "001-test-epic",
+                "hook",
+                "2026-04-02T11:00:00Z",
                 '["src/widget.py"]',
             ),
             (
-                "ccc3333", "chore: update config", "Alice", "test-plat",
-                None, "hook", "2026-04-03T09:00:00Z",
+                "ccc3333",
+                "chore: update config",
+                "Alice",
+                "test-plat",
+                None,
+                "hook",
+                "2026-04-03T09:00:00Z",
                 '["config.yaml"]',
             ),
         ]

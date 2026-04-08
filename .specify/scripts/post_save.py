@@ -332,6 +332,7 @@ def record_save(
     artifact: str,
     epic: str | None = None,
     epic_status: str | None = None,
+    register_only: bool = False,
 ) -> dict:
     """Record a skill's artifact save in the DB."""
     artifact_path = _validate_artifact_path(platform, artifact)
@@ -388,6 +389,22 @@ def record_save(
                     and existing_epic_node.get("completed_by")
                     and not existing_epic_node["completed_by"].startswith("seed")
                 )
+                # Hooks fire on every file save and must not bump completed_at
+                # on finished nodes — otherwise downstream nodes show false staleness.
+                if (
+                    register_only
+                    and existing_epic_node
+                    and existing_epic_node["status"] == "done"
+                    and epic_was_completed_by_skill
+                ):
+                    return {
+                        "status": "ok",
+                        "action": "skipped_register_only",
+                        "platform": platform,
+                        "node": node,
+                        "epic": epic,
+                        "artifact": artifact,
+                    }
                 skip_epic_update = (
                     existing_epic_node
                     and existing_epic_node["status"] == "done"
@@ -476,6 +493,16 @@ def record_save(
                     and existing_node.get("completed_by")
                     and not existing_node["completed_by"].startswith("seed")
                 )
+                # Hooks fire on every file save and must not bump completed_at
+                # on finished nodes — otherwise downstream nodes show false staleness.
+                if register_only and existing_node and existing_node["status"] == "done" and was_completed_by_skill:
+                    return {
+                        "status": "ok",
+                        "action": "skipped_register_only",
+                        "platform": platform,
+                        "node": node,
+                        "artifact": artifact,
+                    }
                 hash_unchanged = (
                     existing_node
                     and existing_node["status"] == "done"
@@ -692,6 +719,12 @@ def main():
         dest="json_mode",
         help="Emit structured NDJSON log output (for CI consumption)",
     )
+    parser.add_argument(
+        "--register-only",
+        action="store_true",
+        dest="register_only",
+        help="Only register new completions; skip already-done nodes (used by hooks)",
+    )
 
     args = parser.parse_args()
 
@@ -703,7 +736,7 @@ def main():
             # Not a recognized pipeline artifact — silently exit
             return
         log.info("Auto-detected: %s/%s → %s", detected["platform"], detected["node"], detected["artifact"])
-        result = record_save(**detected)
+        result = record_save(**detected, register_only=args.register_only)
         print(json.dumps(result))
         return
 

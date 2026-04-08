@@ -55,26 +55,25 @@ export default function EasterStatusBanner({ sessions, connected, todayCompleted
       <div
         style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          margin: 0,
           background: theme.bg, border: `1px solid ${theme.border}`,
           borderRadius: 6, padding: '0.75rem 1.25rem',
           minHeight: 80,
         }}
       >
         {/* Left: status dot + label */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', margin: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
           <div
             style={{
-              width: 10, height: 10, borderRadius: '50%', background: theme.dot, flexShrink: 0, margin: 0,
+              width: 10, height: 10, borderRadius: '50%', background: theme.dot, flexShrink: 0,
               animation: isAlive ? 'easter-pulse 2s infinite' : 'none',
             }}
           />
-          <div style={{ margin: 0 }}>
-            <div style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--sl-color-white, #fff)', margin: 0, lineHeight: 1.3 }}>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--sl-color-white, #fff)', lineHeight: 1.3 }}>
               Easter Service{' '}
               <span style={{ color: theme.labelColor, fontSize: '0.75rem' }}>{theme.label}</span>
             </div>
-            <div style={{ fontSize: '0.72rem', color: 'var(--sl-color-gray-3, #888)', margin: 0, lineHeight: 1.3 }}>
+            <div style={{ fontSize: '0.72rem', color: 'var(--sl-color-gray-3, #888)', lineHeight: 1.3 }}>
               {isAlive
                 ? `PID ${sessions.pid} \u00B7 up ${formatUptime(sessions.uptime_seconds)}`
                 : 'Service not reachable'}
@@ -83,13 +82,13 @@ export default function EasterStatusBanner({ sessions, connected, todayCompleted
         </div>
 
         {/* Right: stats */}
-        <div style={{ display: 'flex', gap: '1.5rem', margin: 0 }}>
+        <div style={{ display: 'flex', gap: '1.5rem' }}>
           {stats.map((s) => (
-            <div key={s.label} style={{ textAlign: 'center', margin: 0 }}>
-              <div style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--sl-color-white, #fff)', lineHeight: 1.2, margin: 0 }}>
+            <div key={s.label} style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--sl-color-white, #fff)', lineHeight: 1.2 }}>
                 {s.value}
               </div>
-              <div style={{ fontSize: '0.62rem', color: 'var(--sl-color-gray-4, #666)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
+              <div style={{ fontSize: '0.62rem', color: 'var(--sl-color-gray-4, #666)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 {s.label}
               </div>
             </div>

@@ -84,7 +84,6 @@ function scoreBg(score: number): string {
 
 const cardStyle: React.CSSProperties = {
   padding: '0.75rem 1rem',
-  margin: 0,
   background: 'var(--sl-color-gray-6, #1a1a1a)',
   borderRadius: 6,
   border: '1px solid var(--sl-color-gray-5, #333)',
@@ -229,10 +228,10 @@ function FilterBar({
   totalCount: number;
 }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', margin: 0 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
       {/* Platform filter chips */}
       {platformIds.length > 0 && (
-        <div style={{ display: 'flex', gap: '0.25rem', margin: 0 }}>
+        <div style={{ display: 'flex', gap: '0.25rem' }}>
           {[{ id: 'all', label: 'All' }, ...platformIds.map((id) => ({ id, label: id }))].map((p) => {
             const active = platformFilter === p.id;
             const chipColor = 'var(--sl-color-accent, #0284c7)';
@@ -241,7 +240,7 @@ function FilterBar({
                 key={p.id}
                 onClick={() => onPlatformChange(p.id)}
                 style={{
-                  padding: '0.25rem 0.6rem', margin: 0, borderRadius: '9999px',
+                  padding: '0.25rem 0.6rem', borderRadius: '9999px',
                   fontSize: '0.7rem', fontWeight: active ? 600 : 400,
                   border: `1px solid ${active ? chipColor : 'var(--sl-color-gray-5, #333)'}`,
                   background: active ? `${chipColor}18` : 'transparent',
@@ -256,7 +255,7 @@ function FilterBar({
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: '0.25rem', margin: 0 }}>
+      <div style={{ display: 'flex', gap: '0.25rem' }}>
         {STATUS_FILTERS.map((f) => {
           const active = statusFilter === f.id;
           const chipColor = f.id === 'all' ? 'var(--sl-color-accent, #0284c7)' : (STATUS_BADGE[f.id]?.color ?? '#888');
@@ -266,7 +265,6 @@ function FilterBar({
               onClick={() => onStatusChange(f.id)}
               style={{
                 padding: '0.25rem 0.6rem',
-                margin: 0,
                 borderRadius: '9999px',
                 fontSize: '0.7rem',
                 fontWeight: active ? 600 : 400,
@@ -292,7 +290,6 @@ function FilterBar({
           flex: '1 1 180px',
           maxWidth: 300,
           padding: '0.3rem 0.6rem',
-          margin: 0,
           fontSize: '0.75rem',
           fontFamily: 'monospace',
           background: 'var(--sl-color-gray-6, #1a1a1a)',
@@ -303,7 +300,7 @@ function FilterBar({
         }}
       />
 
-      <span style={{ fontSize: '0.7rem', color: 'var(--sl-color-gray-4, #666)', marginLeft: 'auto', margin: 0 }}>
+      <span style={{ fontSize: '0.7rem', color: 'var(--sl-color-gray-4, #666)', marginLeft: 'auto' }}>
         {resultCount === totalCount ? `${totalCount} nodes` : `${resultCount} of ${totalCount}`}
       </span>
     </div>

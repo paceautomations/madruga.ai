@@ -117,30 +117,30 @@ function buildKanban(epics: EpicData[]) {
 // ── Styles (matching original CSS using inline styles + CSS vars) ──
 
 const S = {
-  hero: { display: 'flex', alignItems: 'center', gap: '1.5rem', marginBottom: '1.75rem', paddingBottom: '1.25rem', borderBottom: '1px solid var(--sl-color-gray-5, #333)', flexWrap: 'wrap' as const, margin: 0 },
-  stat: { display: 'flex', flexDirection: 'column' as const, alignItems: 'center', padding: '0 1.2rem', borderRight: '1px solid var(--sl-color-gray-5, #333)', margin: 0 },
+  hero: { display: 'flex', alignItems: 'center', gap: '1.5rem', marginBottom: '1.75rem', paddingBottom: '1.25rem', borderBottom: '1px solid var(--sl-color-gray-5, #333)', flexWrap: 'wrap' as const },
+  stat: { display: 'flex', flexDirection: 'column' as const, alignItems: 'center', padding: '0 1.2rem', borderRight: '1px solid var(--sl-color-gray-5, #333)' },
   statLast: { borderRight: 'none', paddingRight: 0 },
-  statValue: { fontSize: '1.6rem', fontWeight: 800, color: 'var(--sl-color-white, #fff)', lineHeight: 1, fontVariantNumeric: 'tabular-nums' as const, margin: 0 },
+  statValue: { fontSize: '1.6rem', fontWeight: 800, color: 'var(--sl-color-white, #fff)', lineHeight: 1, fontVariantNumeric: 'tabular-nums' as const },
   statUnit: { fontSize: '0.9rem', fontWeight: 600, color: 'var(--sl-color-gray-3, #888)' },
   statLabel: { fontSize: '0.6rem', fontWeight: 500, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: 'var(--sl-color-gray-4, #666)', marginTop: '0.3rem', whiteSpace: 'nowrap' as const },
-  nextStep: { marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.45rem 0.75rem', background: 'var(--sl-color-gray-6, #181818)', border: '1px solid var(--sl-color-gray-5, #333)', borderRadius: 6, margin: 0 },
-  nextLabel: { fontSize: '0.6rem', textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#22c55e', fontWeight: 700, margin: 0 },
-  nextCommand: { fontSize: '0.78rem', padding: '0.12rem 0.4rem', background: 'var(--sl-color-gray-7, #111)', borderRadius: 4, color: 'var(--sl-color-white, #fff)', fontWeight: 500, margin: 0 },
-  nextDesc: { fontSize: '0.68rem', color: 'var(--sl-color-gray-3, #888)', margin: 0 },
+  nextStep: { marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.45rem 0.75rem', background: 'var(--sl-color-gray-6, #181818)', border: '1px solid var(--sl-color-gray-5, #333)', borderRadius: 6 },
+  nextLabel: { fontSize: '0.6rem', textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#22c55e', fontWeight: 700 },
+  nextCommand: { fontSize: '0.78rem', padding: '0.12rem 0.4rem', background: 'var(--sl-color-gray-7, #111)', borderRadius: 4, color: 'var(--sl-color-white, #fff)', fontWeight: 500 },
+  nextDesc: { fontSize: '0.68rem', color: 'var(--sl-color-gray-3, #888)' },
   section: { marginBottom: '2rem' },
   sectionHeader: { display: 'flex', alignItems: 'baseline', gap: '0.5rem', marginBottom: '0.6rem' },
   sectionTitle: { margin: 0, fontSize: '0.78rem', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: 'var(--sl-color-gray-3, #888)' },
-  sectionMeta: { fontSize: '0.68rem', color: 'var(--sl-color-gray-4, #666)', margin: 0 },
+  sectionMeta: { fontSize: '0.68rem', color: 'var(--sl-color-gray-4, #666)' },
   progressTrack: { background: 'var(--sl-color-gray-5, #333)', borderRadius: 2, height: 3, overflow: 'hidden' as const, margin: '0 0 0.9rem 0' },
   layerGrid: { display: 'flex', gap: '0.5rem', alignItems: 'stretch' },
-  nodeRow: { display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.2rem 0.25rem', borderRadius: 3, fontSize: '0.78rem', textDecoration: 'none', color: 'inherit', margin: 0 },
+  nodeRow: { display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.2rem 0.25rem', borderRadius: 3, fontSize: '0.78rem', textDecoration: 'none', color: 'inherit' },
   staleAlert: { display: 'flex', alignItems: 'flex-start', gap: '0.5rem', padding: '0.55rem 0.75rem', background: 'color-mix(in srgb, #f97316 8%, var(--sl-color-gray-7, #111))', border: '1px solid color-mix(in srgb, #f97316 40%, var(--sl-color-gray-5, #333))', borderLeft: '3px solid #f97316', borderRadius: 6, marginBottom: '1rem', fontSize: '0.75rem', color: 'var(--sl-color-gray-2, #ccc)' },
   kanbanBoard: { display: 'flex', gap: '0.4rem', alignItems: 'stretch' },
-  colHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.3rem 0.45rem', margin: '0 !important', background: 'var(--sl-color-gray-6, #181818)', borderRadius: '6px 6px 0 0', border: '1px solid var(--sl-color-gray-5, #333)', borderBottom: 'none' },
-  colTitle: { fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: 'var(--sl-color-gray-4, #666)', margin: 0 },
-  colCount: { fontSize: '0.55rem', background: 'var(--sl-color-gray-3, #888)', color: 'var(--sl-color-black, #000)', borderRadius: 8, padding: '0.05rem 0.3rem', fontWeight: 800, minWidth: 14, textAlign: 'center' as const, margin: 0 },
-  colBody: { flex: 1, margin: 0, padding: '0.3rem', background: 'var(--sl-color-gray-7, #111)', border: '1px solid var(--sl-color-gray-5, #333)', borderRadius: '0 0 6px 6px', display: 'flex', flexDirection: 'column' as const, gap: '0.25rem' },
-  epicCard: { display: 'block', padding: '0.45rem 0.5rem', background: 'var(--sl-color-gray-6, #181818)', border: '1px solid var(--sl-color-gray-5, #333)', borderRadius: 5, textDecoration: 'none', color: 'var(--sl-color-white, #fff)', margin: 0 },
+  colHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.3rem 0.45rem', background: 'var(--sl-color-gray-6, #181818)', borderRadius: '6px 6px 0 0', border: '1px solid var(--sl-color-gray-5, #333)', borderBottom: 'none' },
+  colTitle: { fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: 'var(--sl-color-gray-4, #666)' },
+  colCount: { fontSize: '0.55rem', background: 'var(--sl-color-gray-3, #888)', color: 'var(--sl-color-black, #000)', borderRadius: 8, padding: '0.05rem 0.3rem', fontWeight: 800, minWidth: 14, textAlign: 'center' as const },
+  colBody: { flex: 1, padding: '0.3rem', background: 'var(--sl-color-gray-7, #111)', border: '1px solid var(--sl-color-gray-5, #333)', borderRadius: '0 0 6px 6px', display: 'flex', flexDirection: 'column' as const, gap: '0.25rem' },
+  epicCard: { display: 'block', padding: '0.45rem 0.5rem', background: 'var(--sl-color-gray-6, #181818)', border: '1px solid var(--sl-color-gray-5, #333)', borderRadius: 5, textDecoration: 'none', color: 'var(--sl-color-white, #fff)' },
   footerMeta: { fontSize: '0.65rem', color: 'var(--sl-color-gray-4, #666)', textAlign: 'right' as const, marginTop: '0.75rem', opacity: 0.6 },
 };
 
@@ -197,9 +197,9 @@ export default function ExecutionTab({ allPlatforms, initialPlatformId }: Execut
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', margin: 0 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
       {/* Platform cards */}
-      <div style={{ margin: 0 }}>
+      <div>
         <div style={S.sectionHeader}>
           <h2 style={S.sectionTitle}>Platforms</h2>
           <span style={S.sectionMeta}>{allPlatforms.length} platforms</span>
@@ -208,14 +208,14 @@ export default function ExecutionTab({ allPlatforms, initialPlatformId }: Execut
       </div>
 
       {!hasData ? (
-        <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--sl-color-gray-3, #888)', margin: 0 }}>
+        <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--sl-color-gray-3, #888)' }}>
           <p style={{ margin: 0 }}>No pipeline data for <strong>{selectedId}</strong>. Run <code>python3 .specify/scripts/platform_cli.py status --all --json</code></p>
         </div>
       ) : (
         <>
           {/* Hero stats */}
           <div style={{ ...S.hero, marginBottom: '1.75rem', paddingBottom: '1.25rem' }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 0, margin: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 0 }}>
               {[
                 { value: `${Math.round(platform.l1.progress_pct)}`, unit: '%', label: 'L1 Completo' },
                 { value: `${totalEpics}`, unit: '', label: 'Epics' },
@@ -245,8 +245,8 @@ export default function ExecutionTab({ allPlatforms, initialPlatformId }: Execut
           {/* Stale alert */}
           {staleNodes.length > 0 && (
             <div style={S.staleAlert}>
-              <span style={{ color: '#f97316', fontSize: '0.9rem', flexShrink: 0, lineHeight: 1.3, margin: 0 }}>&#9888;</span>
-              <div style={{ flex: 1, margin: 0 }}>
+              <span style={{ color: '#f97316', fontSize: '0.9rem', flexShrink: 0, lineHeight: 1.3 }}>&#9888;</span>
+              <div style={{ flex: 1 }}>
                 <strong>{staleNodes.length} artefato(s) desatualizado(s)</strong> — dependencias mudaram apos a geracao.
                 <span style={{ display: 'block', marginTop: '0.2rem', fontFamily: 'var(--sl-font-mono, monospace)', fontSize: '0.68rem', color: 'var(--sl-color-gray-3, #888)' }}>
                   Re-execute: {staleNodes.map((n) => `/${n.id}`).join(', ')}
@@ -262,14 +262,14 @@ export default function ExecutionTab({ allPlatforms, initialPlatformId }: Execut
               <span style={S.sectionMeta}>{platform.l1.done}/{platform.l1.total} nos</span>
             </div>
             <div style={S.progressTrack}>
-              <div style={{ height: '100%', width: `${platform.l1.progress_pct}%`, background: '#22c55e', borderRadius: 2, margin: 0 }} />
+              <div style={{ height: '100%', width: `${platform.l1.progress_pct}%`, background: '#22c55e', borderRadius: 2 }} />
             </div>
             <div style={S.layerGrid}>
               {layers.map((layer) => (
                 <div
                   key={layer.id}
                   style={{
-                    flex: 1, margin: 0, border: '1px solid var(--sl-color-gray-5, #333)',
+                    flex: 1, border: '1px solid var(--sl-color-gray-5, #333)',
                     borderLeft: `3px solid ${layer.color}`, borderRadius: 6,
                     padding: '0.6rem 0.65rem', background: 'var(--sl-color-gray-7, #111)',
                     display: 'flex', flexDirection: 'column', minWidth: 0,
@@ -278,18 +278,18 @@ export default function ExecutionTab({ allPlatforms, initialPlatformId }: Execut
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem', paddingBottom: '0.35rem', borderBottom: '1px solid var(--sl-color-gray-5, #333)' }}>
                     <h3 style={{ margin: 0, fontSize: '0.75rem', fontWeight: 700, color: layer.color }}>{layer.label}</h3>
-                    <span style={{ fontSize: '0.65rem', color: 'var(--sl-color-gray-4, #666)', fontVariantNumeric: 'tabular-nums', fontWeight: 600, margin: 0 }}>{layer.done}/{layer.total}</span>
+                    <span style={{ fontSize: '0.65rem', color: 'var(--sl-color-gray-4, #666)', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{layer.done}/{layer.total}</span>
                   </div>
-                  <div style={{ flex: 1, margin: 0 }}>
+                  <div style={{ flex: 1 }}>
                     {layer.nodes.map((n) => {
                       const si = STATUS_ICON[n.status] || STATUS_ICON.pending;
                       const href = n.status === 'done' && n.outputs?.length ? resolveNodeHref(selectedId, n.id, n.outputs[0]) : undefined;
                       return (
                         <a key={n.id} href={href} style={{ ...S.nodeRow, ...(n.status === 'skipped' ? { textDecoration: 'line-through', color: 'var(--sl-color-gray-4, #666)' } : {}) }} title={`${n.id}: ${n.status} (${n.gate})`}>
-                          <span style={{ width: 14, textAlign: 'center', fontWeight: 700, fontSize: '0.7rem', flexShrink: 0, color: si.color, margin: 0 }}>{si.icon}</span>
-                          <span style={{ flex: 1, color: n.status === 'done' ? 'var(--sl-color-white, #fff)' : 'var(--sl-color-gray-2, #ccc)', margin: 0 }}>{NODE_LABELS[n.id] || n.id}</span>
-                          {n.optional && <span style={{ fontSize: '0.5rem', padding: '0.05rem 0.25rem', borderRadius: 3, background: 'var(--sl-color-gray-6, #181818)', color: 'var(--sl-color-gray-4, #666)', textTransform: 'uppercase', fontWeight: 700, margin: 0 }}>opt</span>}
-                          <span style={{ fontSize: '0.6rem', flexShrink: 0, opacity: 0.7, margin: 0 }}>{GATE_ICON[n.gate] || ''}</span>
+                          <span style={{ width: 14, textAlign: 'center', fontWeight: 700, fontSize: '0.7rem', flexShrink: 0, color: si.color }}>{si.icon}</span>
+                          <span style={{ flex: 1, color: n.status === 'done' ? 'var(--sl-color-white, #fff)' : 'var(--sl-color-gray-2, #ccc)' }}>{NODE_LABELS[n.id] || n.id}</span>
+                          {n.optional && <span style={{ fontSize: '0.5rem', padding: '0.05rem 0.25rem', borderRadius: 3, background: 'var(--sl-color-gray-6, #181818)', color: 'var(--sl-color-gray-4, #666)', textTransform: 'uppercase', fontWeight: 700 }}>opt</span>}
+                          <span style={{ fontSize: '0.6rem', flexShrink: 0, opacity: 0.7 }}>{GATE_ICON[n.gate] || ''}</span>
                         </a>
                       );
                     })}
@@ -309,7 +309,7 @@ export default function ExecutionTab({ allPlatforms, initialPlatformId }: Execut
               {PHASES.map((phase) => {
                 const cards = kanban[phase.id] || [];
                 return (
-                  <div key={phase.id} style={{ flex: 1, margin: 0, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                  <div key={phase.id} style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
                     <div style={S.colHeader}>
                       <span style={S.colTitle}>{phase.label}</span>
                       {cards.length > 0 && <span style={S.colCount}>{cards.length}</span>}
@@ -318,16 +318,16 @@ export default function ExecutionTab({ allPlatforms, initialPlatformId }: Execut
                       {cards.map((epic) => (
                         <a key={epic.id} href={`/${selectedId}/epics/${epic.id}/pitch/`} style={{ ...S.epicCard, ...(phase.id === 'shipped' ? { borderLeft: '2px solid #22c55e', opacity: 0.65 } : {}) }}>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.1rem' }}>
-                            <span style={{ fontSize: '0.6rem', color: 'var(--sl-color-gray-4, #666)', fontWeight: 700, fontFamily: 'var(--sl-font-mono, monospace)', margin: 0 }}>{epic.id.split('-')[0]}</span>
-                            {epic.subStage && <span style={{ fontSize: '0.5rem', padding: '0.05rem 0.25rem', borderRadius: 3, background: 'var(--sl-color-gray-7, #111)', color: 'var(--sl-color-gray-4, #666)', textTransform: 'uppercase', fontWeight: 700, margin: 0 }}>{epic.subStage}</span>}
+                            <span style={{ fontSize: '0.6rem', color: 'var(--sl-color-gray-4, #666)', fontWeight: 700, fontFamily: 'var(--sl-font-mono, monospace)' }}>{epic.id.split('-')[0]}</span>
+                            {epic.subStage && <span style={{ fontSize: '0.5rem', padding: '0.05rem 0.25rem', borderRadius: 3, background: 'var(--sl-color-gray-7, #111)', color: 'var(--sl-color-gray-4, #666)', textTransform: 'uppercase', fontWeight: 700 }}>{epic.subStage}</span>}
                           </div>
-                          <span style={{ display: 'block', fontSize: '0.72rem', lineHeight: 1.3, color: 'var(--sl-color-gray-2, #ccc)', margin: 0 }}>{epic.title}</span>
+                          <span style={{ display: 'block', fontSize: '0.72rem', lineHeight: 1.3, color: 'var(--sl-color-gray-2, #ccc)' }}>{epic.title}</span>
                           {epic.done > 0 && (
                             <div style={{ marginTop: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                              <div style={{ flex: 1, height: 2, background: 'var(--sl-color-gray-5, #333)', borderRadius: 1, overflow: 'hidden', margin: 0 }}>
-                                <div style={{ height: '100%', width: `${epic.progress_pct}%`, background: '#22c55e', borderRadius: 1, margin: 0 }} />
+                              <div style={{ flex: 1, height: 2, background: 'var(--sl-color-gray-5, #333)', borderRadius: 1, overflow: 'hidden' }}>
+                                <div style={{ height: '100%', width: `${epic.progress_pct}%`, background: '#22c55e', borderRadius: 1 }} />
                               </div>
-                              <span style={{ fontSize: '0.55rem', color: 'var(--sl-color-gray-4, #666)', fontVariantNumeric: 'tabular-nums', margin: 0 }}>{epic.done}/{epic.total}</span>
+                              <span style={{ fontSize: '0.55rem', color: 'var(--sl-color-gray-4, #666)', fontVariantNumeric: 'tabular-nums' }}>{epic.done}/{epic.total}</span>
                             </div>
                           )}
                         </a>

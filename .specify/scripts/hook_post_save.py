@@ -25,7 +25,7 @@ def main():
         return
 
     subprocess.run(
-        [sys.executable, str(SCRIPTS_DIR / "post_save.py"), "--detect-from-path", file_path],
+        [sys.executable, str(SCRIPTS_DIR / "post_save.py"), "--detect-from-path", file_path, "--register-only"],
         capture_output=True,
     )
 

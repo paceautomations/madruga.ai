@@ -61,13 +61,13 @@ const TOOLTIP_STYLE: React.CSSProperties = {
 
 const FILTER_INPUT_STYLE: React.CSSProperties = {
   fontSize: '0.72rem', background: 'var(--sl-color-gray-7, #111)', color: 'var(--sl-color-white, #fff)',
-  border: CHART_BORDER, borderRadius: 4, padding: '0.25rem 0.4rem', margin: 0,
+  border: CHART_BORDER, borderRadius: 4, padding: '0.25rem 0.4rem',
 };
 
 // ── Styles ──
 
 const cardStyle: React.CSSProperties = {
-  padding: '0.75rem 1rem', margin: 0,
+  padding: '0.75rem 1rem',
   background: 'var(--sl-color-gray-6, #1a1a1a)', borderRadius: 6,
   border: '1px solid var(--sl-color-gray-5, #333)',
   flex: '1 1 0', minWidth: 100, height: 80,
@@ -76,7 +76,7 @@ const cardStyle: React.CSSProperties = {
 
 const chartBoxStyle: React.CSSProperties = {
   background: CHART_BG, border: CHART_BORDER, borderRadius: 8,
-  padding: '1rem', margin: 0, minHeight: 280,
+  padding: '1rem', minHeight: 280,
 };
 
 const chartTitleStyle: React.CSSProperties = {
@@ -95,13 +95,13 @@ function KpiCard({ label, value, delta, invertDelta }: { label: string; value: s
   const deltaGood = invertDelta ? !isPositive : isPositive;
   return (
     <div style={cardStyle}>
-      <div style={{ fontSize: '0.62rem', color: 'var(--sl-color-gray-3, #888)', textTransform: 'uppercase', letterSpacing: '0.04em', margin: 0 }}>
+      <div style={{ fontSize: '0.62rem', color: 'var(--sl-color-gray-3, #888)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
         {label}
       </div>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.4rem', margin: 0 }}>
-        <span style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--sl-color-white, #fff)', margin: 0 }}>{value}</span>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.4rem' }}>
+        <span style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--sl-color-white, #fff)' }}>{value}</span>
         {delta != null && (
-          <span style={{ fontSize: '0.65rem', fontWeight: 600, margin: 0, color: deltaGood ? '#22c55e' : '#ef4444' }}>
+          <span style={{ fontSize: '0.65rem', fontWeight: 600, color: deltaGood ? '#22c55e' : '#ef4444' }}>
             {isPositive ? '\u2191' : '\u2193'}{Math.abs(delta).toFixed(0)}%
           </span>
         )}
@@ -223,15 +223,15 @@ export default function DashboardCharts({ platformIds }: DashboardChartsProps) {
   const passRate = s.total_runs > 0 ? ((s.total_runs - failedRuns) / s.total_runs) * 100 : 0;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', margin: 0 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
       {/* Filters */}
       <div style={filterRowStyle}>
-        <label style={{ fontSize: '0.72rem', color: TEXT_COLOR, margin: 0 }}>
+        <label style={{ fontSize: '0.72rem', color: TEXT_COLOR }}>
           From{' '}
           <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)}
             style={FILTER_INPUT_STYLE} />
         </label>
-        <label style={{ fontSize: '0.72rem', color: TEXT_COLOR, margin: 0 }}>
+        <label style={{ fontSize: '0.72rem', color: TEXT_COLOR }}>
           To{' '}
           <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)}
             style={FILTER_INPUT_STYLE} />
@@ -247,7 +247,7 @@ export default function DashboardCharts({ platformIds }: DashboardChartsProps) {
       </div>
 
       {/* KPI Strip */}
-      <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'stretch', margin: 0 }}>
+      <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'stretch' }}>
         <KpiCard label="Total Cost" value={formatCostRounded(s.total_cost)} delta={delta.cost} invertDelta />
         <KpiCard label="Total Runs" value={String(s.total_runs)} delta={delta.runs} />
         <KpiCard label="Avg Eval" value={s.avg_eval != null ? s.avg_eval.toFixed(1) : '--'} delta={delta.eval} />
@@ -255,7 +255,7 @@ export default function DashboardCharts({ platformIds }: DashboardChartsProps) {
       </div>
 
       {/* Charts Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', margin: 0 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
         {/* 1. Cost Trend */}
         <ChartBox title="Cost Trend">
           <ResponsiveContainer width="100%" height={200}>

@@ -25,6 +25,7 @@ class TestMain:
         mock_run.assert_called_once()
         args = mock_run.call_args[0][0]
         assert "--detect-from-path" in args
+        assert "--register-only" in args
         assert "platforms/test-platform/business/vision.md" in args
 
     def test_empty_file_path_returns_early(self):
