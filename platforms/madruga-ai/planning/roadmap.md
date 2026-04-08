@@ -12,7 +12,7 @@ updated: 2026-04-05
 
 **MVP Epics:** 012 + 013 + 014 + 015 + 016 (todos os candidatos)
 **MVP Criterion:** Pipeline executa pelo menos 1 epic completo (pitch-to-PR) em repo externo (ProsaUAI) com autonomia — human gates notificados via Telegram, specs revisadas por Subagent Judge, easter operando 24/7.
-**Total MVP Appetite:** ~14w (team size: 1)
+**Total MVP Estimate:** ~14w (team size: 1)
 
 ---
 
@@ -97,14 +97,14 @@ gantt
 
 ### Sequencia e Justificativa
 
-| Ordem | Epic | Appetite | Risco | Justificativa da Posicao |
-|-------|------|----------|-------|--------------------------|
-| 1 | 012 Multi-repo Implement | 2w (real: 1d) | Medio | Value-first: desbloqueia ProsaUAI imediatamente. Escopo bem definido + reutilizacao de db.py reduziu appetite de 2w para 1d. |
-| 2 | 013 DAG Executor + SpeckitBridge | 6w | Alto | Value: runtime funcional. Real: ~1d. Infraestrutura existente (db.py, post_save.py) + decisoes bem capturadas em context.md reduziram escopo. |
-| 3 | 014 Telegram Notifications | 2w (real: 1d) | Baixo | Depende da gate state machine de 013. aiogram e framework maduro — baixo risco tecnico. Appetite reduzido: scope claro + framework maduro. |
-| 3 | 015 Subagent Judge + Decision Classifier | 2w (real: 1d) | Medio→Baixo | Paralelo com 014. Agent tool ja provado. Knowledge files = maioria do deliverable. Calibracao validada com 7 ADRs reais. |
-| 4 | 016 Easter 24/7 | 2w (real: 1d) | Baixo | Ultimo — monta em cima de tudo. Mecanico: asyncio event loop + health checks + systemd. Appetite reduzido: modulos existentes (dag_executor, telegram_bot) ja tinham 90% da logica. |
-| 5 | 017 Observability, Tracing & Evals | 2w (real: 1d) | Baixo | Primeiro post-MVP. Infraestrutura completa (easter, db.py, portal). Heuristicas simples — sem ML. Appetite reduzido: reuso de patterns existentes (db CRUD, easter endpoints, portal React). |
+| Ordem | Epic | Risco | Justificativa da Posicao |
+|-------|------|-------|--------------------------|
+| 1 | 012 Multi-repo Implement | Medio | Value-first: desbloqueia ProsaUAI imediatamente. Escopo bem definido + reutilizacao de db.py. Real: 1d. |
+| 2 | 013 DAG Executor + SpeckitBridge | Alto | Value: runtime funcional. Real: ~1d. Infraestrutura existente (db.py, post_save.py) + decisoes bem capturadas em context.md reduziram escopo. |
+| 3 | 014 Telegram Notifications | Baixo | Depende da gate state machine de 013. aiogram e framework maduro — baixo risco tecnico. Real: 1d. |
+| 3 | 015 Subagent Judge + Decision Classifier | Medio→Baixo | Paralelo com 014. Agent tool ja provado. Knowledge files = maioria do deliverable. Calibracao validada com 7 ADRs reais. |
+| 4 | 016 Easter 24/7 | Baixo | Ultimo — monta em cima de tudo. Mecanico: asyncio event loop + health checks + systemd. Real: 1d. |
+| 5 | 017 Observability, Tracing & Evals | Baixo | Primeiro post-MVP. Infraestrutura completa (easter, db.py, portal). Heuristicas simples — sem ML. Real: 1d. |
 
 > 014 e 015 podem rodar em paralelo apos 013. Gantt mostra sequencial por team size = 1.
 

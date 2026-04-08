@@ -3,7 +3,6 @@ id: 006
 title: "SQLite Foundation — BD para Estado do Pipeline"
 status: shipped
 phase: pitch
-appetite: 2w
 priority: 1
 delivered_at: 2026-03-29
 updated: 2026-03-29
@@ -20,10 +19,6 @@ O madruga.ai armazena todo estado como arquivos no filesystem: pipeline status d
 4. **Staleness invisível** — quando upstream muda, downstream não é invalidado
 5. **Decision log inexistente** — decisões tomadas durante skills se perdem entre sessões
 6. **Hallucination sem guardrails** — research skills fabricam sources sem escape hatch
-
-## Appetite
-
-1 semana (small batch). Schema SQL + `db.py` + integração no step 5 + guardrails.
 
 ## Solução
 

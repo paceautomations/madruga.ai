@@ -53,7 +53,7 @@ Campos configuráveis por tenant/agent:
 
 ### Safety net para mudancas de config
 - A/B testing com golden dataset antes de mudar prompts (score novo > baseline + 0.05 — ADR-008)
-- **Canary rollout progressivo** — nova versao recebe % do trafego, comparacao automatica de eval scores, rollback imediato se regressao. Mecanismo completo em [ADR-019](/prosauai/decisions/adr-019-agent-config-versioning/)
+- **Canary rollout progressivo** — nova versao recebe % do trafego, comparacao automatica de eval scores, rollback imediato se regressao. Mecanismo completo em [ADR-019](./ADR-019-agent-config-versioning/)
 - Sem auto-deploy de mudancas de prompt — human gate + review semanal (ADR-009, anti-pattern #12)
 - "Prompt Review Friday" por tenant (data flywheel)
 

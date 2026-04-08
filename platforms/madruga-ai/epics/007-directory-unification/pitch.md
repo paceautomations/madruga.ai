@@ -3,7 +3,6 @@ id: 007
 title: "Directory Unification — SpecKit Opera em epics/, DAG Dois Níveis"
 status: shipped
 phase: pitch
-appetite: 2w
 priority: 2
 delivered_at: 2026-03-29
 updated: 2026-03-29
@@ -19,10 +18,6 @@ SpecKit e Madruga operam em diretórios separados: SpecKit cria artifacts em `sp
 3. **Nomes confusos** — discuss, adr-gen, test-ai, vision-one-pager, folder-arch são nomes vagos ou inconsistentes
 4. **Pipeline fragmentado** — pipeline-status e pipeline-next são 2 skills separadas que fazem o mesmo. Não cobrem per-epic
 5. **Sem HANDOFF blocks** — context entre skills se perde. Decisions não propagam
-
-## Appetite
-
-1-2 semanas (small batch). Ajustes cirúrgicos em scripts + renaming + HANDOFF + /pipeline unificado.
 
 ## Solução
 

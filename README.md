@@ -19,6 +19,9 @@ pip install copier pyyaml
 /platform-new meu-saas
 /pipeline meu-saas
 
+# Instalar git hooks (commit traceability automatico)
+make install-hooks
+
 # Portal (visualizacao de todas as plataformas)
 cd portal && npm install && npm run dev
 # Abra http://localhost:4321
@@ -716,6 +719,14 @@ python3 .specify/scripts/skill-lint.py --json           # JSON output
   --json --platform prosauai --epic 001-onboarding --skill specify
 ```
 
+### Git Hooks (`install-hooks`)
+
+```bash
+make install-hooks   # instala post-commit hook para commit traceability
+```
+
+O hook registra automaticamente cada commit na tabela `commits` do SQLite com: SHA, mensagem, autor, data, plataforma e epic associado. Deteccao de plataforma/epic eh automatica via branch name (`epic/<platform>/<NNN-slug>`) e file paths (`platforms/<X>/`). Best-effort — nunca bloqueia commits.
+
 ### Portal
 
 ```bash
@@ -820,6 +831,7 @@ O arquivo `.specify/memory/constitution.md` (v1.1.0) define 9 principios:
 - Python 3.11+ com `pyyaml`
 - `copier` >= 9.4.0: `pip install copier`
 - Para Easter: `pip install fastapi uvicorn aiogram structlog sentry-sdk`
+- Git hooks: `make install-hooks` — instala post-commit hook para rastreabilidade automatica de commits no SQLite
 
 ---
 

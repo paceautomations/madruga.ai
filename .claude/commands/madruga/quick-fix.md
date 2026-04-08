@@ -127,7 +127,7 @@ After approval, the DAG executor handles the rest automatically:
 - **implement**: Executes the fix based on the spec
 - **judge**: Reviews the implementation with 4 tech-reviewer personas
 
-The quick-fix cycle is driven by `dag_executor.py --quick`, which loads the `quick_cycle` nodes from `platform.yaml`.
+The quick-fix cycle is driven by `dag_executor.py --quick`, which loads the `quick_cycle` nodes from `.specify/pipeline.yaml`.
 
 ### 6. Save + Report
 

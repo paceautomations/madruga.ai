@@ -27,7 +27,7 @@ class TestLoadRepoBinding:
     def test_loads_prosauai_binding(self):
         binding = _load_repo_binding("prosauai")
         assert binding["org"] == "paceautomations"
-        assert binding["name"] == "prosauai-api"
+        assert binding["name"] == "prosauai"
         assert binding["base_branch"] == "main"
         assert binding["epic_branch_prefix"] == "epic/prosauai/"
 

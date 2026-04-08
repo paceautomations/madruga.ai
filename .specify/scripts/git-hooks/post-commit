@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Post-commit hook: register commits in the pipeline SQLite DB.
+# Best-effort — errors are logged to stderr but never block the commit (FR-007).
+#
+# Install: make install-hooks
+# Or manually: cp .specify/scripts/git-hooks/post-commit .git/hooks/post-commit && chmod +x .git/hooks/post-commit
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+SCRIPT="${REPO_ROOT}/.specify/scripts/hook_post_commit.py"
+
+if [ -f "$SCRIPT" ]; then
+    LOG_DIR="${REPO_ROOT}/.pipeline/logs"
+    mkdir -p "$LOG_DIR"
+    PYTHONPATH="${REPO_ROOT}/.specify/scripts" python3 "$SCRIPT" 2>>"${LOG_DIR}/post-commit.log" || true
+fi

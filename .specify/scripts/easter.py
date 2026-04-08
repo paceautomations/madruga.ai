@@ -159,7 +159,7 @@ async def dag_scheduler(conn, semaphore, shutdown_event, poll_interval=15, platf
                         epic_slug=epic_id,
                         resume=True,
                         semaphore=semaphore,
-                        gate_mode=os.environ.get("MADRUGA_MODE", "manual"),
+                        gate_mode=os.environ.get("MADRUGA_MODE", "auto"),
                     )
                     # C2: notify via ntfy when pipeline fails (circuit breaker likely involved)
                     if result != 0:
@@ -291,16 +291,34 @@ async def lifespan(app: FastAPI):
 
     lock_path = _lock_repo_root / ".pipeline" / "madruga.lock"
     lock_path.parent.mkdir(parents=True, exist_ok=True)
+
+    def _acquire_lock(fh):
+        fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        fh.write(str(os.getpid()))
+        fh.flush()
+
     lock_file = open(lock_path, "w")  # noqa: SIM115
     try:
-        fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        lock_file.write(str(os.getpid()))
-        lock_file.flush()
+        _acquire_lock(lock_file)
         logger.info("instance_lock_acquired", lock=str(lock_path), pid=os.getpid())
     except OSError:
-        logger.error("another_easter_running", lock=str(lock_path))
+        # Check if the PID holding the lock is still alive
         lock_file.close()
-        sys.exit(1)
+        stale = False
+        try:
+            with open(lock_path) as f:
+                old_pid = int(f.read().strip())
+            os.kill(old_pid, 0)  # signal 0 = check if alive
+        except (ValueError, ProcessLookupError, PermissionError):
+            stale = True
+        if stale:
+            logger.warning("stale_lock_reclaimed", lock=str(lock_path), old_pid=old_pid)
+            lock_path.unlink(missing_ok=True)
+            lock_file = open(lock_path, "w")  # noqa: SIM115
+            _acquire_lock(lock_file)
+        else:
+            logger.error("another_easter_running", lock=str(lock_path), pid=old_pid)
+            sys.exit(1)
 
     # Sentry (optional)
     dsn = os.environ.get("MADRUGA_SENTRY_DSN")

@@ -13,6 +13,15 @@ MIGRATIONS_DIR = REPO_ROOT / ".pipeline" / "migrations"
 PLATFORMS_DIR = REPO_ROOT / "platforms"
 TEMPLATE_DIR = REPO_ROOT / ".specify" / "templates" / "platform"
 PORTAL_DIR = REPO_ROOT / "portal"
+PIPELINE_YAML = REPO_ROOT / ".specify" / "pipeline.yaml"
+
+
+def load_pipeline() -> dict:
+    """Load the shared pipeline definition from .specify/pipeline.yaml."""
+    import yaml
+
+    return yaml.safe_load(PIPELINE_YAML.read_text())
+
 
 # Cost estimation — fallback pricing per token (USD) when claude doesn't report cost.
 # Override via env vars when pricing changes.

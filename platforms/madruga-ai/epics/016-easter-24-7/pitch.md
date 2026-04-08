@@ -3,7 +3,6 @@ id: 016
 title: "Easter 24/7"
 status: shipped
 delivered_at: 2026-04-01
-appetite: 2w
 priority: 3
 updated: 2026-04-01
 ---
@@ -12,10 +11,6 @@ updated: 2026-04-01
 ## Problem
 
 O pipeline so executa quando um humano invoca skills manualmente no terminal. Nao existe processo persistente que monitore o estado do DAG, dispare skills quando prerequisites sao atendidos, e opere continuamente. Sem easter, a promessa de autonomia do pipeline e impossivel.
-
-## Appetite
-
-**2w** — Ultimo epic do MVP. Monta em cima de tudo. Mecanico: asyncio event loop + health checks + systemd.
 
 ## Dependencies
 

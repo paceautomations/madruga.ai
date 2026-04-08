@@ -171,6 +171,11 @@ This is a complement to the Judge safety net (which catches escaped 1-way-doors 
 
 Write to `platforms/<name>/<path>` (or `platforms/<name>/epics/<NNN>/<path>` for epic cycle).
 
+### Link Convention
+
+Cross-references between platform docs MUST use relative paths, never absolute portal URLs.
+See `.claude/rules/portal.md` § "Cross-Reference Links" for the full convention.
+
 ### SQLite Integration
 
 After saving the artifact, run the post-save script to record state in the DB.

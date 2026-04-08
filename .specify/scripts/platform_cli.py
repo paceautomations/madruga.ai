@@ -338,18 +338,15 @@ def cmd_check_stale(name: str) -> None:
     """Check for stale pipeline nodes (dependencies completed after them)."""
     from db import get_conn, get_stale_nodes, migrate
 
+    from config import load_pipeline
+
     pdir = PLATFORMS_DIR / name
-    yaml_path = pdir / "platform.yaml"
-    if not yaml_path.exists():
-        _error(f"platform.yaml not found: {yaml_path}")
+    if not (pdir / "platform.yaml").exists():
+        _error(f"platform.yaml not found: {pdir / 'platform.yaml'}")
         sys.exit(1)
 
-    with open(yaml_path) as f:
-        manifest = yaml.safe_load(f)
-
-    # Build DAG edges from platform.yaml
     dag_edges: dict[str, list[str]] = {}
-    for node in manifest.get("pipeline", {}).get("nodes", []):
+    for node in load_pipeline().get("nodes", []):
         dag_edges[node["id"]] = node.get("depends", [])
 
     with get_conn() as conn:
@@ -489,12 +486,13 @@ def cmd_status(name: str | None, show_all: bool, as_json: bool, output_file: str
             "platforms": [],
         }
 
+        from config import load_pipeline
+
+        pipeline_cfg = load_pipeline()
         for pname in targets:
             pdir = PLATFORMS_DIR / pname
             manifest = yaml.safe_load((pdir / "platform.yaml").read_text())
 
-            # Build DAG edges and node metadata from platform.yaml
-            pipeline_cfg = manifest.get("pipeline", {})
             dag_edges = {n["id"]: n.get("depends", []) for n in pipeline_cfg.get("nodes", [])}
 
             # Query DB

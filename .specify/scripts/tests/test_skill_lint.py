@@ -363,35 +363,31 @@ def test_lint_knowledge_declarations_undeclared_ref():
 
 
 def test_all_pipeline_resolution():
-    """all-pipeline resolves to all L1 + L2 node IDs from platform.yaml."""
+    """all-pipeline resolves to all L1 + L2 node IDs from pipeline.yaml."""
     import tempfile
     import textwrap
+    from unittest.mock import patch
 
-    # platform.yaml with known L1 and L2 nodes
+    # pipeline.yaml with known L1 and L2 nodes (top-level keys, no wrapper)
     yaml_content = textwrap.dedent("""\
-        name: test-platform
-        pipeline:
+        nodes:
+          - id: vision
+            skill: "madruga:vision"
+            outputs: ["business/vision.md"]
+          - id: adr
+            skill: "madruga:adr"
+            outputs: ["decisions/ADR-*.md"]
+          - id: blueprint
+            skill: "madruga:blueprint"
+            outputs: ["engineering/blueprint.md"]
+        epic_cycle:
           nodes:
-            - id: vision
-              skill: "madruga:vision"
-              outputs: ["business/vision.md"]
-            - id: adr
-              skill: "madruga:adr"
-              outputs: ["decisions/ADR-*.md"]
-            - id: blueprint
-              skill: "madruga:blueprint"
-              outputs: ["engineering/blueprint.md"]
-          epic_cycle:
-            nodes:
-              - id: epic-context
-                skill: "madruga:epic-context"
-                outputs: ["pitch.md"]
-              - id: judge
-                skill: "madruga:judge"
-                outputs: ["judge-report.md"]
-        knowledge:
-          - file: pipeline-contract-base.md
-            consumers: all-pipeline
+            - id: epic-context
+              skill: "madruga:epic-context"
+              outputs: ["pitch.md"]
+            - id: judge
+              skill: "madruga:judge"
+              outputs: ["judge-report.md"]
     """)
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as tmp:
@@ -400,7 +396,8 @@ def test_all_pipeline_resolution():
         tmp_path = Path(tmp.name)
 
     try:
-        resolved = skill_lint.resolve_all_pipeline(tmp_path)
+        with patch("config.PIPELINE_YAML", tmp_path):
+            resolved = skill_lint.resolve_all_pipeline()
 
         expected = {"vision", "adr", "blueprint", "epic-context", "judge"}
         assert resolved == expected, f"Expected all-pipeline to resolve to {sorted(expected)}, got {sorted(resolved)}"

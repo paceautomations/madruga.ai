@@ -37,10 +37,10 @@ _NODE_EXPECTED_SECTIONS: dict[str, list[str]] = {
     "domain-model": [r"#+\s*Bounded Context", r"#+\s*Aggregate"],
     "containers": [r"#+\s*Container|specification\s*\{"],
     "context-map": [r"#+\s*Context Map|#+\s*Relationship"],
-    "epic-breakdown": [r"#+\s*Problem|#+\s*Appetite|#+\s*Solution"],
+    "epic-breakdown": [r"#+\s*Problem|#+\s*Solution"],
     "roadmap": [r"#+\s*Roadmap|#+\s*Epic.*Sequenc"],
     # L2 nodes
-    "epic-context": [r"#+\s*Problem|#+\s*Appetite|#+\s*Solution"],
+    "epic-context": [r"#+\s*Problem|#+\s*Solution"],
     "specify": [r"#+\s*User Stor|#+\s*Acceptance"],
     "plan": [r"#+\s*Summary|#+\s*Technical Context|#+\s*Project Structure"],
     "tasks": [r"#+\s*Phase|#+\s*Task|\- \[.\] T\d+"],

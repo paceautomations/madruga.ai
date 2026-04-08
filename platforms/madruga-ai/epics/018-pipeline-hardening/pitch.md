@@ -2,7 +2,6 @@
 id: 018
 title: "Pipeline Hardening & Safety"
 status: shipped
-appetite: 2w
 priority: P1
 depends_on: []
 blocks: [020]
@@ -16,10 +15,6 @@ delivered_at: 2026-04-05
 O pipeline DAG tem falhas de confiabilidade que se acumulam: connection leaks (conn.close() manual em 5+ lugares do dag_executor.py sem try/finally), validacao ad-hoc de inputs (KeyError 3 nodes downstream de um campo faltando no platform.yaml), ausencia de hierarquia de erros (mix de SystemExit, log.error+return, print("[error]")), e um typo em `gate: "humam"` passa silenciosamente como auto — executando nodes sem aprovacao humana. Nao ha graceful shutdown: Ctrl+C durante dispatch deixa subprocess orfao sem checkpoint. Nomes de plataforma e URLs de repo nao sao sanitizados (`ensure_repo.py` roda `git clone` com input do usuario sem validacao).
 
 Esses riscos sao cumulativos: cada nova plataforma e cada novo epic amplifica a probabilidade de falha silenciosa.
-
-## Appetite
-
-**2w** — 7 tasks bem definidas, todas em scripts existentes. Historico mostra appetite 2w = ~1d de execucao real. Nenhuma decisao arquitetural — so aplicar patterns ja provados (context managers, dataclasses, signal handlers).
 
 ## Solution
 

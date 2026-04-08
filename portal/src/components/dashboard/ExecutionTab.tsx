@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useMemo } from 'react';
 import PlatformCards from './PlatformCards';
 import { NODE_LABELS, resolveNodeHref } from '../../lib/constants';
 
@@ -156,12 +156,13 @@ const STATUS_ICON: Record<string, { icon: string; color: string }> = {
 
 function getInitialPlatform(fallback: string): string {
   if (typeof window === 'undefined') return fallback;
-  const params = new URLSearchParams(window.location.search);
-  return params.get('platform') || fallback;
+  // Extract platform from path: /{platform}/control-panel/
+  const match = window.location.pathname.match(/^\/([^/]+)\/control-panel/);
+  return match ? match[1] : fallback;
 }
 
 export default function ExecutionTab({ allPlatforms, initialPlatformId }: ExecutionTabProps) {
-  const [selectedId, setSelectedId] = useState(() => getInitialPlatform(initialPlatformId));
+  const selectedId = getInitialPlatform(initialPlatformId);
 
   const platform = allPlatforms.find((p) => p.id === selectedId);
   const hasData = !!platform;
@@ -190,11 +191,9 @@ export default function ExecutionTab({ allPlatforms, initialPlatformId }: Execut
   }, [platform]);
 
   const handleSelect = (id: string) => {
-    setSelectedId(id);
-    // Update URL without reload
-    const url = new URL(window.location.href);
-    url.searchParams.set('platform', id);
-    window.history.replaceState(null, '', url.toString());
+    // Navigate to the new platform's control panel (full reload syncs sidebar + dropdown)
+    const hash = window.location.hash || '#execution';
+    window.location.href = `/${id}/control-panel/${hash}`;
   };
 
   return (

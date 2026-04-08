@@ -2,7 +2,6 @@
 id: 021
 title: "Pipeline Intelligence"
 status: shipped
-appetite: 2w
 priority: P3
 depends_on: [017]
 blocks: []
@@ -14,10 +13,6 @@ delivered_at: 2026-04-05
 ## Problem
 
 Nao ha visibilidade sobre custos do pipeline: as colunas `tokens_in`, `tokens_out`, `cost_usd` na tabela `pipeline_runs` existem desde o epic 017 mas nunca sao populadas — impossivel saber qual skill consome mais tokens ou quanto custa um epic completo. Nao existe deteccao de output fabricado: se um skill gera um artifact sem fazer nenhum tool call (zero reads, zero writes), o output provavelmente e alucinado — mas o pipeline aceita silenciosamente. O pipeline de 24 skills e heavy demais para bug fixes: corrigir um typo requer o mesmo fluxo de 11 passos L2 que implementar um epic de 6 semanas.
-
-## Appetite
-
-**2w** — 4 tasks. Cost tracking e trivial (colunas ja existem, so popular). Hallucination guard e 1h. Fast lane e o mais complexo (~4h) mas e uma nova skill markdown + ajuste no dag_executor.
 
 ## Solution
 

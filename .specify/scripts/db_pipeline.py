@@ -39,7 +39,9 @@ _EPIC_STATUS_MAP = {
 }
 
 # Fields allowed in complete_run() updates — validated at import time to prevent SQL injection
-_COMPLETE_RUN_FIELDS = frozenset({"tokens_in", "tokens_out", "cost_usd", "duration_ms", "error", "output_lines"})
+_COMPLETE_RUN_FIELDS = frozenset(
+    {"tokens_in", "tokens_out", "cost_usd", "duration_ms", "error", "output_lines", "dispatch_log"}
+)
 _validate_identifiers(*_COMPLETE_RUN_FIELDS)
 
 
@@ -221,13 +223,12 @@ def get_pipeline_nodes(conn: sqlite3.Connection, platform_id: str) -> list[dict]
 def upsert_epic(conn: sqlite3.Connection, platform_id: str, epic_id: str, title: str = "", **kwargs) -> None:
     conn.execute(
         """INSERT INTO epics
-           (platform_id, epic_id, title, status, appetite, priority, branch_name, file_path,
+           (platform_id, epic_id, title, status, priority, branch_name, file_path,
             delivered_at, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(platform_id, epic_id) DO UPDATE SET
              title = excluded.title,
              status = excluded.status,
-             appetite = COALESCE(excluded.appetite, epics.appetite),
              priority = COALESCE(excluded.priority, epics.priority),
              branch_name = COALESCE(excluded.branch_name, epics.branch_name),
              file_path = COALESCE(excluded.file_path, epics.file_path),
@@ -239,7 +240,6 @@ def upsert_epic(conn: sqlite3.Connection, platform_id: str, epic_id: str, title:
             epic_id,
             title,
             kwargs.get("status", "proposed"),
-            kwargs.get("appetite"),
             kwargs.get("priority"),
             kwargs.get("branch_name"),
             kwargs.get("file_path"),
@@ -499,6 +499,161 @@ def get_events(
 
 
 # ══════════════════════════════════════
+# Commits (Epic 023 — Commit Traceability)
+# ══════════════════════════════════════
+
+
+def insert_commit(
+    conn: sqlite3.Connection,
+    sha: str,
+    message: str,
+    author: str,
+    platform_id: str,
+    epic_id: str | None,
+    source: str,
+    committed_at: str,
+    files_json: str,
+) -> None:
+    """Insert a commit record. Uses INSERT OR IGNORE for idempotency on SHA.
+
+    Args:
+        conn: SQLite connection.
+        sha: Git commit SHA (or sha:platform_id composite for multi-platform).
+        message: Commit message.
+        author: Commit author name.
+        platform_id: Platform this commit belongs to.
+        epic_id: Epic slug (e.g. '023-commit-traceability') or None for ad-hoc.
+        source: How the commit was captured ('hook', 'backfill', 'manual', 'reseed').
+        committed_at: ISO 8601 timestamp of the commit.
+        files_json: JSON string of affected file paths (e.g. '["src/main.py"]').
+    """
+    conn.execute(
+        """INSERT OR IGNORE INTO commits
+           (sha, message, author, platform_id, epic_id, source, committed_at, files_json)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (sha, message, author, platform_id, epic_id, source, committed_at, files_json),
+    )
+    # NOTE: caller owns transaction boundary — call conn.commit() after batch inserts
+
+
+def get_commits_by_epic(
+    conn: sqlite3.Connection,
+    epic_id: str,
+    platform_id: str | None = None,
+) -> list[dict]:
+    """Return commits for a given epic, ordered by committed_at DESC.
+
+    Args:
+        conn: SQLite connection.
+        epic_id: Epic slug (e.g. '023-commit-traceability').
+        platform_id: Optional platform filter. If None, returns commits across all platforms.
+
+    Returns:
+        List of dicts with commit data. Empty list if no commits found.
+    """
+    sql = "SELECT * FROM commits WHERE epic_id=?"
+    params: list = [epic_id]
+    if platform_id is not None:
+        sql += " AND platform_id=?"
+        params.append(platform_id)
+    sql += " ORDER BY committed_at DESC"
+    rows = conn.execute(sql, params).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_commits_by_platform(
+    conn: sqlite3.Connection,
+    platform_id: str,
+    limit: int = 100,
+    offset: int = 0,
+) -> list[dict]:
+    """Return commits for a given platform, paginated, ordered by committed_at DESC.
+
+    Args:
+        conn: SQLite connection.
+        platform_id: Platform identifier (e.g. 'madruga-ai').
+        limit: Maximum number of rows to return (default 100).
+        offset: Number of rows to skip (default 0).
+
+    Returns:
+        List of dicts with commit data. Empty list if no commits found.
+    """
+    rows = conn.execute(
+        "SELECT * FROM commits WHERE platform_id=? ORDER BY committed_at DESC LIMIT ? OFFSET ?",
+        (platform_id, limit, offset),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_adhoc_commits(
+    conn: sqlite3.Connection,
+    platform_id: str | None = None,
+    limit: int = 100,
+) -> list[dict]:
+    """Return commits with no epic association (epic_id IS NULL), ordered by committed_at DESC.
+
+    Args:
+        conn: SQLite connection.
+        platform_id: Optional platform filter. If None, returns ad-hoc commits across all platforms.
+        limit: Maximum number of rows to return (default 100).
+
+    Returns:
+        List of dicts with commit data. Empty list if no ad-hoc commits found.
+    """
+    sql = "SELECT * FROM commits WHERE epic_id IS NULL"
+    params: list = []
+    if platform_id is not None:
+        sql += " AND platform_id=?"
+        params.append(platform_id)
+    sql += " ORDER BY committed_at DESC LIMIT ?"
+    params.append(limit)
+    rows = conn.execute(sql, params).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_commit_stats(
+    conn: sqlite3.Connection,
+    platform_id: str | None = None,
+) -> dict:
+    """Return aggregate commit statistics for the portal.
+
+    Args:
+        conn: SQLite connection.
+        platform_id: Optional platform filter. If None, stats span all platforms.
+
+    Returns:
+        Dict with keys: total_commits, commits_per_epic (dict of epic_id→count),
+        adhoc_count, adhoc_percentage (float 0-100, rounded to 1 decimal).
+    """
+    where = ""
+    params: list = []
+    if platform_id is not None:
+        where = " WHERE platform_id=?"
+        params = [platform_id]
+
+    total = conn.execute(f"SELECT COUNT(*) FROM commits{where}", params).fetchone()[0]
+
+    adhoc_sql = f"SELECT COUNT(*) FROM commits{where}{' AND' if where else ' WHERE'} epic_id IS NULL"
+    adhoc_count = conn.execute(adhoc_sql, params).fetchone()[0]
+
+    epic_rows = conn.execute(
+        f"SELECT epic_id, COUNT(*) AS cnt FROM commits{where}"
+        f"{' AND' if where else ' WHERE'} epic_id IS NOT NULL"
+        " GROUP BY epic_id ORDER BY epic_id",
+        params,
+    ).fetchall()
+    commits_per_epic = {row["epic_id"]: row["cnt"] for row in epic_rows}
+
+    return {
+        "total_commits": total,
+        "commits_per_epic": commits_per_epic,
+        "adhoc_count": adhoc_count,
+        "adhoc_percentage": round(adhoc_count / total * 100, 1) if total > 0 else 0.0,
+    }
+
+
+# ══════════════════════════════════════
 # Staleness & Status
 # ══════════════════════════════════════
 
@@ -506,7 +661,7 @@ def get_events(
 def get_stale_nodes(conn: sqlite3.Connection, platform_id: str, dag_edges: dict[str, list[str]]) -> list[dict]:
     """Return nodes whose dependencies completed after them.
 
-    dag_edges: {node_id: [dep_node_id, ...]} parsed from platform.yaml.
+    dag_edges: {node_id: [dep_node_id, ...]} parsed from pipeline.yaml.
     """
     nodes = {n["node_id"]: n for n in get_pipeline_nodes(conn, platform_id)}
     stale = []
@@ -742,7 +897,9 @@ def seed_from_filesystem(conn: sqlite3.Connection, platform_id: str, platform_di
         )
 
         nodes_seeded = 0
-        pipeline = manifest.get("pipeline", {})
+        from config import load_pipeline
+
+        pipeline = load_pipeline()
 
         # Load existing node timestamps so reseed never overwrites them
         existing_nodes = {n["node_id"]: n for n in get_pipeline_nodes(txn, platform_id)}
@@ -874,10 +1031,7 @@ def seed_from_filesystem(conn: sqlite3.Connection, platform_id: str, platform_di
                     if existing_row and existing_row[0] == "shipped" and fs_status == "proposed":
                         fs_status = "shipped"
 
-                    # Appetite and priority from frontmatter
-                    appetite = frontmatter.get("appetite")
-                    if appetite is not None:
-                        appetite = str(appetite).strip('"').strip("'")
+                    # Priority and delivery from frontmatter
                     priority = frontmatter.get("priority")
                     delivered_at = frontmatter.get("delivered_at")
                     if delivered_at is not None:
@@ -890,7 +1044,6 @@ def seed_from_filesystem(conn: sqlite3.Connection, platform_id: str, platform_di
                         title=title_line or epic_id,
                         file_path=f"epics/{epic_id}/pitch.md",
                         status=fs_status,
-                        appetite=appetite,
                         priority=priority,
                         delivered_at=delivered_at,
                     )

@@ -2,7 +2,7 @@
 
 # Platform pipeline prerequisites checker
 #
-# Validates skill dependencies by reading platform.yaml pipeline nodes,
+# Validates skill dependencies by reading .specify/pipeline.yaml nodes,
 # checking file existence, and returning JSON/text status.
 #
 # Usage: ./check-platform-prerequisites.sh [OPTIONS]
@@ -145,14 +145,14 @@ skill_id = sys.argv[5] if len(sys.argv) > 5 else ''
 status_mode = sys.argv[6] == 'true'
 use_db = sys.argv[7] == 'true'
 
-# Load epic_cycle from platform.yaml
-with open(os.path.join(platform_dir, 'platform.yaml')) as f:
-    manifest = yaml.safe_load(f)
+sys.path.insert(0, os.path.join(platform_dir, '..', '..', '.specify', 'scripts'))
+from config import load_pipeline
+_pipeline = load_pipeline()
 
-epic_cycle = manifest.get('pipeline', {}).get('epic_cycle', {})
+epic_cycle = _pipeline.get('epic_cycle', {})
 nodes = epic_cycle.get('nodes', [])
 if not nodes:
-    print(json.dumps({'error': 'No epic_cycle section in platform.yaml'}))
+    print(json.dumps({'error': 'No epic_cycle section in pipeline.yaml'}))
     sys.exit(1)
 
 epic_dir = os.path.join(platform_dir, 'epics', epic_slug)
@@ -282,18 +282,15 @@ if [ "$USE_DB" = true ]; then
 import sys, json
 sys.path.insert(0, sys.argv[1] + '/.specify/scripts')
 from db import get_conn, get_pipeline_nodes, get_stale_nodes, get_platform_status, get_epics
-import yaml
+from config import load_pipeline
 
 conn = get_conn()
 status = get_platform_status(conn, sys.argv[2])
 nodes = get_pipeline_nodes(conn, sys.argv[2])
 epics = get_epics(conn, sys.argv[2])
 
-# Parse DAG edges for staleness
-with open(sys.argv[3]) as f:
-    manifest = yaml.safe_load(f)
 dag_edges = {}
-for n in manifest.get('pipeline', {}).get('nodes', []):
+for n in load_pipeline().get('nodes', []):
     dag_edges[n['id']] = n.get('depends', [])
 
 stale = get_stale_nodes(conn, sys.argv[2], dag_edges)
@@ -313,7 +310,7 @@ result = {
 }
 print(json.dumps(result, indent=2))
 conn.close()
-" "$REPO_ROOT" "$PLATFORM" "$PLATFORM_YAML" 2>&1)
+" "$REPO_ROOT" "$PLATFORM" 2>&1)
         echo "$DB_RESULT"
         exit 0
     fi
@@ -329,31 +326,23 @@ if ! command -v python3 >/dev/null 2>&1; then
     exit 1
 fi
 
-# Parse pipeline nodes from platform.yaml using python3
 PIPELINE_JSON=$(python3 -c "
-import yaml, json, sys
+import json, sys, os
 
-with open(sys.argv[1]) as f:
-    data = yaml.safe_load(f)
+sys.path.insert(0, os.path.join(sys.argv[1], '.specify', 'scripts'))
+from config import load_pipeline
 
-pipeline = data.get('pipeline')
-if not pipeline:
-    json.dump({'error': 'No pipeline section in platform.yaml', 'suggestion': 'Run copier update or add pipeline: section manually'}, sys.stdout)
-    sys.exit(0)
-
+pipeline = load_pipeline()
 nodes = pipeline.get('nodes', [])
 json.dump(nodes, sys.stdout)
-" "$PLATFORM_YAML" 2>/dev/null)
+" "$REPO_ROOT" 2>/dev/null)
 
-# Check if pipeline section exists
-if echo "$PIPELINE_JSON" | python3 -c "import json,sys; d=json.load(sys.stdin); sys.exit(0 if 'error' not in d else 1)" 2>/dev/null; then
-    : # No error
-else
+# Check if pipeline loaded successfully
+if [ -z "$PIPELINE_JSON" ] || [ "$PIPELINE_JSON" = "null" ]; then
     if $JSON_MODE; then
-        echo "$PIPELINE_JSON"
+        echo '{"error": "Failed to load pipeline.yaml"}'
     else
-        echo "ERROR: No pipeline section in platform.yaml" >&2
-        echo "Suggestion: Run copier update or add pipeline: section manually" >&2
+        echo "ERROR: Failed to load .specify/pipeline.yaml" >&2
     fi
     exit 1
 fi

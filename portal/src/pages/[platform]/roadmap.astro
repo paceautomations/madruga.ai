@@ -47,7 +47,6 @@ const doneEpics = epics.filter((e) => e.status === 'done');
               <th>#</th>
               <th>Epic</th>
               <th>Status</th>
-              <th>Appetite</th>
               <th>Contexts</th>
             </tr>
           </thead>
@@ -61,7 +60,6 @@ const doneEpics = epics.filter((e) => e.status === 'done');
                   </a>
                 </td>
                 <td>{e.status ?? '—'}</td>
-                <td>{e.appetite ?? '—'}</td>
                 <td>{(e.arch?.contexts ?? []).join(', ') || '—'}</td>
               </tr>
             ))}

@@ -70,10 +70,7 @@ export default function PlatformCards({ platforms, selected, onSelect }: Platfor
               if (onSelect) {
                 onSelect(p.id);
               } else {
-                const url = new URL(window.location.href);
-                url.searchParams.set('platform', p.id);
-                url.hash = 'execution';
-                window.location.href = url.toString();
+                window.location.href = `/${p.id}/control-panel/#execution`;
               }
             }}
             style={{

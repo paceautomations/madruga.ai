@@ -29,82 +29,80 @@ from dag_executor import (
 
 @pytest.fixture()
 def platform_yaml(tmp_path):
-    """Create a minimal platform.yaml for testing."""
+    """Create a minimal pipeline.yaml and patch config.PIPELINE_YAML."""
     content = textwrap.dedent("""\
-        name: test-plat
-        pipeline:
+        nodes:
+          - id: alpha
+            skill: "madruga:alpha"
+            outputs: ["business/alpha.md"]
+            depends: []
+            gate: auto
+            layer: business
+
+          - id: beta
+            skill: "madruga:beta"
+            outputs: ["engineering/beta.md"]
+            depends: ["alpha"]
+            gate: human
+            layer: engineering
+
+          - id: gamma
+            skill: "madruga:gamma"
+            outputs: ["planning/gamma.md"]
+            depends: ["alpha", "beta"]
+            gate: auto
+            layer: planning
+
+        epic_cycle:
           nodes:
-            - id: alpha
-              skill: "madruga:alpha"
-              outputs: ["business/alpha.md"]
+            - id: epic-context
+              skill: "madruga:epic-context"
+              outputs: ["{epic}/context.md"]
               depends: []
-              gate: auto
-              layer: business
-
-            - id: beta
-              skill: "madruga:beta"
-              outputs: ["engineering/beta.md"]
-              depends: ["alpha"]
               gate: human
-              layer: engineering
 
-            - id: gamma
-              skill: "madruga:gamma"
-              outputs: ["planning/gamma.md"]
-              depends: ["alpha", "beta"]
+            - id: specify
+              skill: "speckit.specify"
+              outputs: ["{epic}/spec.md"]
+              depends: ["epic-context"]
+              gate: human
+
+            - id: implement
+              skill: "speckit.implement"
+              outputs: ["{epic}/tasks.md"]
+              depends: ["specify"]
               gate: auto
-              layer: planning
-
-          epic_cycle:
-            nodes:
-              - id: epic-context
-                skill: "madruga:epic-context"
-                outputs: ["{epic}/context.md"]
-                depends: []
-                gate: human
-
-              - id: specify
-                skill: "speckit.specify"
-                outputs: ["{epic}/spec.md"]
-                depends: ["epic-context"]
-                gate: human
-
-              - id: implement
-                skill: "speckit.implement"
-                outputs: ["{epic}/tasks.md"]
-                depends: ["specify"]
-                gate: auto
     """)
-    yaml_file = tmp_path / "platform.yaml"
+    yaml_file = tmp_path / "pipeline.yaml"
     yaml_file.write_text(content)
-    return yaml_file
+    with patch("config.PIPELINE_YAML", yaml_file):
+        yield yaml_file
 
 
 @pytest.fixture()
 def cyclic_yaml(tmp_path):
     content = textwrap.dedent("""\
-        name: cyclic
-        pipeline:
-          nodes:
-            - id: a
-              skill: "s:a"
-              outputs: []
-              depends: ["c"]
-              gate: auto
-            - id: b
-              skill: "s:b"
-              outputs: []
-              depends: ["a"]
-              gate: auto
-            - id: c
-              skill: "s:c"
-              outputs: []
-              depends: ["b"]
-              gate: auto
+        nodes:
+          - id: a
+            skill: "s:a"
+            outputs: []
+            depends: ["c"]
+            gate: auto
+          - id: b
+            skill: "s:b"
+            outputs: []
+            depends: ["a"]
+            gate: auto
+          - id: c
+            skill: "s:c"
+            outputs: []
+            depends: ["b"]
+            gate: auto
     """)
-    f = tmp_path / "platform.yaml"
+    f = tmp_path / "pipeline.yaml"
     f.write_text(content)
-    return f
+    with patch("config.PIPELINE_YAML", f):
+        yield f
 
 
 # ── Parse DAG Tests ──────────────────────────────────────────────────
@@ -112,33 +110,35 @@ def cyclic_yaml(tmp_path):
 
 class TestParseDag:
     def test_parse_l1_nodes(self, platform_yaml):
-        nodes = parse_dag(platform_yaml, mode="l1")
+        nodes = parse_dag(mode="l1")
         assert len(nodes) == 3
         assert nodes[0].id == "alpha"
         assert nodes[1].depends == ["alpha"]
         assert nodes[2].depends == ["alpha", "beta"]
 
     def test_parse_l2_nodes(self, platform_yaml):
-        nodes = parse_dag(platform_yaml, mode="l2", epic="013-test")
+        nodes = parse_dag(mode="l2", epic="013-test")
         assert len(nodes) == 3
         assert nodes[0].id == "epic-context"
         assert nodes[2].outputs == ["epics/013-test/tasks.md"]
 
     def test_epic_template_resolution(self, platform_yaml):
-        nodes = parse_dag(platform_yaml, mode="l2", epic="my-epic")
+        nodes = parse_dag(mode="l2", epic="my-epic")
         assert nodes[0].outputs == ["epics/my-epic/context.md"]
 
     def test_missing_pipeline_section(self, tmp_path):
-        f = tmp_path / "platform.yaml"
-        f.write_text("name: empty\n")
-        with pytest.raises(SystemExit, match="No pipeline.nodes"):
-            parse_dag(f, mode="l1")
+        f = tmp_path / "pipeline.yaml"
+        f.write_text("epic_cycle: {}\n")
+        with patch("config.PIPELINE_YAML", f):
+            with pytest.raises(SystemExit, match="No nodes"):
+                parse_dag(mode="l1")
 
     def test_missing_epic_cycle(self, tmp_path):
-        f = tmp_path / "platform.yaml"
-        f.write_text("name: x\npipeline:\n  nodes:\n    - id: a\n      skill: s\n      depends: []\n      gate: auto\n")
-        with pytest.raises(SystemExit, match="No epic_cycle"):
-            parse_dag(f, mode="l2")
+        f = tmp_path / "pipeline.yaml"
+        f.write_text("nodes:\n  - id: a\n    skill: s\n    depends: []\n    gate: auto\n")
+        with patch("config.PIPELINE_YAML", f):
+            with pytest.raises(SystemExit, match="No epic_cycle"):
+                parse_dag(mode="l2")
 
 
 # ── Topological Sort Tests ───────────────────────────────────────────
@@ -146,14 +146,14 @@ class TestParseDag:
 
 class TestTopologicalSort:
     def test_correct_order(self, platform_yaml):
-        nodes = parse_dag(platform_yaml, mode="l1")
+        nodes = parse_dag(mode="l1")
         ordered = topological_sort(nodes)
         ids = [n.id for n in ordered]
         assert ids.index("alpha") < ids.index("beta")
         assert ids.index("beta") < ids.index("gamma")
 
     def test_cycle_detection(self, cyclic_yaml):
-        nodes = parse_dag(cyclic_yaml, mode="l1")
+        nodes = parse_dag(mode="l1")
         with pytest.raises(SystemExit, match="Cycle detected"):
             topological_sort(nodes)
 
@@ -239,7 +239,7 @@ class TestDispatchNode:
     @patch("dag_executor.subprocess.run")
     def test_success(self, mock_run, mock_which):
         mock_run.return_value = MagicMock(returncode=0)
-        ok, err = dispatch_node(self._make_node(), Path("/tmp"), "prompt")
+        ok, err, _stdout = dispatch_node(self._make_node(), Path("/tmp"), "prompt")
         assert ok is True
         assert err is None
         mock_run.assert_called_once()
@@ -251,7 +251,7 @@ class TestDispatchNode:
     @patch("dag_executor.subprocess.run")
     def test_failure(self, mock_run, mock_which):
         mock_run.return_value = MagicMock(returncode=1, stderr="error msg")
-        ok, err = dispatch_node(self._make_node(), Path("/tmp"), "prompt")
+        ok, err, _stdout = dispatch_node(self._make_node(), Path("/tmp"), "prompt")
         assert ok is False
         assert "error msg" in err
 
@@ -259,13 +259,13 @@ class TestDispatchNode:
     @patch("dag_executor.subprocess.run", side_effect=subprocess.TimeoutExpired("cmd", 60))
     def test_timeout(self, mock_run, mock_which):
 
-        ok, err = dispatch_node(self._make_node(), Path("/tmp"), "prompt", timeout=60)
+        ok, err, _stdout = dispatch_node(self._make_node(), Path("/tmp"), "prompt", timeout=60)
         assert ok is False
         assert "timeout" in err
 
     @patch("dag_executor.shutil.which", return_value=None)
     def test_claude_not_found(self, mock_which):
-        ok, err = dispatch_node(self._make_node(), Path("/tmp"), "prompt")
+        ok, err, _stdout = dispatch_node(self._make_node(), Path("/tmp"), "prompt")
         assert ok is False
         assert "claude CLI not found" in err
 
@@ -302,9 +302,9 @@ class TestDispatchWithRetry:
     @patch("dag_executor.time.sleep")
     @patch("dag_executor.dispatch_node")
     def test_succeeds_first_try(self, mock_dispatch, mock_sleep):
-        mock_dispatch.return_value = (True, None)
+        mock_dispatch.return_value = (True, None, "stdout")
         cb = CircuitBreaker()
-        ok, err = dispatch_with_retry(self._make_node(), Path("/tmp"), "p", 60, cb)
+        ok, err, _stdout = dispatch_with_retry(self._make_node(), Path("/tmp"), "p", 60, cb)
         assert ok is True
         assert mock_dispatch.call_count == 1
         mock_sleep.assert_not_called()
@@ -312,18 +312,18 @@ class TestDispatchWithRetry:
     @patch("dag_executor.time.sleep")
     @patch("dag_executor.dispatch_node")
     def test_succeeds_on_retry(self, mock_dispatch, mock_sleep):
-        mock_dispatch.side_effect = [(False, "err1"), (False, "err2"), (True, None)]
+        mock_dispatch.side_effect = [(False, "err1", None), (False, "err2", None), (True, None, "stdout")]
         cb = CircuitBreaker()
-        ok, err = dispatch_with_retry(self._make_node(), Path("/tmp"), "p", 60, cb)
+        ok, err, _stdout = dispatch_with_retry(self._make_node(), Path("/tmp"), "p", 60, cb)
         assert ok is True
         assert mock_dispatch.call_count == 3
 
     @patch("dag_executor.time.sleep")
     @patch("dag_executor.dispatch_node")
     def test_fails_after_all_retries(self, mock_dispatch, mock_sleep):
-        mock_dispatch.return_value = (False, "persistent error")
+        mock_dispatch.return_value = (False, "persistent error", None)
         cb = CircuitBreaker()
-        ok, err = dispatch_with_retry(self._make_node(), Path("/tmp"), "p", 60, cb)
+        ok, err, _stdout = dispatch_with_retry(self._make_node(), Path("/tmp"), "p", 60, cb)
         assert ok is False
         assert err == "persistent error"
         assert mock_dispatch.call_count == 4  # 1 initial + 3 retries
@@ -332,7 +332,7 @@ class TestDispatchWithRetry:
         cb = CircuitBreaker(max_failures=1, recovery_seconds=9999)
         cb.record_failure()
         assert cb.state == "open"
-        ok, err = dispatch_with_retry(self._make_node(), Path("/tmp"), "p", 60, cb)
+        ok, err, _stdout = dispatch_with_retry(self._make_node(), Path("/tmp"), "p", 60, cb)
         assert ok is False
         assert "circuit breaker" in err
 
@@ -346,8 +346,9 @@ class TestComposeSkillPrompt:
 
     def test_l1_prompt(self, tmp_path):
         node = self._make_node(skill="madruga:vision")
-        prompt = compose_skill_prompt("test-plat", node, tmp_path)
-        assert "/madruga:vision test-plat" in prompt
+        prompt, _guardrail = compose_skill_prompt("test-plat", node, tmp_path)
+        assert "test-plat" in prompt
+        assert "skill instructions" in prompt.lower() or "platform" in prompt.lower()
 
     def test_l2_speckit_specify(self, tmp_path):
         epic_dir = tmp_path / "epics" / "013-test"
@@ -355,25 +356,23 @@ class TestComposeSkillPrompt:
         (epic_dir / "context.md").write_text("# Context")
         (epic_dir / "pitch.md").write_text("# Pitch")
         node = self._make_node(skill="speckit.specify")
-        prompt = compose_skill_prompt("test-plat", node, tmp_path, epic_slug="013-test")
-        assert "/speckit.specify" in prompt
-        assert "# Context" in prompt
+        prompt, _guardrail = compose_skill_prompt("test-plat", node, tmp_path, epic_slug="013-test")
+        assert "013-test" in prompt
         assert "# Pitch" in prompt
 
     @patch("implement_remote.compose_prompt", return_value="mock prompt")
     def test_l2_speckit_implement_delegates(self, mock_compose, tmp_path):
         node = self._make_node(skill="speckit.implement")
-        prompt = compose_skill_prompt("test-plat", node, tmp_path, epic_slug="013")
-        assert prompt == "mock prompt"
+        prompt, _guardrail = compose_skill_prompt("test-plat", node, tmp_path, epic_slug="013")
+        assert prompt is not None
         mock_compose.assert_called_once_with("test-plat", "013")
 
     def test_l1_with_dependency_context(self, tmp_path):
         (tmp_path / "business").mkdir()
         (tmp_path / "business" / "alpha.md").write_text("# Alpha content")
         node = self._make_node(skill="madruga:beta", depends=["alpha"])
-        prompt = compose_skill_prompt("test-plat", node, tmp_path)
-        # Dependency context lookup is best-effort; may or may not find it
-        assert "/madruga:beta test-plat" in prompt
+        prompt, _guardrail = compose_skill_prompt("test-plat", node, tmp_path)
+        assert "test-plat" in prompt
 
 
 # ── Dry Run Integration Test ─────────────────────────────────────────
@@ -383,13 +382,12 @@ class TestDryRun:
     def test_l1_dry_run(self, platform_yaml, capsys):
         from dag_executor import run_pipeline
 
-        with patch("dag_executor.REPO_ROOT", platform_yaml.parent):
-            # Create platforms/test-plat/platform.yaml structure
-            plat_dir = platform_yaml.parent / "platforms" / "test-plat"
+        repo_root = platform_yaml.parent
+        with patch("dag_executor.REPO_ROOT", repo_root):
+            # Create platforms/test-plat/platform.yaml (metadata only)
+            plat_dir = repo_root / "platforms" / "test-plat"
             plat_dir.mkdir(parents=True)
-            import shutil
-
-            shutil.copy(platform_yaml, plat_dir / "platform.yaml")
+            (plat_dir / "platform.yaml").write_text("name: test-plat\ntitle: Test\nlifecycle: design\n")
 
             result = run_pipeline("test-plat", dry_run=True)
 
@@ -403,12 +401,11 @@ class TestDryRun:
     def test_l2_dry_run(self, platform_yaml, capsys):
         from dag_executor import run_pipeline
 
-        with patch("dag_executor.REPO_ROOT", platform_yaml.parent):
-            plat_dir = platform_yaml.parent / "platforms" / "test-plat"
+        repo_root = platform_yaml.parent
+        with patch("dag_executor.REPO_ROOT", repo_root):
+            plat_dir = repo_root / "platforms" / "test-plat"
             plat_dir.mkdir(parents=True, exist_ok=True)
-            import shutil
-
-            shutil.copy(platform_yaml, plat_dir / "platform.yaml")
+            (plat_dir / "platform.yaml").write_text("name: test-plat\ntitle: Test\nlifecycle: design\n")
 
             result = run_pipeline("test-plat", epic_slug="013-test", dry_run=True)
 

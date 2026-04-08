@@ -23,7 +23,7 @@ Every milestone must have an associated epic with testable acceptance criteria. 
 - Create a milestone without an associated epic
 - Sequence by preference instead of dependency/risk
 - Ignore inter-epic dependencies
-- Create a timeline without considering epic appetites
+- Create a timeline without considering epic dependencies
 
 > **Contract**: Follow `.claude/knowledge/pipeline-contract-base.md` + `.claude/knowledge/pipeline-contract-planning.md`.
 
@@ -45,7 +45,7 @@ Save to `platforms/<name>/planning/roadmap.md`.
 ### 1. Collect Context + Ask Questions
 
 **Required reading:**
-- `epics/*/pitch.md` — all epics with appetite and dependencies
+- `epics/*/pitch.md` — all epics with dependencies
 - `engineering/blueprint.md` — NFRs, deploy topology, shared infrastructure
 - `business/vision.md` — business priorities
 
@@ -76,9 +76,8 @@ updated: YYYY-MM-DD
 
 ## MVP
 
-**MVP Epics:** [list with total appetite]
+**MVP Epics:** [list]
 **MVP Criterion:** [what defines "minimum viable product"]
-**Total MVP Appetite:** [N weeks]
 
 ---
 
@@ -109,10 +108,10 @@ gantt
 
 ## Epic Table
 
-| Order | Epic | Appetite | Deps | Risk | Milestone |
-|-------|------|----------|------|------|-----------|
-| 1 | NNN: [title] | Xw | — | [high/medium/low] | MVP |
-| 2 | ... | ... | NNN | ... | ... |
+| Order | Epic | Deps | Risk | Milestone |
+|-------|------|------|------|-----------|
+| 1 | NNN: [title] | — | [high/medium/low] | MVP |
+| 2 | ... | NNN | ... | ... |
 
 ---
 
@@ -170,7 +169,7 @@ When updating the roadmap:
 | 2 | Are planned epics in the roadmap table (not as files)? | Move to table |
 | 3 | Are dependencies acyclic? | Resolve |
 | 4 | Is MVP clearly defined? | Define it |
-| 5 | Is the timeline realistic (sum of appetites)? | Adjust |
+| 5 | Is the timeline realistic? | Adjust |
 | 6 | Do milestones have testable criteria? | Make measurable |
 | 7 | Does the Mermaid Gantt render? | Fix |
 | 8 | "Objetivos e Resultados" section present? | Add outcomes |

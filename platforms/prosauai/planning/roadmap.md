@@ -21,7 +21,7 @@ updated: 2026-04-07
 
 **MVP Epics:** 001-channel-pipeline + 002-conversation-core
 **MVP Criterion:** Agente recebe mensagem WhatsApp, responde com IA (nao echo), persiste em BD.
-**Total MVP Appetite:** ~3 semanas (1w + 2w)
+**Total MVP Estimate:** ~3 semanas (1w + 2w)
 
 ---
 
@@ -50,16 +50,16 @@ gantt
 
 > **Convencao:** apenas o epic 001 tem pitch file criado. Demais sao sugestoes no roadmap — arquivos serao criados sob demanda quando o epic for iniciado via `/epic-context`.
 
-| Ordem | Epic | Appetite | Deps | Risco | Milestone | Status |
-|-------|------|----------|------|-------|-----------|--------|
-| 1 | 001: Channel Pipeline | 1w | — | baixo | MVP | **proposed** (pitch criado) |
-| 2 | 002: Conversation Core | 2w | 001 | medio | MVP | sugerido (sem arquivo) |
-| 3 | 003: Group Routing | 1w | 002 | baixo | Post-MVP | sugerido |
-| 4 | 004: Agent Tools | 2w | 002 | medio | Post-MVP | sugerido |
-| 5 | 005: Handoff Engine | 2w | 002 | medio | Post-MVP | sugerido |
-| 6 | 006: Trigger Engine | 1w | 005 | baixo | Post-MVP | sugerido |
-| 7 | 007: Admin Dashboard | 2w | 004 | medio | Admin | sugerido |
-| 8 | 008: Admin Handoff Inbox | 1w | 005 | baixo | Admin | sugerido |
+| Ordem | Epic | Deps | Risco | Milestone | Status |
+|-------|------|------|-------|-----------|--------|
+| 1 | 001: Channel Pipeline | — | baixo | MVP | **proposed** (pitch criado) |
+| 2 | 002: Conversation Core | 001 | medio | MVP | sugerido (sem arquivo) |
+| 3 | 003: Group Routing | 002 | baixo | Post-MVP | sugerido |
+| 4 | 004: Agent Tools | 002 | medio | Post-MVP | sugerido |
+| 5 | 005: Handoff Engine | 002 | medio | Post-MVP | sugerido |
+| 6 | 006: Trigger Engine | 005 | baixo | Post-MVP | sugerido |
+| 7 | 007: Admin Dashboard | 004 | medio | Admin | sugerido |
+| 8 | 008: Admin Handoff Inbox | 005 | baixo | Admin | sugerido |
 
 ### Epics Futuros (criados conforme necessidade)
 

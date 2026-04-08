@@ -1,0 +1,192 @@
+# Shared pipeline definition — single source of truth for L1, L2, and quick cycle.
+# All platforms use this file. platform.yaml contains only metadata.
+
+nodes:
+  - id: platform-new
+    skill: "madruga:platform-new"
+    outputs: ["platform.yaml"]
+    depends: []
+    layer: business
+    gate: human
+
+  - id: vision
+    skill: "madruga:vision"
+    outputs: ["business/vision.md"]
+    depends: ["platform-new"]
+    layer: business
+    gate: human
+
+  - id: solution-overview
+    skill: "madruga:solution-overview"
+    outputs: ["business/solution-overview.md"]
+    depends: ["vision"]
+    layer: business
+    gate: human
+
+  - id: business-process
+    skill: "madruga:business-process"
+    outputs: ["business/process.md"]
+    depends: ["solution-overview"]
+    layer: business
+    gate: human
+
+  - id: tech-research
+    skill: "madruga:tech-research"
+    outputs: ["research/tech-alternatives.md"]
+    depends: ["business-process"]
+    layer: research
+    gate: 1-way-door
+
+  - id: codebase-map
+    skill: "madruga:codebase-map"
+    outputs: ["research/codebase-context.md"]
+    depends: ["vision"]
+    layer: research
+    gate: auto
+    optional: true
+
+  - id: adr
+    skill: "madruga:adr"
+    output_pattern: "decisions/ADR-*.md"
+    depends: ["tech-research"]
+    layer: engineering
+    gate: 1-way-door
+
+  - id: blueprint
+    skill: "madruga:blueprint"
+    outputs: ["engineering/blueprint.md"]
+    depends: ["adr"]
+    layer: engineering
+    gate: human
+
+  - id: domain-model
+    skill: "madruga:domain-model"
+    outputs: ["engineering/domain-model.md"]
+    depends: ["blueprint", "business-process"]
+    layer: engineering
+    gate: human
+
+  - id: containers
+    skill: "madruga:containers"
+    outputs: ["engineering/containers.md"]
+    depends: ["domain-model", "blueprint"]
+    layer: engineering
+    gate: human
+
+  - id: context-map
+    skill: "madruga:context-map"
+    outputs: ["engineering/context-map.md"]
+    depends: ["domain-model", "containers"]
+    layer: engineering
+    gate: human
+
+  - id: epic-breakdown
+    skill: "madruga:epic-breakdown"
+    output_pattern: "epics/*/pitch.md"
+    depends: ["domain-model", "containers", "context-map"]
+    layer: planning
+    gate: 1-way-door
+
+  - id: roadmap
+    skill: "madruga:roadmap"
+    outputs: ["planning/roadmap.md"]
+    depends: ["epic-breakdown"]
+    layer: planning
+    gate: human
+
+epic_cycle:
+  nodes:
+    - id: epic-context
+      skill: "madruga:epic-context"
+      outputs: ["{epic}/pitch.md"]
+      depends: []
+      gate: human
+
+    - id: specify
+      skill: "speckit.specify"
+      outputs: ["{epic}/spec.md"]
+      depends: ["epic-context"]
+      gate: auto
+
+    - id: clarify
+      skill: "speckit.clarify"
+      outputs: ["{epic}/spec.md"]
+      depends: ["specify"]
+      gate: auto
+
+    - id: plan
+      skill: "speckit.plan"
+      outputs: ["{epic}/plan.md"]
+      depends: ["specify"]
+      gate: auto
+
+    - id: tasks
+      skill: "speckit.tasks"
+      outputs: ["{epic}/tasks.md"]
+      depends: ["plan"]
+      gate: auto
+
+    - id: analyze
+      skill: "speckit.analyze"
+      outputs: ["{epic}/analyze-report.md"]
+      depends: ["tasks"]
+      gate: auto
+
+    - id: implement
+      skill: "speckit.implement"
+      outputs: ["{epic}/implement-report.md"]
+      depends: ["analyze"]
+      gate: auto
+
+    - id: analyze-post
+      skill: "speckit.analyze"
+      outputs: ["{epic}/analyze-post-report.md"]
+      depends: ["implement"]
+      gate: auto
+
+    - id: judge
+      skill: "madruga:judge"
+      outputs: ["{epic}/judge-report.md"]
+      depends: ["analyze-post"]
+      gate: auto
+
+    - id: qa
+      skill: "madruga:qa"
+      outputs: ["{epic}/qa-report.md"]
+      depends: ["judge"]
+      gate: auto
+
+    - id: reconcile
+      skill: "madruga:reconcile"
+      outputs: ["{epic}/reconcile-report.md"]
+      depends: ["qa"]
+      gate: auto
+
+    - id: roadmap-reassess
+      skill: "madruga:roadmap"
+      outputs: ["{epic}/roadmap-reassess-report.md"]
+      depends: ["reconcile"]
+      gate: auto
+
+quick_cycle:
+  nodes:
+    - id: specify
+      skill: "speckit.specify"
+      outputs: ["{epic}/spec.md"]
+      depends: []
+      gate: human
+      layer: business
+
+    - id: implement
+      skill: "speckit.implement"
+      outputs: ["{epic}/implement-context.md"]
+      depends: ["specify"]
+      gate: auto
+      layer: engineering
+
+    - id: judge
+      skill: "madruga:judge"
+      outputs: ["{epic}/judge-report.md"]
+      depends: ["implement"]
+      gate: auto-escalate
+      layer: engineering
