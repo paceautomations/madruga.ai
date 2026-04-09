@@ -35,9 +35,8 @@ ci: ## Run local CI checks (lint + tests)
 status: ## Show pipeline status for all platforms
 	python3 $(PLATFORM) status --all
 
-status-json: ## Export pipeline status as JSON (pipeline + commits)
+status-json: ## Export pipeline status as JSON
 	python3 $(PLATFORM) status --all --json --output portal/src/data/pipeline-status.json
-	python3 -c "import sys; sys.path.insert(0,'.specify/scripts'); from post_save import export_commits_json; export_commits_json()"
 
 seed: ## Re-seed all platforms from filesystem
 	python3 .specify/scripts/post_save.py --reseed-all

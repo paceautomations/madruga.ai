@@ -716,174 +716,136 @@ def test_is_valid_output_rejects_md_without_heading(tmp_path):
 
 
 # ══════════════════════════════════════
-# export_commits_json (T027)
+# get_commits_paginated (T027)
 # ══════════════════════════════════════
 
 
-def test_export_commits_json_empty_db(setup_platform):
-    """export_commits_json produces valid JSON with empty commits list when DB has no commits."""
-    import json as _json
+def _seed_commits(db_path):
+    """Insert 5 test commits (3 epic, 2 ad-hoc) across 2 platforms. Returns the connection."""
+    from db_pipeline import insert_commit
 
-    tmp_path, db_path = setup_platform
-    import post_save
-    import db_core as db_mod
+    conn = get_conn(db_path)
+    migrate(conn)
+    insert_commit(
+        conn,
+        "aaa1111",
+        "feat: add login",
+        "Alice",
+        "plat-a",
+        "012-auth",
+        "hook",
+        "2026-04-01T10:00:00Z",
+        '["src/login.py"]',
+    )
+    insert_commit(
+        conn,
+        "bbb2222",
+        "fix: password hash",
+        "Bob",
+        "plat-a",
+        "012-auth",
+        "hook",
+        "2026-04-02T11:00:00Z",
+        '["src/auth.py"]',
+    )
+    insert_commit(
+        conn,
+        "ccc3333",
+        "feat: signup flow",
+        "Alice",
+        "plat-b",
+        "015-signup",
+        "backfill",
+        "2026-04-03T09:00:00Z",
+        '["src/signup.py", "tests/test_signup.py"]',
+    )
+    insert_commit(
+        conn, "ddd4444", "chore: update deps", "Charlie", "plat-a", None, "hook", "2026-04-04T08:00:00Z", "[]"
+    )
+    insert_commit(
+        conn, "eee5555", "fix: typo in readme", "Bob", "plat-b", None, "hook", "2026-04-05T07:00:00Z", '["README.md"]'
+    )
+    conn.commit()
+    return conn
 
-    original_repo = post_save.REPO_ROOT
-    original_db = db_mod.DB_PATH
-    post_save.REPO_ROOT = tmp_path
-    db_mod.DB_PATH = db_path
 
-    try:
-        out_file = tmp_path / "output" / "commits-status.json"
-        result_path = post_save.export_commits_json(out_file)
+def test_get_commits_paginated_no_filters(setup_platform):
+    """get_commits_paginated returns all commits ordered by committed_at DESC."""
+    from db_pipeline import get_commits_paginated
 
-        assert result_path == out_file
-        assert out_file.exists()
+    _tmp_path, db_path = setup_platform
+    conn = _seed_commits(db_path)
 
-        data = _json.loads(out_file.read_text(encoding="utf-8"))
-
-        # Top-level structure
-        assert "generated_at" in data
-        assert "commits" in data
-        assert "stats" in data
-
-        # Empty commits
-        assert data["commits"] == []
-
-        # Stats structure with zero values
-        assert data["stats"]["by_epic"] == {}
-        assert data["stats"]["by_platform"] == {}
-        assert data["stats"]["adhoc_pct"] == 0.0
-    finally:
-        post_save.REPO_ROOT = original_repo
-        db_mod.DB_PATH = original_db
+    commits, total = get_commits_paginated(conn)
+    assert total == 5
+    assert len(commits) == 5
+    # Ordered DESC by committed_at
+    dates = [c["committed_at"] for c in commits]
+    assert dates == sorted(dates, reverse=True)
+    # files_json parsed into files list
+    signup = next(c for c in commits if c["sha"] == "ccc3333")
+    assert signup["files"] == ["src/signup.py", "tests/test_signup.py"]
+    conn.close()
 
 
-def test_export_commits_json_with_data(setup_platform):
-    """export_commits_json produces correct JSON structure with commits and stats."""
-    import json as _json
+def test_get_commits_paginated_platform_filter(setup_platform):
+    """get_commits_paginated filters by platform_id."""
+    from db_pipeline import get_commits_paginated
 
-    tmp_path, db_path = setup_platform
-    import post_save
-    import db_core as db_mod
+    _tmp_path, db_path = setup_platform
+    conn = _seed_commits(db_path)
 
-    original_repo = post_save.REPO_ROOT
-    original_db = db_mod.DB_PATH
-    post_save.REPO_ROOT = tmp_path
-    db_mod.DB_PATH = db_path
+    commits, total = get_commits_paginated(conn, platform_id="plat-a")
+    assert total == 3
+    assert all(c["platform_id"] == "plat-a" for c in commits)
+    conn.close()
 
-    try:
-        from db_pipeline import insert_commit
 
-        conn = get_conn(db_path)
-        migrate(conn)
+def test_get_commits_paginated_commit_type(setup_platform):
+    """get_commits_paginated filters by commit_type (epic vs adhoc)."""
+    from db_pipeline import get_commits_paginated
 
-        # Insert 3 epic commits and 2 ad-hoc commits across 2 platforms
-        insert_commit(
-            conn,
-            "aaa1111",
-            "feat: add login",
-            "Alice",
-            "plat-a",
-            "012-auth",
-            "hook",
-            "2026-04-01T10:00:00Z",
-            '["src/login.py"]',
-        )
-        insert_commit(
-            conn,
-            "bbb2222",
-            "fix: password hash",
-            "Bob",
-            "plat-a",
-            "012-auth",
-            "hook",
-            "2026-04-02T11:00:00Z",
-            '["src/auth.py"]',
-        )
-        insert_commit(
-            conn,
-            "ccc3333",
-            "feat: signup flow",
-            "Alice",
-            "plat-b",
-            "015-signup",
-            "backfill",
-            "2026-04-03T09:00:00Z",
-            '["src/signup.py", "tests/test_signup.py"]',
-        )
-        insert_commit(
-            conn,
-            "ddd4444",
-            "chore: update deps",
-            "Charlie",
-            "plat-a",
-            None,
-            "hook",
-            "2026-04-04T08:00:00Z",
-            "[]",
-        )
-        insert_commit(
-            conn,
-            "eee5555",
-            "fix: typo in readme",
-            "Bob",
-            "plat-b",
-            None,
-            "hook",
-            "2026-04-05T07:00:00Z",
-            '["README.md"]',
-        )
-        conn.commit()
-        conn.close()
+    _tmp_path, db_path = setup_platform
+    conn = _seed_commits(db_path)
 
-        out_file = tmp_path / "commits-status.json"
-        post_save.export_commits_json(out_file)
+    epic_commits, epic_total = get_commits_paginated(conn, commit_type="epic")
+    assert epic_total == 3
+    assert all(c["epic_id"] is not None for c in epic_commits)
 
-        data = _json.loads(out_file.read_text(encoding="utf-8"))
+    adhoc_commits, adhoc_total = get_commits_paginated(conn, commit_type="adhoc")
+    assert adhoc_total == 2
+    assert all(c["epic_id"] is None for c in adhoc_commits)
+    conn.close()
 
-        # Verify generated_at is ISO 8601
-        assert "T" in data["generated_at"]
-        assert data["generated_at"].endswith("Z")
 
-        # Verify commits list
-        assert len(data["commits"]) == 5
+def test_get_commits_paginated_date_range(setup_platform):
+    """get_commits_paginated filters by date_from and date_to."""
+    from db_pipeline import get_commits_paginated
 
-        # Verify ordering: most recent first (committed_at DESC)
-        dates = [c["committed_at"] for c in data["commits"]]
-        assert dates == sorted(dates, reverse=True)
+    _tmp_path, db_path = setup_platform
+    conn = _seed_commits(db_path)
 
-        # Verify commit fields
-        first = data["commits"][0]
-        assert "sha" in first
-        assert "message" in first
-        assert "author" in first
-        assert "platform_id" in first
-        assert "epic_id" in first  # can be None
-        assert "source" in first
-        assert "committed_at" in first
-        assert "files" in first  # parsed from files_json
-        assert isinstance(first["files"], list)
+    commits, total = get_commits_paginated(conn, date_from="2026-04-03", date_to="2026-04-04")
+    assert total == 2
+    conn.close()
 
-        # Verify files_json was parsed into files list
-        signup_commit = next(c for c in data["commits"] if c["sha"] == "ccc3333")
-        assert signup_commit["files"] == ["src/signup.py", "tests/test_signup.py"]
 
-        # Verify ad-hoc commit has epic_id = None
-        adhoc_commit = next(c for c in data["commits"] if c["sha"] == "ddd4444")
-        assert adhoc_commit["epic_id"] is None
+def test_get_commits_paginated_pagination(setup_platform):
+    """get_commits_paginated respects limit and offset."""
+    from db_pipeline import get_commits_paginated
 
-        # Verify stats.by_epic
-        assert data["stats"]["by_epic"] == {"012-auth": 2, "015-signup": 1}
+    _tmp_path, db_path = setup_platform
+    conn = _seed_commits(db_path)
 
-        # Verify stats.by_platform
-        assert data["stats"]["by_platform"] == {"plat-a": 3, "plat-b": 2}
+    page1, total = get_commits_paginated(conn, limit=2, offset=0)
+    assert total == 5
+    assert len(page1) == 2
 
-        # Verify stats.adhoc_pct (2 ad-hoc out of 5 total = 40.0%)
-        assert data["stats"]["adhoc_pct"] == 40.0
-    finally:
-        post_save.REPO_ROOT = original_repo
-        db_mod.DB_PATH = original_db
+    page2, _ = get_commits_paginated(conn, limit=2, offset=2)
+    assert len(page2) == 2
+    # No overlap
+    assert {c["sha"] for c in page1}.isdisjoint({c["sha"] for c in page2})
+    conn.close()
 
 
 # ══════════════════════════════════════

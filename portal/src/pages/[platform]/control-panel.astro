@@ -5,9 +5,6 @@ import DashboardCharts from '../../components/dashboard/DashboardCharts.tsx';
 import ExecutionTab from '../../components/dashboard/ExecutionTab.tsx';
 import ObservabilityDashboard from '../../components/observability/ObservabilityDashboard.tsx';
 import { discoverPlatforms, loadStatusData } from '../../lib/platforms.mjs';
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 export function getStaticPaths() {
   const platforms = discoverPlatforms();
@@ -22,17 +19,6 @@ const { platform } = Astro.params;
 const { allPlatformIds } = Astro.props;
 const statusData = loadStatusData() || { generated_at: '', platforms: [] };
 const selectedId = platform || allPlatformIds[0] || '';
-
-// Load commits-status.json for Changes tab (best-effort)
-const __ctrlDir = path.dirname(fileURLToPath(import.meta.url));
-function loadCommitsData() {
-  for (const base of [path.join(__ctrlDir, '..', '..', 'data'), path.join(process.cwd(), 'src', 'data')]) {
-    const p = path.join(base, 'commits-status.json');
-    if (fs.existsSync(p)) { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { /* skip */ } }
-  }
-  return null;
-}
-const commitsData = loadCommitsData();
 
 // Derive GitHub repo URL from platform manifest
 const platforms = discoverPlatforms();
@@ -69,7 +55,7 @@ const repoUrl = repoOrg && repoName ? `https://github.com/${repoOrg}/${repoName}
 
   {/* ── Tab: Changes ── */}
   <div id="tab-changes" class="cp-tab-panel not-content" style="display: none;" role="tabpanel">
-    <ChangesTab client:visible data={commitsData} repoUrl={repoUrl} />
+    <ChangesTab client:visible repoUrl={repoUrl} />
   </div>
 
 </StarlightPage>

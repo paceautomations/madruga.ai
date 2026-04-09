@@ -47,8 +47,6 @@ log = logging.getLogger("post_save")
 from log_utils import setup_logging as _setup_logging  # noqa: E402
 
 
-from db_pipeline import get_commit_stats  # noqa: E402
-
 from db import (  # noqa: E402, F401 — compute_epic_status used in record_save
     compute_epic_status,
     compute_file_hash,
@@ -93,72 +91,6 @@ def _refresh_portal_status() -> None:
         )
     except Exception:
         pass  # best-effort — never block the save
-
-    # Also regenerate commits-status.json (best-effort)
-    try:
-        export_commits_json()
-    except Exception:
-        pass
-
-
-def export_commits_json(output_path: str | Path | None = None) -> Path:
-    """Export all commits from DB to a JSON file for portal consumption.
-
-    Queries all commits and computes aggregate stats (by_epic, by_platform,
-    adhoc_pct). Writes to ``portal/src/data/commits-status.json`` by default.
-
-    Args:
-        output_path: Destination file path. Defaults to
-            ``REPO_ROOT / portal/src/data/commits-status.json``.
-
-    Returns:
-        The resolved output Path that was written.
-    """
-    if output_path is None:
-        output_path = REPO_ROOT / "portal" / "src" / "data" / "commits-status.json"
-    output_path = Path(output_path)
-
-    with get_conn() as conn:
-        migrate(conn)
-
-        # Fetch all commits ordered by committed_at DESC
-        rows = conn.execute(
-            "SELECT sha, message, author, platform_id, epic_id, source, committed_at, files_json "
-            "FROM commits ORDER BY committed_at DESC"
-        ).fetchall()
-
-        commits = []
-        by_platform: dict[str, int] = {}
-        for row in rows:
-            r = dict(row)
-            # Parse files_json back to list for cleaner JSON output
-            try:
-                r["files"] = json.loads(r.pop("files_json"))
-            except (json.JSONDecodeError, TypeError):
-                r["files"] = []
-                r.pop("files_json", None)
-            commits.append(r)
-            # Accumulate by_platform counts
-            pid = r["platform_id"]
-            by_platform[pid] = by_platform.get(pid, 0) + 1
-
-        # Use existing stats function for by_epic and adhoc_pct
-        stats = get_commit_stats(conn)
-
-    payload = {
-        "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "commits": commits,
-        "stats": {
-            "by_epic": stats["commits_per_epic"],
-            "by_platform": by_platform,
-            "adhoc_pct": stats["adhoc_percentage"],
-        },
-    }
-
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
-    log.info("Exported %d commits to %s", len(commits), output_path)
-    return output_path
 
 
 def sync_commits(conn, platform_id: str) -> int:

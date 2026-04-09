@@ -901,3 +901,101 @@ async def test_dag_scheduler_skips_epic_with_pending_gate():
     # Restore
     easter._running_epics = orig_running
     easter._platform_filter = orig_filter
+
+
+# --- Commits API endpoints ---
+
+
+def _setup_commits_db():
+    """Create an in-memory DB with commits for testing API endpoints."""
+    import sqlite3
+
+    from db_core import migrate
+    from db_pipeline import insert_commit
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    migrate(conn)
+    insert_commit(
+        conn,
+        "aaa1111",
+        "feat: login",
+        "Alice",
+        "plat-a",
+        "012-auth",
+        "hook",
+        "2026-04-01T10:00:00Z",
+        '["src/login.py"]',
+    )
+    insert_commit(
+        conn, "bbb2222", "fix: hash", "Bob", "plat-a", "012-auth", "hook", "2026-04-02T11:00:00Z", '["src/auth.py"]'
+    )
+    insert_commit(
+        conn,
+        "ccc3333",
+        "feat: signup",
+        "Alice",
+        "plat-b",
+        "015-signup",
+        "backfill",
+        "2026-04-03T09:00:00Z",
+        '["src/signup.py"]',
+    )
+    insert_commit(conn, "ddd4444", "chore: deps", "Charlie", "plat-a", None, "hook", "2026-04-04T08:00:00Z", "[]")
+    insert_commit(conn, "eee5555", "fix: typo", "Bob", "plat-b", None, "hook", "2026-04-05T07:00:00Z", '["README.md"]')
+    conn.commit()
+    return conn
+
+
+@pytest.mark.asyncio
+async def test_commits_endpoint_returns_paginated():
+    """GET /api/commits returns paginated commits with total."""
+    app = _make_app()
+    app.state.db_conn = _setup_commits_db()
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.get("/api/commits", params={"limit": 2, "offset": 0})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] == 5
+    assert len(data["commits"]) == 2
+    assert data["limit"] == 2
+    assert data["offset"] == 0
+    app.state.db_conn.close()
+
+
+@pytest.mark.asyncio
+async def test_commits_endpoint_filters():
+    """GET /api/commits respects platform_id and commit_type filters."""
+    app = _make_app()
+    app.state.db_conn = _setup_commits_db()
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        # Filter by platform
+        resp = await client.get("/api/commits", params={"platform_id": "plat-a"})
+        assert resp.json()["total"] == 3
+
+        # Filter by commit_type=adhoc
+        resp = await client.get("/api/commits", params={"commit_type": "adhoc"})
+        data = resp.json()
+        assert data["total"] == 2
+        assert all(c["epic_id"] is None for c in data["commits"])
+
+    app.state.db_conn.close()
+
+
+@pytest.mark.asyncio
+async def test_commits_stats_endpoint():
+    """GET /api/commits/stats returns aggregate stats."""
+    app = _make_app()
+    app.state.db_conn = _setup_commits_db()
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.get("/api/commits/stats")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total_commits"] == 5
+    assert data["by_epic"] == {"012-auth": 2, "015-signup": 1}
+    assert data["by_platform"] == {"plat-a": 3, "plat-b": 2}
+    assert data["adhoc_pct"] == 40.0
+    app.state.db_conn.close()

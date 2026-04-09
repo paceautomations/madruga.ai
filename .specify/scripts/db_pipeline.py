@@ -624,6 +624,7 @@ def get_commit_stats(
 
     Returns:
         Dict with keys: total_commits, commits_per_epic (dict of epic_id→count),
+        commits_per_platform (dict of platform_id→count),
         adhoc_count, adhoc_percentage (float 0-100, rounded to 1 decimal).
     """
     where = ""
@@ -645,12 +646,86 @@ def get_commit_stats(
     ).fetchall()
     commits_per_epic = {row["epic_id"]: row["cnt"] for row in epic_rows}
 
+    platform_rows = conn.execute(
+        f"SELECT platform_id, COUNT(*) AS cnt FROM commits{where} GROUP BY platform_id",
+        params,
+    ).fetchall()
+    commits_per_platform = {row["platform_id"]: row["cnt"] for row in platform_rows}
+
     return {
         "total_commits": total,
         "commits_per_epic": commits_per_epic,
+        "commits_per_platform": commits_per_platform,
         "adhoc_count": adhoc_count,
         "adhoc_percentage": round(adhoc_count / total * 100, 1) if total > 0 else 0.0,
     }
+
+
+def get_commits_paginated(
+    conn: sqlite3.Connection,
+    limit: int = 50,
+    offset: int = 0,
+    platform_id: str | None = None,
+    epic_id: str | None = None,
+    commit_type: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> tuple[list[dict], int]:
+    """List commits with pagination and filters. Returns (commits, total_count).
+
+    Args:
+        conn: SQLite connection.
+        limit: Max rows per page.
+        offset: Rows to skip.
+        platform_id: Filter by platform.
+        epic_id: Filter by specific epic.
+        commit_type: 'epic' (has epic_id) or 'adhoc' (epic_id IS NULL).
+        date_from: Inclusive lower bound (ISO date or datetime).
+        date_to: Inclusive upper bound (ISO date or datetime).
+
+    Returns:
+        Tuple of (list of commit dicts with files parsed, total matching count).
+    """
+    where_parts: list[str] = []
+    params: list = []
+
+    if platform_id is not None:
+        where_parts.append("platform_id = ?")
+        params.append(platform_id)
+    if epic_id is not None:
+        where_parts.append("epic_id = ?")
+        params.append(epic_id)
+    if commit_type == "epic":
+        where_parts.append("epic_id IS NOT NULL")
+    elif commit_type == "adhoc":
+        where_parts.append("epic_id IS NULL")
+    if date_from is not None:
+        where_parts.append("committed_at >= ?")
+        params.append(date_from)
+    if date_to is not None:
+        # If only a date (no time), include the full day
+        val = date_to if "T" in date_to else date_to + "T23:59:59Z"
+        where_parts.append("committed_at <= ?")
+        params.append(val)
+
+    where = (" WHERE " + " AND ".join(where_parts)) if where_parts else ""
+
+    total = conn.execute(f"SELECT COUNT(*) FROM commits{where}", params).fetchone()[0]
+
+    sql = f"SELECT * FROM commits{where} ORDER BY committed_at DESC LIMIT ? OFFSET ?"
+    rows = conn.execute(sql, [*params, limit, offset]).fetchall()
+
+    commits = []
+    for row in rows:
+        d = dict(row)
+        try:
+            d["files"] = json.loads(d.pop("files_json"))
+        except (json.JSONDecodeError, TypeError):
+            d["files"] = []
+            d.pop("files_json", None)
+        commits.append(d)
+
+    return commits, total
 
 
 # ══════════════════════════════════════

@@ -743,6 +743,49 @@ async def export_csv_endpoint(
     )
 
 
+@app.get("/api/commits")
+async def list_commits(
+    request: Request,
+    platform_id: str | None = Query(default=None),
+    epic_id: str | None = Query(default=None),
+    commit_type: str | None = Query(default=None),
+    date_from: str | None = Query(default=None),
+    date_to: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+):
+    from db_pipeline import get_commits_paginated
+
+    commits, total = get_commits_paginated(
+        request.app.state.db_conn,
+        limit=limit,
+        offset=offset,
+        platform_id=platform_id,
+        epic_id=epic_id,
+        commit_type=commit_type,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    return {"commits": commits, "total": total, "limit": limit, "offset": offset}
+
+
+@app.get("/api/commits/stats")
+async def commits_stats(
+    request: Request,
+    platform_id: str | None = Query(default=None),
+):
+    from db_pipeline import get_commit_stats
+
+    stats = get_commit_stats(request.app.state.db_conn, platform_id)
+    return {
+        "total_commits": stats["total_commits"],
+        "by_epic": stats["commits_per_epic"],
+        "by_platform": stats["commits_per_platform"],
+        "adhoc_count": stats["adhoc_count"],
+        "adhoc_pct": stats["adhoc_percentage"],
+    }
+
+
 # --- CLI Entry Point ---
 
 
