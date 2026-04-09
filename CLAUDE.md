@@ -88,6 +88,8 @@ Direct edits bypass validation (frontmatter, handoff chains, archetype complianc
 - SQLite WAL mode (`.pipeline/madruga.db`) — novas tabelas `traces` e `eval_scores`, coluna `trace_id` em `pipeline_runs` (epic/madruga-ai/017-observability-tracing-evals)
 - TypeScript (Astro 5.x, React), Python 3.11+ (scripts), Bash (CI) + Astro + Starlight, astro-mermaid v2.0.1, js-yaml (portal build-time) (epic/madruga-ai/022-mermaid-migration)
 - Filesystem (Markdown + YAML), SQLite WAL mode (pipeline state) (epic/madruga-ai/022-mermaid-migration)
+- Python 3.12 + FastAPI >=0.115 + FastAPI, uvicorn, pydantic 2.x, pydantic-settings, redis[hiredis] >=5.0, httpx, structlog (epic/prosauai/001-channel-pipeline)
+- Redis 7 (debounce buffers apenas — sem persistência de dados) (epic/prosauai/001-channel-pipeline)
 
 ## Recent Changes
 - epic/madruga-ai/017-observability-tracing-evals: Added Python 3.11+ (backend), TypeScript/React (portal) + sqlite3 (stdlib), structlog, FastAPI (easter), React + @xyflow/react (portal existente), Astro Starlight
