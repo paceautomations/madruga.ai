@@ -16,9 +16,7 @@ jobs:
           cache: pip
           cache-dependency-path: requirements-dev.txt
       - run: pip install -r requirements-dev.txt
-      - run: python3 .specify/scripts/platform_cli.py lint --all
-      - run: ruff check .specify/scripts/
-      - run: ruff format --check .specify/scripts/
+      - run: bash .specify/scripts/bash/ci-checks.sh --suite lint
 
   db-tests:
     runs-on: ubuntu-latest
@@ -30,7 +28,7 @@ jobs:
           cache: pip
           cache-dependency-path: requirements-dev.txt
       - run: pip install -r requirements-dev.txt
-      - run: python3 -m pytest .specify/scripts/tests/ -v --cov --cov-report=term-missing
+      - run: bash .specify/scripts/bash/ci-checks.sh --suite db-tests
 
   smoke-test:
     runs-on: ubuntu-latest
@@ -101,14 +99,14 @@ jobs:
             -d platform_description="Automated CI validation" \
             -d lifecycle=design \
             -d register_portal=false
-      - run: python3 -m pytest .specify/templates/platform/tests/ -v
+      - run: bash .specify/scripts/bash/ci-checks.sh --suite template-tests
 
   bash-tests:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Run bash tests
-        run: bash .specify/scripts/bash/tests/test_base_dir.sh
+        run: bash .specify/scripts/bash/ci-checks.sh --suite bash-tests
 
   portal-build:
     runs-on: ubuntu-latest

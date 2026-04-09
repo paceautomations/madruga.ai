@@ -3,7 +3,7 @@
 
 PLATFORM := .specify/scripts/platform_cli.py
 
-.PHONY: help test coverage lint ruff ruff-fix format status status-json seed \
+.PHONY: help test coverage lint ruff ruff-fix format ci status status-json seed \
        portal-dev portal-build portal-install install-hooks \
        install-services up down restart logs logs-easter logs-portal
 
@@ -28,6 +28,9 @@ ruff-fix: ## Run ruff fix on Python scripts
 
 format: ## Run ruff format on Python scripts
 	python3 -m ruff format .specify/scripts/
+
+ci: ## Run local CI checks (lint + tests)
+	bash .specify/scripts/bash/ci-checks.sh
 
 status: ## Show pipeline status for all platforms
 	python3 $(PLATFORM) status --all
@@ -74,6 +77,10 @@ up: install-services ## Start all services (easter + portal)
 
 down: ## Stop all services
 	@systemctl --user stop $(SERVICES) 2>/dev/null || true
+	@for port in 4321 18789; do \
+	  pid=$$(lsof -ti :$$port 2>/dev/null); \
+	  [ -n "$$pid" ] && kill $$pid && echo "Killed orphan on port $$port (PID $$pid)" || true; \
+	done
 	@echo "Stopped: $(SERVICES)"
 
 restart: ## Restart all services

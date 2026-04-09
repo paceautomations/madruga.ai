@@ -40,7 +40,7 @@ Nao existe infraestrutura base para receber mensagens WhatsApp, rotear por tipo 
 
 ## Solucao
 
-FastAPI recebe webhooks Evolution API → Smart Router classifica tipo (5 paths) → Redis debounce agrupa mensagens rapidas (3s window, Lua atomic) → ARQ worker processa batch → Echo response enviada via Evolution API. Todas mensagens persistidas em Supabase PostgreSQL.
+FastAPI recebe webhooks Evolution API → Smart Router classifica tipo (6 paths) e retorna `RouteResult` com `agent_id` (None nesta fase — usa tenant default) → Redis debounce agrupa mensagens rapidas (3s window, Lua atomic) → ARQ worker processa batch → Echo response enviada via Evolution API. Todas mensagens persistidas em Supabase PostgreSQL. Routing rules configuravel por phone number vem no epic 003.
 
 ### Interfaces / Contratos
 
@@ -66,7 +66,14 @@ class MessageRoute(str, Enum):
     GROUP_EVENT = "group_event"      # Evento de grupo (join/leave)
     IGNORE = "ignore"                # from_me ou invalido
 
-def route_message(msg: ParsedMessage, settings: Settings) -> MessageRoute: ...
+@dataclass
+class RouteResult:
+    route: MessageRoute
+    agent_id: UUID | None  # None para IGNORE/GROUP_SAVE_ONLY; resolvido por routing_rules ou default
+    reason: str | None = None
+
+# Epic 001: agent_id sempre None (usa tenant default). Routing rules em epic 003.
+def route_message(msg: ParsedMessage, settings: Settings) -> RouteResult: ...
 
 # prosauai/core/formatter.py
 class ParsedMessage(BaseModel):
@@ -119,6 +126,8 @@ class EvolutionProvider(MessagingProvider):
 **Fora:**
 - LLM / pydantic-ai agents (epico 002)
 - Database persistence em Supabase (epico 002 — por ora in-memory/log)
+- Routing rules configuravel por phone number (epico 003 — por ora usa tenant default)
+- Agent pipeline steps (epico 016 — por ora single LLM call)
 - Admin panel (epico 007)
 - Handoff (epico 005)
 - Triggers proativos (epico 006)
@@ -163,6 +172,7 @@ class EvolutionProvider(MessagingProvider):
 | 2026-03-25 | Echo sem LLM nesta fase | Validar infra antes de adicionar complexidade LLM |
 | 2026-03-25 | Sem ARQ worker nesta fase | Simplificar: processar sincrono. Worker no epico 002 |
 | 2026-03-25 | Sem DB persistence nesta fase | In-memory/log suficiente para echo. Supabase no epico 002 |
+| 2026-04-09 | RouteResult inclui agent_id desde dia 1 | Evita breaking change futuro. None = usa tenant default. Routing rules no epic 003 |
 
 ## Notas
 

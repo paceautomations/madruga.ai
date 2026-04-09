@@ -23,10 +23,10 @@ O resultado: regressoes silenciosas em skills, sem auditoria de mudancas, e deci
 Criar `.github/CODEOWNERS`:
 ```
 # AI instruction infrastructure — require review on all changes
-/.claude/                          @gabrielhamu-srna
-/CLAUDE.md                         @gabrielhamu-srna
-/platforms/*/CLAUDE.md             @gabrielhamu-srna
-/.specify/scripts/skill-lint.py    @gabrielhamu-srna
+/.claude/                          @gabrielhamu
+/CLAUDE.md                         @gabrielhamu
+/platforms/*/CLAUDE.md             @gabrielhamu
+/.specify/scripts/skill-lint.py    @gabrielhamu
 ```
 
 Habilitar no GitHub: Settings > Branches > main > "Require review from Code Owners". Mitigacao solo-dev: "Allow administrators to bypass".

@@ -80,38 +80,60 @@ sequenceDiagram
 
 </details>
 
-### Fase 2: Decision Point #1 — Smart Router
+### Fase 2: Decision Point #1 — Smart Router (Two-Phase)
 
 <details>
-<summary>5 caminhos possiveis de roteamento</summary>
+<summary>6 caminhos de roteamento + resolucao de agente configuravel por numero</summary>
+
+O Smart Router opera em **duas fases**:
+
+**Fase A — Route Classification** (o que acontece): classifica a mensagem em 1 dos 6 paths com base em atributos da mensagem (is_group, @mention, from_me, handoff state). Os 6 paths sao fixos e iguais para todos os tenants.
+
+**Fase B — Agent Resolution** (quem atende): para routes que precisam de agente (SUPPORT, GROUP_RESPOND), avalia as `routing_rules` configuradas para o tenant + phone_number. Avaliacao por priority ASC, first-match wins. Sem regra = `tenants.settings.default_agent_id`.
 
 ```mermaid
 flowchart LR
     M3{"M3 Smart Router"}
 
-    M3 -->|"1. SUPPORT"| P1["Pipeline completo (1:1)"]
-    M3 -->|"2. GROUP_RESPOND"| P2["Pipeline com contexto de grupo"]
-    M3 -->|"3. GROUP_SAVE_ONLY"| P3["Salva sem LLM<br/>(zero custo)"]
-    M3 -->|"4. GROUP_EVENT"| P6["Evento de membership<br/>(welcome/saida)"]
-    M3 -->|"5. HANDOFF_ATIVO"| P4["Bypass IA<br/>→ M12 Handoff"]
-    M3 -->|"6. IGNORE"| P5["Duplicata ou<br/>evento interno"]
+    subgraph "Fase A: Route Classification"
+        M3 -->|"1. SUPPORT"| P1["Pipeline completo (1:1)"]
+        M3 -->|"2. GROUP_RESPOND"| P2["Pipeline com contexto de grupo"]
+        M3 -->|"3. GROUP_SAVE_ONLY"| P3["Salva sem LLM<br/>(zero custo)"]
+        M3 -->|"4. GROUP_EVENT"| P6["Evento de membership<br/>(welcome/saida)"]
+        M3 -->|"5. HANDOFF_ATIVO"| P4["Bypass IA<br/>→ M12 Handoff"]
+        M3 -->|"6. IGNORE"| P5["Duplicata ou<br/>evento interno"]
+    end
 
-    P1 --> M4["→ M4 Clientes"]
-    P2 --> M4
+    subgraph "Fase B: Agent Resolution"
+        P1 --> RR{"routing_rules<br/>(priority ASC)"}
+        P2 --> RR
+        RR -->|"Match"| AG["agent_id resolvido"]
+        RR -->|"No match"| DF["default_agent_id<br/>(tenant settings)"]
+        AG --> M4["→ M4 Clientes"]
+        DF --> M4
+    end
 
     style M3 fill:#f9f,stroke:#333
+    style RR fill:#ffd,stroke:#333
     style P3 fill:#eee,stroke:#999
     style P6 fill:#eee,stroke:#999
     style P5 fill:#eee,stroke:#999
 ```
 
-**Caminhos:**
+**Caminhos (Fase A):**
 - **SUPPORT** → Pipeline completo para mensagem individual (1:1)
 - **GROUP_RESPOND** → Mesmo pipeline, com contexto de grupo (@mention)
 - **GROUP_SAVE_ONLY** → Salva mensagem no historico sem acionar LLM (zero custo)
 - **GROUP_EVENT** → Evento de membership (welcome, saida de membro) — aciona trigger template sem LLM
 - **HANDOFF_ATIVO** → Conversa ja escalada — bypass completo da IA, direto para atendente humano
 - **IGNORE** → Duplicata detectada ou evento interno — descarta
+
+**Resolucao de agente (Fase B):**
+- Cada numero WhatsApp do tenant pode ter `routing_rules` diferentes (ex: individual → vendas, grupo → suporte)
+- Regras armazenadas em `routing_rules` table com `match_conditions` JSONB (ex: `{"channel_type": "individual"}`)
+- Avaliacao por priority (menor = maior prioridade), first-match wins
+- Sem regras configuradas → usa `tenants.settings.default_agent_id`
+- Config via admin panel, sem deploy — ver [ADR-006](../decisions/ADR-006-agent-as-data/) e [domain-model](../engineering/domain-model/)
 
 </details>
 
@@ -137,9 +159,10 @@ sequenceDiagram
     Note over M4: Persiste mensagens recebidas
 
     M4->>M5: CustomerContext
-    Note over M5: Montagem de contexto em 3 camadas:<br/>1. Perfil do cliente (longo prazo)<br/>2. Estado da conversa (sessao)<br/>3. Working memory (ultimas interacoes)<br/>+ RAG results quando disponivel
+    Note over M5: Montagem de contexto em 4 camadas:<br/>1. Perfil (customers.preferences, metadata)<br/>2. Estado da conversa (session state machine)<br/>3. Working memory (ultimas 10 msgs + summary)<br/>4. RAG knowledge base (opcional, pgvector)
+    Note over M5: Short-term memory: sliding window<br/>(default 10 msgs) + async summarization<br/>apos 20 exchanges.<br/>Cross-conversation: dados estruturados<br/>(preferences, metadata, ultimas N conversas),<br/>NAO vector-based long-term memory.
 
-    M5->>M6: AgentContext (3 camadas)
+    M5->>M6: AgentContext (4 camadas)
     Note over M6: Decision Point #2<br/>PII: CPF, telefone, email<br/>Toxicidade: conteudo ofensivo<br/>Injection: prompt injection
     alt BLOCK
         M6-->>M6: Resposta padrao (rejeita)
@@ -152,17 +175,27 @@ sequenceDiagram
     Note over M7: Se confidence < 0.7<br/>→ fallback "general"
 
     M7->>M8: IntentClassification
-    M8->>Bifrost: POST /v1/chat/completions
-    Bifrost->>GPTmini: OpenAI API
-    GPTmini-->>Bifrost: Resposta + tool calls
-    Bifrost-->>M8: AgentResponse
+
+    alt Agent SEM pipeline steps (default)
+        M8->>Bifrost: POST /v1/chat/completions (single LLM call)
+        Bifrost->>GPTmini: OpenAI API
+        GPTmini-->>Bifrost: Resposta + tool calls
+        Bifrost-->>M8: AgentResponse
+    else Agent COM pipeline steps (configuravel)
+        Note over M8: Pipeline: classifier → clarifier → resolver → specialist<br/>Cada step configurado em agent_pipeline_steps<br/>(model, prompt, tools, conditions por step)
+        loop Para cada step em agent_pipeline_steps (step_order ASC)
+            M8->>Bifrost: POST /v1/chat/completions (step N)
+            Bifrost-->>M8: StepOutput
+            Note over M8: Proximo step recebe output do anterior.<br/>Step com condition so executa se match.
+        end
+    end
 
     opt Tool calls (ResenhAI data)
         M8->>ResenhAI: asyncpg read-only
         ResenhAI-->>M8: Dados jogos/stats/ranking
     end
 
-    Note over M8: ~2-5 LLM calls por conversa ativa<br/>Tools: get_ranking, get_stats,<br/>get_player, handoff
+    Note over M8: ~2-5 LLM calls por conversa ativa<br/>Tools: get_ranking, get_stats,<br/>get_player, handoff<br/>Pipeline steps: opt-in per agent (ADR-006)
 ```
 
 </details>

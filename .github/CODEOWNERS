@@ -7,6 +7,6 @@
 #
 # Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
 
-/.claude/                          @gabrielhamu-srna
-/CLAUDE.md                         @gabrielhamu-srna
-/.specify/scripts/skill-lint.py    @gabrielhamu-srna
+/.claude/                          @gabrielhamu
+/CLAUDE.md                         @gabrielhamu
+/.specify/scripts/skill-lint.py    @gabrielhamu

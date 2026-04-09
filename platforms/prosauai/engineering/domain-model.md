@@ -74,12 +74,25 @@ classDiagram
         IGNORE
     }
 
+    class RoutingRule {
+        +uuid id
+        +uuid tenant_id
+        +string phone_number
+        +json match_conditions
+        +uuid agent_id
+        +int priority
+        +bool is_active
+        +matches(msg: InboundMessage) bool
+    }
+
     class Router {
         +uuid message_id
         +RouteDecision decision
+        +uuid resolved_agent_id
         +string reason
         +json routing_metadata
-        +decide(messages: InboundMessage[]) RouteDecision
+        +classify(messages: InboundMessage[]) RouteDecision
+        +resolve_agent(decision: RouteDecision, rules: RoutingRule[]) uuid
     }
 
     class DeliveryAttempt {
@@ -101,7 +114,8 @@ classDiagram
 
     InboundMessage --> DebounceBuffer : buffered in
     DebounceBuffer --> Router : flushed to
-    Router --> RouteDecision : produces
+    Router --> RouteDecision : classifies
+    Router --> RoutingRule : evaluates (priority order)
     Router --> DeliveryAttempt : triggers (if not IGNORE)
 ```
 
@@ -146,6 +160,12 @@ CREATE TABLE tenants (
     billing_tier    TEXT NOT NULL DEFAULT 'free'
                     CHECK (billing_tier IN ('free', 'starter', 'growth', 'business', 'enterprise')),
     settings        JSONB NOT NULL DEFAULT '{}',
+    -- settings JSONB keys:
+    --   default_agent_id: UUID          -- fallback agent when no routing rule matches
+    --   active_hours: JSONB             -- global active hours {"start": "09:00", "end": "18:00"}
+    --   timezone: TEXT                  -- e.g. 'America/Sao_Paulo'
+    --   max_context_messages: INT       -- sliding window size (default 10)
+    --   summarization_threshold: INT    -- trigger async summarization after N exchanges (default 20)
     is_active       BOOLEAN NOT NULL DEFAULT TRUE,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -198,6 +218,30 @@ CREATE INDEX idx_acv_tenant ON agent_config_versions (tenant_id);
 -- FK circular: agents.active_version_id -> agent_config_versions(id)
 ALTER TABLE agents ADD CONSTRAINT fk_active_version
     FOREIGN KEY (active_version_id) REFERENCES agent_config_versions(id);
+
+-- Agent Pipeline Steps — sub-routing configuravel (ADR-006 extensao)
+-- Agents SEM pipeline steps executam como single LLM call (backward compatible).
+-- Agents COM pipeline steps executam cada step em sequencia (ex: classifier → clarifier → resolver).
+CREATE TABLE agent_pipeline_steps (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id       UUID NOT NULL REFERENCES tenants(id),
+    agent_id        UUID NOT NULL REFERENCES agents(id),
+    step_order      INT NOT NULL,
+    step_type       TEXT NOT NULL CHECK (step_type IN (
+        'classifier', 'clarifier', 'resolver', 'specialist', 'summarizer'
+    )),
+    config          JSONB NOT NULL DEFAULT '{}',  -- model, prompt_slug, tools, thresholds, routing_map
+    condition       JSONB,                        -- opcional: quando executar (ex: {"classifier.intent": "billing"})
+    is_active       BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (agent_id, step_order)
+);
+
+ALTER TABLE agent_pipeline_steps ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON agent_pipeline_steps USING (tenant_id = auth.tenant_id());
+CREATE INDEX idx_pipeline_agent ON agent_pipeline_steps (agent_id, step_order);
+CREATE INDEX idx_pipeline_tenant ON agent_pipeline_steps (tenant_id);
 
 -- User Consents — LGPD (ADR-018)
 CREATE TABLE user_consents (
@@ -277,6 +321,29 @@ CREATE POLICY tenant_isolation ON route_decisions USING (tenant_id = auth.tenant
 CREATE INDEX idx_route_tenant ON route_decisions (tenant_id);
 CREATE INDEX idx_route_decision ON route_decisions (tenant_id, decision, decided_at DESC);
 
+-- M3: Routing Rules — configuracao per-phone-number (ADR-006 extensao)
+-- Define QUAL agente atende cada tipo de mensagem por numero de telefone do tenant.
+-- RouteDecision (SUPPORT, GROUP_RESPOND, etc.) define O QUE ACONTECE.
+-- RoutingRule define QUEM ATENDE (qual agent_id).
+-- Avaliacao: priority ASC (menor = maior prioridade), first-match wins.
+-- Sem regras para um numero → tenant.settings.default_agent_id.
+CREATE TABLE routing_rules (
+    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id        UUID NOT NULL REFERENCES tenants(id),
+    phone_number     TEXT NOT NULL,           -- numero WhatsApp (instance) que esta regra aplica
+    match_conditions JSONB NOT NULL,          -- {"channel_type": "individual"} ou {"channel_type": "group", "has_mention": true}
+    agent_id         UUID NOT NULL REFERENCES agents(id),
+    priority         INT NOT NULL DEFAULT 100, -- menor = maior prioridade
+    is_active        BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE routing_rules ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON routing_rules USING (tenant_id = auth.tenant_id());
+CREATE INDEX idx_routing_tenant_phone ON routing_rules (tenant_id, phone_number, priority);
+CREATE INDEX idx_routing_tenant ON routing_rules (tenant_id);
+
 -- M11: Tentativas de entrega
 CREATE TABLE delivery_attempts (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -308,6 +375,12 @@ CREATE INDEX idx_delivery_pending ON delivery_attempts (status) WHERE status = '
 5. **Mensagens de grupo sempre carregam `group_jid` e `sender_jid`** — constraint NOT NULL quando `is_group = TRUE`
 6. **Buffer flush e atomico** — todas mensagens do buffer sao processadas juntas ou nenhuma
 7. **IGNORE nao cria DeliveryAttempt** — mensagens ignoradas terminam no route_decisions
+
+#### Routing Rules (ADR-006 extensao)
+
+8. **Routing rules avaliadas por priority ASC, first-match wins** — se nenhuma regra casa, usa `tenants.settings.default_agent_id`
+9. **Numero sem routing rules usa tenant default para todos os tipos** — routing rules sao opt-in, nao obrigatorias
+10. **RouteDecision e RoutingRule sao ortogonais** — RouteDecision define o path (SUPPORT, GROUP_RESPOND, etc.), RoutingRule define qual agent_id atende
 
 ---
 
@@ -391,11 +464,24 @@ classDiagram
         +render(variables: json) string
     }
 
+    class AgentPipelineStep {
+        +uuid id
+        +uuid agent_id
+        +int step_order
+        +string step_type
+        +json config
+        +json condition
+        +bool is_active
+        +should_execute(prev_output: json) bool
+        +execute(context: ConversationState) json
+    }
+
     class AgentOrchestrator {
         +uuid conversation_id
         +select_agent(classification: string) string
         +build_messages(state: ConversationState, prompt: Prompt) json[]
         +call_llm(messages: json[]) Message
+        +execute_pipeline(steps: AgentPipelineStep[], state: ConversationState) Message
         +evaluate(response: Message) EvalScore
     }
 
@@ -424,6 +510,7 @@ classDiagram
     AgentOrchestrator --> Prompt : uses
     AgentOrchestrator --> ConversationState : reads/writes
     AgentOrchestrator --> AgentConfigVersion : selects (active or canary)
+    AgentOrchestrator --> AgentPipelineStep : executes (if steps exist)
 ```
 
 </details>
@@ -513,6 +600,15 @@ CREATE INDEX idx_msg_tenant ON messages (tenant_id);
 CREATE INDEX idx_msg_conversation ON messages (tenant_id, conversation_id, created_at);
 
 -- M5: Conversation State (contexto vivo da conversa)
+-- Estrategia de memoria: hybrid sliding window + summarization async.
+-- context_window: ultimas N mensagens verbatim (default N=10 via tenants.settings.max_context_messages).
+-- Apos threshold de exchanges (default 20 via tenants.settings.summarization_threshold),
+-- summarization async comprime mensagens mais antigas em extracted_entities.conversation_summary.
+-- Token budget: system_prompt (~1000) + profile (~500) + messages (variavel) + response (~2000).
+--
+-- IMPORTANTE: contexto cross-conversation usa dados estruturados (customers.preferences,
+-- customers.metadata, query das ultimas N conversas), NAO vector-based long-term memory.
+-- pgvector (ADR-013) e exclusivamente para RAG knowledge base, NAO para memoria de conversas.
 CREATE TABLE conversation_states (
     id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id         UUID NOT NULL REFERENCES tenants(id),
@@ -616,6 +712,20 @@ CREATE INDEX idx_eval_conversation ON eval_scores (tenant_id, conversation_id, m
 14. **Rollback e imediato** — canary → rolled_back, active mantem 100%
 15. **`config_snapshot` e imutavel** — editar cria nova versao, nunca modifica existente
 16. **Minimum sample size antes de promover** — default 50 conversas, evita decisoes com dados insuficientes
+
+#### Agent Pipeline Steps (ADR-006 extensao)
+
+17. **Pipeline steps executam em step_order sequencial** — zero steps = single LLM call (backward compatible)
+18. **Cada step recebe o output do step anterior como input** — primeiro step recebe o ConversationState original
+19. **Conditions sao opcionais** — omitido = step sempre executa
+20. **Step config e independente do agent config** — model, prompt_slug, tools e thresholds por step
+
+#### Short-Term Memory (M5 Context)
+
+21. **Context window e sliding window de ultimas N mensagens** — default N=10 (configuravel via `tenants.settings.max_context_messages`)
+22. **Summarization async apos threshold** — default 20 exchanges. Summary armazenado em `extracted_entities.conversation_summary`
+23. **Token budget fixo** — system_prompt (~1000) + profile (~500) + messages (variavel) + response reserve (~2000). Truncar mensagens mais antigas se exceder
+24. **Cross-conversation context usa dados estruturados** — `customers.preferences`, `customers.metadata`, query de ultimas N conversas. NAO usa vector-based long-term memory
 
 ---
 

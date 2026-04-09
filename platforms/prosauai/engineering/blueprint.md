@@ -241,6 +241,7 @@ prosauai-api/
 | Q10 | Eval quality | Faithfulness score medio | >0.8 | DeepEval batch offline + alerta se cai abaixo | Should |
 | Q11 | Guardrail latencia | Overhead de seguranca no pipeline | <260ms total (3 layers) | Layer A <5ms, B ~50ms, C ~200ms (so high-risk) | Should |
 | Q12 | Secret rotation | Compliance de rotacao | 100% no prazo | Infisical rotation schedules automatizados | Must |
+| Q13 | Routing rule evaluation | Latencia da resolucao de agente (M3 Fase B) | <10ms p99 | DB query + in-memory cache (TTL 30s) | Should |
 
 ---
 
@@ -307,6 +308,9 @@ prosauai-api/
 | **CSAT** | Customer Satisfaction Score (1-5) coletado apos atendimento humano | Metricas |
 | **Channel Adapter** | Interface padrao que abstrai canal de mensageria. Novo canal = novo adapter, zero mudanca no core | Arquitetura |
 | **Tool Registry** | Catalogo central de tools com metadata (nome, params, categoria). Alimenta admin e valida configs | Arquitetura |
+| **Routing Rule** | Mapeamento configuravel de (phone_number, match_conditions) → agent_id. Avaliado pelo Smart Router (M3) em priority order. Sem regra = tenant default | Routing |
+| **Pipeline Step** | Etapa configuravel de processamento dentro de um agente (classifier, clarifier, resolver, specialist). Zero steps = single LLM call (backward compatible) | Orquestracao |
+| **Context Window** | Sliding window das ultimas N mensagens (default 10) mantidas verbatim no conversation state. Apos threshold (default 20 exchanges), async summarization comprime mensagens mais antigas | Memoria |
 | **Infisical** | Secret manager open-source (MIT). Envelope encryption (KEK + DEK por tenant) | Seguranca |
 | **DLQ** | Dead Letter Queue — fila de mensagens que falharam apos max retries, para reprocessamento manual | Infra |
 | **Circuit Breaker** | Padrao que isola tenant com alta taxa de erro, evitando cascata para outros tenants | Resiliencia |

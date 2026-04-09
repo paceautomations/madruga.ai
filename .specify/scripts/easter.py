@@ -87,6 +87,18 @@ def poll_active_epics(conn, platform_id=None) -> list[dict]:
 # --- Coroutines ---
 
 
+async def _interruptible_sleep(shutdown_event: asyncio.Event, seconds: float) -> bool:
+    """Sleep for up to `seconds`, returning immediately if shutdown_event fires.
+
+    Returns True if shutdown was requested, False if timeout elapsed normally.
+    """
+    try:
+        await asyncio.wait_for(shutdown_event.wait(), timeout=seconds)
+        return True  # shutdown requested
+    except TimeoutError:
+        return False  # timeout elapsed, keep running
+
+
 async def dag_scheduler(conn, semaphore, shutdown_event, poll_interval=15, platform_id=None):
     """Poll active epics and dispatch pipeline runs.
 
@@ -97,7 +109,7 @@ async def dag_scheduler(conn, semaphore, shutdown_event, poll_interval=15, platf
         try:
             # N5: skip DB poll when an epic is already running (sequential constraint)
             if _running_epics:
-                await asyncio.sleep(poll_interval)
+                await _interruptible_sleep(shutdown_event, poll_interval)
                 continue
 
             epics = poll_active_epics(conn, platform_id=platform_id)
@@ -169,7 +181,7 @@ async def dag_scheduler(conn, semaphore, shutdown_event, poll_interval=15, platf
                                 ntfy_alert, topic, f"Pipeline failed for epic {epic_id} (exit={result})"
                             )
                         # Cooldown after failure to avoid rapid retry busy-loop
-                        await asyncio.sleep(poll_interval * 2)
+                        await _interruptible_sleep(shutdown_event, poll_interval * 2)
                 finally:
                     _running_epics.discard(epic_id)
 
@@ -177,10 +189,10 @@ async def dag_scheduler(conn, semaphore, shutdown_event, poll_interval=15, platf
             consecutive_errors += 1
             backoff = min(poll_interval * (2**consecutive_errors), 300)
             logger.exception("dag_scheduler_error", consecutive_errors=consecutive_errors, backoff_s=backoff)
-            await asyncio.sleep(backoff)
+            await _interruptible_sleep(shutdown_event, backoff)
             continue
 
-        await asyncio.sleep(poll_interval)
+        await _interruptible_sleep(shutdown_event, poll_interval)
 
 
 async def health_checker(bot, shutdown_event, interval=60, conn=None, adapter=None, chat_id=None):
@@ -188,7 +200,8 @@ async def health_checker(bot, shutdown_event, interval=60, conn=None, adapter=No
     from telegram_bot import poll_pending_gates
 
     while not shutdown_event.is_set():
-        await asyncio.sleep(interval)
+        if await _interruptible_sleep(shutdown_event, interval):
+            break
 
         # Systemd watchdog
         sd_notify("WATCHDOG=1")
@@ -239,7 +252,8 @@ GATE_REMINDER_HOURS = 24
 async def gate_reminder(conn, adapter, chat_id, shutdown_event, interval=3600):
     """C1: Remind operator about gates pending for more than 24 hours."""
     while not shutdown_event.is_set():
-        await asyncio.sleep(interval)
+        if await _interruptible_sleep(shutdown_event, interval):
+            break
         if _easter_state.telegram_status != "connected" or adapter is None:
             continue
         try:
@@ -269,7 +283,8 @@ async def retention_cleanup(conn, shutdown_event, interval=86400):
     from db import cleanup_old_data
 
     while not shutdown_event.is_set():
-        await asyncio.sleep(interval)
+        if await _interruptible_sleep(shutdown_event, interval):
+            break
         try:
             result = await asyncio.to_thread(cleanup_old_data, conn, days=90)
             logger.info("retention_cleanup", **result)
@@ -305,6 +320,7 @@ async def lifespan(app: FastAPI):
         # Check if the PID holding the lock is still alive
         lock_file.close()
         stale = False
+        old_pid = None
         try:
             with open(lock_path) as f:
                 old_pid = int(f.read().strip())

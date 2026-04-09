@@ -28,7 +28,7 @@ Em grupos WhatsApp, o agente participa quando mencionado — publica ranking, re
 |---------|-----------|---------------------|
 | **Receber e responder mensagens** | Agente recebe mensagens WhatsApp e responde automaticamente, 24/7 | Base do produto — sem isso nada funciona |
 | **Conversa inteligente com IA** | Agente entende contexto, historico e responde com precisao em portugues | Core da proposta de valor — atendimento que realmente resolve |
-| **Agente em grupos WhatsApp** | Responde quando mencionado (@), observa sem responder quando nao mencionado | Moat competitivo — ninguem faz isso |
+| **Agente em grupos WhatsApp** | Responde quando mencionado (@), observa sem responder quando nao mencionado. Roteamento configuravel por numero: cada numero pode direcionar mensagens para agentes diferentes | Moat competitivo — ninguem faz isso |
 | **Consultas em tempo real** | Agente consulta dados do negocio (ranking, stats, agenda, estoque) para dar respostas uteis | Respostas relevantes, nao genericas |
 | **Transferencia para humano** | Quando a IA nao resolve, transfere para atendente com resumo e contexto completo | Rede de seguranca — cliente nunca fica sem resposta |
 | **Mensagens automaticas** | Notificacoes por eventos: lembrete de agendamento, pedido enviado, boas-vindas | Engajamento proativo, nao so reativo |

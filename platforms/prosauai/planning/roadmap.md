@@ -35,7 +35,7 @@ gantt
     001 Channel Pipeline    :a1, after start, 1w
     002 Conversation Core   :a2, after a1, 2w
     section Post-MVP
-    003 Group Routing       :a3, after a2, 1w
+    003 Configurable Routing + Groups :a3, after a2, 2w
     004 Agent Tools         :a4, after a2, 2w
     005 Handoff Engine      :a5, after a2, 2w
     006 Trigger Engine      :a6, after a5, 1w
@@ -54,7 +54,7 @@ gantt
 |-------|------|------|-------|-----------|--------|
 | 1 | 001: Channel Pipeline | — | baixo | MVP | **proposed** (pitch criado) |
 | 2 | 002: Conversation Core | 001 | medio | MVP | sugerido (sem arquivo) |
-| 3 | 003: Group Routing | 002 | baixo | Post-MVP | sugerido |
+| 3 | 003: Configurable Routing + Groups | 002 | medio | Post-MVP | sugerido |
 | 4 | 004: Agent Tools | 002 | medio | Post-MVP | sugerido |
 | 5 | 005: Handoff Engine | 002 | medio | Post-MVP | sugerido |
 | 6 | 006: Trigger Engine | 005 | baixo | Post-MVP | sugerido |
@@ -72,6 +72,7 @@ gantt
 | 013: RAG pgvector | Base de conhecimento com embeddings por tenant | 002 | Later |
 | 014: Billing Stripe | Cobranca automatica com tiers e consumo medido | 012 | Later |
 | 015: WhatsApp Flows | Formularios estruturados dentro do WhatsApp | 002 | Later |
+| 016: Agent Pipeline Steps | Pipeline de processamento configuravel por agente (classifier → clarifier → resolver → specialist) | 004 | Later |
 
 ---
 
@@ -80,12 +81,13 @@ gantt
 ```mermaid
 graph LR
   E001[001 Channel Pipeline] --> E002[002 Conversation Core]
-  E002 --> E003[003 Group Routing]
+  E002 --> E003[003 Configurable Routing + Groups]
   E002 --> E004[004 Agent Tools]
   E002 --> E005[005 Handoff Engine]
   E005 --> E006[006 Trigger Engine]
   E004 --> E007[007 Admin Dashboard]
   E005 --> E008[008 Admin Handoff Inbox]
+  E004 --> E016[016 Agent Pipeline Steps]
 ```
 
 ---
@@ -95,7 +97,7 @@ graph LR
 | Milestone | Epics | Criterio de Sucesso | Estimativa |
 |-----------|-------|---------------------|------------|
 | **MVP** | 001, 002 | Agente responde mensagens WhatsApp com IA, persiste conversas, funciona em grupo | ~3 semanas |
-| **Post-MVP** | 003-006 | Routing de grupo, tools, handoff humano, triggers proativos | ~6 semanas |
+| **Post-MVP** | 003-006 | Routing configuravel por phone + grupos, tools, handoff humano, triggers proativos | ~7 semanas |
 | **Admin** | 007-008 | Dashboard + fila de atendimento humano funcionais | ~3 semanas |
 
 ---

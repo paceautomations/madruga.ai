@@ -71,7 +71,7 @@
 
 ### Implementation for User Story 1
 
-- [X] T007 [P] [US1] Create `.github/CODEOWNERS` with 4 path rules: `/.claude/ @gabrielhamu-srna`, `/CLAUDE.md @gabrielhamu-srna`, `/platforms/*/CLAUDE.md @gabrielhamu-srna`, `/.specify/scripts/skill-lint.py @gabrielhamu-srna`. Include header comment explaining purpose
+- [X] T007 [P] [US1] Create `.github/CODEOWNERS` with 4 path rules: `/.claude/ @gabrielhamu`, `/CLAUDE.md @gabrielhamu`, `/platforms/*/CLAUDE.md @gabrielhamu`, `/.specify/scripts/skill-lint.py @gabrielhamu`. Include header comment explaining purpose
 
 **Manual step** (not a task — document in PR): Enable "Require review from Code Owners" in GitHub Settings > Branches > main. Enable "Allow administrators to bypass".
 

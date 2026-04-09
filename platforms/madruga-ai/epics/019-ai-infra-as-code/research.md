@@ -6,7 +6,7 @@
 
 ## R1. CODEOWNERS Syntax and GitHub Branch Protection
 
-**Decision**: Use GitHub CODEOWNERS file with `@gabrielhamu-srna` as owner for `.claude/`, `CLAUDE.md`, platform-specific `CLAUDE.md`, and `skill-lint.py`.
+**Decision**: Use GitHub CODEOWNERS file with `@gabrielhamu` as owner for `.claude/`, `CLAUDE.md`, platform-specific `CLAUDE.md`, and `skill-lint.py`.
 
 **Rationale**: GitHub natively supports CODEOWNERS. When branch protection requires code owner review, any PR touching matched paths must be approved by the designated owner. Admin bypass is configurable via "Allow administrators to bypass" setting.
 

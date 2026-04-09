@@ -27,6 +27,10 @@ We will representar agentes como configuracao JSONB no banco, nao como classes P
 - White-label: cada tenant controla branding, tone, welcome message, canal proprio (Evolution API — ADR-005)
 - Dados do cliente sao propriedade do cliente (principio inviolavel)
 
+### Routing configuravel por numero
+
+Cada numero WhatsApp do tenant pode ter regras de roteamento diferentes. Exemplo: mensagens individuais no numero principal vao para o agente de vendas; mensagens em grupo com @mention vao para o agente de suporte. Regras sao configuradas via admin panel (`routing_rules` table), sem deploy. Avaliacao por priority ASC, first-match wins. Sem regras = `tenants.settings.default_agent_id`.
+
 ### Config por agent (JSONB)
 Campos configuráveis por tenant/agent:
 - `system_prompt` — personalidade e instrucoes (texto livre)
@@ -48,8 +52,10 @@ Campos configuráveis por tenant/agent:
 | **System prompt** | Personalidade e instrucoes | Texto livre editavel no admin |
 | **Guardrails** | Limites entrada/saida | JSONB: PII detection, forbidden topics, max length, disclaimers (colunas explicitas — anti-pattern #6) |
 | **Tools** | Capacidades do agente | Filtrado por template — support nao ve sales_tools (anti-pattern #5) |
+| **Routing Rules** | Qual agente atende cada tipo de mensagem por numero | `routing_rules` table: (phone_number, match_conditions) → agent_id. Priority ASC, first-match wins |
+| **Pipeline Steps** | Sequencia de processamento do agente | `agent_pipeline_steps` table: classifier → clarifier → resolver → specialist (configuravel por agent). Zero steps = single LLM call |
 | **Triggers** | Regras de escalacao | Phase 1: 4 hardcoded. v2: IF condition THEN action configuravel |
-| **Smart Router** | Quando responder em grupos | 5 paths (mention, reply, save-only, event, ignore) com thresholds ajustaveis |
+| **Smart Router** | Classificacao de mensagem + resolucao de agente | 6 route types (classification) + routing_rules por numero (agent resolution). RouteDecision = path, routing_rules = qual agente |
 
 ### Safety net para mudancas de config
 - A/B testing com golden dataset antes de mudar prompts (score novo > baseline + 0.05 — ADR-008)
@@ -85,6 +91,9 @@ Campos configuráveis por tenant/agent:
 - [-] Requer validacao robusta (JSON Schema ou Pydantic) para evitar configs invalidas
 - [-] Debugging mais dificil — stack trace nao aponta direto pro "codigo" do agente
 - [-] Guardrails JSONB pode virar "mega config" — mitiga com colunas explicitas e validacao strict
+- [+] Routing rules: multiplos agentes por numero, cada um para um tipo de interacao — zero deploy
+- [+] Pipeline steps: comportamento do agente configuravel per-tenant (classifier → resolver) sem mudar codigo
+- [-] Routing rules mal configuradas podem direcionar mensagens ao agente errado — mitigar com validacao no admin + "test message" feature
 
 ---
 

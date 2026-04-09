@@ -61,10 +61,10 @@ knowledge:
 
 ```
 # .github/CODEOWNERS
-/.claude/                          @gabrielhamu-srna
-/CLAUDE.md                         @gabrielhamu-srna
-/platforms/*/CLAUDE.md             @gabrielhamu-srna
-/.specify/scripts/skill-lint.py    @gabrielhamu-srna
+/.claude/                          @gabrielhamu
+/CLAUDE.md                         @gabrielhamu
+/platforms/*/CLAUDE.md             @gabrielhamu
+/.specify/scripts/skill-lint.py    @gabrielhamu
 ```
 
 No computed logic. GitHub interprets path patterns natively.

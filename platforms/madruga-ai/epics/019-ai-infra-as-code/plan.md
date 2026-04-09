@@ -83,10 +83,10 @@ CONTRIBUTING.md                      # T8 — CREATE (~80 lines)
 ### T1. CODEOWNERS (CREATE `.github/CODEOWNERS`)
 
 ~5 lines. Standard GitHub CODEOWNERS syntax. Paths:
-- `/.claude/` → `@gabrielhamu-srna`
-- `/CLAUDE.md` → `@gabrielhamu-srna`
-- `/platforms/*/CLAUDE.md` → `@gabrielhamu-srna`
-- `/.specify/scripts/skill-lint.py` → `@gabrielhamu-srna`
+- `/.claude/` → `@gabrielhamu`
+- `/CLAUDE.md` → `@gabrielhamu`
+- `/platforms/*/CLAUDE.md` → `@gabrielhamu`
+- `/.specify/scripts/skill-lint.py` → `@gabrielhamu`
 
 **Manual step**: Enable "Require review from Code Owners" in GitHub branch protection for `main`. Enable "Allow administrators to bypass".
 
