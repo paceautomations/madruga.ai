@@ -190,7 +190,7 @@ export default function ChangesTab({ repoUrl }: ChangesTabProps) {
   // Fetch stats on mount
   useEffect(() => {
     fetch(`${EASTER_BASE}/api/commits/stats`)
-      .then((r) => r.json())
+      .then((r) => { if (!r.ok) throw new Error(r.statusText); return r.json(); })
       .then((d: StatsResponse) => setStats(d))
       .catch(() => setStatsError(true));
   }, []);
@@ -222,7 +222,7 @@ export default function ChangesTab({ repoUrl }: ChangesTabProps) {
 
     setLoading(true);
     fetch(`${EASTER_BASE}/api/commits?${params}`)
-      .then((r) => r.json())
+      .then((r) => { if (!r.ok) throw new Error(r.statusText); return r.json(); })
       .then((d: CommitsResponse) => {
         setCommits(d.commits);
         setTotal(d.total);
