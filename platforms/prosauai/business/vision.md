@@ -1,6 +1,6 @@
 ---
 title: "Vision"
-updated: 2026-04-07
+updated: 2026-04-10
 sidebar:
   order: 1
 ---
@@ -172,6 +172,87 @@ Desde novembro de 2024, **respostas a mensagens iniciadas pelo usuario sao grati
 | **Debounce** | Agrupamento de mensagens rapidas numa unica interacao (evita respostas multiplas) | "O cliente digitou 3 msgs em 2s — debounce agrupou em 1" |
 | **Canal** | Meio de comunicacao (WhatsApp, futuro: outros). Cada canal tem um adaptador | "ProsaUAI e WhatsApp-first mas suporta multiplos canais" |
 | **Trigger** | Mensagem proativa enviada pelo agente por evento ou agendamento | "Trigger de lembrete enviado 1h antes do jogo" |
+
+---
+
+---
+
+## 8. Multi-Tenant End-State (Faseamento)
+
+A vision multi-tenant nao e implementada num unico salto — segue 3 fases que mapeiam a maturidade comercial da plataforma. Cada fase tem trigger explicito; nao se antecipa fase sem dor real para evita-la.
+
+### Fase 1 — Fundacao Multi-Tenant Estrutural (epic 003)
+
+**Quando:** agora. Pre-requisito de qualquer outro epic.
+
+**O que entrega:**
+
+- Codigo ja e multi-tenant: `Tenant` abstraction, `TenantStore` (file-backed YAML), per-tenant credentials, per-tenant Redis keys (debounce + idempotency)
+- Auth via `X-Webhook-Secret` per-tenant (substitui HMAC imaginario que rejeitava 100% dos webhooks reais)
+- 2 tenants reais operando em paralelo desde o dia 1: **Pace Ariel** + **Pace ResenhAI** (ambas instancias internas Pace)
+- Parser corrigido contra Evolution v2.3.0 real (12 correcoes empiricas validadas com 26 fixtures capturadas)
+- Deploy isolado por rede: Tailscale no dev, Docker network privada na prod Fase 1 — **superficie de ataque zero** ate Fase 2
+
+**O que NAO entrega:** admin API, Caddy publico, rate limit per-tenant, billing.
+
+**Stakeholder:** time interno Pace.
+
+**Trigger de saida:** primeiro cliente externo pagando R$ 0/mes (free tier validado) ou R$ 197/mes (Starter). Sem cliente externo, nao avanca para Fase 2 — Fase 1 e suficiente para validar a tese com clientes internos.
+
+### Fase 2 — Public API Multi-Tenant (epic 012)
+
+**Quando:** quando existir 1+ cliente externo disposto a configurar webhook na sua propria instancia Evolution.
+
+**O que entrega:**
+
+- Caddy reverse proxy com TLS automatico (Let's Encrypt) na frente da prosauai-api
+- Endpoint publico `https://api.prosauai.com/webhook/whatsapp/{instance}`
+- Admin API: `POST/GET/PATCH/DELETE /admin/tenants` com auth via master token (+ futura JWT scoped)
+- Rate limiting per-tenant (Redis sliding window por minuto + per dia, integrado com Bifrost spend caps — ja documentado em ADR-015)
+- Onboarding doc para clientes externos: como configurar webhook na sua Evolution, como gerar secret, validacao end-to-end
+- Metricas basicas per-tenant expostas (requests/s, errors, debounces flushed) — pre-requisito visual para cobranca
+- Hot reload de tenants (FS watcher) ou reload via admin API — sem restart
+
+**O que NAO entrega:** Postgres, billing automatizado (pagamento manual), self-service signup.
+
+**Stakeholder:** primeiros clientes externos, time interno Pace.
+
+**Trigger de entrada:** primeiro cliente externo dizendo "sim, quero pagar/testar". Estimativa: ~2 semanas de implementacao.
+
+**Trigger de saida:** >= 5 tenants reais simultaneos OU dor operacional de gerenciar `tenants.yaml` manualmente (quem editou? quando? rollback?).
+
+**ADRs novos:** [ADR-021](../decisions/ADR-021-caddy-edge-proxy.md) (Caddy como edge proxy), [ADR-022](../decisions/ADR-022-admin-api.md) (Admin API).
+
+### Fase 3 — Operacao em Producao Multi-Tenant (epic 013)
+
+**Quando:** dor operacional real, nao antes. Trigger objetivo: >=5 tenants em producao OU primeiro incidente de "tenant noisy neighbor" derrubando outros.
+
+**O que entrega:**
+
+- `TenantStore` migrado de YAML para Postgres (schema gerenciado em Supabase, RLS para futuro self-service)
+- Circuit breaker per-tenant (ja documentado em ADR-015) — tenant doente nao derruba os outros
+- Billing/usage tracking automatizado (contagem de mensagens processadas, custo LLM via Bifrost — ja documentado em ADR-012)
+- Alertas Prometheus/Grafana per-tenant (requests/s, error rate, queue depth, spend approaching cap)
+- Auditoria: log imutavel de operacoes administrativas (quem criou/editou/disabilitou cada tenant)
+- Backup/restore do estado dos tenants (config + secrets via Infisical)
+
+**O que NAO entrega:** UI admin (provavelmente so API + scripts no inicio); migracao para outras regioes geograficas.
+
+**Stakeholder:** ops team Pace, SREs, finance team (billing).
+
+**Trigger de entrada:** dor operacional real e mensuravel. Estimativa: ~3 semanas de implementacao.
+
+**ADR novo:** [ADR-023](../decisions/ADR-023-tenant-store-postgres-migration.md) (trigger e migration plan YAML → Postgres).
+
+### Sintese das fases
+
+| Fase | Epic | Trigger entrada | Output principal | Stakeholder |
+|------|------|----------------|------------------|-------------|
+| **1 — Fundacao** | 003 (now) | Bloqueio do servico em producao real | Codigo multi-tenant operando com 2 tenants internos | Time interno Pace |
+| **2 — Public API** | 012 (later) | Primeiro cliente externo | Caddy + Admin API + rate limit + onboarding externo | Clientes externos + Pace |
+| **3 — Operacao** | 013 (later) | >=5 tenants OU dor operacional | Postgres + circuit breaker + billing + alertas | Ops + finance |
+
+Cada fase e independente — implementar Fase 2 sem cliente real seria overengineering. Implementar Fase 3 sem >=5 tenants seria desperdicio. **A disciplina e nao antecipar trigger.**
 
 ---
 

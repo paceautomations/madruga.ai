@@ -180,8 +180,16 @@ def parse_claude_output(stdout: str) -> dict:
     Returns dict with keys: tokens_in, tokens_out, cost_usd, duration_ms.
     All values default to None on parse failure (best-effort, FR-011).
 
+    `tokens_in` is the TOTAL input sent to the model — sum of raw input_tokens
+    plus cache reads and cache writes. When prompt caching is active (default),
+    `usage.input_tokens` alone is only the uncached delta (often < 100 tokens)
+    and severely undercounts the real input. The portal displays this value, so
+    we aggregate all three fields here to reflect the actual prompt size.
+
     If total_cost_usd is missing but token counts are available, estimates
-    cost using Sonnet pricing as fallback (see _estimate_cost_usd).
+    cost using Sonnet pricing as fallback (see _estimate_cost_usd). Note that
+    the estimate will overcount cost in cache-heavy runs (cache reads cost less
+    than fresh input), but total_cost_usd from the CLI is preferred and correct.
     """
     result: dict = {"tokens_in": None, "tokens_out": None, "cost_usd": None, "duration_ms": None}
     if not stdout:
@@ -189,7 +197,15 @@ def parse_claude_output(stdout: str) -> dict:
     try:
         data = json.loads(stdout)
         usage = data.get("usage", {})
-        result["tokens_in"] = usage.get("input_tokens")
+        input_tokens = usage.get("input_tokens")
+        cache_read = usage.get("cache_read_input_tokens")
+        cache_create = usage.get("cache_creation_input_tokens")
+        # Sum all three. Only return None when ALL three are absent, so a run
+        # without cache fields (cache_read=None) still reports raw input_tokens.
+        if input_tokens is None and cache_read is None and cache_create is None:
+            result["tokens_in"] = None
+        else:
+            result["tokens_in"] = (input_tokens or 0) + (cache_read or 0) + (cache_create or 0)
         result["tokens_out"] = usage.get("output_tokens")
         result["cost_usd"] = data.get("total_cost_usd")
         result["duration_ms"] = data.get("duration_ms")

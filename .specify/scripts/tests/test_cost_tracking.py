@@ -139,8 +139,10 @@ class TestParseClaudeOutputCorrectExtraction:
     """Verify parse_claude_output() extracts the right fields from real JSON."""
 
     def test_tokens_in_from_real_json_no_tools(self):
+        # tokens_in aggregates raw input + cache_read + cache_creation so the
+        # portal shows the real prompt size (not just the uncached delta).
         result = parse_claude_output(json.dumps(REAL_JSON_NO_TOOLS))
-        assert result["tokens_in"] == 6
+        assert result["tokens_in"] == 6 + 16210 + 38899
 
     def test_tokens_out_from_real_json_no_tools(self):
         result = parse_claude_output(json.dumps(REAL_JSON_NO_TOOLS))
@@ -162,7 +164,7 @@ class TestParseClaudeOutputCorrectExtraction:
 
     def test_tokens_in_from_real_json_with_tools(self):
         result = parse_claude_output(json.dumps(REAL_JSON_WITH_TOOLS))
-        assert result["tokens_in"] == 7
+        assert result["tokens_in"] == 7 + 18379 + 70145
 
     def test_tokens_out_from_real_json_with_tools(self):
         result = parse_claude_output(json.dumps(REAL_JSON_WITH_TOOLS))

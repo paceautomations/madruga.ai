@@ -90,6 +90,8 @@ Direct edits bypass validation (frontmatter, handoff chains, archetype complianc
 - Filesystem (Markdown + YAML), SQLite WAL mode (pipeline state) (epic/madruga-ai/022-mermaid-migration)
 - Python 3.12 + FastAPI >=0.115 + FastAPI, uvicorn, pydantic 2.x, pydantic-settings, redis[hiredis] >=5.0, httpx, structlog (epic/prosauai/001-channel-pipeline)
 - Redis 7 (debounce buffers apenas — sem persistência de dados) (epic/prosauai/001-channel-pipeline)
+- Python 3.12, FastAPI >=0.115 + `opentelemetry-sdk`, `opentelemetry-exporter-otlp-proto-grpc`, `opentelemetry-instrumentation-fastapi`, `opentelemetry-instrumentation-httpx`, `opentelemetry-instrumentation-redis`, `arize-phoenix-otel` (epic/prosauai/002-observability)
+- Supabase Postgres (schema `observability`, gerenciado pelo Phoenix); Redis 7 (buffers de debounce) (epic/prosauai/002-observability)
 
 ## Recent Changes
 - epic/madruga-ai/017-observability-tracing-evals: Added Python 3.11+ (backend), TypeScript/React (portal) + sqlite3 (stdlib), structlog, FastAPI (easter), React + @xyflow/react (portal existente), Astro Starlight

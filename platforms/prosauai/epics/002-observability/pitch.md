@@ -1,7 +1,7 @@
 ---
 id: "002"
 title: "Observability — Tracing total da jornada de mensagem"
-status: in_progress
+status: shipped
 phase: now
 features:
   - "Trace fim-a-fim por mensagem (webhook → router → debounce → echo)"
@@ -18,6 +18,7 @@ arch:
   modules: [M14]
   contexts: [observability, channel, conversation]
   containers: [prosauai-api, redis, phoenix, supabase-prosauai]
+delivered_at: 2026-04-10
 ---
 
 # 002 — Observability — Tracing total da jornada de mensagem

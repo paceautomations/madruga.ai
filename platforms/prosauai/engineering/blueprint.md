@@ -1,6 +1,6 @@
 ---
 title: "Engineering Blueprint"
-updated: 2026-04-07
+updated: 2026-04-10
 sidebar:
   order: 1
 ---
@@ -24,7 +24,7 @@ Referencia tecnica consolidada da plataforma **ProsaUAI — Agentes WhatsApp**: 
 | Redis 7 | Managed ou self-hosted | 6379/TCP | Single instance + Sentinel (HA) |
 | Supabase (PG 15 + pgvector + RLS) | Managed (Supabase Cloud) | 5432/TCP | Vertical (managed) |
 | Bifrost | Go binary (LLM proxy) | 8080/HTTP | Horizontal (stateless) |
-| LangFuse v3 | Docker Compose (self-hosted) | 3000/HTTP | Single instance |
+| Phoenix (Arize) | Docker Compose (self-hosted) | 6006/HTTP (UI) + 4317/gRPC (OTLP) | Single instance |
 | Infisical | Docker Compose (self-hosted) | 8080/HTTP | Single instance |
 | Evolution API | Cloud mode (managed) | — (webhook) | Managed pelo provider |
 
@@ -120,24 +120,44 @@ graph LR
 
 ## 3. Folder Structure
 
-<!-- Preencher quando repositorio prosauai-api for criado -->
-
 ```text
-prosauai-api/
-├── src/
-│   ├── api/            # FastAPI routes + webhook receiver
-│   ├── worker/         # ARQ tasks (debounce, LLM, delivery, eval, trigger)
-│   ├── domain/         # Bounded contexts (channel, conversation, safety, operations, observability)
-│   ├── infra/          # DB, Redis, external API clients
-│   └── shared/         # Value objects, exceptions, config
-├── admin/              # Next.js 15 frontend
-├── tests/              # pytest (unit + integration + RLS)
-└── docker-compose.yml  # Full local environment
+prosauai/
+├── prosauai/
+│   ├── __init__.py
+│   ├── main.py               # FastAPI app, lifespan, structlog config
+│   ├── config.py              # pydantic-settings + .env
+│   ├── core/                  # Core domain logic
+│   │   ├── formatter.py       # Evolution API payload → ParsedMessage
+│   │   ├── router.py          # Smart Router (6 rotas), RouteResult
+│   │   └── debounce.py        # DebounceManager (Redis Lua + keyspace notifications)
+│   ├── channels/              # Channel adapters (ACL boundary)
+│   │   ├── base.py            # MessagingProvider ABC
+│   │   └── evolution.py       # EvolutionProvider (httpx async)
+│   ├── api/                   # FastAPI endpoints
+│   │   ├── webhooks.py        # POST /webhook/whatsapp/{instance}
+│   │   ├── health.py          # GET /health
+│   │   └── dependencies.py    # HMAC verification, Redis injection
+│   └── observability/         # OTel SDK + Phoenix integration (epic 002)
+│       ├── __init__.py
+│       ├── setup.py           # configure_observability() — SDK + exporter
+│       ├── conventions.py     # SpanAttributes constants (prosauai.*, gen_ai.*)
+│       ├── structlog_bridge.py # add_otel_context processor (log↔trace)
+│       └── tracing.py         # get_tracer(), W3C context inject/extract
+├── tests/                     # pytest (unit + integration)
+│   ├── fixtures/              # Evolution API payload fixtures
+│   ├── unit/                  # Unit tests
+│   └── integration/           # Integration tests
+├── pyproject.toml             # Deps, ruff, pytest config
+├── Dockerfile                 # Multi-stage build
+├── docker-compose.yml         # api + redis + phoenix
+└── .env.example               # Environment template
 ```
+
+> **Nota**: A estrutura `src/domain/` com BCs separados e `src/infra/` sera evolucao natural quando epics futuros adicionarem Supabase e ARQ worker. A estrutura atual (flat packages) e adequada para o escopo atual (channel pipeline + observability).
 
 | Convencao | Regra |
 |-----------|-------|
-| Bounded contexts | 1 diretorio por BC em `src/domain/` |
+| Packages por concern | `core/` (dominio), `api/` (endpoints), `channels/` (adapters), `observability/` (cross-cutting) |
 | RLS tests | Obrigatorios para toda nova tabela com tenant_id |
 | Secrets | Nunca em codigo; sempre via Infisical SDK |
 
@@ -188,13 +208,15 @@ prosauai-api/
 
 | Ferramenta | Papel | Integracao |
 |------------|-------|------------|
-| LangFuse v3 (self-hosted) | Tracing LLM, prompt versioning, sessoes | SDK Python; `trace_id` = `conversation_id` |
+| Phoenix (Arize) self-hosted | Tracing fim-a-fim da jornada de mensagens, waterfall UI, SpanQL queries | OTel SDK Python → OTLP gRPC :4317; Postgres backend (Supabase) |
+| OpenTelemetry SDK | Auto-instrumentation (FastAPI, httpx, redis) + spans manuais de dominio | `configure_observability()` no lifespan; `prosauai.observability.*` |
+| structlog + OTel bridge | Correlacao log↔trace: `trace_id`/`span_id` em todo log estruturado | Processor `add_otel_context` em shared_processors |
 | DeepEval | Eval offline: faithfulness, relevance, toxicity, coherence | Batch jobs no worker; resultados em `eval_results` |
 | Promptfoo | Regressao de prompts, red-teaming automatizado | CI/CD pipeline; roda contra prompt snapshots |
 | `usage_events` | Metricas de consumo, latencia, custo por tenant | Supabase; particao mensal por `event_month` |
-| LangFuse traces | Latencia p50/p95/p99 por modulo do pipeline | Fire-and-forget; buffer local em Redis se LangFuse indisponivel |
+| Phoenix traces | Latencia p50/p95/p99 por span (webhook, route, debounce, echo) | Fire-and-forget via BatchSpanProcessor; API continua se Phoenix indisponivel |
 
-> Detalhes: [ADR-007](../decisions/ADR-007-langfuse-observability/) | [ADR-008](../decisions/ADR-008-eval-stack/)
+> Detalhes: [ADR-020](../decisions/ADR-020-phoenix-observability.md) (supersedes [ADR-007](../decisions/ADR-007-langfuse-observability/)) | [ADR-008](../decisions/ADR-008-eval-stack/)
 
 ### 4.5 Multi-Tenancy
 
@@ -218,7 +240,7 @@ prosauai-api/
 | PG LISTEN/NOTIFY drop | Polling fallback a cada 5s | ARQ cron a cada 30min catch-up de eventos perdidos |
 | Rate limit excedido | HTTP 429 + mensagem amigavel ao usuario WhatsApp | Fila de espera; mensagem processada quando slot disponivel |
 | Circuit breaker aberto | Requests do tenant vao para DLQ | Half-open apos 5min; 1 request teste; sucesso = fecha |
-| Tool execution falha | Retry 1x; se falha novamente, resposta sem tool + log | Alerta no LangFuse trace |
+| Tool execution falha | Retry 1x; se falha novamente, resposta sem tool + log | Alerta no Phoenix trace |
 | Webhook HMAC invalido | Request rejeitado com 401 | Log de tentativa + alerta seguranca |
 | Debounce flush avalanche | Jitter aleatorio 0-1s no TTL do Lua script (espalha flushes no tempo) | — |
 | Worker overload (pico) | ARQ `max_jobs=20` limita batches concorrentes; `asyncio.Semaphore(10)` limita chamadas LLM | Batches excedentes ficam na fila Redis (sem perda); backpressure se fila > 100 jobs |
@@ -256,7 +278,7 @@ prosauai-api/
 | Phone hash | Pipeline | Supabase `customers.phone_hash` (SHA-256) | Vida do registro | Pseudonimizado | Legitimo interesse |
 | Sessoes ativas | Pipeline processing | Redis (TTL 24h) | 24h auto-expire | Sim | Legitimo interesse |
 | Embeddings knowledge base | Admin upload | Supabase pgvector `knowledge_chunks` | Permanente (ate delete manual) | Possivel | Consentimento do tenant |
-| LangFuse traces | Pipeline observability | ClickHouse (LangFuse) | 90d | Sim (referencia) | Legitimo interesse |
+| Phoenix traces | Pipeline observability | Supabase PG (schema `observability`) | 90d | Sim (referencia) | Legitimo interesse |
 | Application logs | Todos os servicos | Log rotation local | 30d | Hash only | Legitimo interesse |
 | Audit trail (seguranca) | Auth, admin actions, secret ops | Supabase `audit_log` | 365d | Sim | Obrigacao legal |
 | Consent records | 1o contato WhatsApp | Supabase `user_consents` | Permanente | Sim | Obrigacao legal |
@@ -304,7 +326,7 @@ prosauai-api/
 | **ACL** | Anti-Corruption Layer — isola integracao com sistemas externos, traduzindo formatos | Arquitetura |
 | **Bifrost** | Proxy LLM em Go — centraliza rate limiting, cost tracking | Infra |
 | **Evolution API** | Gateway WhatsApp self-hosted (cloud mode) — conecta ProsaUAI ao WhatsApp sem BSP | Integracao |
-| **LangFuse** | Observabilidade LLM: tracing, eval, prompt versioning. Self-hosted v3 | Observabilidade |
+| **Phoenix (Arize)** | Observabilidade: tracing fim-a-fim, waterfall UI, SpanQL queries. Self-hosted, Postgres backend. Substitui LangFuse ([ADR-020](../decisions/ADR-020-phoenix-observability.md)) | Observabilidade |
 | **CSAT** | Customer Satisfaction Score (1-5) coletado apos atendimento humano | Metricas |
 | **Channel Adapter** | Interface padrao que abstrai canal de mensageria. Novo canal = novo adapter, zero mudanca no core | Arquitetura |
 | **Tool Registry** | Catalogo central de tools com metadata (nome, params, categoria). Alimenta admin e valida configs | Arquitetura |
@@ -317,6 +339,136 @@ prosauai-api/
 | **Sandwich Pattern** | Defesa contra prompt injection: system prompt antes e depois do input do usuario | Seguranca |
 | **SAR** | Subject Access Request — requisicao do titular de dados (LGPD Art. 18) | Compliance |
 | **RPM** | Requests Per Minute — metrica primaria de rate limiting por tenant | Metricas |
+
+---
+
+## 8. Multi-Tenant Topology — Faseamento
+
+A arquitetura multi-tenant nao e binaria. Tres fases progressivas, cada uma com escopo bem definido e trigger explicito de entrada.
+
+### Fase 1 — Fundacao Estrutural (epic 003)
+
+**Topologia:**
+
+```mermaid
+graph LR
+    Tailscale[/"Tailscale<br/>(dev)"/] -->|"100.x.x.x:8050<br/>(dev only)"| API
+    DockerNet[/"Docker network<br/>pace-net (prod)"/] -->|"http://api:8050<br/>(internal DNS)"| API
+    Evolution_Ariel[/"Evolution Ariel<br/>(Pace internal)"/] -->|"webhook + X-Webhook-Secret"| Tailscale
+    Evolution_Resenha[/"Evolution ResenhAI<br/>(Pace internal)"/] -->|"webhook + X-Webhook-Secret"| Tailscale
+
+    subgraph ProsauAI_API ["prosauai-api :8050"]
+        TR[TenantResolver]
+        Auth[Auth dep<br/>X-Webhook-Secret]
+        Idem[Idempotency<br/>Redis SETNX]
+        Parser[Parser v2.3.0]
+        Router[Router 6 paths]
+        Debounce[Debounce<br/>buf:tenant_id:*]
+        EvoP[EvolutionProvider<br/>per-tenant credentials]
+    end
+
+    API[ProsauAI API] --> TR
+    TR --> Auth
+    Auth --> Idem
+    Idem --> Parser
+    Parser --> Router
+    Router --> Debounce
+    Debounce --> EvoP
+    EvoP -.->|"echo back<br/>tenant.evolution_api_url"| Evolution_Ariel
+    EvoP -.->|"echo back<br/>tenant.evolution_api_url"| Evolution_Resenha
+```
+
+**Caracteristicas:**
+- TenantStore file-backed YAML, lifespan carrega no startup
+- 2 tenants reais (Ariel + ResenhAI) operando em paralelo
+- Idempotencia per-tenant (`seen:{tenant_id}:{message_id}` Redis SETNX 24h TTL)
+- Debounce keys per-tenant (`buf:/tmr:{tenant_id}:{sender_key}:{ctx}`)
+- Auth via `X-Webhook-Secret` constant-time compare
+- Deploy isolado por rede: Tailscale (dev) + Docker network privada (prod)
+- **Zero porta exposta na internet publica.**
+
+**O que NAO existe:** Caddy publico, admin API, rate limit per-tenant, billing.
+
+**ADRs novas envolvidas:** nenhuma (refactor estrutural, sem decisao 1-way-door).
+
+### Fase 2 — Public API (epic 012)
+
+**Topologia (delta vs Fase 1):**
+
+```mermaid
+graph LR
+    Internet((Internet)) -->|"HTTPS :443<br/>api.prosauai.com"| Caddy
+    Caddy -->|"TLS terminated<br/>+ rate limit per IP"| API
+    AdminAPI[Admin API<br/>POST /admin/tenants] --> TS_File[TenantStore<br/>tenants.yaml hot-reload]
+
+    Caddy[/"Caddy 2<br/>:80, :443"/]
+    API[ProsauAI API :8050]
+
+    AdminClient[/"Admin Client<br/>(master token)"/] --> Caddy
+    Caddy --> AdminAPI
+
+    Evolution_Cliente[/"Evolution<br/>(cliente externo)"/] -->|"webhook + secret"| Caddy
+```
+
+**Mudancas vs Fase 1:**
+- Caddy 2 alpine container na frente, expondo `:80` + `:443` (Let's Encrypt automatico)
+- ProsauAI API continua sem `ports:` no docker-compose — **so Caddy fala com a internet**
+- Admin API: novo modulo `prosauai/api/admin.py` com endpoints `POST/GET/PATCH/DELETE /admin/tenants`
+- Auth admin via master token estatico no header `X-Admin-Token` (futuro: JWT scoped per-org)
+- Hot reload do TenantStore: file watcher (inotify) ou endpoint `POST /admin/tenants/reload` — sem restart
+- Rate limiting per-tenant em duas camadas: (a) Caddy `rate_limit` por IP global; (b) Redis sliding window per-tenant integrado com Bifrost spend caps (ja documentado em [ADR-015](../decisions/ADR-015-noisy-neighbor-mitigation.md))
+- Metricas basicas per-tenant expostas via `/admin/metrics` (requests/s, errors, debounces flushed)
+
+**ADRs novas envolvidas:** [ADR-021](../decisions/ADR-021-caddy-edge-proxy.md) (Caddy), [ADR-022](../decisions/ADR-022-admin-api.md) (Admin API).
+
+**Storage:** ainda YAML — Postgres so na Fase 3.
+
+### Fase 3 — Operacao (epic 013)
+
+**Topologia (delta vs Fase 2):**
+
+```mermaid
+graph LR
+    AdminAPI[Admin API] --> Postgres[(TenantStore<br/>Postgres + RLS)]
+    Postgres -->|"audit_log"| AuditTable[(audit_log)]
+    API[ProsauAI API] --> CB[Circuit Breaker<br/>per-tenant]
+    CB -->|"open: DLQ"| DLQ[(DLQ Redis Stream)]
+    API --> Bifrost[Bifrost LLM proxy<br/>spend cap per-tenant]
+    Bifrost --> Stripe[Stripe billing]
+    API --> Prometheus[Prometheus]
+    Prometheus --> Grafana[Grafana dashboards]
+    Grafana -->|"alerts"| PagerDuty[PagerDuty]
+
+    Postgres -.->|"migrated from<br/>tenants.yaml"| YAMLLegacy[/"tenants.yaml<br/>(deprecated)"/]
+```
+
+**Mudancas vs Fase 2:**
+- TenantStore migrado de YAML para Postgres (schema gerenciado em Supabase, RLS herdada do [ADR-011](../decisions/ADR-011-pool-rls-multi-tenant.md))
+- `audit_log` table: append-only, registra todas operacoes administrativas (quem criou/editou/disabilitou cada tenant)
+- Circuit breaker per-tenant ([ADR-015](../decisions/ADR-015-noisy-neighbor-mitigation.md)): tenant doente vai pra DLQ, half-open apos 5min
+- Billing/usage tracking automatizado via Bifrost spend metrics + Stripe ([ADR-012](../decisions/ADR-012-consumption-billing.md))
+- Alertas Prometheus per-tenant (requests/s, error rate, queue depth, spend approaching cap)
+- Backup/restore: pg_dump scheduled + secrets via [Infisical](../decisions/ADR-017-secrets-management.md)
+- Migracao YAML → Postgres feita uma unica vez, com cutover ([ADR-023](../decisions/ADR-023-tenant-store-postgres-migration.md))
+
+**ADR nova envolvida:** [ADR-023](../decisions/ADR-023-tenant-store-postgres-migration.md) (trigger e migration plan).
+
+**Trigger de entrada:** dor operacional real, nao antes. Threshold objetivo: >=5 tenants em producao OU primeiro incidente de noisy neighbor mensuravel.
+
+### Sintese — comparativo das fases
+
+| Aspecto | Fase 1 (epic 003) | Fase 2 (epic 012) | Fase 3 (epic 013) |
+|---------|------------------|------------------|------------------|
+| **Tenant storage** | YAML file | YAML file (hot reload) | Postgres + RLS |
+| **Edge proxy** | Nao | Caddy 2 + Let's Encrypt | Caddy 2 + Let's Encrypt |
+| **Porta publica** | Nenhuma (Tailscale dev / Docker network prod) | 80 + 443 (Caddy) | 80 + 443 (Caddy) |
+| **Admin API** | Nao | `POST/GET/PATCH/DELETE /admin/tenants` (master token) | + JWT scoped per-org + audit log |
+| **Rate limit per-tenant** | Nao | Redis sliding window + Bifrost spend cap | + Circuit breaker + DLQ per-tenant |
+| **Billing** | Nao | Manual (planilha) | Stripe automatizado |
+| **Alertas** | Nao | Manual (sem Prometheus) | Prometheus + Grafana + PagerDuty |
+| **Onboarding** | Manual interno | Vendas + Admin API + onboarding doc | Self-service via Stripe checkout |
+| **Estimativa** | ~1 semana (epic 003) | ~2 semanas (epic 012) | ~3 semanas (epic 013) |
+| **Trigger entrada** | Bloqueio do servico em prod real | Primeiro cliente externo pagante | >=5 tenants OU dor operacional mensuravel |
 
 ---
 
