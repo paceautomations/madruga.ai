@@ -6,6 +6,6 @@ version: "0.5.0"
 repo:
   org: paceautomations
   name: prosauai
-  base_branch: main
+  base_branch: develop
   epic_branch_prefix: "epic/prosauai/"
 tags: [whatsapp, conversational-ai, multi-tenant]

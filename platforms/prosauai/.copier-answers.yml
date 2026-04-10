@@ -6,6 +6,6 @@ platform_description: "Plataforma multi-tenant de agentes conversacionais WhatsA
 lifecycle: design
 repo_org: paceautomations
 repo_name: prosauai-api
-repo_base_branch: main
+repo_base_branch: develop
 include_business_flow: true
 register_portal: false

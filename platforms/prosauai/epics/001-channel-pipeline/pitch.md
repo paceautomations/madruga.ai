@@ -1,7 +1,7 @@
 ---
 id: "001"
 title: "Channel Pipeline"
-status: planned
+status: shipped
 phase: now
 features:
   - "Receber e responder mensagens"
@@ -15,6 +15,7 @@ arch:
   modules: [M1, M2, M3, M11]
   contexts: [channel]
   containers: [prosauai-api, redis, evolution-api]
+delivered_at: 2026-04-09
 ---
 
 # 001 — Channel Pipeline
