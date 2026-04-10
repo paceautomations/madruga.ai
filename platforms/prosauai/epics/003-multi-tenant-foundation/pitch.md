@@ -1,7 +1,7 @@
 ---
 id: "003"
 title: "Multi-Tenant Foundation — Auth + Parser Reality + Deploy"
-status: drafted
+status: in_progress
 phase: now
 features:
   - "Tenant abstraction + TenantStore (YAML file-backed, 2 tenants reais desde dia 1)"
@@ -10,9 +10,10 @@ features:
   - "Parser Evolution v2.3.0: 12 correcoes criticas (messageType reais, @lid, mentionedJid, groups.upsert, group-participants.update)"
   - "Fixture-driven testing — 26 payloads reais capturados substituem fixture sintetica"
   - "Deploy isolado por rede: Tailscale (dev) + Docker network (prod Fase 1)"
+  - "Observability multi-tenant: tenant.id substitui settings.tenant_id em 4-5 arquivos do epic 002"
 owner: "gabrielhamu"
 created: 2026-04-10
-updated: 2026-04-10
+updated: 2026-04-10  # [REVISADO] delta review 2026-04-10 apos ship do 002
 target: ""
 outcome: ""
 arch:
@@ -197,6 +198,49 @@ def route_message(msg: ParsedMessage, tenant: Tenant) -> RouteResult:
     """Interface apenas: troca settings por tenant, mantem logica if/elif.
     Refactor completo (classify + RoutingEngine) e problema do 004-router-mece.
     """
+
+
+# prosauai/core/debounce.py — tenant-aware keys + signatures
+class DebounceManager:
+    """Signatures revisadas pos-delta-review para multi-tenant."""
+
+    def _make_keys(
+        self,
+        tenant_id: str,
+        sender_key: str,
+        *,
+        group_id: str | None,
+    ) -> tuple[str, str]:
+        """Returns (buf:{tenant_id}:{sender_key}:{ctx}, tmr:{tenant_id}:{sender_key}:{ctx})."""
+
+    async def append(
+        self,
+        tenant_id: str,      # NOVO — required
+        sender_key: str,     # @lid or phone (was: phone)
+        *,
+        group_id: str | None,
+        text: str,
+    ) -> int | None:
+        """Emits 'debounce.append' span with SpanAttributes.TENANT_ID set from tenant_id param."""
+
+
+def parse_expired_key(key: str) -> tuple[str, str, str | None]:
+    """Parse 'tmr:{tenant_id}:{sender_key}:{ctx}' → (tenant_id, sender_key, group_id or None)."""
+
+
+# FlushCallback signature muda: adiciona tenant_id no inicio
+FlushCallback = Callable[
+    [str, str, str | None, str],  # (tenant_id, sender_key, group_id, text)
+    Awaitable[None],
+]
+
+
+# prosauai/observability/setup.py — delta do 003 sobre o 002
+def configure_observability(settings: Settings) -> None:
+    """Resource NAO inclui mais tenant_id (removido do Resource — process-wide, multi-tenant invalido).
+    service.name + service.version + deployment.environment apenas.
+    tenant_id vira per-span attribute, populado em webhooks.py via Depends(resolve_tenant_and_authenticate).
+    """
 ```
 
 ### Schema YAML de tenants
@@ -285,7 +329,7 @@ tenants:
 
 - **Porta 8050 vs 8040.** 8040 conflita com `madruga-ai` daemon. 8050 continua padrao `80X0` do Gabriel sem colidir. Afeta: `.env`, `docker-compose.yml`, `Dockerfile` EXPOSE, `config.py` default, `conftest.py`, README, webhook URL reapontado na Evolution.
 
-- **Observability (epic 002) precisa de `tenant_id` nos spans.** Quando 002 shipar primeiro, spans nascem single-tenant. Ao promover 003 depois, delta review adiciona `tenant_id` como span attribute via `gen_ai.*` ou `prosauai.*` conventions. Mitigacao trivial (~5 linhas no `configure_observability`), mas precisa estar na lista de revisao do epic-context.
+- **Observability (epic 002) precisa de `tenant_id` nos spans — ESCOPO CORRIGIDO apos delta review 2026-04-10.** 002 ja shipou com `SpanAttributes.TENANT_ID` definido mas fonte single-tenant (`settings.tenant_id`). Escopo real do fix em 003: (a) `Resource.create()` em `setup.py` L65-72 → remover `tenant_id` do resource, (b) `config.py` L51 → remover campo `tenant_id`, (c) `webhooks.py` L82 → trocar `settings.tenant_id` por `tenant.id` via nova dependency, (d) `DebounceManager.append()` → adicionar parametro `tenant_id` + span attribute, (e) `main.py` `_flush_echo` → resolver tenant via `parse_expired_key` + `app.state.tenant_store.get()`, (f) `webhooks.py` → `structlog.contextvars.bind_contextvars(tenant_id=tenant.id)`. **Escopo real: ~25-30 LOC em 4-5 arquivos**, NAO os ~5 LOC do draft original. Captured Decision #16 [REVISADO] reflete isso.
 
 - **004-router-mece ja drafted assume que 003 entrega `route_message(msg, tenant)`.** Task T7 deste epic entrega exatamente essa assinatura minima. 004 faz rip-and-replace do corpo. Se T7 mexer demais, 004 vai ter merge hell. Regra: **T7 e cirurgica — 10-20 linhas no maximo.**
 
@@ -312,6 +356,11 @@ tenants:
 - [ ] **T9** — `debounce.py`: keys `buf:/tmr:{tenant_id}:{sender_key}:{ctx}`; `parse_expired_key()` retorna `(tenant_id, sender_key, group_id)`
 - [ ] **T10** — `main.py`: lifespan carrega `TenantStore.load_from_file()` em `app.state.tenant_store`
 - [ ] **T11** — `main.py`: `_make_flush_callback(app)` resolve tenant por chave, cria `EvolutionProvider` per-tenant, envia echo
+- [ ] **T11b** — `prosauai/observability/setup.py`: remover `tenant_id` do `Resource.create()` (Resource e process-wide; tenant_id vira per-span). Remover/ajustar `configure_observability` docstring para nao mais ler `settings.tenant_id`
+- [ ] **T11c** — `prosauai/observability/conventions.py`: **ZERO mudanca** (contrato `SpanAttributes.TENANT_ID = "tenant_id"` preservado para compat com Phoenix dashboards). Apenas verificar que nao ha regressao
+- [ ] **T11d** — `prosauai/api/webhooks.py`: trocar `SpanAttributes.TENANT_ID: settings.tenant_id` por `tenant.id` vindo do `Depends(resolve_tenant_and_authenticate)`; adicionar `structlog.contextvars.bind_contextvars(tenant_id=tenant.id)` no inicio do handler
+- [ ] **T11e** — `prosauai/core/debounce.py`: novo parametro `tenant_id` em `DebounceManager.append()` e `append_or_immediate()`; emitir `SpanAttributes.TENANT_ID` como span attribute em `debounce.append` e `debounce.flush`; atualizar `FlushCallback` type para `(tenant_id, sender_key, group_id, text)`; `_make_keys()` aceita `tenant_id` e retorna keys prefixadas
+- [ ] **T11f** — `prosauai/config.py`: remover campo `tenant_id: str = "prosauai-default"` do `Settings`. Adicionar `tenants_config_path: Path = Path("config/tenants.yaml")`
 - [ ] **T12** — `docker-compose.yml`: remove `ports:`, adiciona volume `./config/tenants.yaml:/app/config/tenants.yaml:ro`
 - [ ] **T13** — `docker-compose.override.example.yml` template (gitignored real); bind Tailscale no dev
 - [ ] **T14** — `.env.example` + `.env` (gitignored) + `.gitignore` atualizado
@@ -404,7 +453,9 @@ tenants:
 | 2026-04-10 | `reactionMessage` → `IGNORE` com `reason="reaction"` (nao rota dedicada) | Reactions sao ambient signal; extrai `reaction_emoji` pra log/futuro, nao echoar; promovivel depois se necessario |
 | 2026-04-10 | Porta 8050 (nao 8040, nao 8080) | 8040 colide com madruga-ai daemon; 8080 colide com Evolution Manager; 8050 continua padrao 80X0 sem conflito |
 | 2026-04-10 | Sequencia 003 + 004 back-to-back, prod deploy apos 004 | Both epics partem de main separadamente; prod hold entre merges; evita cascade rebase risk |
-| 2026-04-10 | Fase 2 (Caddy + Admin API + rate limit) e Fase 3 (Postgres + billing + circuit breaker) documentados AGORA em business/engineering + ADRs | Pedido explicito do usuario; evita que end-state vire surpresa futura; ADR-021/022/023 novos |
+| 2026-04-10 | Fase 2 (Caddy + Admin API + rate limit) e Fase 3 (Postgres + billing + circuit breaker) documentados AGORA em business/engineering + ADRs | Pedido explicito do usuario; `[REVISADO 2026-04-10]` ja em main via reconcile do 002 (commit a78257e) |
+| 2026-04-10 `[REVISADO]` | Observability delta tem escopo real de ~25-30 LOC em 4-5 arquivos, NAO ~5 LOC | Delta review pos-ship do 002 revelou `settings.tenant_id` usado em 5 sites (config.py, setup.py, webhooks.py, debounce.py, main.py); `SpanAttributes.TENANT_ID` preservado |
+| 2026-04-10 `[NOVO]` | Pre-gate: 003 so entra no ciclo L2 apos 002 mergear em `develop` do prosauai repo | Caso contrario, 003 herda base sem codigo observability e scope explode; comando de verificacao documentado no pitch |
 
 ## Captured Decisions
 
@@ -423,9 +474,11 @@ tenants:
 | 11 | Deploy topology | `docker-compose.yml` sem `ports:`; override.yml bind Tailscale no dev; Docker network isolada na prod Fase 1 | blueprint §2.2 (DevX), §4.7 (superficie de ataque minima) |
 | 12 | Port decision | 8050 final (8040 colide com madruga-ai, 8080 colide com Evolution Manager) | blueprint §1 (infra topology) |
 | 13 | Test strategy | Fixture-driven com 26 pares capturados; partial assertion loader; `_*` keys ignoradas | blueprint §5 NFR testabilidade, epic 001 lesson learned |
-| 14 | Scope boundary | Fase 0+1 apenas; Fase 2 (Caddy, admin API) e Fase 3 (Postgres, billing) documentadas como ADR-021/022/023 para evitar surpresa futura | vision §1 end-state, user request 2026-04-10 |
+| 14 | Scope boundary | `[REVISADO 2026-04-10]` Fase 0+1 apenas; ADR-021/022/023 ja em main via reconcile do 002 — decisao retroativamente validada | vision §1 end-state, ADR-021, ADR-022, ADR-023 |
 | 15 | Epic sequencing | 003 + 004 back-to-back, ambos de main; prod hold entre merges; deploy unico apos 004 | Shape Up discipline, user request 2026-04-10 |
-| 16 | Observability delta | 002 shipa primeiro single-tenant; promocao do 003 adiciona `tenant_id` como span attribute via delta review | blueprint §4.4 observability (epic 002 compatibility) |
+| 16 | Observability delta | `[REVISADO 2026-04-10]` 002 shipou primeiro com `SpanAttributes.TENANT_ID` ja definido em `prosauai/observability/conventions.py` mas com fonte errada (`settings.tenant_id` singleton). Delta do 003: (a) remover `tenant_id` do `Resource.create()` em `setup.py` L70 (resource e process-wide), (b) remover campo `tenant_id` de `Settings` em `config.py` L51, (c) trocar `SpanAttributes.TENANT_ID: settings.tenant_id` por `tenant.id` em `webhooks.py` L82 via nova dependency, (d) adicionar `tenant_id` ao `DebounceManager.append()` e emitir como span attribute no `debounce.append`/`debounce.flush`, (e) `structlog.contextvars.bind_contextvars(tenant_id=...)` no handler para propagar em logs. Escopo real: ~25-30 LOC em 4 arquivos, NAO ~5 como no draft inicial | ADR-020 (phoenix observability), blueprint §4.4, prosauai/observability/conventions.py (002 impl), prosauai/observability/setup.py L65-72 (002 impl) |
+| 17 | Observability contract preservado | `SpanAttributes.TENANT_ID = "tenant_id"` ja e o contrato estabelecido pelo 002 — dashboards em `phoenix-dashboards/README.md` (596 linhas, 002 artifact) ja assumem essa chave. 003 apenas troca a **fonte** do valor, nao o nome do atributo. Dashboards continuam funcionando sem mudanca | ADR-020, prosauai/observability/conventions.py:24 (002 impl), phoenix-dashboards/README.md (002 artifact) |
+| 18 | Branch merge order | 003 branca a partir de `develop` (no repo prosauai) **apos** o 002 (`epic/prosauai/002-observability`, commit `1c751b1`) ser rebased contra `develop` (que tem `91dd8b6` com port 8050 + 26 fixtures) e mergeado. Se 002 nao mergar primeiro, 003 herda base sem o codigo observability — e precisaria adicionar todo observability layer do zero (scope blowup). **Assumption [VALIDAR]**: user mergea 002 em develop antes de 003 comecar o ciclo L2 | IMPLEMENTATION_PLAN.md §7.1, prosauai develop branch state |
 
 ## Resolved Gray Areas
 
@@ -439,11 +492,25 @@ tenants:
 
 **`reactionMessage`: rota dedicada ou `IGNORE`?:** `IGNORE` com `reason="reaction"`. Alternativa descartada: rota `REACTION` que echoa "gostei tambem!". UX estranho, complica enum sem beneficio. Extrai `reaction_emoji` mesmo assim — promovivel pra rota depois se aparecer caso de uso.
 
-**Observability do 002 precisa de `tenant_id`:** sim, mas **delta review resolve**. 002 shipa single-tenant; ao promover 003 (apos 002), delta review adiciona `tenant_id` em `configure_observability()` via `gen_ai.tenant.id` attribute (ou convention `prosauai.tenant.id`). Mitigacao trivial, ~5 linhas. Alternativa descartada: inverter ordem (parar 002, shipar 003 primeiro) — perde 40% do progresso do 002.
+**Observability do 002 precisa de `tenant_id`:** `[REVISADO apos delta review 2026-04-10]` escopo inicial subestimado. 002 ja shipou com `SpanAttributes.TENANT_ID = "tenant_id"` definido em `prosauai/observability/conventions.py` — contrato bom, mas fonte errada. O 002 code tem:
+1. `Resource.create({"tenant_id": settings.tenant_id})` em `setup.py` L65-72 — Resource e process-wide; em multi-tenant nao faz sentido. **Acao:** remover `tenant_id` do Resource (mantem `service.name`, `service.version`, `deployment.environment`).
+2. `SpanAttributes.TENANT_ID: settings.tenant_id` em `webhooks.py` L82 — fonte e `settings` singleton. **Acao:** trocar por `tenant.id` vindo da dependency `resolve_tenant_and_authenticate`.
+3. Campo `tenant_id: str = "prosauai-default"` em `config.py` L51 — **Acao:** remover (e ajustar todos os sites que leem `settings.tenant_id`).
+4. `DebounceManager.append(phone, *, group_id, text)` emite `debounce.append` span sem `tenant_id`. **Acao:** adicionar `tenant_id` ao signature e como span attribute.
+5. `_flush_echo` closure em `main.py` usa `settings.evolution_api_url` + `settings.evolution_api_key` (single-tenant). **Acao:** resolver tenant via `parse_expired_key(key)` → `app.state.tenant_store.get(tenant_id)` → `EvolutionProvider(tenant.evolution_api_url, tenant.evolution_api_key)`.
+6. `structlog.contextvars.bind_contextvars(tenant_id=tenant.id)` no inicio do handler — `add_otel_context` processor nao toca em tenant_id; precisa vir via contextvars para propagar em logs de sub-tasks.
+
+**Escopo real:** ~25-30 LOC tocados em 4-5 arquivos (`config.py`, `setup.py`, `webhooks.py`, `debounce.py`, `main.py`). **Nao** e "5 linhas trivial" como no draft. Decisao #16 [REVISADO] captura isso.
+
+**Dashboards Phoenix:** `phoenix-dashboards/README.md` (596 linhas, artefato do 002) ja assume chave `tenant_id` nos spans — contrato preservado. Apenas a **fonte** muda, dashboards continuam funcionando.
+
+**Alternativa descartada:** inverter ordem (parar 002, shipar 003 primeiro) — 002 ja shipou, irrelevante agora.
+
+**Assumption branching [VALIDAR]:** 003 branca de `develop` (prosauai repo) **apos** 002 ser mergeado. Caso contrario, 003 herda base sem observability code e precisaria implementar observability do zero (scope blowup — evitar).
 
 **T7 no router: interface minima ou refactor completo?:** **minima**. Zero conflito com 004-router-mece (que faz rip-and-replace de `route_message`). Se T7 refatorar algo alem da assinatura e dos 3-strategies de mention, 004 vai ter merge hell. Regra dura: diff <= 30 linhas.
 
-**Fase 2/3 nos docs agora vs depois:** agora, por pedido explicito. 3 ADRs novos (ADR-021 Caddy, ADR-022 Admin API, ADR-023 TenantStore Postgres migration) + secoes novas em `vision.md`, `process.md`, `blueprint.md`, `containers.md`. Razao: evita que end-state vire surpresa futura e cria ponto de referencia para discussoes do Fase 2/3 quando chegarem.
+**Fase 2/3 nos docs agora vs depois:** `[REVISADO apos delta review 2026-04-10]` **ja feito em main pelo reconcile do 002** (commit `a78257e`). ADR-021 (Caddy), ADR-022 (Admin API), ADR-023 (Postgres migration) existem em `platforms/prosauai/decisions/`. As secoes "Multi-Tenant Topology — Faseamento" ja estao em `blueprint.md` e `containers.md`, e `vision.md`/`process.md` ja contem Fase 2/3. **Decisao #14 passa a ser retroativamente validada** — nada para fazer aqui durante o ciclo L2 do 003.
 
 **Single PR ou split?:** **single PR**. Rip-and-replace da HMAC + parser + multi-tenant nao tem como dividir sem criar estados intermediarios quebrados (e.g., "HMAC removido mas auth novo ainda nao existe"). Epic 001 foi 1 PR grande e deu certo. 003 segue o mesmo padrao.
 
@@ -465,7 +532,8 @@ tenants:
 | Deploy Fase 1 em Docker network privada | §7.2 do plano | `pace-net` external compartilhada com Evolution; trafego interno |
 | `mention_lid_opaque` descoberto empiricamente por tenant | §7.6.2.1 Descoberta #4 | README documenta workflow; nao e inferivel de `mention_phone` |
 | 004-router-mece depende de `route_message(msg, tenant)` estavel | 004 pitch T7 reference | T7 e cirurgica; diff <=30 linhas; enum e if/elif intocados |
-| 002-observability depende de `tenant_id` nos spans | blueprint §4.4, epic 002 research | Delta review no momento da promocao do 003 adiciona `tenant_id` em spans |
+| 002-observability ja definiu `SpanAttributes.TENANT_ID` — 003 so troca fonte | ADR-020, prosauai/observability/conventions.py (002 impl) | Contrato preservado; dashboards Phoenix continuam funcionando. Escopo 003: ~25-30 LOC em 4-5 arquivos de observability |
+| 003 branca de `develop` apos 002 mergear naquela branch | prosauai repo state, IMPLEMENTATION_PLAN §7.1 | Se 002 nao mergar primeiro, 003 scope explode (observability do zero). **Pre-gate [VALIDAR]** antes de iniciar ciclo L2 |
 
 ## Suggested Approach
 
@@ -477,8 +545,11 @@ tenants:
 6. **Debounce keys com tenant_id** — `debounce.py` + `parse_expired_key`. Testes atualizados.
 7. **Webhooks.py handler completo** — integra tudo: resolver → auth → parse → idempotency → route → debounce.
 8. **Main.py lifespan** — carrega `TenantStore`; `_make_flush_callback(app)` resolve tenant por chave.
-9. **Docker + deploy** — `docker-compose.yml` sem ports, `override.example.yml`, `.env.example`, porta 8050.
-10. **End-to-end real** — apontar webhook real da Evolution para `http://<tailscale-ip>:8050/webhook/whatsapp/Ariel`, validar fluxo completo com mensagem real. Repetir com ResenhAI.
-11. **Docs** — README com onboarding de novo tenant (inclui discovery de `mention_lid_opaque`); `decisions.md` append-only.
+9. **Observability delta (NOVO, apos delta review 2026-04-10)** — apos scaffolding acima estar funcional, refatorar os 4-5 arquivos de observability que o 002 deixou single-tenant: `config.py` (remover `tenant_id` field), `setup.py` (remover `tenant_id` do Resource), `webhooks.py` (`tenant.id` via dependency + `bind_contextvars`), `debounce.py` (novo param `tenant_id` em `append()` e span attribute em `debounce.append`/`debounce.flush`), `main.py` (`_flush_echo` resolve tenant via `parse_expired_key` + `tenant_store.get()`). Total: ~25-30 LOC. **Dashboards Phoenix preservados** — contrato `SpanAttributes.TENANT_ID = "tenant_id"` permanece.
+10. **Docker + deploy** — `docker-compose.yml` sem ports, `override.example.yml`, `.env.example`, porta 8050.
+11. **End-to-end real** — apontar webhook real da Evolution para `http://<tailscale-ip>:8050/webhook/whatsapp/Ariel`, validar fluxo completo com mensagem real. Repetir com ResenhAI. Validar em Phoenix que spans tem `tenant_id` correto por tenant.
+12. **Docs** — README com onboarding de novo tenant (inclui discovery de `mention_lid_opaque`); `decisions.md` append-only.
 
-> **Proximo passo**: aguardar ship do epic 002 (Observability). Quando 002 mergar em main, rodar `/madruga:epic-context prosauai 003` (sem `--draft`) — delta review adiciona `tenant_id` nas conventions de span do `configure_observability()` (epic 002), cria branch `epic/prosauai/003-multi-tenant-foundation` a partir de main, e entra no ciclo L2 (`/speckit.specify` → ... → `/madruga:reconcile`).
+> **Pre-gate (VALIDAR antes de /speckit.specify):** confirmar que no repo prosauai, a branch `epic/prosauai/002-observability` (commit `1c751b1`) foi rebased/merged em `develop` (que tem `91dd8b6` com port 8050 + 26 fixtures). Se nao, 003 herda base sem observability code — scope explode. Comando de verificacao: `cd /home/gabrielhamu/repos/paceautomations/prosauai && git log develop --oneline | grep -E "observability|1c751b1"`.
+>
+> **Proximo passo**: epic 002 ja shipou no madruga.ai (`21680a4 merge`). Apos validar o pre-gate acima, entrar no ciclo L2 com `/speckit.specify`. A branch `epic/prosauai/003-multi-tenant-foundation` (madruga.ai) e criada por este comando (path B de `/madruga:epic-context`).
