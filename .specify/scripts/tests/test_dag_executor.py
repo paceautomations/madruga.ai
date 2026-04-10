@@ -609,7 +609,7 @@ def test_compose_task_prompt(tmp_path):
 
 
 def test_compose_task_prompt_shows_recent_done(tmp_path):
-    """Action 2: compose_task_prompt surfaces recently checked tasks from tasks.md.
+    """compose_task_prompt surfaces recently checked tasks from tasks.md.
 
     Replaces the legacy behavior of reading implement-context.md. The new
     source of truth is the [X] checkboxes in tasks.md itself.
@@ -644,7 +644,7 @@ def test_compose_task_prompt_legacy_implement_context(tmp_path):
 
 
 def test_compose_task_prompt_analyze_report_filtered_to_task(tmp_path):
-    """Action 3a: analyze-report.md is sliced to paragraphs mentioning this task id."""
+    """analyze-report.md is sliced to paragraphs mentioning this task id."""
     from dag_executor import compose_task_prompt
 
     epic_dir = _make_epic_dir(
@@ -664,7 +664,7 @@ def test_compose_task_prompt_analyze_report_filtered_to_task(tmp_path):
 
 
 def test_compose_task_prompt_analyze_report_absent_when_no_mention(tmp_path):
-    """Action 3a: no analyze-report section if report doesn't mention this task."""
+    """No analyze-report section is added when the report doesn't mention this task."""
     from dag_executor import compose_task_prompt
 
     epic_dir = _make_epic_dir(
@@ -1699,7 +1699,7 @@ def test_build_dispatch_cmd_prompt_not_in_argv(tmp_path):
     assert "my test prompt here" not in cmd
 
 
-# --- Tests for --bare-lite flags (Action 1: MADRUGA_BARE_LITE) ---
+# --- Tests for --bare-lite flags (MADRUGA_BARE_LITE) ---
 
 
 def test_bare_lite_default_on_adds_mcp_and_slash_flags(tmp_path):

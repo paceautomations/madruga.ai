@@ -330,10 +330,10 @@ PHASE_RE = re.compile(r"^## Phase \d+")
 FILE_PATH_RE = re.compile(r"`([a-zA-Z0-9_./-]+\.[a-zA-Z0-9]+)`")
 US_TAG_RE = re.compile(r"\[US(\d+)\]")
 
-# Task-scoping heuristics (Action 3a): decide which static docs are relevant
-# to a given task by matching its files + description against path/keyword
-# regexes. Anchored so ``models/user.py`` matches but ``fetch_models_xyz.py``
-# does not. Word boundaries on description keywords to avoid false positives.
+# Task-scoping heuristics: decide which static docs are relevant to a given
+# task by matching its files + description against path/keyword regexes.
+# Anchored so ``models/user.py`` matches but ``fetch_models_xyz.py`` does not.
+# Word boundaries on description keywords to avoid false positives.
 MODEL_PATH_RE = re.compile(r"(^|/)(models|schemas|migrations|db)/", re.IGNORECASE)
 API_PATH_RE = re.compile(r"(^|/)(api|routes|handlers|endpoints|webhooks)/", re.IGNORECASE)
 MODEL_DESC_RE = re.compile(
@@ -347,6 +347,14 @@ API_DESC_RE = re.compile(
 TASK_TIMEOUT = int(os.environ.get("MADRUGA_TASK_TIMEOUT", "600"))
 MAX_FILE_CONTEXT_BYTES = 50_000  # 50KB — no doc in our repo exceeds this
 MAX_PROMPT_BYTES = 200_000  # 200KB — safety net, not a bottleneck
+
+# Rollback kill-switches for the bare-lite + scoped-context optimizations (ADR-021).
+# Default all on; set any to "0" via systemd drop-in to restore legacy behavior
+# without a redeploy. See CLAUDE.md "Gotchas" for the rollback procedure.
+ENV_BARE_LITE = "MADRUGA_BARE_LITE"
+ENV_KILL_IMPLEMENT_CONTEXT = "MADRUGA_KILL_IMPLEMENT_CONTEXT"
+ENV_SCOPED_CONTEXT = "MADRUGA_SCOPED_CONTEXT"
+ENV_STRICT_SETTINGS = "MADRUGA_STRICT_SETTINGS"  # opt-in (default off)
 
 
 def _flag(name: str, default: str = "1") -> bool:
@@ -378,37 +386,40 @@ class TaskItem:
     us_tag: str | None = None
 
 
-def parse_tasks(tasks_md_path: Path) -> list[TaskItem]:
-    """Parse tasks.md into structured TaskItem list."""
-    lines = tasks_md_path.read_text(encoding="utf-8").splitlines()
+def _parse_tasks_from_text(content: str) -> list[TaskItem]:
+    """Parse pre-loaded tasks.md content. Use when the file is already in memory."""
     tasks: list[TaskItem] = []
     current_phase = ""
 
-    for i, line in enumerate(lines, start=1):
-        phase_match = PHASE_RE.match(line)
-        if phase_match:
+    for i, line in enumerate(content.splitlines(), start=1):
+        if PHASE_RE.match(line):
             current_phase = line.lstrip("#").strip()
             continue
 
         task_match = TASK_RE.match(line)
-        if task_match:
-            check, task_id, desc = task_match.groups()
-            files = FILE_PATH_RE.findall(desc)
-            us_match = US_TAG_RE.search(desc)
-            tasks.append(
-                TaskItem(
-                    id=task_id,
-                    description=desc,
-                    checked=check.lower() == "x",
-                    phase=current_phase,
-                    parallel="[P]" in desc,
-                    files=files,
-                    line_number=i,
-                    us_tag=f"US{us_match.group(1)}" if us_match else None,
-                )
+        if not task_match:
+            continue
+        check, task_id, desc = task_match.groups()
+        us_match = US_TAG_RE.search(desc)
+        tasks.append(
+            TaskItem(
+                id=task_id,
+                description=desc,
+                checked=check.lower() == "x",
+                phase=current_phase,
+                parallel="[P]" in desc,
+                files=FILE_PATH_RE.findall(desc),
+                line_number=i,
+                us_tag=f"US{us_match.group(1)}" if us_match else None,
             )
+        )
 
     return tasks
+
+
+def parse_tasks(tasks_md_path: Path) -> list[TaskItem]:
+    """Parse tasks.md into structured TaskItem list."""
+    return _parse_tasks_from_text(tasks_md_path.read_text(encoding="utf-8"))
 
 
 def mark_task_done(tasks_md_path: Path, task_id: str) -> bool:
@@ -431,7 +442,7 @@ def append_implement_context(epic_dir: Path, task: TaskItem, metrics: dict | Non
     instead, eliminating a redundant 4-12KB per dispatch. Set the env var to 0
     to restore the legacy file-based history for rollback.
     """
-    if _flag("MADRUGA_KILL_IMPLEMENT_CONTEXT"):
+    if _flag(ENV_KILL_IMPLEMENT_CONTEXT):
         return
     ctx_path = epic_dir / "implement-context.md"
     entry = f"### {task.id} — DONE\n- {task.description[:200]}\n"
@@ -477,17 +488,16 @@ def _analyze_report_slice(path: Path, task_id: str) -> str | None:
     return f"\n---\n\n## Pre-Implementation Analysis (filtered to {task_id})\n\n{body}"
 
 
+def _format_context(content: str, header: str) -> str:
+    """Format pre-loaded content as a prompt section (truncated at MAX_FILE_CONTEXT_BYTES)."""
+    return f"\n---\n\n## {header}\n\n{content[:MAX_FILE_CONTEXT_BYTES]}"
+
+
 def _read_context(path: Path, header: str) -> str | None:
     """Read a file and format it as a prompt section, or None if missing."""
     if not path.exists():
         return None
-    content = path.read_text(encoding="utf-8")[:MAX_FILE_CONTEXT_BYTES]
-    return f"\n---\n\n## {header}\n\n{content}"
-
-
-def _append_if(parts: list[str], section: str | None) -> None:
-    if section is not None:
-        parts.append(section)
+    return _format_context(path.read_text(encoding="utf-8"), header)
 
 
 def compose_task_prompt(
@@ -524,9 +534,9 @@ def compose_task_prompt(
         ]
     )
 
-    # sections accumulates (name, content, byte_count) so the final log can
-    # report per-section bytes without re-encoding. ``total_size`` is kept in
-    # sync so the file-inlining loop below can enforce MAX_PROMPT_BYTES cheaply.
+    # Carry byte_count with each section so the final log line can report
+    # per-section sizes without re-encoding. ``total_size`` enforces
+    # MAX_PROMPT_BYTES in the file-inlining loop below.
     sections: list[tuple[str, str, int]] = []
     total_size = 0
 
@@ -540,15 +550,18 @@ def compose_task_prompt(
 
     add("header", header)
 
+    # Read tasks.md exactly once — both the "recent_done" derivation and the
+    # "All Tasks" section below share this single in-memory copy.
     tasks_md_path = epic_dir / "tasks.md"
-    if _flag("MADRUGA_KILL_IMPLEMENT_CONTEXT"):
-        # Derive recent progress from the authoritative tasks.md checkboxes.
-        # Cycle-local, zero cross-trace leakage, and the file is read once
-        # (parse_tasks + _read_context below share the same on-disk copy).
-        try:
-            done_ids = [t.id for t in parse_tasks(tasks_md_path) if t.checked][-5:]
-        except OSError:
-            done_ids = []
+    try:
+        tasks_text: str | None = tasks_md_path.read_text(encoding="utf-8")
+    except OSError:
+        tasks_text = None
+
+    if _flag(ENV_KILL_IMPLEMENT_CONTEXT):
+        done_ids: list[str] = []
+        if tasks_text is not None:
+            done_ids = [t.id for t in _parse_tasks_from_text(tasks_text) if t.checked][-5:]
         if done_ids:
             add(
                 "recent_done",
@@ -556,7 +569,8 @@ def compose_task_prompt(
             )
     else:
         add("implement_context", _read_context(epic_dir / "implement-context.md", "Prior Tasks Completed"))
-    add("tasks", _read_context(tasks_md_path, "All Tasks (current progress)"))
+    if tasks_text is not None:
+        add("tasks", _format_context(tasks_text, "All Tasks (current progress)"))
 
     # Static docs — skip on resume (already in session context)
     if not resume:
@@ -564,7 +578,7 @@ def compose_task_prompt(
         add("spec", _read_context(epic_dir / "spec.md", "Specification"))
 
         # Rollback: MADRUGA_SCOPED_CONTEXT=0 restores the old always-include behavior.
-        scoped = _flag("MADRUGA_SCOPED_CONTEXT")
+        scoped = _flag(ENV_SCOPED_CONTEXT)
 
         if (not scoped) or _task_needs_data_model(task):
             add("data_model", _read_context(epic_dir / "data-model.md", "Data Model"))
@@ -584,9 +598,11 @@ def compose_task_prompt(
             add("analyze_report", _read_context(analyze_path, "Pre-Implementation Analysis"))
 
     # Include referenced files that already exist (so task can build on prior work)
+    dropped_files: list[str] = []
     for file_path in task.files:
         if total_size >= MAX_PROMPT_BYTES:
-            break
+            dropped_files.append(file_path)
+            continue
         full_path = Path(file_path)
         if not full_path.is_absolute():
             full_path = REPO_ROOT / file_path
@@ -597,6 +613,15 @@ def compose_task_prompt(
         except (OSError, UnicodeDecodeError):
             continue
         add(f"file:{file_path}", f"\n---\n\n## Existing file: {file_path}\n\n```\n{content}\n```")
+
+    if dropped_files:
+        log.warning(
+            "prompt_budget_exceeded task=%s total_bytes=%d limit=%d dropped_files=%s",
+            task.id,
+            total_size,
+            MAX_PROMPT_BYTES,
+            dropped_files,
+        )
 
     log.info(
         "prompt_composed task=%s resume=%s total_bytes=%d sections=%s",
@@ -2168,7 +2193,7 @@ def build_dispatch_cmd(
     # --bare-lite: approximate --bare isolation under OAuth (no ANTHROPIC_API_KEY).
     # Drops user/local MCP servers, skill resolver, and (for implement) tool defs
     # that aren't needed. Rollback: MADRUGA_BARE_LITE=0 (systemd drop-in).
-    if _flag("MADRUGA_BARE_LITE"):
+    if _flag(ENV_BARE_LITE):
         cmd.extend(
             [
                 "--strict-mcp-config",
@@ -2184,7 +2209,7 @@ def build_dispatch_cmd(
         if not resume_session_id:
             cmd.append("--no-session-persistence")
         # Opt-in (off by default until settings.local.json audit completes).
-        if _flag("MADRUGA_STRICT_SETTINGS", default="0"):
+        if _flag(ENV_STRICT_SETTINGS, default="0"):
             cmd.extend(["--setting-sources", "project"])
 
     # Tool restriction (runtime permission gate — composes with --tools above)
