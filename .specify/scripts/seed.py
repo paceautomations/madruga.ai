@@ -45,6 +45,7 @@ def seed(platform: str | None = None, force: bool = False) -> int:
     Returns the number of platforms seeded.
     """
     from db import get_conn, migrate, seed_from_filesystem
+    from db_core import db_write_lock
 
     db_path = REPO_ROOT / ".pipeline" / "madruga.db"
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -57,38 +58,39 @@ def seed(platform: str | None = None, force: bool = False) -> int:
                 candidate.unlink()
         print(f"seed: removed existing DB at {db_path}", file=sys.stderr)
 
-    conn = get_conn()
-    try:
-        migrate(conn)
-
-        targets = [platform] if platform else _discover_platforms()
-        if not targets:
-            print("seed: no platforms found under platforms/", file=sys.stderr)
-            return 0
-
-        total = 0
-        for slug in targets:
-            pdir = REPO_ROOT / "platforms" / slug
-            if not (pdir / "platform.yaml").exists():
-                print(f"seed: skipping {slug} (no platform.yaml)", file=sys.stderr)
-                continue
-            summary = seed_from_filesystem(conn, slug, pdir)
-            print(
-                f"seed: {slug} — "
-                f"status={summary.get('status', '?')} "
-                f"nodes={summary.get('nodes', 0)} "
-                f"epics={summary.get('epics', 0)}",
-                file=sys.stderr,
-            )
-            total += 1
-
-        conn.commit()
-        return total
-    finally:
+    with db_write_lock():
+        conn = get_conn()
         try:
-            conn.close()
-        except Exception:
-            pass
+            migrate(conn)
+
+            targets = [platform] if platform else _discover_platforms()
+            if not targets:
+                print("seed: no platforms found under platforms/", file=sys.stderr)
+                return 0
+
+            total = 0
+            for slug in targets:
+                pdir = REPO_ROOT / "platforms" / slug
+                if not (pdir / "platform.yaml").exists():
+                    print(f"seed: skipping {slug} (no platform.yaml)", file=sys.stderr)
+                    continue
+                summary = seed_from_filesystem(conn, slug, pdir)
+                print(
+                    f"seed: {slug} — "
+                    f"status={summary.get('status', '?')} "
+                    f"nodes={summary.get('nodes', 0)} "
+                    f"epics={summary.get('epics', 0)}",
+                    file=sys.stderr,
+                )
+                total += 1
+
+            conn.commit()
+            return total
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 
 def main() -> None:

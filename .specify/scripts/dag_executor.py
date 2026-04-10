@@ -329,9 +329,49 @@ TASK_RE = re.compile(r"^- \[([ Xx])\] (T\d{3})\s+(.+)$")
 PHASE_RE = re.compile(r"^## Phase \d+")
 FILE_PATH_RE = re.compile(r"`([a-zA-Z0-9_./-]+\.[a-zA-Z0-9]+)`")
 US_TAG_RE = re.compile(r"\[US(\d+)\]")
+
+# Task-scoping heuristics: decide which static docs are relevant to a given
+# task by matching its files + description against path/keyword regexes.
+# Anchored so ``models/user.py`` matches but ``fetch_models_xyz.py`` does not.
+# Word boundaries on description keywords to avoid false positives.
+MODEL_PATH_RE = re.compile(r"(^|/)(models|schemas|migrations|db)/", re.IGNORECASE)
+API_PATH_RE = re.compile(r"(^|/)(api|routes|handlers|endpoints|webhooks)/", re.IGNORECASE)
+MODEL_DESC_RE = re.compile(
+    r"\b(model|entity|schema|migration|dataclass|pydantic|table)\b",
+    re.IGNORECASE,
+)
+API_DESC_RE = re.compile(
+    r"\b(api|endpoint|webhook|contract|validation|serializer|dto|route)\b",
+    re.IGNORECASE,
+)
 TASK_TIMEOUT = int(os.environ.get("MADRUGA_TASK_TIMEOUT", "600"))
 MAX_FILE_CONTEXT_BYTES = 50_000  # 50KB — no doc in our repo exceeds this
 MAX_PROMPT_BYTES = 200_000  # 200KB — safety net, not a bottleneck
+
+# Rollback kill-switches for the bare-lite + scoped-context optimizations (ADR-021).
+# Default all on; set any to "0" via systemd drop-in to restore legacy behavior
+# without a redeploy. See CLAUDE.md "Gotchas" for the rollback procedure.
+ENV_BARE_LITE = "MADRUGA_BARE_LITE"
+ENV_KILL_IMPLEMENT_CONTEXT = "MADRUGA_KILL_IMPLEMENT_CONTEXT"
+ENV_SCOPED_CONTEXT = "MADRUGA_SCOPED_CONTEXT"
+ENV_STRICT_SETTINGS = "MADRUGA_STRICT_SETTINGS"  # opt-in (default off)
+
+
+def _flag(name: str, default: str = "1") -> bool:
+    """Read a MADRUGA_* boolean env var. Default enabled — set to 0 to roll back."""
+    return os.environ.get(name, default) == "1"
+
+
+# Session-resume bounds (postmortem: prosauai/003 T031 — --resume accumulated
+# tool outputs across 12 US3 tasks, hit Anthropic 1M context window, crashed).
+# Force a fresh session when either threshold trips:
+SESSION_RESUME_MAX_TASKS = int(os.environ.get("MADRUGA_RESUME_MAX_TASKS", "8"))
+SESSION_RESUME_MAX_TOKENS = int(os.environ.get("MADRUGA_RESUME_MAX_TOKENS", "700000"))
+
+# Stop plowing through tasks after this many consecutive failures in one batch.
+# Prevents wasted cycles when the root cause (usually context overflow or API
+# outage) affects all remaining tasks identically.
+IMPLEMENT_MAX_CONSECUTIVE_FAILURES = int(os.environ.get("MADRUGA_IMPLEMENT_MAX_FAILS", "3"))
 
 
 @dataclass
@@ -346,37 +386,40 @@ class TaskItem:
     us_tag: str | None = None
 
 
-def parse_tasks(tasks_md_path: Path) -> list[TaskItem]:
-    """Parse tasks.md into structured TaskItem list."""
-    lines = tasks_md_path.read_text(encoding="utf-8").splitlines()
+def _parse_tasks_from_text(content: str) -> list[TaskItem]:
+    """Parse pre-loaded tasks.md content. Use when the file is already in memory."""
     tasks: list[TaskItem] = []
     current_phase = ""
 
-    for i, line in enumerate(lines, start=1):
-        phase_match = PHASE_RE.match(line)
-        if phase_match:
+    for i, line in enumerate(content.splitlines(), start=1):
+        if PHASE_RE.match(line):
             current_phase = line.lstrip("#").strip()
             continue
 
         task_match = TASK_RE.match(line)
-        if task_match:
-            check, task_id, desc = task_match.groups()
-            files = FILE_PATH_RE.findall(desc)
-            us_match = US_TAG_RE.search(desc)
-            tasks.append(
-                TaskItem(
-                    id=task_id,
-                    description=desc,
-                    checked=check.lower() == "x",
-                    phase=current_phase,
-                    parallel="[P]" in desc,
-                    files=files,
-                    line_number=i,
-                    us_tag=f"US{us_match.group(1)}" if us_match else None,
-                )
+        if not task_match:
+            continue
+        check, task_id, desc = task_match.groups()
+        us_match = US_TAG_RE.search(desc)
+        tasks.append(
+            TaskItem(
+                id=task_id,
+                description=desc,
+                checked=check.lower() == "x",
+                phase=current_phase,
+                parallel="[P]" in desc,
+                files=FILE_PATH_RE.findall(desc),
+                line_number=i,
+                us_tag=f"US{us_match.group(1)}" if us_match else None,
             )
+        )
 
     return tasks
+
+
+def parse_tasks(tasks_md_path: Path) -> list[TaskItem]:
+    """Parse tasks.md into structured TaskItem list."""
+    return _parse_tasks_from_text(tasks_md_path.read_text(encoding="utf-8"))
 
 
 def mark_task_done(tasks_md_path: Path, task_id: str) -> bool:
@@ -392,7 +435,15 @@ def mark_task_done(tasks_md_path: Path, task_id: str) -> bool:
 
 
 def append_implement_context(epic_dir: Path, task: TaskItem, metrics: dict | None = None) -> None:
-    """Append completed task summary to implement-context.md for next tasks."""
+    """Append completed task summary to implement-context.md for next tasks.
+
+    NO-OP by default (MADRUGA_KILL_IMPLEMENT_CONTEXT=1) — ``compose_task_prompt``
+    now derives "recent progress" from the authoritative tasks.md checkboxes
+    instead, eliminating a redundant 4-12KB per dispatch. Set the env var to 0
+    to restore the legacy file-based history for rollback.
+    """
+    if _flag(ENV_KILL_IMPLEMENT_CONTEXT):
+        return
     ctx_path = epic_dir / "implement-context.md"
     entry = f"### {task.id} — DONE\n- {task.description[:200]}\n"
     if task.files:
@@ -405,17 +456,48 @@ def append_implement_context(epic_dir: Path, task: TaskItem, metrics: dict | Non
         f.write(entry)
 
 
+def _task_needs_data_model(task: TaskItem) -> bool:
+    """True if the task touches model-ish files or mentions data model keywords."""
+    if any(MODEL_PATH_RE.search(f) for f in task.files):
+        return True
+    return MODEL_DESC_RE.search(task.description) is not None
+
+
+def _task_needs_contracts(task: TaskItem) -> bool:
+    """True if the task touches API-ish files or mentions contract/endpoint keywords."""
+    if any(API_PATH_RE.search(f) for f in task.files):
+        return True
+    return API_DESC_RE.search(task.description) is not None
+
+
+def _analyze_report_slice(path: Path, task_id: str) -> str | None:
+    """Return only paragraphs of analyze-report.md that mention ``task_id``.
+
+    Empty → returns None (no section added). Whole-file fallback is intentional:
+    if analyze-report.md doesn't reference the task, the task is unaffected by
+    the pre-implementation consistency check and doesn't need the report at all.
+    """
+    if not path.exists():
+        return None
+    content = path.read_text(encoding="utf-8")
+    paras = content.split("\n\n")
+    relevant = [p for p in paras if task_id in p]
+    if not relevant:
+        return None
+    body = "\n\n".join(relevant)
+    return f"\n---\n\n## Pre-Implementation Analysis (filtered to {task_id})\n\n{body}"
+
+
+def _format_context(content: str, header: str) -> str:
+    """Format pre-loaded content as a prompt section (truncated at MAX_FILE_CONTEXT_BYTES)."""
+    return f"\n---\n\n## {header}\n\n{content[:MAX_FILE_CONTEXT_BYTES]}"
+
+
 def _read_context(path: Path, header: str) -> str | None:
     """Read a file and format it as a prompt section, or None if missing."""
     if not path.exists():
         return None
-    content = path.read_text(encoding="utf-8")[:MAX_FILE_CONTEXT_BYTES]
-    return f"\n---\n\n## {header}\n\n{content}"
-
-
-def _append_if(parts: list[str], section: str | None) -> None:
-    if section is not None:
-        parts.append(section)
+    return _format_context(path.read_text(encoding="utf-8"), header)
 
 
 def compose_task_prompt(
@@ -430,58 +512,126 @@ def compose_task_prompt(
     If resume=True, skips static docs (plan, spec, etc.) since the resumed
     session already has them — only includes task description, updated
     tasks.md progress, and implement-context.md.
+
+    Emits a structured `prompt_composed` log line with per-section byte counts
+    so we can measure context bloat without relying on noisy API metrics.
     """
     output_dir = f"platforms/{platform_name}/epics/{epic_slug}"
 
-    parts = [
-        f"You are implementing task {task.id} for platform '{platform_name}', epic '{epic_slug}'.",
-        "",
-        "## Task",
-        f"- {task.description}",
-        "",
-        "CRITICAL CONSTRAINTS:",
-        f"- ONLY implement this specific task ({task.id}). Do NOT implement other tasks.",
-        f"- export SPECIFY_BASE_DIR={output_dir}/",
-        f"- You are on branch: epic/{platform_name}/{epic_slug}",
-        "- Do NOT create, switch, or checkout any branch.",
-        f"- Save ALL output to: {output_dir}/ or project root (for scripts/portal).",
-    ]
+    header = "\n".join(
+        [
+            f"You are implementing task {task.id} for platform '{platform_name}', epic '{epic_slug}'.",
+            "",
+            "## Task",
+            f"- {task.description}",
+            "",
+            "CRITICAL CONSTRAINTS:",
+            f"- ONLY implement this specific task ({task.id}). Do NOT implement other tasks.",
+            f"- export SPECIFY_BASE_DIR={output_dir}/",
+            f"- You are on branch: epic/{platform_name}/{epic_slug}",
+            "- Do NOT create, switch, or checkout any branch.",
+            f"- Save ALL output to: {output_dir}/ or project root (for scripts/portal).",
+        ]
+    )
 
-    # Always include — changes between tasks
-    _append_if(parts, _read_context(epic_dir / "implement-context.md", "Prior Tasks Completed"))
-    _append_if(parts, _read_context(epic_dir / "tasks.md", "All Tasks (current progress)"))
+    # Carry byte_count with each section so the final log line can report
+    # per-section sizes without re-encoding. ``total_size`` enforces
+    # MAX_PROMPT_BYTES in the file-inlining loop below.
+    sections: list[tuple[str, str, int]] = []
+    total_size = 0
+
+    def add(name: str, content: str | None) -> None:
+        nonlocal total_size
+        if content is None:
+            return
+        size = len(content.encode())
+        sections.append((name, content, size))
+        total_size += size
+
+    add("header", header)
+
+    # Read tasks.md exactly once — both the "recent_done" derivation and the
+    # "All Tasks" section below share this single in-memory copy.
+    tasks_md_path = epic_dir / "tasks.md"
+    try:
+        tasks_text: str | None = tasks_md_path.read_text(encoding="utf-8")
+    except OSError:
+        tasks_text = None
+
+    if _flag(ENV_KILL_IMPLEMENT_CONTEXT):
+        done_ids: list[str] = []
+        if tasks_text is not None:
+            done_ids = [t.id for t in _parse_tasks_from_text(tasks_text) if t.checked][-5:]
+        if done_ids:
+            add(
+                "recent_done",
+                f"\n---\n\n## Recent progress\nLast tasks completed in this cycle: {', '.join(done_ids)}",
+            )
+    else:
+        add("implement_context", _read_context(epic_dir / "implement-context.md", "Prior Tasks Completed"))
+    if tasks_text is not None:
+        add("tasks", _format_context(tasks_text, "All Tasks (current progress)"))
 
     # Static docs — skip on resume (already in session context)
     if not resume:
-        _append_if(parts, _read_context(epic_dir / "plan.md", "Implementation Plan"))
-        _append_if(parts, _read_context(epic_dir / "spec.md", "Specification"))
-        _append_if(parts, _read_context(epic_dir / "data-model.md", "Data Model"))
+        add("plan", _read_context(epic_dir / "plan.md", "Implementation Plan"))
+        add("spec", _read_context(epic_dir / "spec.md", "Specification"))
+
+        # Rollback: MADRUGA_SCOPED_CONTEXT=0 restores the old always-include behavior.
+        scoped = _flag(ENV_SCOPED_CONTEXT)
+
+        if (not scoped) or _task_needs_data_model(task):
+            add("data_model", _read_context(epic_dir / "data-model.md", "Data Model"))
 
         contracts_dir = epic_dir / "contracts"
-        if contracts_dir.is_dir():
+        if contracts_dir.is_dir() and ((not scoped) or _task_needs_contracts(task)):
             for contract_file in sorted(contracts_dir.glob("*.md")):
-                _append_if(parts, _read_context(contract_file, f"Contract: {contract_file.name}"))
+                add(
+                    f"contract:{contract_file.name}",
+                    _read_context(contract_file, f"Contract: {contract_file.name}"),
+                )
 
-        _append_if(parts, _read_context(epic_dir / "analyze-report.md", "Pre-Implementation Analysis"))
+        analyze_path = epic_dir / "analyze-report.md"
+        if scoped:
+            add("analyze_report", _analyze_report_slice(analyze_path, task.id))
+        else:
+            add("analyze_report", _read_context(analyze_path, "Pre-Implementation Analysis"))
 
     # Include referenced files that already exist (so task can build on prior work)
-    total_size = sum(len(p.encode()) for p in parts)
+    dropped_files: list[str] = []
     for file_path in task.files:
         if total_size >= MAX_PROMPT_BYTES:
-            break
+            dropped_files.append(file_path)
+            continue
         full_path = Path(file_path)
         if not full_path.is_absolute():
             full_path = REPO_ROOT / file_path
-        if full_path.exists() and full_path.is_file():
-            try:
-                content = full_path.read_text(encoding="utf-8")[:MAX_FILE_CONTEXT_BYTES]
-                section = f"\n---\n\n## Existing file: {file_path}\n\n```\n{content}\n```"
-                total_size += len(section.encode())
-                parts.append(section)
-            except (OSError, UnicodeDecodeError):
-                pass
+        if not (full_path.exists() and full_path.is_file()):
+            continue
+        try:
+            content = full_path.read_text(encoding="utf-8")[:MAX_FILE_CONTEXT_BYTES]
+        except (OSError, UnicodeDecodeError):
+            continue
+        add(f"file:{file_path}", f"\n---\n\n## Existing file: {file_path}\n\n```\n{content}\n```")
 
-    return "\n".join(parts)
+    if dropped_files:
+        log.warning(
+            "prompt_budget_exceeded task=%s total_bytes=%d limit=%d dropped_files=%s",
+            task.id,
+            total_size,
+            MAX_PROMPT_BYTES,
+            dropped_files,
+        )
+
+    log.info(
+        "prompt_composed task=%s resume=%s total_bytes=%d sections=%s",
+        task.id,
+        resume,
+        total_size,
+        {name: size for name, _, size in sections},
+    )
+
+    return "\n".join(content for _, content, _ in sections)
 
 
 async def run_implement_tasks(
@@ -514,7 +664,9 @@ async def run_implement_tasks(
     log.info("Task-by-task implement: %d pending of %d total", len(pending), len(tasks))
     epic_dir = platform_dir / "epics" / epic_slug
 
-    # Delete stale implement-context.md from previous run (ephemeral per cycle)
+    # Delete stale implement-context.md from previous run (legacy mode only).
+    # Under MADRUGA_KILL_IMPLEMENT_CONTEXT=1 (default) the file isn't written,
+    # but legacy leftovers may still exist — sweep them opportunistically.
     ctx_path = epic_dir / "implement-context.md"
     if ctx_path.exists():
         ctx_path.unlink()
@@ -522,22 +674,42 @@ async def run_implement_tasks(
     breaker = CircuitBreaker(conn=conn, platform_id=platform_name, epic_id=epic_slug)
     completed = 0
     failed: list[tuple[str, str]] = []
+    consecutive_failures = 0
 
     # Track session_id per User Story for --resume between consecutive tasks
     last_us_tag: str | None = None
     last_session_id: str | None = None
+    resume_chain_length = 0  # how many tasks reused the current session
+    last_task_tokens_in: int | None = None
 
     for task in pending:
-        # Resume session if same US tag as previous successful task
+        # Resume session if same US tag as previous successful task AND we're
+        # still within the session-resume bounds. These bounds cap how much
+        # prior tool-output context a single claude session can accumulate.
         resume_id = None
+        resume_blocker: str | None = None
         if task.us_tag and task.us_tag == last_us_tag and last_session_id:
-            resume_id = last_session_id
+            if resume_chain_length >= SESSION_RESUME_MAX_TASKS:
+                resume_blocker = f"chain_len={resume_chain_length}>={SESSION_RESUME_MAX_TASKS}"
+            elif last_task_tokens_in and last_task_tokens_in >= SESSION_RESUME_MAX_TOKENS:
+                resume_blocker = f"prev_tokens_in={last_task_tokens_in}>={SESSION_RESUME_MAX_TOKENS}"
+            else:
+                resume_id = last_session_id
+                log.info(
+                    "Resuming session %s for %s (same %s, chain=%d)",
+                    last_session_id[:12],
+                    task.id,
+                    task.us_tag,
+                    resume_chain_length + 1,
+                )
+        if resume_blocker:
             log.info(
-                "Resuming session %s for %s (same %s)",
-                last_session_id[:12],
+                "Session-resume bound tripped for %s (%s) — forcing fresh session",
                 task.id,
-                task.us_tag,
+                resume_blocker,
             )
+            last_session_id = None
+            resume_chain_length = 0
 
         prompt = compose_task_prompt(
             task,
@@ -588,13 +760,20 @@ async def run_implement_tasks(
         if success:
             mark_task_done(tasks_path, task.id)
             completed += 1
+            consecutive_failures = 0
             log.info("Task %s completed (%d/%d)", task.id, completed, len(pending))
 
             # Track session for potential resume on next task
+            new_session_id = parse_session_id(stdout) if stdout else None
+            if resume_id and new_session_id == last_session_id:
+                resume_chain_length += 1
+            else:
+                resume_chain_length = 1
             last_us_tag = task.us_tag
-            last_session_id = parse_session_id(stdout) if stdout else None
+            last_session_id = new_session_id
 
             metrics = parse_claude_output(stdout) if stdout else {}
+            last_task_tokens_in = metrics.get("tokens_in")
             complete_run(
                 conn,
                 run_id,
@@ -619,9 +798,25 @@ async def run_implement_tasks(
             # Reset session tracking on failure — next task starts fresh
             last_us_tag = None
             last_session_id = None
+            resume_chain_length = 0
+            last_task_tokens_in = None
+            consecutive_failures += 1
             failed.append((task.id, error or "unknown error"))
             log.error("Task %s failed: %s", task.id, error)
             complete_run(conn, run_id, status="failed", error=error)
+
+            # Early abort: if the same error keeps killing tasks in a row, stop
+            # the whole batch. Continuing burns time + cost without fixing the
+            # root cause (typically context overflow or API outage).
+            if consecutive_failures >= IMPLEMENT_MAX_CONSECUTIVE_FAILURES:
+                log.error(
+                    "Aborting implement batch: %d consecutive task failures (>=%d). "
+                    "Remaining %d tasks skipped. Fix root cause before re-dispatching.",
+                    consecutive_failures,
+                    IMPLEMENT_MAX_CONSECUTIVE_FAILURES,
+                    len(pending) - completed - len(failed),
+                )
+                break
 
     summary = f"{completed}/{len(pending)} tasks completed"
     if failed:
@@ -978,20 +1173,27 @@ class CircuitBreaker:
             )
 
     def _seed_from_db(self, conn, platform_id: str, epic_id: str | None) -> None:
-        """Count recent consecutive failures from DB to persist state across restarts."""
+        """Count recent consecutive failures from DB to persist state across restarts.
+
+        Excludes rows whose error is itself ``circuit breaker OPEN`` — those are
+        not new failures, they're the breaker echoing its own state. Counting them
+        causes the CB to stay permanently OPEN across epic re-dispatches (see
+        easter-tracking postmortem on T031-T046 cascade).
+        """
         import sqlite3
 
         try:
             epic_filter = "AND epic_id=?" if epic_id else "AND epic_id IS NULL"
             params = (platform_id, epic_id) if epic_id else (platform_id,)
             rows = conn.execute(
-                "SELECT status, completed_at FROM pipeline_runs "
+                "SELECT status, error FROM pipeline_runs "
                 f"WHERE platform_id=? {epic_filter} "
+                "  AND (error IS NULL OR error NOT LIKE '%circuit breaker%') "
                 "ORDER BY started_at DESC LIMIT ?",
                 (*params, self.max_failures),
             ).fetchall()
             consecutive = 0
-            for status, completed_at in rows:
+            for status, _error in rows:
                 if status == "failed":
                     consecutive += 1
                 else:
@@ -1038,9 +1240,23 @@ def dispatch_node(
     log.debug("Command: %s", " ".join(cmd[:4]) + " ...")
 
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, cwd=str(cwd), env=_dispatch_env())
+        # Pipe prompt via stdin — see dispatch_node_async for the rationale
+        # (Linux MAX_ARG_STRLEN=128KB per-arg limit on execve).
+        result = subprocess.run(
+            cmd,
+            input=prompt,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            cwd=str(cwd),
+            env=_dispatch_env(),
+        )
         if result.returncode != 0:
-            error = result.stderr.strip()[:500] if result.stderr else f"exitcode {result.returncode}"
+            error = _extract_claude_error(
+                result.stdout or "",
+                result.stderr.encode() if result.stderr else None,
+                result.returncode,
+            )
             log.error("Node '%s' failed: %s", node.id, error)
             return False, error, result.stdout
         return True, None, result.stdout
@@ -1173,6 +1389,52 @@ async def terminate_active_subprocesses(graceful_timeout: float = 5.0) -> int:
     return signalled
 
 
+def _extract_claude_error(stdout_text: str, stderr: bytes | None, returncode: int) -> str:
+    """Extract the real error from a failed claude -p --output-format json invocation.
+
+    Claude CLI's JSON output format emits errors to stdout (not stderr):
+      {"is_error": true, "subtype": "error_during_execution", "result": "<msg>", ...}
+
+    On non-zero exit with empty stderr (the common failure mode for context-window
+    overflows and API errors), we parse stdout for the structured error. Falls back
+    to stderr when stdout isn't JSON.
+    """
+    # First try: parse stdout as JSON and extract structured error fields.
+    if stdout_text:
+        # Claude CLI may emit multiple JSON objects (one per turn); the last one
+        # carries the final result. Scan from the end for a {"is_error": true, ...}.
+        for line in reversed(stdout_text.strip().splitlines()):
+            line = line.strip()
+            if not line or not line.startswith("{"):
+                continue
+            try:
+                obj = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if obj.get("is_error") or obj.get("type") == "error":
+                subtype = obj.get("subtype") or obj.get("error_type") or "unknown"
+                result = obj.get("result") or obj.get("error") or obj.get("message") or ""
+                detail = f"{subtype}: {result}" if result else subtype
+                return f"claude_error[{detail}][:500]"[:500]
+        # Whole-stdout fallback (non-jsonl formats)
+        try:
+            obj = json.loads(stdout_text)
+            if obj.get("is_error"):
+                subtype = obj.get("subtype", "unknown")
+                result = obj.get("result", "")
+                return f"claude_error[{subtype}: {result}]"[:500]
+        except (json.JSONDecodeError, AttributeError):
+            pass
+    # Second try: stderr
+    if stderr:
+        decoded = stderr.decode(errors="replace").strip()
+        if decoded:
+            return decoded[:500]
+    # Last resort: exit code + hint that stdout was empty/opaque
+    stdout_hint = f" stdout_len={len(stdout_text)}" if stdout_text else " stdout_empty"
+    return f"exitcode {returncode}{stdout_hint}"
+
+
 async def dispatch_node_async(
     node: Node,
     cwd: str | Path,
@@ -1201,6 +1463,7 @@ async def dispatch_node_async(
 
     process = await asyncio.create_subprocess_exec(
         *cmd,
+        stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
         cwd=str(cwd),
@@ -1209,10 +1472,22 @@ async def dispatch_node_async(
     # A8: register so shutdown can terminate us
     _active_subprocesses.add(process)
     try:
-        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
+        # Pipe the (potentially very large) prompt via stdin to avoid the Linux
+        # ``MAX_ARG_STRLEN=128KB`` per-argument limit on execve. Postmortem:
+        # T042's prompt was ~155KB (accumulated implement-context.md + plan +
+        # spec + data-model + contracts) and crashed with ``OSError [Errno 7]
+        # Argument list too long`` before claude even started.
+        prompt_bytes = prompt.encode("utf-8") if prompt else None
+        stdout, stderr = await asyncio.wait_for(
+            process.communicate(input=prompt_bytes),
+            timeout=timeout,
+        )
         stdout_text = stdout.decode() if stdout else ""
         if process.returncode != 0:
-            error = stderr.decode()[:500] if stderr else f"exitcode {process.returncode}"
+            # Claude CLI with --output-format json often fails silently (empty stderr,
+            # error details embedded in stdout JSON). Parse stdout to surface the real
+            # cause (e.g. context_length_exceeded, rate_limit, max_turns).
+            error = _extract_claude_error(stdout_text, stderr, process.returncode)
             log.error("Node '%s' failed: %s", node.id, error)
             return False, error, stdout_text
         return True, None, stdout_text
@@ -1883,14 +2158,22 @@ def build_dispatch_cmd(
     Uses --bare only when ANTHROPIC_API_KEY is set (API key auth).
     With OAuth (claude.ai), --bare is skipped because it disables OAuth/keychain reads.
 
+    The ``prompt`` argument is kept in the signature for test compatibility,
+    but it is NOT placed on the command line — it is piped via stdin by
+    ``dispatch_node_async``. Passing large prompts as argv blows up against
+    the Linux per-arg limit ``MAX_ARG_STRLEN=128KB`` with ``OSError:
+    [Errno 7] Argument list too long`` (postmortem: prosauai/003 T042 cascade).
+
     Centralizes command construction for both dispatch_node() and dispatch_node_async().
     """
     system_prompt = build_system_prompt(node, platform_name, quick_mode=quick_mode or _quick_mode_ctx.get())
 
+    # NB: ``prompt`` is intentionally NOT passed on argv; it's piped via stdin.
+    # See note in the docstring.
+    _ = prompt
     cmd = [
         "claude",
         "-p",
-        prompt,
     ]
 
     # --bare isolates the agent: no CLAUDE.md, no hooks, no user settings.
@@ -1907,7 +2190,29 @@ def build_dispatch_cmd(
         ]
     )
 
-    # Tool restriction
+    # --bare-lite: approximate --bare isolation under OAuth (no ANTHROPIC_API_KEY).
+    # Drops user/local MCP servers, skill resolver, and (for implement) tool defs
+    # that aren't needed. Rollback: MADRUGA_BARE_LITE=0 (systemd drop-in).
+    if _flag(ENV_BARE_LITE):
+        cmd.extend(
+            [
+                "--strict-mcp-config",
+                "--mcp-config",
+                '{"mcpServers":{}}',
+                "--disable-slash-commands",
+            ]
+        )
+        # --tools prunes tool DEFINITIONS (not just runtime gating like --allowedTools).
+        # Safe only for implement:* — judge/qa need Agent, tech-research needs Web*.
+        if node.id.startswith("implement:") or node.id == "implement":
+            cmd.extend(["--tools", IMPLEMENT_TASK_TOOLS])
+        if not resume_session_id:
+            cmd.append("--no-session-persistence")
+        # Opt-in (off by default until settings.local.json audit completes).
+        if _flag(ENV_STRICT_SETTINGS, default="0"):
+            cmd.extend(["--setting-sources", "project"])
+
+    # Tool restriction (runtime permission gate — composes with --tools above)
     tools = NODE_TOOLS.get(node.id, DEFAULT_TOOLS)
     if node.id.startswith("implement:"):
         tools = IMPLEMENT_TASK_TOOLS
@@ -1928,6 +2233,13 @@ def build_dispatch_cmd(
 
     # Defense-in-depth: block dangerous git operations
     cmd.extend(["--disallowedTools", DISALLOWED_TOOLS])
+
+    log.info(
+        "dispatch_cmd node=%s system_prompt_bytes=%d flags=%s",
+        node.id,
+        len(system_prompt.encode()),
+        [f for f in cmd if f.startswith("--")],
+    )
 
     return cmd
 

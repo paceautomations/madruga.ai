@@ -47,6 +47,7 @@ log = logging.getLogger("post_save")
 from log_utils import setup_logging as _setup_logging  # noqa: E402
 
 
+from db_core import db_write_lock  # noqa: E402
 from db import (  # noqa: E402, F401 — compute_epic_status used in record_save
     compute_epic_status,
     compute_file_hash,
@@ -267,9 +268,10 @@ def record_save(
     register_only: bool = False,
 ) -> dict:
     """Record a skill's artifact save in the DB."""
+
     artifact_path = _validate_artifact_path(platform, artifact)
 
-    with get_conn() as conn:
+    with db_write_lock(), get_conn() as conn:
         migrate(conn)
 
         # Auto-create platform if missing
@@ -429,9 +431,39 @@ def record_save(
                         if delivered_at:
                             shipped_delivered_at = delivered_at
 
-                    # Auto-set branch_name from pre-fetched git branch
-                    if not current.get("branch_name") and _current_branch and _current_branch.startswith("epic/"):
-                        upsert_epic(txn, platform, epic, title=current["title"], branch_name=_current_branch)
+                    # Auto-set branch_name when missing.
+                    #
+                    # Prefer the DETERMINISTIC branch name derived from the epic
+                    # (``epic/<platform>/<epic_id>``) over ``git branch --show-current``.
+                    # Rationale: the current HEAD is whatever the user happens to be
+                    # on, which can be another epic's branch entirely when drafting
+                    # ad-hoc epics. Postmortem: ``madruga-ai/024-sequential-execution-ux``
+                    # got branch_name="epic/prosauai/003-multi-tenant-foundation" because
+                    # the draft was created while the user was on the prosauai/003 branch.
+                    #
+                    # We only fall back to ``_current_branch`` when the current HEAD
+                    # already matches the expected pattern for this epic — that
+                    # guards against the cross-epic contamination above while still
+                    # handling worktrees where git HEAD is authoritative.
+                    if not current.get("branch_name"):
+                        expected = f"epic/{platform}/{epic}"
+                        resolved_branch: str | None = None
+                        if _current_branch and _current_branch == expected:
+                            resolved_branch = _current_branch
+                        elif current["status"] in ("in_progress",):
+                            # Only materialize the expected branch name for epics
+                            # that are actually active — drafted/proposed epics
+                            # keep branch_name NULL until activation.
+                            resolved_branch = expected
+                        if resolved_branch:
+                            upsert_epic(
+                                txn,
+                                platform,
+                                epic,
+                                title=current["title"],
+                                status=current["status"],  # preserve — never clobber
+                                branch_name=resolved_branch,
+                            )
             else:
                 # Skip update if node was already completed by a real skill with the same hash
                 # (prevents side-effect edits from other skills overwriting completed_at)
@@ -519,10 +551,11 @@ def reseed(platform: str) -> dict:
     git history (best-effort). This fills gaps when the post-commit hook
     missed commits (e.g. hook not installed, DB unavailable at commit time).
     """
+
     pdir = REPO_ROOT / "platforms" / platform
     if not pdir.exists():
         return {"status": "error", "reason": f"Platform dir not found: {pdir}"}
-    with get_conn() as conn:
+    with db_write_lock(), get_conn() as conn:
         migrate(conn)
         result = seed_from_filesystem(conn, platform, pdir)
         # Sync commits from git history (best-effort — never fail the reseed)
@@ -541,9 +574,10 @@ def reseed_all() -> list[dict]:
     Opens a single connection and migrates once, then seeds all platforms
     (instead of N connections + N migration scans).
     """
+
     platforms_dir = REPO_ROOT / "platforms"
     results = []
-    with get_conn() as conn:
+    with db_write_lock(), get_conn() as conn:
         migrate(conn)
         for pdir in sorted(platforms_dir.iterdir()):
             yaml_path = pdir / "platform.yaml"

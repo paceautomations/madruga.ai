@@ -44,7 +44,7 @@ PIPELINE_SKILLS = {
     "reconcile",
 }
 SPECIALIST_SKILLS = {"qa", "judge"}
-UTILITY_SKILLS = {"pipeline", "checkpoint", "getting-started", "skills-mgmt", "ship"}
+UTILITY_SKILLS = {"pipeline", "checkpoint", "getting-started", "skills-mgmt", "ship", "pair-program"}
 
 SEVERITY_ORDER = {"BLOCKER": 0, "WARNING": 1, "NIT": 2}
 

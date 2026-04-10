@@ -3,7 +3,7 @@
 
 PLATFORM := .specify/scripts/platform_cli.py
 
-.PHONY: help test coverage lint ruff ruff-fix format ci status status-json seed \
+.PHONY: help test coverage lint ruff ruff-fix format ci status status-json seed recover \
        portal-dev portal-build portal-install install-hooks \
        install-services up down restart logs logs-easter logs-portal
 
@@ -43,6 +43,9 @@ seed: ## Re-seed all platforms from filesystem (recreates madruga.db from canoni
 
 seed-force: ## Drop madruga.db (+wal/-shm) and re-seed from scratch
 	python3 .specify/scripts/seed.py --force
+
+recover: ## Recover historical data from git-archived DB snapshot
+	python3 .specify/scripts/recover_db.py
 
 portal-dev: ## Start portal dev server
 	cd portal && npm run dev
