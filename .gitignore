@@ -15,7 +15,9 @@ venv/
 .pipeline/madruga.db-shm
 .pipeline/madruga.db-journal
 .pipeline/madruga.lock
+.pipeline/madruga-db.lock
 .pipeline/*.bak*
+.pipeline/backups/
 .pipeline/logs/
 platforms/*/model/output/
 .env

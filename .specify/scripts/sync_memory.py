@@ -22,8 +22,16 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import sys
 from pathlib import Path
+
+# Skip entirely when invoked inside an easter dispatch subprocess. Without this,
+# every Write/Edit inside a dispatched `claude -p` session triggers a Python
+# subprocess via the PostToolUse hook, multiplying latency and causing SQLite
+# WAL contention. The MADRUGA_DISPATCH flag is set by dag_executor._dispatch_env.
+if os.environ.get("MADRUGA_DISPATCH") == "1":
+    sys.exit(0)
 
 sys.path.insert(0, str(Path(__file__).parent))
 

@@ -66,6 +66,13 @@ class EasterState:
 _easter_state = EasterState()
 _shutdown_event = asyncio.Event()
 _running_epics: set[str] = set()
+
+# Per-epic consecutive pipeline failure counter (in-memory; resets on daemon
+# restart). After MAX_EPIC_DISPATCH_FAILURES consecutive non-zero exits, the
+# epic is auto-transitioned to status='blocked' to stop the retry storm.
+# Postmortem: prosauai/003 T031-T046 cascade retried ~22× before user noticed.
+_epic_fail_counts: dict[str, int] = {}
+MAX_EPIC_DISPATCH_FAILURES = int(os.environ.get("MADRUGA_MAX_EPIC_FAILS", "3"))
 _platform_filter: str | None = None
 
 
@@ -278,13 +285,58 @@ async def dag_scheduler(conn, semaphore, shutdown_event, poll_interval=15, platf
                             semaphore=semaphore,
                             gate_mode=os.environ.get("MADRUGA_MODE", "auto"),
                         )
-                        # C2: notify via ntfy when pipeline fails (circuit breaker likely involved)
-                        if result != 0:
+                        if result == 0:
+                            # success → clear the fail streak for this epic
+                            _epic_fail_counts.pop(epic_id, None)
+                        else:
+                            _epic_fail_counts[epic_id] = _epic_fail_counts.get(epic_id, 0) + 1
+                            fail_count = _epic_fail_counts[epic_id]
+                            logger.warning(
+                                "epic_dispatch_failed",
+                                epic_id=epic_id,
+                                exit_code=result,
+                                consecutive_failures=fail_count,
+                                max=MAX_EPIC_DISPATCH_FAILURES,
+                            )
+                            # C2: notify via ntfy when pipeline fails
                             topic = os.environ.get("MADRUGA_NTFY_TOPIC")
                             if topic:
                                 await asyncio.to_thread(
-                                    ntfy_alert, topic, f"Pipeline failed for epic {epic_id} (exit={result})"
+                                    ntfy_alert,
+                                    topic,
+                                    f"Pipeline failed for epic {epic_id} "
+                                    f"(exit={result}, streak={fail_count}/{MAX_EPIC_DISPATCH_FAILURES})",
                                 )
+                            # Auto-block after max consecutive failures. The user
+                            # must inspect and manually re-enable (status='in_progress')
+                            # once the root cause is fixed.
+                            if fail_count >= MAX_EPIC_DISPATCH_FAILURES:
+                                try:
+                                    block_conn = get_conn()
+                                    block_conn.execute(
+                                        "UPDATE epics SET status='blocked' WHERE platform_id=? AND epic_id=?",
+                                        (epic_platform_id, epic_id),
+                                    )
+                                    block_conn.commit()
+                                    block_conn.close()
+                                    logger.error(
+                                        "epic_auto_blocked",
+                                        epic_id=epic_id,
+                                        platform=epic_platform_id,
+                                        after_failures=fail_count,
+                                    )
+                                    if topic:
+                                        await asyncio.to_thread(
+                                            ntfy_alert,
+                                            topic,
+                                            f"Epic {epic_id} AUTO-BLOCKED after "
+                                            f"{fail_count} consecutive failures. "
+                                            f"Investigate and run: UPDATE epics "
+                                            f"SET status='in_progress' WHERE epic_id='{epic_id}'",
+                                        )
+                                    _epic_fail_counts.pop(epic_id, None)
+                                except Exception:
+                                    logger.exception("epic_auto_block_failed", epic_id=epic_id)
                             # Cooldown after failure to avoid rapid retry busy-loop
                             await _interruptible_sleep(shutdown_event, poll_interval * 2)
                     finally:
@@ -403,6 +455,30 @@ async def retention_cleanup(conn, shutdown_event, interval=86400):
             logger.exception("retention_cleanup_error")
 
 
+async def periodic_backup(conn, shutdown_event, interval_hours=6):
+    """Create periodic DB backups via VACUUM INTO. Rotate to keep last 5."""
+    from config import DB_PATH as _db_path
+
+    backup_dir = _db_path.parent / "backups"
+    backup_dir.mkdir(exist_ok=True)
+
+    while not shutdown_event.is_set():
+        if await _interruptible_sleep(shutdown_event, interval_hours * 3600):
+            break
+        try:
+            timestamp = time.strftime("%Y%m%d_%H%M%S", time.gmtime())
+            path = backup_dir / f"madruga_{timestamp}.db"
+            await asyncio.to_thread(conn.execute, "VACUUM INTO ?", (str(path),))
+            logger.info("backup_created", path=str(path))
+            # Rotate: keep last 5
+            backups = sorted(backup_dir.glob("madruga_*.db"))
+            for old in backups[:-5]:
+                old.unlink()
+                logger.info("backup_rotated", path=str(old))
+        except Exception:
+            logger.exception("backup_failed")
+
+
 # --- Lifespan ---
 
 
@@ -510,6 +586,15 @@ async def lifespan(app: FastAPI):
 
     conn = get_conn()
     migrate(conn)
+
+    # Integrity check — fail fast if DB is corrupt
+    integrity = conn.execute("PRAGMA integrity_check").fetchone()
+    if integrity[0] != "ok":
+        logger.error("db_integrity_check_failed", result=integrity[0])
+        conn.close()
+        sys.exit(78)  # EX_CONFIG — operator runs: make seed
+    logger.info("db_integrity_ok")
+
     app.state.db_conn = conn
 
     # A3: startup zombie sweep — mark orphaned 'running' runs/traces from a
@@ -546,6 +631,9 @@ async def lifespan(app: FastAPI):
 
             # Retention cleanup (daily)
             tg.create_task(retention_cleanup(conn, _shutdown_event))
+
+            # DB backup (every 6 hours)
+            tg.create_task(periodic_backup(conn, _shutdown_event))
 
             # Telegram tasks (if configured)
             if bot and dp and adapter:
@@ -625,6 +713,11 @@ async def lifespan(app: FastAPI):
         for exc in eg.exceptions:
             logger.exception("taskgroup_error", error=str(exc))
     finally:
+        try:
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            logger.info("wal_checkpoint_done")
+        except Exception:
+            logger.exception("wal_checkpoint_failed")
         conn.close()
         lock_file.close()
         lock_path.unlink(missing_ok=True)

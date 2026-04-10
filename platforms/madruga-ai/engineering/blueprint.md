@@ -22,7 +22,7 @@ sidebar:
 | Banco de dados | SQLite WAL mode | ADR-004, ADR-012 | PostgreSQL, DynamoDB — SQLite por zero-ops e single-writer |
 | Diagramas | Mermaid inline em .md | ADR-020 | Structurizr, PlantUML — Mermaid por LLM-friendliness e zero tooling |
 | Runtime (Easter) | FastAPI + asyncio | ADR-006 | Celery, cron — asyncio por single-process + concurrent I/O |
-| Orchestracao AI | claude -p subprocess | ADR-010 | SDK, API client — subprocess por simplicidade + auth via keychain |
+| Orchestracao AI | claude -p subprocess + bare-lite flags | ADR-010, ADR-021 | SDK, API client — subprocess por simplicidade + auth via keychain; bare-lite corta ~30-50% input tokens sob OAuth |
 | Notificacoes | Telegram Bot API (aiogram) | ADR-018 | WhatsApp/wpp-bridge (superseded ADR-015), Slack — Telegram por inline buttons nativas |
 | Observabilidade | structlog + SQLite + Sentry | ADR-016 | OpenTelemetry, Datadog — custom por ~100 LOC e zero dependencias externas |
 | Pipeline | Custom DAG executor | ADR-017 | Airflow, Prefect — custom por YAML-driven + claude -p dispatch |

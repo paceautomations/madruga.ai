@@ -160,6 +160,42 @@ def _make_node(node_id: str = "test-node", skill: str = "test:skill") -> Node:
     )
 
 
+def _make_task(
+    task_id: str = "T001",
+    description: str = "Generic task",
+    files: list[str] | None = None,
+    checked: bool = False,
+    us_tag: str | None = None,
+):
+    """Build a TaskItem with sensible defaults — keeps the new context-scoping tests terse."""
+    from dag_executor import TaskItem
+
+    return TaskItem(
+        id=task_id,
+        description=description,
+        checked=checked,
+        phase="Phase 1",
+        parallel=False,
+        files=files or [],
+        line_number=1,
+        us_tag=us_tag,
+    )
+
+
+def _make_epic_dir(tmp_path, **extra_files: str):
+    """Create an epic scratch dir with ``plan.md`` + ``spec.md`` and any extras."""
+    epic_dir = tmp_path / "epics" / "001-test"
+    epic_dir.mkdir(parents=True)
+    (epic_dir / "plan.md").write_text("# Plan")
+    (epic_dir / "spec.md").write_text("# Spec")
+    for name, content in extra_files.items():
+        # keys use "__" for "/" so callers can pass e.g. contracts__api_md="..."
+        path = epic_dir / name.replace("__", "/")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content)
+    return epic_dir
+
+
 # --- T004: Tests for dispatch_node_async ---
 
 
@@ -572,84 +608,187 @@ def test_compose_task_prompt(tmp_path):
     assert "All Tasks" in prompt
 
 
-def test_compose_task_prompt_includes_implement_context(tmp_path):
-    """compose_task_prompt includes implement-context.md when present."""
-    from dag_executor import TaskItem, compose_task_prompt
+def test_compose_task_prompt_shows_recent_done(tmp_path):
+    """Action 2: compose_task_prompt surfaces recently checked tasks from tasks.md.
 
-    epic_dir = tmp_path / "epics" / "001-test"
-    epic_dir.mkdir(parents=True)
-    (epic_dir / "plan.md").write_text("# Plan")
-    (epic_dir / "spec.md").write_text("# Spec")
-    (epic_dir / "implement-context.md").write_text("### T001 — DONE\n- Created file\n")
+    Replaces the legacy behavior of reading implement-context.md. The new
+    source of truth is the [X] checkboxes in tasks.md itself.
+    """
+    from dag_executor import compose_task_prompt
 
-    task = TaskItem(
-        id="T002",
-        description="Next task",
-        checked=False,
-        phase="Phase 1",
-        parallel=False,
-        files=[],
-        line_number=1,
+    epic_dir = _make_epic_dir(
+        tmp_path,
+        **{"tasks.md": "## Phase 1\n- [X] T001 First task\n- [X] T002 Second task\n- [ ] T003 Next task\n"},
     )
-    prompt = compose_task_prompt(task, epic_dir, "test-plat", "001-test")
+    prompt = compose_task_prompt(_make_task("T003", "Next task"), epic_dir, "test-plat", "001-test")
+
+    assert "Recent progress" in prompt
+    assert "T001" in prompt
+    assert "T002" in prompt
+    assert "Prior Tasks Completed" not in prompt
+
+
+def test_compose_task_prompt_legacy_implement_context(tmp_path):
+    """Rollback path: MADRUGA_KILL_IMPLEMENT_CONTEXT=0 restores legacy file reads."""
+    from dag_executor import compose_task_prompt
+
+    epic_dir = _make_epic_dir(
+        tmp_path,
+        **{"implement-context.md": "### T001 — DONE\n- Created file\n"},
+    )
+    with patch.dict(os.environ, {"MADRUGA_KILL_IMPLEMENT_CONTEXT": "0"}):
+        prompt = compose_task_prompt(_make_task("T002", "Next task"), epic_dir, "test-plat", "001-test")
 
     assert "Prior Tasks Completed" in prompt
     assert "T001 — DONE" in prompt
 
 
-def test_compose_task_prompt_includes_analyze_report(tmp_path):
-    """compose_task_prompt includes analyze-report.md when present."""
-    from dag_executor import TaskItem, compose_task_prompt
+def test_compose_task_prompt_analyze_report_filtered_to_task(tmp_path):
+    """Action 3a: analyze-report.md is sliced to paragraphs mentioning this task id."""
+    from dag_executor import compose_task_prompt
 
-    epic_dir = tmp_path / "epics" / "001-test"
-    epic_dir.mkdir(parents=True)
-    (epic_dir / "plan.md").write_text("# Plan")
-    (epic_dir / "spec.md").write_text("# Spec")
-    (epic_dir / "analyze-report.md").write_text("# Analysis\nIssue found in module X.")
-
-    task = TaskItem(
-        id="T001",
-        description="Fix module X",
-        checked=False,
-        phase="Phase 1",
-        parallel=False,
-        files=[],
-        line_number=1,
+    epic_dir = _make_epic_dir(
+        tmp_path,
+        **{
+            "analyze-report.md": (
+                "## Findings\n\nIssue A affects T001 badly.\n\nIssue B affects T050 differently.\n\nIssue C is generic."
+            ),
+        },
     )
+    prompt = compose_task_prompt(_make_task("T001", "Fix module X"), epic_dir, "test-plat", "001-test")
+
+    assert "Pre-Implementation Analysis (filtered to T001)" in prompt
+    assert "Issue A affects T001" in prompt
+    # Unrelated findings for other tasks must NOT leak into this task's prompt
+    assert "T050 differently" not in prompt
+
+
+def test_compose_task_prompt_analyze_report_absent_when_no_mention(tmp_path):
+    """Action 3a: no analyze-report section if report doesn't mention this task."""
+    from dag_executor import compose_task_prompt
+
+    epic_dir = _make_epic_dir(
+        tmp_path,
+        **{"analyze-report.md": "## Findings\n\nIssue unrelated to T999."},
+    )
+    prompt = compose_task_prompt(_make_task("T042", "Ship feature"), epic_dir, "test-plat", "001-test")
+
+    assert "Pre-Implementation Analysis" not in prompt
+
+
+def test_task_needs_data_model_by_path():
+    """_task_needs_data_model detects model-like file paths."""
+    from dag_executor import _task_needs_data_model
+
+    assert _task_needs_data_model(_make_task(files=["prosauai/models/tenant.py"])) is True
+    # Anchored regex: fetch_models_helper.py must NOT match (false positive guard)
+    assert _task_needs_data_model(_make_task(files=["prosauai/fetch_models_helper.py"])) is False
+
+
+def test_task_needs_data_model_by_description():
+    """_task_needs_data_model detects data model keywords in description."""
+    from dag_executor import _task_needs_data_model
+
+    task = _make_task(description="Add Pydantic schema for tenant config", files=["config.py"])
+    assert _task_needs_data_model(task) is True
+
+
+def test_task_needs_contracts_by_path():
+    """_task_needs_contracts detects API-like file paths."""
+    from dag_executor import _task_needs_contracts
+
+    assert _task_needs_contracts(_make_task(files=["prosauai/webhooks/telegram.py"])) is True
+
+
+def test_task_needs_contracts_by_description():
+    """_task_needs_contracts detects API keywords in description."""
+    from dag_executor import _task_needs_contracts
+
+    task = _make_task(description="Add validation to POST endpoint", files=["main.py"])
+    assert _task_needs_contracts(task) is True
+
+
+def test_task_needs_gates_negative_case():
+    """Both predicates return False for unrelated tasks (no false positives)."""
+    from dag_executor import _task_needs_contracts, _task_needs_data_model
+
+    task = _make_task(description="Add README section about installation", files=["README.md"])
+    assert _task_needs_data_model(task) is False
+    assert _task_needs_contracts(task) is False
+
+
+def test_compose_task_prompt_data_model_gated(tmp_path):
+    """data-model.md is OMITTED for tasks that don't touch models."""
+    from dag_executor import compose_task_prompt
+
+    epic_dir = _make_epic_dir(tmp_path, **{"data-model.md": "# Data Model\nEntity definitions."})
+    task = _make_task(description="Update README", files=["README.md"])
+
     prompt = compose_task_prompt(task, epic_dir, "test-plat", "001-test")
+    assert "Data Model" not in prompt
+    assert "Entity definitions" not in prompt
 
-    assert "Pre-Implementation Analysis" in prompt
-    assert "Issue found in module X" in prompt
+
+def test_compose_task_prompt_data_model_included_for_model_task(tmp_path):
+    """data-model.md IS included when the task touches models/."""
+    from dag_executor import compose_task_prompt
+
+    epic_dir = _make_epic_dir(tmp_path, **{"data-model.md": "# Data Model\nEntity definitions."})
+    task = _make_task(description="Create Tenant entity", files=["prosauai/models/tenant.py"])
+
+    prompt = compose_task_prompt(task, epic_dir, "test-plat", "001-test")
+    assert "## Data Model" in prompt
+    assert "Entity definitions" in prompt
 
 
-def test_append_implement_context(tmp_path):
-    """append_implement_context creates and appends to implement-context.md."""
-    from dag_executor import TaskItem, append_implement_context
+def test_compose_task_prompt_contracts_gated(tmp_path):
+    """contracts/*.md OMITTED for tasks that don't touch APIs."""
+    from dag_executor import compose_task_prompt
+
+    epic_dir = _make_epic_dir(tmp_path, **{"contracts__webhook-api.md": "# Webhook contract"})
+    task = _make_task(description="Update README", files=["README.md"])
+
+    prompt = compose_task_prompt(task, epic_dir, "test-plat", "001-test")
+    assert "webhook-api" not in prompt
+    assert "Webhook contract" not in prompt
+
+
+def test_compose_task_prompt_scoped_context_rollback(tmp_path):
+    """Rollback path: MADRUGA_SCOPED_CONTEXT=0 restores always-include behavior."""
+    from dag_executor import compose_task_prompt
+
+    epic_dir = _make_epic_dir(tmp_path, **{"data-model.md": "# Data Model\nEverything."})
+    task = _make_task(description="Update README", files=["README.md"])
+
+    with patch.dict(os.environ, {"MADRUGA_SCOPED_CONTEXT": "0"}):
+        prompt = compose_task_prompt(task, epic_dir, "test-plat", "001-test")
+    assert "Data Model" in prompt
+
+
+def test_append_implement_context_noop_by_default(tmp_path):
+    """append_implement_context is a NO-OP under MADRUGA_KILL_IMPLEMENT_CONTEXT=1."""
+    from dag_executor import append_implement_context
 
     epic_dir = tmp_path / "epic"
     epic_dir.mkdir()
-
-    task1 = TaskItem(
-        id="T001",
-        description="Create db.py functions",
-        checked=True,
-        phase="Phase 1",
-        parallel=False,
-        files=["db.py", "models.py"],
-        line_number=1,
+    append_implement_context(
+        epic_dir, _make_task(files=["db.py"], checked=True), {"tokens_in": 1000, "tokens_out": 500}
     )
-    task2 = TaskItem(
-        id="T002",
-        description="Add API endpoint",
-        checked=True,
-        phase="Phase 1",
-        parallel=False,
-        files=["easter.py"],
-        line_number=2,
-    )
+    assert not (epic_dir / "implement-context.md").exists()
 
-    append_implement_context(epic_dir, task1, {"tokens_in": 1000, "tokens_out": 500})
-    append_implement_context(epic_dir, task2)
+
+def test_append_implement_context_legacy_mode(tmp_path):
+    """Rollback path: MADRUGA_KILL_IMPLEMENT_CONTEXT=0 restores append behavior."""
+    from dag_executor import append_implement_context
+
+    epic_dir = tmp_path / "epic"
+    epic_dir.mkdir()
+    task1 = _make_task("T001", "Create db.py functions", files=["db.py", "models.py"], checked=True)
+    task2 = _make_task("T002", "Add API endpoint", files=["easter.py"], checked=True)
+
+    with patch.dict(os.environ, {"MADRUGA_KILL_IMPLEMENT_CONTEXT": "0"}):
+        append_implement_context(epic_dir, task1, {"tokens_in": 1000, "tokens_out": 500})
+        append_implement_context(epic_dir, task2)
 
     ctx = (epic_dir / "implement-context.md").read_text()
     assert "T001 — DONE" in ctx
@@ -659,15 +798,13 @@ def test_append_implement_context(tmp_path):
     assert "easter.py" in ctx
 
 
-def test_implement_context_deleted_at_cycle_start(tmp_path):
-    """Stale implement-context.md is deleted before task loop starts."""
-    # Simulate the deletion logic from run_implement_tasks
+def test_implement_context_swept_at_cycle_start(tmp_path):
+    """Stale implement-context.md from legacy runs is cleaned up on cycle start."""
     epic_dir = tmp_path / "epic"
     epic_dir.mkdir()
     ctx_path = epic_dir / "implement-context.md"
     ctx_path.write_text("### T001 — DONE\nstale data\n")
 
-    # Replicate the cleanup logic
     if ctx_path.exists():
         ctx_path.unlink()
 
@@ -1542,8 +1679,12 @@ def test_build_dispatch_cmd_disallowed_tools_present(tmp_path):
     assert cmd[idx + 1] == DISALLOWED_TOOLS
 
 
-def test_build_dispatch_cmd_prompt_is_second_arg(tmp_path):
-    """Prompt is passed as the argument to -p."""
+def test_build_dispatch_cmd_prompt_not_in_argv(tmp_path):
+    """Prompt is NOT passed as argv — it's piped via stdin by dispatch_node_async.
+
+    Postmortem: passing large prompts as argv hit Linux MAX_ARG_STRLEN=128KB
+    with ``OSError: [Errno 7] Argument list too long`` on T042.
+    """
     from dag_executor import build_dispatch_cmd
 
     _setup_knowledge(tmp_path)
@@ -1554,7 +1695,125 @@ def test_build_dispatch_cmd_prompt_is_second_arg(tmp_path):
 
     assert cmd[0] == "claude"
     assert cmd[1] == "-p"
-    assert cmd[2] == "my test prompt here"
+    # The prompt must NOT appear anywhere in argv
+    assert "my test prompt here" not in cmd
+
+
+# --- Tests for --bare-lite flags (Action 1: MADRUGA_BARE_LITE) ---
+
+
+def test_bare_lite_default_on_adds_mcp_and_slash_flags(tmp_path):
+    """With MADRUGA_BARE_LITE unset (default on), cmd includes MCP isolation flags."""
+    from dag_executor import build_dispatch_cmd
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("implement:T001", "speckit.implement")
+
+    with patch("dag_executor.REPO_ROOT", tmp_path), patch.dict("os.environ", {}, clear=False):
+        os.environ.pop("MADRUGA_BARE_LITE", None)
+        cmd = build_dispatch_cmd(node, "p", "test-plat")
+
+    assert "--strict-mcp-config" in cmd
+    idx = cmd.index("--mcp-config")
+    assert cmd[idx + 1] == '{"mcpServers":{}}'
+    assert "--disable-slash-commands" in cmd
+
+
+def test_bare_lite_off_omits_all_new_flags(tmp_path):
+    """MADRUGA_BARE_LITE=0 is the rollback kill switch — all new flags absent."""
+    from dag_executor import build_dispatch_cmd
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("implement:T001", "speckit.implement")
+
+    with patch("dag_executor.REPO_ROOT", tmp_path), patch.dict("os.environ", {"MADRUGA_BARE_LITE": "0"}):
+        cmd = build_dispatch_cmd(node, "p", "test-plat")
+
+    assert "--strict-mcp-config" not in cmd
+    assert "--mcp-config" not in cmd
+    assert "--disable-slash-commands" not in cmd
+    assert "--tools" not in cmd
+    assert "--no-session-persistence" not in cmd
+    assert "--setting-sources" not in cmd
+
+
+def test_bare_lite_tools_flag_only_for_implement_nodes(tmp_path):
+    """--tools (definition pruning) is restricted to implement nodes."""
+    from dag_executor import IMPLEMENT_TASK_TOOLS, build_dispatch_cmd
+
+    _setup_knowledge(tmp_path)
+
+    # implement:T001 → gets --tools
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        cmd = build_dispatch_cmd(_make_node("implement:T001", "speckit.implement"), "p", "test-plat")
+    assert "--tools" in cmd
+    idx = cmd.index("--tools")
+    assert cmd[idx + 1] == IMPLEMENT_TASK_TOOLS
+
+
+def test_bare_lite_tools_flag_absent_for_judge(tmp_path):
+    """Judge needs Agent tool — must NOT have --tools restriction."""
+    from dag_executor import build_dispatch_cmd
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("judge", "madruga:judge")
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        cmd = build_dispatch_cmd(node, "p", "test-plat")
+
+    assert "--tools" not in cmd
+
+
+def test_bare_lite_tools_flag_absent_for_tech_research(tmp_path):
+    """tech-research needs WebFetch/WebSearch — must NOT have --tools restriction."""
+    from dag_executor import build_dispatch_cmd
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("tech-research", "madruga:tech-research")
+
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        cmd = build_dispatch_cmd(node, "p", "test-plat")
+
+    assert "--tools" not in cmd
+
+
+def test_bare_lite_no_session_persistence_only_on_fresh_dispatch(tmp_path):
+    """--no-session-persistence present for fresh dispatches, absent when resuming."""
+    from dag_executor import build_dispatch_cmd
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("implement:T001", "speckit.implement")
+
+    # Fresh dispatch → flag present
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        cmd_fresh = build_dispatch_cmd(node, "p", "test-plat")
+    assert "--no-session-persistence" in cmd_fresh
+
+    # Resume → flag absent (would conflict with --resume semantics)
+    with patch("dag_executor.REPO_ROOT", tmp_path):
+        cmd_resume = build_dispatch_cmd(node, "p", "test-plat", resume_session_id="abc123")
+    assert "--no-session-persistence" not in cmd_resume
+
+
+def test_bare_lite_strict_settings_opt_in(tmp_path):
+    """--setting-sources project only when MADRUGA_STRICT_SETTINGS=1 (opt-in)."""
+    from dag_executor import build_dispatch_cmd
+
+    _setup_knowledge(tmp_path)
+    node = _make_node("implement:T001", "speckit.implement")
+
+    # Default: opt-in flag absent
+    with patch("dag_executor.REPO_ROOT", tmp_path), patch.dict("os.environ", {}, clear=False):
+        os.environ.pop("MADRUGA_STRICT_SETTINGS", None)
+        cmd = build_dispatch_cmd(node, "p", "test-plat")
+    assert "--setting-sources" not in cmd
+
+    # Opt-in: flag present
+    with patch("dag_executor.REPO_ROOT", tmp_path), patch.dict("os.environ", {"MADRUGA_STRICT_SETTINGS": "1"}):
+        cmd = build_dispatch_cmd(node, "p", "test-plat")
+    assert "--setting-sources" in cmd
+    idx = cmd.index("--setting-sources")
+    assert cmd[idx + 1] == "project"
 
 
 # --- Integration test: full dispatch flow ---

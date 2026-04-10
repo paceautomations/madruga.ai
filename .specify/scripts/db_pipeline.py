@@ -220,7 +220,82 @@ def get_pipeline_nodes(conn: sqlite3.Connection, platform_id: str) -> list[dict]
 # ══════════════════════════════════════
 
 
+_UPSERT_EPIC_STATUS_UNSET = object()
+
+
 def upsert_epic(conn: sqlite3.Connection, platform_id: str, epic_id: str, title: str = "", **kwargs) -> None:
+    """Upsert an epic row.
+
+    IMPORTANT: When ``status`` is not explicitly provided, this function
+    PRESERVES the existing DB status instead of overwriting it with the
+    previous default ``"proposed"``. Background: the old behavior silently
+    regressed in_progress/drafted epics whenever callers did a partial
+    upsert (e.g. post_save.py auto-setting branch_name). Postmortem:
+    ``madruga-ai/024-sequential-execution-ux`` was auto-dispatched by easter
+    because its ``drafted`` status got clobbered to ``proposed`` via this
+    foot-gun, then compute_epic_status auto-promoted ``proposed`` →
+    ``in_progress`` once an epic_node was backfilled.
+
+    On INSERT of a brand-new row with no status provided, falls back to
+    the schema default ``'proposed'``.
+    """
+    status = kwargs.get("status", _UPSERT_EPIC_STATUS_UNSET)
+    now = _now()
+
+    if status is _UPSERT_EPIC_STATUS_UNSET:
+        # Status not provided — do a two-branch update that never touches status.
+        existing = conn.execute(
+            "SELECT 1 FROM epics WHERE platform_id=? AND epic_id=?",
+            (platform_id, epic_id),
+        ).fetchone()
+        if existing is None:
+            # Brand-new row — must provide status (schema is NOT NULL).
+            conn.execute(
+                """INSERT INTO epics
+                   (platform_id, epic_id, title, status, priority, branch_name,
+                    file_path, delivered_at, created_at, updated_at)
+                   VALUES (?, ?, ?, 'proposed', ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    platform_id,
+                    epic_id,
+                    title,
+                    kwargs.get("priority"),
+                    kwargs.get("branch_name"),
+                    kwargs.get("file_path"),
+                    kwargs.get("delivered_at"),
+                    now,
+                    now,
+                ),
+            )
+        else:
+            # Existing row — update title/priority/branch_name/file_path/delivered_at
+            # but NEVER touch status.
+            conn.execute(
+                """UPDATE epics SET
+                     title = ?,
+                     priority = COALESCE(?, priority),
+                     branch_name = COALESCE(?, branch_name),
+                     file_path = COALESCE(?, file_path),
+                     delivered_at = COALESCE(?, delivered_at),
+                     updated_at = ?
+                   WHERE platform_id=? AND epic_id=?
+                """,
+                (
+                    title,
+                    kwargs.get("priority"),
+                    kwargs.get("branch_name"),
+                    kwargs.get("file_path"),
+                    kwargs.get("delivered_at"),
+                    now,
+                    platform_id,
+                    epic_id,
+                ),
+            )
+        conn.commit()
+        return
+
+    # Explicit status provided — original upsert behavior.
     conn.execute(
         """INSERT INTO epics
            (platform_id, epic_id, title, status, priority, branch_name, file_path,
@@ -239,13 +314,13 @@ def upsert_epic(conn: sqlite3.Connection, platform_id: str, epic_id: str, title:
             platform_id,
             epic_id,
             title,
-            kwargs.get("status", "proposed"),
+            status,
             kwargs.get("priority"),
             kwargs.get("branch_name"),
             kwargs.get("file_path"),
             kwargs.get("delivered_at"),
-            _now(),
-            _now(),
+            now,
+            now,
         ),
     )
     conn.commit()

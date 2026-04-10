@@ -15,8 +15,10 @@ This module owns:
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import logging
+import os
 import re
 import sqlite3
 from contextlib import contextmanager
@@ -181,6 +183,27 @@ def get_conn(db_path: Path | str | None = None) -> _ClosingConnection:
     conn.execute("PRAGMA temp_store=MEMORY")
     conn.row_factory = sqlite3.Row
     return _ClosingConnection(conn)
+
+
+_DB_WRITE_LOCK_PATH = DB_PATH.parent / "madruga-db.lock"
+
+
+@contextmanager
+def db_write_lock():
+    """Acquire exclusive flock before writing to the DB.
+
+    Uses a separate lock file from easter's singleton guard (madruga.lock).
+    Prevents concurrent writes from easter, post_save, seed, and hooks.
+    """
+    fh = open(_DB_WRITE_LOCK_PATH, "w")  # noqa: SIM115
+    try:
+        fcntl.flock(fh, fcntl.LOCK_EX)
+        fh.write(str(os.getpid()))
+        fh.flush()
+        yield
+    finally:
+        fcntl.flock(fh, fcntl.LOCK_UN)
+        fh.close()
 
 
 class _BatchConnection:

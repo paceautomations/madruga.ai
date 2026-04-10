@@ -272,7 +272,7 @@ Vou continuar monitorando:
 
 **Total pre-implement**: ~22 min (specify → analyze). O pipeline de planejamento e ~22 min para ~2100 LOC de artefatos — impressionante.
 
-**Ultima atualizacao**: 17:30 BRT (T031 re-rodou com sucesso pos fixes, T032 em andamento)
+**Ultima atualizacao**: 18:59 BRT — **EPIC 003 SHIPPED**. Ciclo L2 completo (12/12 nodes) + bug T042 ARG_MAX descoberto e corrigido durante a retomada.
 
 ## INCIDENTE + POSTMORTEM: T031-T046 cascade + bug 024 auto-dispatch [17:30 BRT]
 
@@ -369,3 +369,101 @@ upsert_epic(conn, 'p1', 'e1', branch_name='epic/p1/e1')  # DB: proposed (clobber
 | pipeline_runs rows failed geradas | ~600 |
 | Tokens gastos em crashes puros | dificil estimar — provavel > 10M tokens in em cache reads + writes parciais |
 | Tempo perdido | ~1h entre primeiro crash e deteccao manual |
+
+## SEGUNDO INCIDENTE: T042 em loop de cancelamento [18:00 BRT]
+
+### Sintoma
+
+Apos os fixes do primeiro incidente, T031-T041 rodaram em sequencia sem problemas. Mas T042 ficou em loop:
+- Control Panel mostrou 18 rows `cancelled` consecutivas para `implement:T042` em ~10 minutos (1 a cada ~33s).
+- Nenhum erro no log alem de "Dispatching task T042 (1/5)" seguido de silencio.
+- O processo `claude` aparecia na ps logo apos o dispatch, mas morria instantaneamente.
+
+### Causa raiz
+
+```
+OSError: [Errno 7] Argument list too long
+```
+
+O prompt de T042 tinha ~155KB (task + constraints + 41 entradas de implement-context.md acumuladas + tasks.md + plan.md + spec.md + data-model.md + contracts + analyze-report.md + README.md referenciado). O kernel Linux tem `MAX_ARG_STRLEN = 128KB` — um limite por argumento individual em `execve()`. Chamar `claude -p "<prompt>"` com prompt > 128KB explode ANTES do claude CLI iniciar. Erro retorna ao Python como `OSError: [Errno 7]` de `asyncio.create_subprocess_exec`.
+
+O fix anterior (`_extract_claude_error`) capturou o traceback corretamente, mas o easter loop re-dispachava o epic a cada ciclo, causando a ilusao de "cancelled" (o easter restart kill + re-dispatch imediato criava novas rows `running` → `cancelled` via zombie sweep).
+
+**Esse foi provavelmente o bug REAL por tras dos crashes do T031/T032 no primeiro incidente**: nao era context window da API Anthropic — era ARG_MAX do kernel. A `session resume bound` ajudou indiretamente (reseta sessao → prompt menor), mas o root cause sempre foi o limite de 128KB por argumento.
+
+### Fix #8 — Passar prompt via stdin em vez de argv
+
+Arquivos: `.specify/scripts/dag_executor.py` (`build_dispatch_cmd`, `dispatch_node_async`, `dispatch_node`), `.specify/scripts/tests/test_dag_executor.py` (teste atualizado).
+
+Mudanca na pratica:
+
+```python
+# ANTES — prompt como argument de linha de comando (limite kernel ~128KB)
+cmd = ["claude", "-p", prompt]
+process = await asyncio.create_subprocess_exec(*cmd, ...)
+
+# DEPOIS — prompt via stdin pipe (sem limite pratico)
+cmd = ["claude", "-p"]  # sem argumento
+process = await asyncio.create_subprocess_exec(
+    *cmd,
+    stdin=asyncio.subprocess.PIPE,  # nova flag
+    ...
+)
+await process.communicate(input=prompt.encode())  # envia prompt via pipe
+```
+
+Equivalente shell: era `claude -p "<prompt gigante>"`, agora eh `echo "<prompt>" | claude -p`.
+
+**Por que funciona**: `MAX_ARG_STRLEN` so aplica a argumentos `argv`. stdin eh um pipe kernel com buffer de 64KB mas `process.communicate(input=...)` cuida do streaming de forma transparente — escreve e le em parallelo, sem deadlock.
+
+### Resultado
+
+Apos o fix + restart do easter, T042-T046 rodaram sem travamentos:
+
+| Node | Duracao | Notas |
+|------|---------|-------|
+| T042 | 4m7s | README.md multi-tenant docs |
+| T043 | 1m50s | ruff format pass |
+| T044 | 4m55s | pytest -v (543 passed) |
+| T045 | 4m16s | quickstart validation |
+| T046 | 4m23s | E2E validation (manual skipped) |
+| analyze-post | 7m31s | 20KB report |
+| judge | 12m22s | **PASS 83%** (inicial 60%, 10 findings fixed, 1 BLOCKER fixed, 543 tests) |
+| qa | 6m14s | 543 passed, 5 healed, 5 WARNs, 0 unresolved |
+| reconcile | 7m57s | doc drift fixes |
+| roadmap-reassess | 2m34s | roadmap reassess |
+
+**Epic 003 = SHIPPED as 18:58 BRT** (L2 cycle 12/12 nodes OK, epic status auto-transicionado via compute_epic_status).
+
+## Lista final dos 8 fixes aplicados ao pipeline
+
+| # | Arquivo | Bug | Fix |
+|---|---------|-----|-----|
+| 1 | `dag_executor.py` `_seed_from_db` | CB se auto-alimentava via rows `error='circuit breaker OPEN'` | Exclui essas rows do seeding com `AND error NOT LIKE '%circuit breaker%'` |
+| 2 | `dag_executor.py` `_extract_claude_error` | Empty stderr + `exitcode 1` sem diagnostico | Parseia stdout JSON do claude (is_error/subtype/result) |
+| 3 | `dag_executor.py` `run_implement_tasks` | `--resume` session crescia sem limite | Reset forcado apos 8 tasks OU >700K tokens in |
+| 4 | `dag_executor.py` `run_implement_tasks` | Plow por 46 tasks mesmo com falhas consecutivas | Early-abort apos 3 failures consecutivas |
+| 5 | `easter.py` `dag_scheduler` | Re-dispatch infinito de epic falhado | Mark `blocked` apos 3 falhas consecutivas do epic |
+| 6 | `db_pipeline.py` `upsert_epic` | Clobber silencioso de status em partial upsert | Sentinel `_UPSERT_EPIC_STATUS_UNSET` + UPDATE explicito que nao toca status |
+| 7 | `post_save.py` linha 435-436 | Cross-epic contamination do branch_name via git HEAD | Deriva `epic/{platform}/{epic}` do epic_id + so materializa em `in_progress` |
+| 8 | `dag_executor.py` `dispatch_node_async` / `build_dispatch_cmd` | Prompts > 128KB explodiam `MAX_ARG_STRLEN` do kernel | Pipe prompt via stdin (`process.communicate(input=prompt_bytes)`) |
+
+## Pipeline timing final (003 completo)
+
+| Fase | Duracao |
+|------|---------|
+| epic-context | manual (pitch.md 555 LOC + decisions.md 29 LOC) |
+| specify | 3m 21s |
+| clarify | 2m 22s |
+| plan | 8m 36s |
+| tasks | 3m 44s |
+| analyze | 3m 32s |
+| implement | ~3h (46 tasks, com 2 incidentes de bug no meio) |
+| analyze-post | 7m 31s |
+| judge | 12m 22s |
+| qa | 6m 14s |
+| reconcile | 7m 57s |
+| roadmap-reassess | 2m 34s |
+| **Total wall-clock** | **~4h30min** (incluindo debugging dos 8 bugs) |
+
+**Tempo "puro" sem bugs** (estimativa): ~2h, seria aproximadamente o mesmo do epic 001.

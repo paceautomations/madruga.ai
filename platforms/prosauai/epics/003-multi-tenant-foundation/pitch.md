@@ -1,7 +1,7 @@
 ---
 id: "003"
 title: "Multi-Tenant Foundation — Auth + Parser Reality + Deploy"
-status: in_progress
+status: shipped
 phase: now
 features:
   - "Tenant abstraction + TenantStore (YAML file-backed, 2 tenants reais desde dia 1)"
@@ -20,6 +20,7 @@ arch:
   modules: [M1, M2, M3, M11]
   contexts: [channel]
   containers: [prosauai-api, redis, evolution-api]
+delivered_at: 2026-04-10
 ---
 
 # 003 — Multi-Tenant Foundation
