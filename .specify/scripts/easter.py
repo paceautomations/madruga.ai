@@ -103,7 +103,19 @@ async def dag_scheduler(conn, semaphore, shutdown_event, poll_interval=15, platf
     """Poll active epics and dispatch pipeline runs.
 
     INVARIANT: self-ref platforms execute epics sequentially.
+
+    Note on connections: the ``conn`` argument is the connection opened in
+    ``lifespan()`` (kept for signature/test compatibility) but it is NOT used
+    inside the poll loop. Instead, every iteration opens a fresh connection
+    via ``get_conn()``. This protects against stale file descriptors when the
+    SQLite file is deleted and recreated underneath the daemon (e.g. by the
+    post-merge auto-reseed hook or a manual ``make seed``). Without this, the
+    daemon polls a phantom inode forever and never sees newly inserted epics.
+    The cost is one ``open()`` + WAL pragmas per poll interval (~1 ms) which
+    is negligible against the 15 s default cadence.
     """
+    from db import get_conn, get_pending_gates
+
     consecutive_errors = 0
     while not shutdown_event.is_set():
         try:
@@ -112,78 +124,92 @@ async def dag_scheduler(conn, semaphore, shutdown_event, poll_interval=15, platf
                 await _interruptible_sleep(shutdown_event, poll_interval)
                 continue
 
-            epics = poll_active_epics(conn, platform_id=platform_id)
-            consecutive_errors = 0  # reset on successful poll
-            for epic in epics:
-                epic_id = epic["epic_id"]
-                epic_platform_id = epic["platform_id"]
+            # Reopen the DB connection on every poll so that DB recreation events
+            # (post-merge reseed, manual `make seed`, copy-restore from backup)
+            # do not leave us bound to a deleted inode. See module docstring above.
+            try:
+                poll_conn = get_conn()
+            except Exception:
+                logger.exception("dag_scheduler_get_conn_failed")
+                await _interruptible_sleep(shutdown_event, poll_interval)
+                continue
 
-                # Skip already-running epics
-                if epic_id in _running_epics:
-                    continue
+            try:
+                epics = poll_active_epics(poll_conn, platform_id=platform_id)
+                consecutive_errors = 0  # reset on successful poll
+                for epic in epics:
+                    epic_id = epic["epic_id"]
+                    epic_platform_id = epic["platform_id"]
 
-                # Sequential constraint: only one epic at a time (global — all platforms)
-                if _running_epics:
-                    logger.debug("sequential_constraint", running=list(_running_epics), skipped=epic_id)
-                    break
+                    # Skip already-running epics
+                    if epic_id in _running_epics:
+                        continue
 
-                # Check if epic has a pending gate — skip dispatch to avoid busy-loop
-                from db import get_pending_gates
+                    # Sequential constraint: only one epic at a time (global — all platforms)
+                    if _running_epics:
+                        logger.debug("sequential_constraint", running=list(_running_epics), skipped=epic_id)
+                        break
 
-                pending = get_pending_gates(conn, epic_platform_id)
-                epic_pending = [
-                    g for g in pending if g.get("epic_id") == epic_id and g.get("gate_status") == "waiting_approval"
-                ]
-                if epic_pending:
-                    logger.debug("gate_pending_skip", epic_id=epic_id, gate=epic_pending[0]["node_id"])
-                    continue
+                    # Check if epic has a pending gate — skip dispatch to avoid busy-loop
+                    pending = get_pending_gates(poll_conn, epic_platform_id)
+                    epic_pending = [
+                        g for g in pending if g.get("epic_id") == epic_id and g.get("gate_status") == "waiting_approval"
+                    ]
+                    if epic_pending:
+                        logger.debug("gate_pending_skip", epic_id=epic_id, gate=epic_pending[0]["node_id"])
+                        continue
 
-                _running_epics.add(epic_id)
-                logger.info("dispatching_epic", epic_id=epic_id, platform=epic_platform_id)
+                    _running_epics.add(epic_id)
+                    logger.info("dispatching_epic", epic_id=epic_id, platform=epic_platform_id)
 
-                # F3: Proactive branch checkout before dispatch
-                # For external repos, worktree handles branching — skip checkout.
-                branch = epic.get("branch_name")
-                if branch:
-                    import subprocess as _sp
+                    # F3: Proactive branch checkout before dispatch
+                    # For external repos, worktree handles branching — skip checkout.
+                    branch = epic.get("branch_name")
+                    if branch:
+                        import subprocess as _sp
 
-                    from config import REPO_ROOT as _repo_root
-                    from ensure_repo import _is_self_ref, _load_repo_binding
+                        from config import REPO_ROOT as _repo_root
+                        from ensure_repo import _is_self_ref, _load_repo_binding
 
-                    binding = _load_repo_binding(epic_platform_id)
-                    if _is_self_ref(binding["name"]):
-                        checkout = await asyncio.to_thread(
-                            _sp.run,
-                            ["git", "checkout", branch],
-                            cwd=str(_repo_root),
-                            capture_output=True,
-                            text=True,
-                            timeout=30,
-                        )
-                        if checkout.returncode != 0:
-                            logger.warning("branch_checkout_failed", branch=branch, stderr=checkout.stderr.strip())
-                    else:
-                        logger.info("external_repo_skip_checkout", branch=branch, platform=epic_platform_id)
-
-                try:
-                    result = await run_pipeline_async(
-                        platform_name=epic_platform_id,
-                        epic_slug=epic_id,
-                        resume=True,
-                        semaphore=semaphore,
-                        gate_mode=os.environ.get("MADRUGA_MODE", "auto"),
-                    )
-                    # C2: notify via ntfy when pipeline fails (circuit breaker likely involved)
-                    if result != 0:
-                        topic = os.environ.get("MADRUGA_NTFY_TOPIC")
-                        if topic:
-                            await asyncio.to_thread(
-                                ntfy_alert, topic, f"Pipeline failed for epic {epic_id} (exit={result})"
+                        binding = _load_repo_binding(epic_platform_id)
+                        if _is_self_ref(binding["name"]):
+                            checkout = await asyncio.to_thread(
+                                _sp.run,
+                                ["git", "checkout", branch],
+                                cwd=str(_repo_root),
+                                capture_output=True,
+                                text=True,
+                                timeout=30,
                             )
-                        # Cooldown after failure to avoid rapid retry busy-loop
-                        await _interruptible_sleep(shutdown_event, poll_interval * 2)
-                finally:
-                    _running_epics.discard(epic_id)
+                            if checkout.returncode != 0:
+                                logger.warning("branch_checkout_failed", branch=branch, stderr=checkout.stderr.strip())
+                        else:
+                            logger.info("external_repo_skip_checkout", branch=branch, platform=epic_platform_id)
+
+                    try:
+                        result = await run_pipeline_async(
+                            platform_name=epic_platform_id,
+                            epic_slug=epic_id,
+                            resume=True,
+                            semaphore=semaphore,
+                            gate_mode=os.environ.get("MADRUGA_MODE", "auto"),
+                        )
+                        # C2: notify via ntfy when pipeline fails (circuit breaker likely involved)
+                        if result != 0:
+                            topic = os.environ.get("MADRUGA_NTFY_TOPIC")
+                            if topic:
+                                await asyncio.to_thread(
+                                    ntfy_alert, topic, f"Pipeline failed for epic {epic_id} (exit={result})"
+                                )
+                            # Cooldown after failure to avoid rapid retry busy-loop
+                            await _interruptible_sleep(shutdown_event, poll_interval * 2)
+                    finally:
+                        _running_epics.discard(epic_id)
+            finally:
+                try:
+                    poll_conn.close()
+                except Exception:
+                    pass
 
         except Exception:
             consecutive_errors += 1
@@ -535,8 +561,16 @@ async def status():
 
 @app.get("/api/sessions")
 async def sessions(request: Request, platform_id: str | None = Query(default=None)):
-    """Active and queued sessions with per-session detail."""
-    conn = request.app.state.db_conn
+    """Active and queued sessions with per-session detail.
+
+    Opens a fresh DB connection per request so that we never serve from a
+    stale inode after a ``make seed`` / post-merge auto-reseed. Same rationale
+    as the comment in ``dag_scheduler``. The cost is one ``open()`` per HTTP
+    call which is negligible for an admin endpoint.
+    """
+    from db import get_conn
+
+    conn = get_conn()
 
     result = {
         "easter_state": _easter_state.easter_state,
@@ -613,6 +647,11 @@ async def sessions(request: Request, platform_id: str | None = Query(default=Non
             result["running_epics"].append(session)
         else:
             result["queued_epics"].append({"epic_id": eid, "platform_id": pid})
+
+    try:
+        conn.close()
+    except Exception:
+        pass
 
     return result
 
