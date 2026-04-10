@@ -7,8 +7,13 @@ venv/
 .ruff_cache/
 *.pyc
 *.log
+# A1: the runtime DB is reproduced from filesystem via `make seed` — tracking
+# it in git caused WAL corruption on `git checkout`/`stash` because WAL/SHM
+# siblings were gitignored while the main file was tracked.
+.pipeline/madruga.db
 .pipeline/madruga.db-wal
 .pipeline/madruga.db-shm
+.pipeline/madruga.db-journal
 .pipeline/madruga.lock
 .pipeline/*.bak*
 .pipeline/logs/

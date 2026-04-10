@@ -35,7 +35,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 
 import structlog
-from fastapi import FastAPI, Query, Request
+from fastapi import Depends, FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 
@@ -99,6 +99,63 @@ async def _interruptible_sleep(shutdown_event: asyncio.Event, seconds: float) ->
         return False  # timeout elapsed, keep running
 
 
+# --- Zombie Sweep ---------------------------------------------------
+
+# A3: Mark stale 'running' rows as 'failed' when they exceed this age without
+# a completion timestamp. Rationale: whenever the daemon is killed with SIGKILL
+# (shutdown timeout, crash, OOM), active runs are left "running" forever. The
+# sweep runs once at startup (catches restart crashes) and periodically while
+# alive (catches runaway tasks). 1 hour is the conservative threshold — real
+# implement tasks can legitimately run for 20-30 minutes.
+ZOMBIE_THRESHOLD = "-1 hour"
+
+
+def _sweep_zombies_sync(conn) -> tuple[int, int]:
+    """Synchronous core for zombie sweep (easier to test). Returns (runs, traces) swept.
+
+    Uses julianday() for comparison because our timestamps are stored as ISO
+    strings with 'T' separator and 'Z' suffix, while ``datetime('now', ...)``
+    produces ``'YYYY-MM-DD HH:MM:SS'`` without them. Lexicographic comparison
+    between the two formats is always wrong (``'T' > ' '``). julianday converts
+    both to numeric days and compares correctly across formats.
+    """
+    now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+    runs_swept = conn.execute(
+        "UPDATE pipeline_runs SET status='failed', "
+        "error=COALESCE(error, 'zombie — daemon restart or crash'), "
+        "completed_at=? "
+        "WHERE status='running' "
+        "AND julianday(started_at) < julianday('now', ?) "
+        "AND (gate_status IS NULL OR gate_status != 'waiting_approval')",
+        (now, ZOMBIE_THRESHOLD),
+    ).rowcount
+
+    traces_swept = conn.execute(
+        "UPDATE traces SET status='failed', completed_at=? "
+        "WHERE status='running' "
+        "AND julianday(started_at) < julianday('now', ?)",
+        (now, ZOMBIE_THRESHOLD),
+    ).rowcount
+
+    conn.commit()
+    return runs_swept, traces_swept
+
+
+async def sweep_zombies(conn) -> None:
+    """Log-wrapping async facade for the zombie sweep."""
+    try:
+        runs_swept, traces_swept = await asyncio.to_thread(_sweep_zombies_sync, conn)
+    except Exception:
+        logger.exception("zombie_sweep_failed")
+        return
+
+    if runs_swept or traces_swept:
+        logger.warning("zombie_sweep_done", runs_swept=runs_swept, traces_swept=traces_swept)
+    else:
+        logger.debug("zombie_sweep_clean")
+
+
 async def dag_scheduler(conn, semaphore, shutdown_event, poll_interval=15, platform_id=None):
     """Poll active epics and dispatch pipeline runs.
 
@@ -115,6 +172,13 @@ async def dag_scheduler(conn, semaphore, shutdown_event, poll_interval=15, platf
     is negligible against the 15 s default cadence.
     """
     from db import get_conn, get_pending_gates
+
+    # A3: Periodic zombie sweep state — runs every ZOMBIE_SWEEP_INTERVAL seconds
+    # regardless of how many polls happen between them. Belt-and-suspenders with
+    # the startup sweep in lifespan(): startup catches restart-after-crash zombies,
+    # periodic catches tasks that zombify while the daemon is alive.
+    zombie_sweep_interval = float(os.environ.get("MADRUGA_ZOMBIE_SWEEP_INTERVAL", "300"))  # 5 min
+    last_sweep_monotonic = time.monotonic()
 
     consecutive_errors = 0
     while not shutdown_event.is_set():
@@ -135,6 +199,11 @@ async def dag_scheduler(conn, semaphore, shutdown_event, poll_interval=15, platf
                 continue
 
             try:
+                # A3: periodic zombie sweep (belt-and-suspenders)
+                if time.monotonic() - last_sweep_monotonic >= zombie_sweep_interval:
+                    await sweep_zombies(poll_conn)
+                    last_sweep_monotonic = time.monotonic()
+
                 epics = poll_active_epics(poll_conn, platform_id=platform_id)
                 consecutive_errors = 0  # reset on successful poll
                 for epic in epics:
@@ -160,6 +229,15 @@ async def dag_scheduler(conn, semaphore, shutdown_event, poll_interval=15, platf
                         continue
 
                     _running_epics.add(epic_id)
+
+                    # A11: bind structlog contextvars so every log line emitted
+                    # inside run_pipeline_async (including dag_executor logs once
+                    # they're routed through LoggingHandler in A2-long) carries
+                    # epic_id, platform, and trace_id (resolved later). We unbind
+                    # in finally to avoid leaking context to other epics.
+                    from structlog.contextvars import bind_contextvars, unbind_contextvars
+
+                    bind_contextvars(epic_id=epic_id, platform=epic_platform_id)
                     logger.info("dispatching_epic", epic_id=epic_id, platform=epic_platform_id)
 
                     # F3: Proactive branch checkout before dispatch
@@ -205,6 +283,7 @@ async def dag_scheduler(conn, semaphore, shutdown_event, poll_interval=15, platf
                             await _interruptible_sleep(shutdown_event, poll_interval * 2)
                     finally:
                         _running_epics.discard(epic_id)
+                        unbind_contextvars("epic_id", "platform")
             finally:
                 try:
                     poll_conn.close()
@@ -324,6 +403,13 @@ async def retention_cleanup(conn, shutdown_event, interval=86400):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """FastAPI lifespan: start background tasks, handle shutdown."""
+    # A2: Logging config MUST run before any logger.info() call.
+    # When easter is started via `uvicorn easter:app` (systemd path), easter.main()
+    # never runs, so _configure_logging() would never be invoked. Result: zero
+    # dag_executor output in journald. Invoking it here guarantees the structlog
+    # pipeline is set up regardless of entry point (main() vs uvicorn).
+    _configure_logging(os.environ.get("MADRUGA_VERBOSE", "").lower() in ("1", "true", "yes"))
+
     _easter_state.easter_state = "running"
     _easter_state.start_time = time.time()
 
@@ -420,6 +506,12 @@ async def lifespan(app: FastAPI):
     migrate(conn)
     app.state.db_conn = conn
 
+    # A3: startup zombie sweep — mark orphaned 'running' runs/traces from a
+    # previous crashed or SIGKILL'd daemon as 'failed'. Must happen after
+    # migrate() (schema ready) and before dag_scheduler starts polling, so the
+    # first poll sees a clean state.
+    await sweep_zombies(conn)
+
     semaphore = asyncio.Semaphore(int(os.environ.get("MADRUGA_MAX_CONCURRENT", "3")))
 
     # Signal handlers
@@ -510,6 +602,19 @@ async def lifespan(app: FastAPI):
             _easter_state.easter_state = "shutting_down"
             _shutdown_event.set()
             sd_notify("STOPPING=1")
+
+            # A8: propagate SIGTERM down the claude subprocess tree so they
+            # can flush/exit cleanly instead of being SIGKILL'd when systemd's
+            # TimeoutStopSec expires. Bounded to 10s — any survivors get
+            # SIGKILL'd inside terminate_active_subprocesses.
+            try:
+                from dag_executor import terminate_active_subprocesses
+
+                signalled = await terminate_active_subprocesses(graceful_timeout=10.0)
+                if signalled:
+                    logger.info("shutdown_terminated_children", count=signalled)
+            except Exception:
+                logger.exception("shutdown_terminate_failed")
     except* Exception as eg:
         for exc in eg.exceptions:
             logger.exception("taskgroup_error", error=str(exc))
@@ -529,6 +634,24 @@ app.add_middleware(
     allow_methods=["GET"],
     allow_headers=["*"],
 )
+
+
+# A4: Fresh connection per request. Prevents the same stale-inode bug fixed for
+# dag_scheduler (commit a879b46): after `make seed` or a post-merge reseed, the
+# connection cached on app.state points to a deleted inode and silently serves
+# phantom data. Opening per request costs ~1 ms against admin-only endpoints —
+# negligible — and guarantees the portal always reads the live DB.
+async def get_fresh_conn():
+    from db import get_conn as _gc
+
+    conn = _gc()
+    try:
+        yield conn
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 
 @app.get("/health")
@@ -559,19 +682,49 @@ async def status():
 # --- Session Monitoring ---
 
 
+def _aggregate_completed_nodes(rows: list[dict]) -> tuple[int, dict | None]:
+    """Count DAG nodes fully complete from a list of pipeline_runs rows.
+
+    A5: Sub-tasks of ``speckit.implement`` (one row per ``implement:T00N``) must
+    NOT inflate the completed-node count. The rule per user feedback: a node
+    only counts as completed when every sub-task has terminated successfully.
+    39/51 sub-tasks still means *zero* implement nodes completed.
+
+    Returns ``(completed_count, implement_progress)`` where implement_progress is
+    ``{"done", "total"}`` or ``None`` when implement never started. The portal
+    uses it to render "5/12 (implement: 32/51)".
+    """
+    completed: set[str] = set()
+    implement_total = 0
+    implement_done = 0
+
+    for r in rows:
+        nid = r["node_id"] or ""
+        status = r["status"]
+        if nid.startswith("implement:"):
+            implement_total += 1
+            if status == "completed":
+                implement_done += 1
+        else:
+            if status == "completed":
+                completed.add(nid)
+
+    if implement_total > 0 and implement_done == implement_total:
+        completed.add("implement")
+
+    progress = {"done": implement_done, "total": implement_total} if implement_total else None
+    return len(completed), progress
+
+
 @app.get("/api/sessions")
-async def sessions(request: Request, platform_id: str | None = Query(default=None)):
+async def sessions(platform_id: str | None = Query(default=None), conn=Depends(get_fresh_conn)):
     """Active and queued sessions with per-session detail.
 
-    Opens a fresh DB connection per request so that we never serve from a
-    stale inode after a ``make seed`` / post-merge auto-reseed. Same rationale
-    as the comment in ``dag_scheduler``. The cost is one ``open()`` per HTTP
-    call which is negligible for an admin endpoint.
+    Opens a fresh DB connection per request (via ``get_fresh_conn``) so we never
+    serve from a stale inode after a ``make seed`` / post-merge reseed — same
+    rationale as the comment in ``dag_scheduler``. Negligible cost for an
+    admin-only endpoint.
     """
-    from db import get_conn
-
-    conn = get_conn()
-
     result = {
         "easter_state": _easter_state.easter_state,
         "telegram_status": _easter_state.telegram_status,
@@ -604,7 +757,6 @@ async def sessions(request: Request, platform_id: str | None = Query(default=Non
                 ).fetchone()
                 agg = conn.execute(
                     "SELECT SUM(cost_usd) AS cost, SUM(tokens_in) AS tin, SUM(tokens_out) AS tout, "
-                    "COUNT(CASE WHEN status='completed' THEN 1 END) AS completed, "
                     "MAX(COALESCE(completed_at, started_at)) AS last_activity "
                     "FROM pipeline_runs WHERE trace_id=?",
                     (tid,),
@@ -613,19 +765,30 @@ async def sessions(request: Request, platform_id: str | None = Query(default=Non
                     "SELECT node_id, status FROM pipeline_runs WHERE trace_id=? ORDER BY started_at",
                     (tid,),
                 ).fetchall()
+                rows = [{"node_id": n["node_id"], "status": n["status"]} for n in nodes]
+                completed_nodes, implement_progress = _aggregate_completed_nodes(rows)
+                # Pretty current_node: hide implement sub-task id for the generic
+                # header but keep it in node_statuses so the frontend can show
+                # the precise task in a sub-indicator.
+                current_node_label = None
+                current_node_started_at = None
+                if running_node:
+                    current_node_label = running_node["node_id"]
+                    current_node_started_at = running_node["started_at"]
                 session.update(
                     {
                         "trace_id": tid,
                         "started_at": trace_row["started_at"],
-                        "current_node": running_node["node_id"] if running_node else None,
-                        "current_node_started_at": running_node["started_at"] if running_node else None,
+                        "current_node": current_node_label,
+                        "current_node_started_at": current_node_started_at,
                         "session_cost_usd": agg["cost"] or 0,
                         "tokens_in": agg["tin"] or 0,
                         "tokens_out": agg["tout"] or 0,
-                        "completed_nodes": agg["completed"] or 0,
+                        "completed_nodes": completed_nodes,
                         "total_nodes": trace_row["total_nodes"] or 12,
+                        "implement_progress": implement_progress,
                         "last_activity": agg["last_activity"],
-                        "node_statuses": [{"node_id": n["node_id"], "status": n["status"]} for n in nodes],
+                        "node_statuses": rows,
                     }
                 )
             else:
@@ -640,6 +803,7 @@ async def sessions(request: Request, platform_id: str | None = Query(default=Non
                         "tokens_out": 0,
                         "completed_nodes": 0,
                         "total_nodes": 12,
+                        "implement_progress": None,
                         "last_activity": None,
                         "node_statuses": [],
                     }
@@ -647,11 +811,6 @@ async def sessions(request: Request, platform_id: str | None = Query(default=Non
             result["running_epics"].append(session)
         else:
             result["queued_epics"].append({"epic_id": eid, "platform_id": pid})
-
-    try:
-        conn.close()
-    except Exception:
-        pass
 
     return result
 
@@ -661,26 +820,26 @@ async def sessions(request: Request, platform_id: str | None = Query(default=Non
 
 @app.get("/api/traces")
 async def list_traces(
-    request: Request,
     platform_id: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     status: str | None = Query(default=None),
+    conn=Depends(get_fresh_conn),
 ):
     if not platform_id:
         return JSONResponse(status_code=400, content={"error": "platform_id is required"})
 
     from db import get_traces
 
-    traces, total = get_traces(request.app.state.db_conn, platform_id, limit, offset, status)
+    traces, total = get_traces(conn, platform_id, limit, offset, status)
     return {"traces": traces, "total": total, "limit": limit, "offset": offset}
 
 
 @app.get("/api/traces/{trace_id}")
-async def trace_detail(request: Request, trace_id: str):
+async def trace_detail(trace_id: str, conn=Depends(get_fresh_conn)):
     from db import get_trace_detail
 
-    result = get_trace_detail(request.app.state.db_conn, trace_id)
+    result = get_trace_detail(conn, trace_id)
     if result is None:
         return JSONResponse(status_code=404, content={"error": "trace not found"})
     return result
@@ -688,17 +847,17 @@ async def trace_detail(request: Request, trace_id: str):
 
 @app.get("/api/runs")
 async def list_runs(
-    request: Request,
     platform_id: str | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     status: str | None = Query(default=None),
     epic_id: str | None = Query(default=None),
+    conn=Depends(get_fresh_conn),
 ):
     from db import get_runs_with_evals
 
     runs, total = get_runs_with_evals(
-        request.app.state.db_conn,
+        conn,
         platform_id,
         limit,
         offset,
@@ -710,33 +869,33 @@ async def list_runs(
 
 @app.get("/api/evals")
 async def list_evals(
-    request: Request,
     platform_id: str | None = Query(default=None),
     node_id: str | None = Query(default=None),
     dimension: str | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=500),
+    conn=Depends(get_fresh_conn),
 ):
     if not platform_id:
         return JSONResponse(status_code=400, content={"error": "platform_id is required"})
 
     from db import get_eval_scores
 
-    scores, total = get_eval_scores(request.app.state.db_conn, platform_id, node_id, dimension, limit)
+    scores, total = get_eval_scores(conn, platform_id, node_id, dimension, limit)
     return {"scores": scores, "total": total}
 
 
 @app.get("/api/stats")
 async def stats(
-    request: Request,
     platform_id: str | None = Query(default=None),
     days: int = Query(default=30, ge=1, le=90),
     start_date: str | None = Query(default=None),
     end_date: str | None = Query(default=None),
+    conn=Depends(get_fresh_conn),
 ):
     from db import get_stats
 
     result = get_stats(
-        request.app.state.db_conn,
+        conn,
         platform_id,
         days,
         start_date=start_date,
@@ -756,10 +915,10 @@ async def stats(
 
 @app.get("/api/export/csv")
 async def export_csv_endpoint(
-    request: Request,
     platform_id: str | None = Query(default=None),
     entity: str | None = Query(default=None),
     days: int = Query(default=90, ge=1, le=365),
+    conn=Depends(get_fresh_conn),
 ):
     if not platform_id:
         return JSONResponse(status_code=400, content={"error": "platform_id is required"})
@@ -773,7 +932,7 @@ async def export_csv_endpoint(
 
     from datetime import date
 
-    csv_str = export_csv(request.app.state.db_conn, platform_id, entity, days)
+    csv_str = export_csv(conn, platform_id, entity, days)
     filename = f"{entity}_{platform_id}_{date.today().isoformat()}.csv"
     return Response(
         content=csv_str,
@@ -784,7 +943,6 @@ async def export_csv_endpoint(
 
 @app.get("/api/commits")
 async def list_commits(
-    request: Request,
     platform_id: str | None = Query(default=None),
     epic_id: str | None = Query(default=None),
     commit_type: str | None = Query(default=None),
@@ -792,11 +950,12 @@ async def list_commits(
     date_to: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
+    conn=Depends(get_fresh_conn),
 ):
     from db_pipeline import get_commits_paginated
 
     commits, total = get_commits_paginated(
-        request.app.state.db_conn,
+        conn,
         limit=limit,
         offset=offset,
         platform_id=platform_id,
@@ -810,12 +969,12 @@ async def list_commits(
 
 @app.get("/api/commits/stats")
 async def commits_stats(
-    request: Request,
     platform_id: str | None = Query(default=None),
+    conn=Depends(get_fresh_conn),
 ):
     from db_pipeline import get_commit_stats
 
-    stats = get_commit_stats(request.app.state.db_conn, platform_id)
+    stats = get_commit_stats(conn, platform_id)
     return {
         "total_commits": stats["total_commits"],
         "by_epic": stats["commits_per_epic"],
@@ -829,22 +988,70 @@ async def commits_stats(
 
 
 def _configure_logging(verbose: bool = False) -> None:
+    """Configure stdlib logging + structlog unified pipeline.
+
+    A2-long: logs emitted via ``logging.getLogger(__name__)`` (the stdlib API
+    used by ``dag_executor``) flow through the SAME structlog pipeline as
+    ``structlog.get_logger(__name__)`` calls. This means every ``log.info`` in
+    dag_executor inherits ``epic_id``/``platform``/``trace_id`` from the
+    contextvars bound by ``dag_scheduler`` and emits JSON on stdout — visible
+    in ``journalctl --user -u madruga-easter``.
+
+    Safe to call multiple times: idempotent handler attach, clears existing
+    handlers to avoid duplicate lines when uvicorn + this both configure.
+    """
     level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(format="%(message)s", level=level)
+
+    # Shared processor chain used by both stdlib and native structlog loggers.
+    # Runs before the final renderer, so the JSON payload carries contextvars
+    # and timestamps regardless of which API emitted the record.
+    shared_processors: list = [
+        structlog.contextvars.merge_contextvars,
+        structlog.stdlib.add_log_level,
+        structlog.stdlib.add_logger_name,
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
+    ]
+    renderer = structlog.dev.ConsoleRenderer() if verbose else structlog.processors.JSONRenderer()
+
     structlog.configure(
-        processors=[
-            structlog.contextvars.merge_contextvars,
-            structlog.stdlib.add_log_level,
-            structlog.processors.TimeStamper(fmt="iso"),
-            structlog.processors.StackInfoRenderer(),
-            structlog.processors.format_exc_info,
-            structlog.dev.ConsoleRenderer() if verbose else structlog.processors.JSONRenderer(),
+        processors=shared_processors
+        + [
+            # When used via stdlib LoggingHandler, this hands the event_dict to
+            # ProcessorFormatter. When used natively, it renders directly.
+            structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
         ],
         wrapper_class=structlog.stdlib.BoundLogger,
         context_class=dict,
         logger_factory=structlog.stdlib.LoggerFactory(),
         cache_logger_on_first_use=True,
     )
+
+    # Root handler — clear any pre-existing to prevent duplicate lines when
+    # uvicorn or something else already installed one.
+    handler = logging.StreamHandler()
+    handler.setFormatter(
+        structlog.stdlib.ProcessorFormatter(
+            # foreign_pre_chain runs on records that came from plain ``logging``
+            # (the dag_executor case). For records from native structlog, those
+            # processors already ran, so we skip them here.
+            foreign_pre_chain=shared_processors,
+            processors=[
+                structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+                renderer,
+            ],
+        )
+    )
+    root = logging.getLogger()
+    for h in list(root.handlers):
+        root.removeHandler(h)
+    root.addHandler(handler)
+    root.setLevel(level)
+
+    # Silence noisy third-party loggers one notch to reduce cost during dispatch.
+    for noisy in ("httpx", "httpcore", "asyncio", "uvicorn.access"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
 
 
 def main():

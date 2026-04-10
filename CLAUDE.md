@@ -46,6 +46,8 @@ Node.js 20+ | Python 3.11+ | `copier` >= 9.4.0
 - Architecture diagrams use Mermaid inline in `.md` files (rendered by `astro-mermaid` in portal).
 - Scripts < 300 LOC: write complete + tests in one batch, no empty incrementalism.
 - LOC estimates: multiply by 1.5-2x (docstrings, argparse, logging are not in the base).
+- **Easter naming** (A12): the 24/7 orchestrator daemon has two aliases — `easter` is the Python module (`.specify/scripts/easter.py`), `madruga-easter` is the systemd user service (`etc/systemd/madruga-easter.service`). Same process, different views: logs via `journalctl --user -u madruga-easter`, code lives in `easter:app`.
+- **`.pipeline/madruga.db` is NOT tracked** (A1): fresh clones run `make seed` to reproduce it from `platforms/*/platform.yaml` + pitches + ADRs. Tracking a live WAL DB caused `row missing from index` corruption on `git checkout`/`stash`.
 
 ## Active hooks
 

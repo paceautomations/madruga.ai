@@ -76,13 +76,28 @@ def _seed_data(conn, platform_id="test-plat"):
 
 @pytest.fixture
 def seeded_app(tmp_path):
-    """Yield (app, conn, seed_ids) with a seeded DB wired into app.state."""
+    """Yield (app, conn, seed_ids) with a seeded DB wired via dependency override.
+
+    A4: the observability endpoints now take ``conn=Depends(get_fresh_conn)``.
+    Tests override that dependency to point at the in-memory test DB so the
+    assertions run against seeded state, not against the live ``.pipeline/madruga.db``.
+    """
+    from easter import get_fresh_conn
+
     app = _get_app()
     conn = _make_test_db(tmp_path)
     ids = _seed_data(conn)
-    app.state.db_conn = conn
-    yield app, conn, ids
-    conn.close()
+    app.state.db_conn = conn  # legacy compat — some tests may still read it
+
+    async def _override():
+        yield conn
+
+    app.dependency_overrides[get_fresh_conn] = _override
+    try:
+        yield app, conn, ids
+    finally:
+        app.dependency_overrides.pop(get_fresh_conn, None)
+        conn.close()
 
 
 # ── GET /api/traces — list with platform_id filter ──────────────────────
