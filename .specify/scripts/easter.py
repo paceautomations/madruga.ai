@@ -143,9 +143,15 @@ def _sweep_zombies_sync(conn) -> tuple[int, int]:
 
 
 async def sweep_zombies(conn) -> None:
-    """Log-wrapping async facade for the zombie sweep."""
+    """Log-wrapping async facade for the zombie sweep.
+
+    Runs inline on the event loop — sqlite3.Connection objects are bound to
+    their creating thread (``check_same_thread=True`` default), so dispatching
+    the sweep via ``asyncio.to_thread`` triggers a ProgrammingError. The two
+    UPDATE statements complete in <1 ms, so the event loop yield is negligible.
+    """
     try:
-        runs_swept, traces_swept = await asyncio.to_thread(_sweep_zombies_sync, conn)
+        runs_swept, traces_swept = _sweep_zombies_sync(conn)
     except Exception:
         logger.exception("zombie_sweep_failed")
         return
