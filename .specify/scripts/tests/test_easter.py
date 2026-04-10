@@ -114,6 +114,15 @@ async def test_dag_scheduler_respects_sequential_constraint():
     shutdown = asyncio.Event()
     mock_conn = MagicMock()
 
+    async def _fake_sleep(_event, _seconds):
+        # A7: dag_scheduler uses _interruptible_sleep (via asyncio.wait_for),
+        # NOT bare asyncio.sleep. Patching `easter.asyncio.sleep` has no effect
+        # because wait_for calls the real asyncio.sleep from its own module.
+        # Instead, patch _interruptible_sleep and set the shutdown event from
+        # inside the fake.
+        shutdown.set()
+        return True
+
     with (
         patch(
             "easter.poll_active_epics",
@@ -124,7 +133,7 @@ async def test_dag_scheduler_respects_sequential_constraint():
         ),
         patch("easter.run_pipeline_async", new_callable=AsyncMock) as mock_run,
         patch("easter._running_epics", {"016"}),
-        patch("easter.asyncio.sleep", new_callable=AsyncMock, side_effect=lambda _: shutdown.set()),
+        patch("easter._interruptible_sleep", new=_fake_sleep),
     ):
         await dag_scheduler(mock_conn, asyncio.Semaphore(3), shutdown, poll_interval=0.01)
 
@@ -140,6 +149,10 @@ async def test_dag_scheduler_skips_already_running_epic():
     shutdown = asyncio.Event()
     mock_conn = MagicMock()
 
+    async def _fake_sleep(_event, _seconds):
+        shutdown.set()
+        return True
+
     with (
         patch(
             "easter.poll_active_epics",
@@ -149,7 +162,7 @@ async def test_dag_scheduler_skips_already_running_epic():
         ),
         patch("easter.run_pipeline_async", new_callable=AsyncMock) as mock_run,
         patch("easter._running_epics", {"016"}),
-        patch("easter.asyncio.sleep", new_callable=AsyncMock, side_effect=lambda _: shutdown.set()),
+        patch("easter._interruptible_sleep", new=_fake_sleep),
     ):
         await dag_scheduler(mock_conn, asyncio.Semaphore(3), shutdown, poll_interval=0.01)
 
@@ -158,12 +171,13 @@ async def test_dag_scheduler_skips_already_running_epic():
 
 @pytest.mark.asyncio
 async def test_dag_scheduler_poll_interval():
-    """dag_scheduler respects poll_interval between iterations."""
+    """dag_scheduler waits poll_interval between iterations via _interruptible_sleep."""
     from easter import dag_scheduler
 
     shutdown = asyncio.Event()
     mock_conn = MagicMock()
     iterations = 0
+    sleep_calls: list[float] = []
 
     def _count_and_stop(*args, **kwargs):
         nonlocal iterations
@@ -172,14 +186,21 @@ async def test_dag_scheduler_poll_interval():
             shutdown.set()
         return []
 
+    # A7: patch _interruptible_sleep (the real knob) and record the poll_interval
+    # it was invoked with. Using the real asyncio.sleep inside tests would add
+    # unnecessary wall-clock wait.
+    async def _fake_sleep(_event, seconds):
+        sleep_calls.append(seconds)
+        return shutdown.is_set()
+
     with (
         patch("easter.poll_active_epics", side_effect=_count_and_stop),
-        patch("easter.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+        patch("easter._interruptible_sleep", new=_fake_sleep),
     ):
         await dag_scheduler(mock_conn, asyncio.Semaphore(3), shutdown, poll_interval=15)
 
-    assert mock_sleep.await_count >= 1
-    mock_sleep.assert_awaited_with(15)
+    assert len(sleep_calls) >= 1
+    assert 15 in sleep_calls
 
 
 @pytest.mark.asyncio
@@ -266,18 +287,18 @@ async def test_telegram_degradation_after_3_failures():
     mock_bot = AsyncMock()
     mock_bot.get_me.side_effect = Exception("connection failed")
 
-    with patch("easter.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
-        # Run 3 iterations
-        call_count = 0
+    # A7: health_checker uses _interruptible_sleep, not asyncio.sleep.
+    call_count = 0
 
-        async def counted_sleep(t):
-            nonlocal call_count
-            call_count += 1
-            if call_count >= 4:
-                shutdown.set()
-                raise asyncio.CancelledError()
+    async def _fake_sleep(_event, _seconds):
+        nonlocal call_count
+        call_count += 1
+        if call_count >= 4:
+            shutdown.set()
+            raise asyncio.CancelledError()
+        return False
 
-        mock_sleep.side_effect = counted_sleep
+    with patch("easter._interruptible_sleep", new=_fake_sleep):
         try:
             await health_checker(mock_bot, shutdown, interval=0.01)
         except asyncio.CancelledError:
@@ -302,17 +323,17 @@ async def test_telegram_recovery_resumes_normal():
     mock_bot = AsyncMock()
     mock_bot.get_me.return_value = MagicMock(username="test_bot")
 
-    with patch("easter.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
-        call_count = 0
+    call_count = 0
 
-        async def counted_sleep(t):
-            nonlocal call_count
-            call_count += 1
-            if call_count >= 2:
-                shutdown.set()
-                raise asyncio.CancelledError()
+    async def _fake_sleep(_event, _seconds):
+        nonlocal call_count
+        call_count += 1
+        if call_count >= 2:
+            shutdown.set()
+            raise asyncio.CancelledError()
+        return False
 
-        mock_sleep.side_effect = counted_sleep
+    with patch("easter._interruptible_sleep", new=_fake_sleep):
         try:
             await health_checker(mock_bot, shutdown, interval=0.01)
         except asyncio.CancelledError:
@@ -338,21 +359,21 @@ async def test_ntfy_fallback_on_degradation():
     mock_bot = AsyncMock()
     mock_bot.get_me.side_effect = Exception("down")
 
+    call_count = 0
+
+    async def _fake_sleep(_event, _seconds):
+        nonlocal call_count
+        call_count += 1
+        if call_count >= 2:
+            shutdown.set()
+            raise asyncio.CancelledError()
+        return False
+
     with (
-        patch("easter.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+        patch("easter._interruptible_sleep", new=_fake_sleep),
         patch("easter.ntfy_alert", return_value=True) as mock_ntfy,
         patch.dict("os.environ", {"MADRUGA_NTFY_TOPIC": "test-topic"}),
     ):
-        call_count = 0
-
-        async def counted_sleep(t):
-            nonlocal call_count
-            call_count += 1
-            if call_count >= 2:
-                shutdown.set()
-                raise asyncio.CancelledError()
-
-        mock_sleep.side_effect = counted_sleep
         try:
             await health_checker(mock_bot, shutdown, interval=0.01)
         except asyncio.CancelledError:
@@ -484,12 +505,20 @@ async def test_gate_reminder_sends_for_old_gates():
     original = _easter_state.telegram_status
     _easter_state.telegram_status = "connected"
     try:
-        with patch("easter.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+        # gate_reminder sleeps FIRST, then checks gates. Return False (timeout
+        # elapsed, keep running) on call 1 so the loop enters the check; then
+        # on call 2 set shutdown so the loop exits cleanly.
+        calls = 0
 
-            async def stop_after_one(t):
+        async def _fake_sleep(_event, _seconds):
+            nonlocal calls
+            calls += 1
+            if calls >= 2:
                 shutdown.set()
+                return True
+            return False
 
-            mock_sleep.side_effect = stop_after_one
+        with patch("easter._interruptible_sleep", new=_fake_sleep):
             await gate_reminder(conn, mock_adapter, 123, shutdown, interval=1)
 
         mock_adapter.send.assert_called_once()
@@ -523,12 +552,19 @@ async def test_gate_reminder_skips_recent_gates():
 
     mock_adapter = AsyncMock()
 
-    with patch("easter.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+    # gate_reminder sleeps first. Same pattern as the sends-for-old-gates test:
+    # return False on first call so the gate check runs, then set shutdown.
+    calls = 0
 
-        async def stop_after_one(t):
+    async def _fake_sleep(_event, _seconds):
+        nonlocal calls
+        calls += 1
+        if calls >= 2:
             shutdown.set()
+            return True
+        return False
 
-        mock_sleep.side_effect = stop_after_one
+    with patch("easter._interruptible_sleep", new=_fake_sleep):
         await gate_reminder(conn, mock_adapter, 123, shutdown, interval=1)
 
     mock_adapter.send.assert_not_called()
@@ -619,20 +655,19 @@ async def test_health_checker_sends_pending_summary_on_recovery():
 
     call_count = 0
 
+    async def _fake_sleep(_event, _seconds):
+        nonlocal call_count
+        call_count += 1
+        # First sleep lets the health check run; second stops the loop
+        if call_count >= 2:
+            shutdown.set()
+            raise asyncio.CancelledError()
+        return False
+
     with (
-        patch("easter.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+        patch("easter._interruptible_sleep", new=_fake_sleep),
         patch("telegram_bot.poll_pending_gates", return_value=[{"run_id": "r1"}, {"run_id": "r2"}]),
     ):
-
-        async def sleep_then_stop(t):
-            nonlocal call_count
-            call_count += 1
-            # First sleep lets the health check run; second stops the loop
-            if call_count >= 2:
-                shutdown.set()
-                raise asyncio.CancelledError()
-
-        mock_sleep.side_effect = sleep_then_stop
         try:
             await health_checker(mock_bot, shutdown, conn=mock_conn, adapter=mock_adapter, chat_id=123)
         except asyncio.CancelledError:
@@ -947,55 +982,232 @@ def _setup_commits_db():
     return conn
 
 
+def _override_conn(app, conn):
+    """A4 helper: route /api/* endpoints at `conn` via dependency override."""
+    from easter import get_fresh_conn
+
+    async def _yield():
+        yield conn
+
+    app.dependency_overrides[get_fresh_conn] = _yield
+
+
 @pytest.mark.asyncio
 async def test_commits_endpoint_returns_paginated():
     """GET /api/commits returns paginated commits with total."""
-    app = _make_app()
-    app.state.db_conn = _setup_commits_db()
+    from easter import get_fresh_conn
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        resp = await client.get("/api/commits", params={"limit": 2, "offset": 0})
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["total"] == 5
-    assert len(data["commits"]) == 2
-    assert data["limit"] == 2
-    assert data["offset"] == 0
-    app.state.db_conn.close()
+    app = _make_app()
+    conn = _setup_commits_db()
+    app.state.db_conn = conn
+    _override_conn(app, conn)
+
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.get("/api/commits", params={"limit": 2, "offset": 0})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 5
+        assert len(data["commits"]) == 2
+        assert data["limit"] == 2
+        assert data["offset"] == 0
+    finally:
+        app.dependency_overrides.pop(get_fresh_conn, None)
+        conn.close()
 
 
 @pytest.mark.asyncio
 async def test_commits_endpoint_filters():
     """GET /api/commits respects platform_id and commit_type filters."""
+    from easter import get_fresh_conn
+
     app = _make_app()
-    app.state.db_conn = _setup_commits_db()
+    conn = _setup_commits_db()
+    app.state.db_conn = conn
+    _override_conn(app, conn)
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        # Filter by platform
-        resp = await client.get("/api/commits", params={"platform_id": "plat-a"})
-        assert resp.json()["total"] == 3
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            # Filter by platform
+            resp = await client.get("/api/commits", params={"platform_id": "plat-a"})
+            assert resp.json()["total"] == 3
 
-        # Filter by commit_type=adhoc
-        resp = await client.get("/api/commits", params={"commit_type": "adhoc"})
-        data = resp.json()
-        assert data["total"] == 2
-        assert all(c["epic_id"] is None for c in data["commits"])
-
-    app.state.db_conn.close()
+            # Filter by commit_type=adhoc
+            resp = await client.get("/api/commits", params={"commit_type": "adhoc"})
+            data = resp.json()
+            assert data["total"] == 2
+            assert all(c["epic_id"] is None for c in data["commits"])
+    finally:
+        app.dependency_overrides.pop(get_fresh_conn, None)
+        conn.close()
 
 
 @pytest.mark.asyncio
 async def test_commits_stats_endpoint():
     """GET /api/commits/stats returns aggregate stats."""
-    app = _make_app()
-    app.state.db_conn = _setup_commits_db()
+    from easter import get_fresh_conn
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        resp = await client.get("/api/commits/stats")
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["total_commits"] == 5
-    assert data["by_epic"] == {"012-auth": 2, "015-signup": 1}
-    assert data["by_platform"] == {"plat-a": 3, "plat-b": 2}
-    assert data["adhoc_pct"] == 40.0
-    app.state.db_conn.close()
+    app = _make_app()
+    conn = _setup_commits_db()
+    app.state.db_conn = conn
+    _override_conn(app, conn)
+
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.get("/api/commits/stats")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total_commits"] == 5
+        assert data["by_epic"] == {"012-auth": 2, "015-signup": 1}
+        assert data["by_platform"] == {"plat-a": 3, "plat-b": 2}
+        assert data["adhoc_pct"] == 40.0
+    finally:
+        app.dependency_overrides.pop(get_fresh_conn, None)
+        conn.close()
+
+
+# --- A3: Zombie Sweep Tests ---
+
+
+def _make_inmem_db_with_traces():
+    """Create an in-memory DB with a running trace and runs for sweep tests."""
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+
+    from db import get_conn, migrate, upsert_platform
+
+    conn = get_conn(":memory:")
+    migrate(conn)
+    upsert_platform(conn, "sweep-plat", name="sweep-plat")
+    return conn
+
+
+def test_sweep_zombies_marks_old_running_as_failed():
+    """Runs with status='running' older than 1h become 'failed' with zombie error."""
+    from easter import _sweep_zombies_sync
+
+    conn = _make_inmem_db_with_traces()
+
+    # Insert a zombie run directly (started 2h ago)
+    from datetime import datetime, timedelta, timezone
+
+    old = (datetime.now(timezone.utc) - timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    conn.execute(
+        "INSERT INTO pipeline_runs (run_id, platform_id, node_id, status, started_at) "
+        "VALUES ('zombie-1', 'sweep-plat', 'implement:T001', 'running', ?)",
+        (old,),
+    )
+    # And a fresh one (2 minutes ago) — must NOT be swept
+    fresh = (datetime.now(timezone.utc) - timedelta(minutes=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    conn.execute(
+        "INSERT INTO pipeline_runs (run_id, platform_id, node_id, status, started_at) "
+        "VALUES ('fresh-1', 'sweep-plat', 'qa', 'running', ?)",
+        (fresh,),
+    )
+    conn.commit()
+
+    runs, traces = _sweep_zombies_sync(conn)
+    assert runs == 1
+    assert traces == 0
+
+    zombie_row = conn.execute("SELECT status, error FROM pipeline_runs WHERE run_id='zombie-1'").fetchone()
+    assert zombie_row[0] == "failed"
+    assert "zombie" in zombie_row[1].lower()
+
+    fresh_row = conn.execute("SELECT status FROM pipeline_runs WHERE run_id='fresh-1'").fetchone()
+    assert fresh_row[0] == "running"
+
+
+def test_sweep_zombies_preserves_waiting_approval_gates():
+    """Runs with gate_status='waiting_approval' are NEVER swept, even if ancient."""
+    from easter import _sweep_zombies_sync
+
+    conn = _make_inmem_db_with_traces()
+
+    from datetime import datetime, timedelta, timezone
+
+    old = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    conn.execute(
+        "INSERT INTO pipeline_runs (run_id, platform_id, node_id, status, gate_status, started_at) "
+        "VALUES ('gate-1', 'sweep-plat', 'adr', 'running', 'waiting_approval', ?)",
+        (old,),
+    )
+    conn.commit()
+
+    runs, _ = _sweep_zombies_sync(conn)
+    assert runs == 0
+    gate_row = conn.execute("SELECT status, gate_status FROM pipeline_runs WHERE run_id='gate-1'").fetchone()
+    assert gate_row[0] == "running"
+    assert gate_row[1] == "waiting_approval"
+
+
+def test_sweep_zombies_marks_old_running_traces_as_failed():
+    """Traces with status='running' older than 1h also become 'failed'."""
+    from easter import _sweep_zombies_sync
+
+    conn = _make_inmem_db_with_traces()
+
+    from datetime import datetime, timedelta, timezone
+
+    old = (datetime.now(timezone.utc) - timedelta(hours=3)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    conn.execute(
+        "INSERT INTO traces (trace_id, platform_id, status, started_at) VALUES ('ztrace', 'sweep-plat', 'running', ?)",
+        (old,),
+    )
+    conn.commit()
+
+    _, traces = _sweep_zombies_sync(conn)
+    assert traces == 1
+    row = conn.execute("SELECT status, completed_at FROM traces WHERE trace_id='ztrace'").fetchone()
+    assert row[0] == "failed"
+    assert row[1] is not None
+
+
+# --- A5: Implement Node Counting Tests ---
+
+
+def test_aggregate_completed_nodes_counts_only_full_implement():
+    """39/51 implement sub-tasks = 0 implement nodes completed. 51/51 = 1 node."""
+    from easter import _aggregate_completed_nodes
+
+    # Some regular nodes + partial implement
+    rows = [
+        {"node_id": "specify", "status": "completed"},
+        {"node_id": "clarify", "status": "completed"},
+        {"node_id": "plan", "status": "completed"},
+        {"node_id": "tasks", "status": "completed"},
+        {"node_id": "analyze", "status": "completed"},
+        {"node_id": "implement:T001", "status": "completed"},
+        {"node_id": "implement:T002", "status": "completed"},
+        {"node_id": "implement:T003", "status": "running"},
+    ]
+    count, progress = _aggregate_completed_nodes(rows)
+    assert count == 5  # implement does NOT count until ALL tasks done
+    assert progress == {"done": 2, "total": 3}
+
+
+def test_aggregate_completed_nodes_counts_full_implement():
+    from easter import _aggregate_completed_nodes
+
+    rows = [
+        {"node_id": "specify", "status": "completed"},
+        {"node_id": "implement:T001", "status": "completed"},
+        {"node_id": "implement:T002", "status": "completed"},
+    ]
+    count, progress = _aggregate_completed_nodes(rows)
+    assert count == 2  # specify + implement (all sub-tasks done)
+    assert progress == {"done": 2, "total": 2}
+
+
+def test_aggregate_completed_nodes_no_implement():
+    from easter import _aggregate_completed_nodes
+
+    rows = [
+        {"node_id": "specify", "status": "completed"},
+        {"node_id": "plan", "status": "running"},
+    ]
+    count, progress = _aggregate_completed_nodes(rows)
+    assert count == 1
+    assert progress is None

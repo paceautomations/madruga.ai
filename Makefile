@@ -38,8 +38,11 @@ status: ## Show pipeline status for all platforms
 status-json: ## Export pipeline status as JSON
 	python3 $(PLATFORM) status --all --json --output portal/src/data/pipeline-status.json
 
-seed: ## Re-seed all platforms from filesystem
-	python3 .specify/scripts/post_save.py --reseed-all
+seed: ## Re-seed all platforms from filesystem (recreates madruga.db from canonical sources)
+	python3 .specify/scripts/seed.py
+
+seed-force: ## Drop madruga.db (+wal/-shm) and re-seed from scratch
+	python3 .specify/scripts/seed.py --force
 
 portal-dev: ## Start portal dev server
 	cd portal && npm run dev

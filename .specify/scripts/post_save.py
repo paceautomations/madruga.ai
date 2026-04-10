@@ -357,6 +357,26 @@ def record_save(
                     log.warning("Skipping node done — unfilled template: %s", artifact)
                     skip_epic_update = True
                 if not skip_epic_update:
+                    # A6: validate the (platform, epic) FK target BEFORE attempting
+                    # upsert_epic_node. Without this pre-check, sqlite3 raises a
+                    # bare "FOREIGN KEY constraint failed" that doesn't tell the
+                    # operator which FK failed. Fail-fast with an actionable
+                    # message instead.
+                    epic_exists = txn.execute(
+                        "SELECT 1 FROM epics WHERE platform_id=? AND epic_id=?",
+                        (platform, epic),
+                    ).fetchone()
+                    if not epic_exists:
+                        raise SystemExit(
+                            f"ERROR: epic '{epic}' not found for platform '{platform}' in the 'epics' table.\n"
+                            f"post_save.py cannot create epic stubs — run epic-context (or upsert_epic manually)\n"
+                            f"before recording per-node artifacts.\n"
+                            f'  Example: python3 -c "from db_pipeline import upsert_epic; import sqlite3; "\n'
+                            f"           \"c=sqlite3.connect('.pipeline/madruga.db'); \"\n"
+                            f"           \"upsert_epic(c, '{platform}', '{epic}', \"\n"
+                            f"           \"status='in_progress', \"\n"
+                            f"           \"branch_name='epic/{platform}/{epic}'); c.commit()\""
+                        )
                     upsert_epic_node(
                         txn,
                         platform,
