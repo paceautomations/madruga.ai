@@ -46,6 +46,8 @@ Node.js 20+ | Python 3.11+ | `copier` >= 9.4.0
 - Architecture diagrams use Mermaid inline in `.md` files (rendered by `astro-mermaid` in portal).
 - Scripts < 300 LOC: write complete + tests in one batch, no empty incrementalism.
 - LOC estimates: multiply by 1.5-2x (docstrings, argparse, logging are not in the base).
+- **Easter naming** (A12): the 24/7 orchestrator daemon has two aliases — `easter` is the Python module (`.specify/scripts/easter.py`), `madruga-easter` is the systemd user service (`etc/systemd/madruga-easter.service`). Same process, different views: logs via `journalctl --user -u madruga-easter`, code lives in `easter:app`.
+- **`.pipeline/madruga.db` is NOT tracked** (A1): fresh clones run `make seed` to reproduce it from `platforms/*/platform.yaml` + pitches + ADRs. Tracking a live WAL DB caused `row missing from index` corruption on `git checkout`/`stash`.
 
 ## Active hooks
 
@@ -90,6 +92,8 @@ Direct edits bypass validation (frontmatter, handoff chains, archetype complianc
 - Filesystem (Markdown + YAML), SQLite WAL mode (pipeline state) (epic/madruga-ai/022-mermaid-migration)
 - Python 3.12 + FastAPI >=0.115 + FastAPI, uvicorn, pydantic 2.x, pydantic-settings, redis[hiredis] >=5.0, httpx, structlog (epic/prosauai/001-channel-pipeline)
 - Redis 7 (debounce buffers apenas — sem persistência de dados) (epic/prosauai/001-channel-pipeline)
+- Python 3.12, FastAPI >=0.115 + `opentelemetry-sdk`, `opentelemetry-exporter-otlp-proto-grpc`, `opentelemetry-instrumentation-fastapi`, `opentelemetry-instrumentation-httpx`, `opentelemetry-instrumentation-redis`, `arize-phoenix-otel` (epic/prosauai/002-observability)
+- Supabase Postgres (schema `observability`, gerenciado pelo Phoenix); Redis 7 (buffers de debounce) (epic/prosauai/002-observability)
 
 ## Recent Changes
 - epic/madruga-ai/017-observability-tracing-evals: Added Python 3.11+ (backend), TypeScript/React (portal) + sqlite3 (stdlib), structlog, FastAPI (easter), React + @xyflow/react (portal existente), Astro Starlight

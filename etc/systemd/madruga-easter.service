@@ -8,7 +8,12 @@ ExecStart=%h/.local/bin/uvicorn easter:app --host 127.0.0.1 --port 18789
 WorkingDirectory=%h/repos/paceautomations/madruga.ai/.specify/scripts
 Restart=on-failure
 RestartSec=5
-TimeoutStopSec=15
+# A8: 60s allows the lifespan shutdown hook to SIGTERM active claude
+# subprocesses, wait ~10s for them to flush, and escalate to SIGKILL on
+# survivors before systemd force-kills the control group. Previously 15s
+# was too short and always ended with orphaned shell/node/npm children
+# SIGKILL'd by systemd.
+TimeoutStopSec=60
 WatchdogSec=120
 NotifyAccess=all
 EnvironmentFile=-%h/repos/paceautomations/madruga.ai/.env

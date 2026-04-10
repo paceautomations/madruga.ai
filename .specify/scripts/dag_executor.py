@@ -40,6 +40,12 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from config import REPO_ROOT, UNFILLED_TEMPLATE_MARKERS  # noqa: E402
 
+# A2-long: keep stdlib logging here — easter._configure_logging installs a
+# structlog ProcessorFormatter with foreign_pre_chain, so every record from
+# this file flows through the structlog pipeline (contextvars + JSON render)
+# without changing call sites. Printf-style calls (``log.info("Foo %s", x)``)
+# continue to work because stdlib handles the interpolation before the
+# formatter sees the record.
 log = logging.getLogger(__name__)
 
 
@@ -180,8 +186,16 @@ def parse_claude_output(stdout: str) -> dict:
     Returns dict with keys: tokens_in, tokens_out, cost_usd, duration_ms.
     All values default to None on parse failure (best-effort, FR-011).
 
+    `tokens_in` is the TOTAL input sent to the model — sum of raw input_tokens
+    plus cache reads and cache writes. When prompt caching is active (default),
+    `usage.input_tokens` alone is only the uncached delta (often < 100 tokens)
+    and severely undercounts the real input. The portal displays this value, so
+    we aggregate all three fields here to reflect the actual prompt size.
+
     If total_cost_usd is missing but token counts are available, estimates
-    cost using Sonnet pricing as fallback (see _estimate_cost_usd).
+    cost using Sonnet pricing as fallback (see _estimate_cost_usd). Note that
+    the estimate will overcount cost in cache-heavy runs (cache reads cost less
+    than fresh input), but total_cost_usd from the CLI is preferred and correct.
     """
     result: dict = {"tokens_in": None, "tokens_out": None, "cost_usd": None, "duration_ms": None}
     if not stdout:
@@ -189,7 +203,15 @@ def parse_claude_output(stdout: str) -> dict:
     try:
         data = json.loads(stdout)
         usage = data.get("usage", {})
-        result["tokens_in"] = usage.get("input_tokens")
+        input_tokens = usage.get("input_tokens")
+        cache_read = usage.get("cache_read_input_tokens")
+        cache_create = usage.get("cache_creation_input_tokens")
+        # Sum all three. Only return None when ALL three are absent, so a run
+        # without cache fields (cache_read=None) still reports raw input_tokens.
+        if input_tokens is None and cache_read is None and cache_create is None:
+            result["tokens_in"] = None
+        else:
+            result["tokens_in"] = (input_tokens or 0) + (cache_read or 0) + (cache_create or 0)
         result["tokens_out"] = usage.get("output_tokens")
         result["cost_usd"] = data.get("total_cost_usd")
         result["duration_ms"] = data.get("duration_ms")
@@ -537,6 +559,20 @@ async def run_implement_tasks(
 
         log.info("Dispatching task %s (%d/%d): %.80s", task.id, completed + 1, len(pending), task.description)
 
+        # A9: create a `running` row BEFORE dispatch so the portal can show
+        # the live sub-task. Previously the row was only inserted after the
+        # subprocess returned, causing a multi-minute gap where the portal
+        # saw `current_node=null` while claude was actively running. On
+        # dispatch completion (success OR failure) we `complete_run` the
+        # existing row instead of inserting a second one.
+        run_id = insert_run(
+            conn,
+            platform_name,
+            f"implement:{task.id}",
+            epic_id=epic_slug,
+            trace_id=trace_id,
+        )
+
         success, error, stdout = await dispatch_with_retry_async(
             task_node,
             cwd,
@@ -559,18 +595,15 @@ async def run_implement_tasks(
             last_session_id = parse_session_id(stdout) if stdout else None
 
             metrics = parse_claude_output(stdout) if stdout else {}
-            run_id = insert_run(
+            complete_run(
                 conn,
-                platform_name,
-                f"implement:{task.id}",
-                epic_id=epic_slug,
-                trace_id=trace_id,
+                run_id,
+                status="completed",
                 tokens_in=metrics.get("tokens_in"),
                 tokens_out=metrics.get("tokens_out"),
                 cost_usd=metrics.get("cost_usd"),
                 duration_ms=metrics.get("duration_ms"),
             )
-            complete_run(conn, run_id, status="completed")
             append_implement_context(epic_dir, task, metrics)
             _run_eval_scoring(
                 conn,
@@ -588,14 +621,6 @@ async def run_implement_tasks(
             last_session_id = None
             failed.append((task.id, error or "unknown error"))
             log.error("Task %s failed: %s", task.id, error)
-            run_id = insert_run(
-                conn,
-                platform_name,
-                f"implement:{task.id}",
-                epic_id=epic_slug,
-                trace_id=trace_id,
-                error=error,
-            )
             complete_run(conn, run_id, status="failed", error=error)
 
     summary = f"{completed}/{len(pending)} tasks completed"
@@ -1087,6 +1112,67 @@ def dispatch_with_retry(
 # ── Async Dispatch (for easter integration) ─────────────────────────
 
 
+# A8: track all live claude subprocesses so lifespan shutdown can propagate
+# SIGTERM down the tree. Without this, systemd SIGTERM only reaches the uvicorn
+# parent; the claude subprocesses keep running until TimeoutStopSec expires
+# and systemd SIGKILLs the whole control group (with orphaned shell/node
+# children). Registered on dispatch, discarded on completion.
+_active_subprocesses: "set[asyncio.subprocess.Process]" = set()
+
+
+async def terminate_active_subprocesses(graceful_timeout: float = 5.0) -> int:
+    """Signal every live dispatch subprocess to exit cleanly.
+
+    Called by easter.lifespan during shutdown. Sends SIGTERM first, waits up
+    to ``graceful_timeout`` seconds for the children to exit, then escalates
+    to SIGKILL on survivors. Returns the number of subprocesses that received
+    a signal (for logging).
+    """
+    import signal as _signal
+
+    if not _active_subprocesses:
+        return 0
+
+    snapshot = list(_active_subprocesses)
+    signalled = 0
+    for proc in snapshot:
+        try:
+            # send_signal vs terminate: on Unix they're equivalent for
+            # SIGTERM, but send_signal is explicit about the signal number.
+            proc.send_signal(_signal.SIGTERM)
+            signalled += 1
+        except (ProcessLookupError, AttributeError):
+            # Process already exited between snapshot and signal — fine.
+            _active_subprocesses.discard(proc)
+
+    if signalled == 0:
+        return 0
+
+    # Wait for graceful exit, bounded by `graceful_timeout`.
+    deadline = asyncio.get_event_loop().time() + graceful_timeout
+    while _active_subprocesses:
+        remaining = deadline - asyncio.get_event_loop().time()
+        if remaining <= 0:
+            break
+        done_snapshot = [p for p in list(_active_subprocesses) if p.returncode is not None]
+        for proc in done_snapshot:
+            _active_subprocesses.discard(proc)
+        if not _active_subprocesses:
+            break
+        await asyncio.sleep(min(0.2, remaining))
+
+    # Escalate to SIGKILL on any survivors.
+    for proc in list(_active_subprocesses):
+        try:
+            proc.kill()
+        except ProcessLookupError:
+            pass
+        finally:
+            _active_subprocesses.discard(proc)
+
+    return signalled
+
+
 async def dispatch_node_async(
     node: Node,
     cwd: str | Path,
@@ -1120,6 +1206,8 @@ async def dispatch_node_async(
         cwd=str(cwd),
         env=_dispatch_env(),
     )
+    # A8: register so shutdown can terminate us
+    _active_subprocesses.add(process)
     try:
         stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
         stdout_text = stdout.decode() if stdout else ""
@@ -1134,6 +1222,8 @@ async def dispatch_node_async(
         error = f"timeout after {timeout}s"
         log.error("Node '%s': %s", node.id, error)
         return False, error, None
+    finally:
+        _active_subprocesses.discard(process)
 
 
 def _make_abort_check(conn, epic_slug: str | None):

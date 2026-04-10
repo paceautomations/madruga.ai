@@ -1,6 +1,6 @@
 ---
 title: "Solution Overview"
-updated: 2026-04-07
+updated: 2026-04-10
 sidebar:
   order: 2
 ---
@@ -18,7 +18,14 @@ Em grupos WhatsApp, o agente participa quando mencionado — publica ranking, re
 
 ## Implementado — Funcional hoje
 
-> Nenhuma feature implementada — plataforma em fase de design. As features abaixo estao priorizadas para os proximos ciclos.
+| Feature | Descricao | Epic |
+|---------|-----------|------|
+| **Recepcao de mensagens** | Webhook FastAPI recebe mensagens WhatsApp via Evolution API com validacao HMAC-SHA256 | 001 |
+| **Smart Router** | Classifica mensagens em 6 categorias: individual, grupo com/sem @mention, evento de grupo, handoff (stub), ignore | 001 |
+| **Debounce** | Agrupa mensagens rapidas (janela 3s + jitter) via Redis Lua script atomico | 001 |
+| **Echo response** | Responde com echo do texto recebido (sem IA — fundacao para epic 003) | 001 |
+| **Roteamento de grupo** | Grupos com @mention recebem resposta; sem @mention apenas log estruturado | 001 |
+| **Health check** | Endpoint `/health` com status do Redis e degradacao graciosa | 001 |
 
 ---
 
@@ -26,9 +33,7 @@ Em grupos WhatsApp, o agente participa quando mencionado — publica ranking, re
 
 | Feature | Descricao | Por que e importante |
 |---------|-----------|---------------------|
-| **Receber e responder mensagens** | Agente recebe mensagens WhatsApp e responde automaticamente, 24/7 | Base do produto — sem isso nada funciona |
 | **Conversa inteligente com IA** | Agente entende contexto, historico e responde com precisao em portugues | Core da proposta de valor — atendimento que realmente resolve |
-| **Agente em grupos WhatsApp** | Responde quando mencionado (@), observa sem responder quando nao mencionado. Roteamento configuravel por numero: cada numero pode direcionar mensagens para agentes diferentes | Moat competitivo — ninguem faz isso |
 | **Consultas em tempo real** | Agente consulta dados do negocio (ranking, stats, agenda, estoque) para dar respostas uteis | Respostas relevantes, nao genericas |
 | **Transferencia para humano** | Quando a IA nao resolve, transfere para atendente com resumo e contexto completo | Rede de seguranca — cliente nunca fica sem resposta |
 | **Mensagens automaticas** | Notificacoes por eventos: lembrete de agendamento, pedido enviado, boas-vindas | Engajamento proativo, nao so reativo |

@@ -1,7 +1,7 @@
 ---
 title: "Business Process"
-description: 'Fluxo de negocio da plataforma ProsaUAI: mensagem individual (1:1), grupo (@mention), handoff humano, triggers proativos.'
-updated: 2026-04-07
+description: 'Fluxo de negocio da plataforma ProsaUAI: mensagem individual (1:1), grupo (@mention), handoff humano, triggers proativos, multi-tenant.'
+updated: 2026-04-10
 sidebar:
   order: 3
 ---
@@ -361,6 +361,112 @@ flowchart LR
 - **Prompt versions**: source of truth no LangFuse
 
 </details>
+
+---
+
+## Multi-Tenant Lifecycle (Fase 1 → Fase 3)
+
+A partir do epic 003 (Multi-Tenant Foundation), todo fluxo do pipeline acima e **per-tenant por construcao**: cada mensagem entra com `instance_name` no path, e o `TenantResolver` carrega o `Tenant` correto antes de qualquer outra etapa. Esta secao descreve os fluxos especificos de gestao de tenants — quem cria, quem desabilita, quem cobra.
+
+### Fase 1 — Onboarding manual (interno Pace, epic 003)
+
+**Atores:** dev/admin Pace.
+
+```mermaid
+sequenceDiagram
+    participant Dev as Dev/Admin Pace
+    participant Repo as Repo prosauai
+    participant Evo as Evolution API
+    participant API as ProsauAI API
+
+    Dev->>Repo: Edita config/tenants.yaml<br/>(adiciona novo tenant)
+    Dev->>Dev: Gera webhook_secret aleatorio
+    Dev->>Repo: Adiciona ${ENV_VAR} no .env
+    Dev->>Evo: POST /webhook/set/{instance}<br/>com headers.X-Webhook-Secret
+    Dev->>API: Restart container (lifespan recarrega TenantStore)
+    Dev->>Dev: Descobre mention_lid_opaque<br/>via capture tool + mention real
+    Dev->>Repo: Atualiza tenants.yaml com lid
+    Dev->>API: Restart novamente
+    Note over Dev,API: Tenant pronto para receber webhooks reais
+```
+
+**Caracteristicas:**
+- 100% manual
+- Aceitavel para 2-5 tenants internos
+- Sem rollback automatizado, sem auditoria, sem self-service
+
+### Fase 2 — Onboarding via Admin API (cliente externo, epic 012)
+
+**Atores:** cliente externo + admin Pace.
+
+```mermaid
+sequenceDiagram
+    participant Client as Cliente Externo
+    participant Sales as Vendas Pace
+    participant AdminAPI as Admin API
+    participant TenantStore as TenantStore (file)
+    participant Caddy as Caddy
+    participant Client_Evo as Evolution do Cliente
+    participant API as ProsauAI API
+
+    Client->>Sales: Quer testar/contratar
+    Sales->>AdminAPI: POST /admin/tenants<br/>(master token)
+    AdminAPI->>TenantStore: Adiciona tenant + persist em YAML
+    AdminAPI->>AdminAPI: Gera webhook_secret aleatorio
+    AdminAPI-->>Sales: {tenant_id, webhook_secret, instance_url}
+    Sales->>Client: Envia onboarding doc:<br/>"configure webhook na sua Evolution"
+    Client->>Client_Evo: POST /webhook/set/{instance}<br/>headers.X-Webhook-Secret
+    Client->>Caddy: Mensagem real WhatsApp
+    Caddy->>API: Reverse proxy + TLS
+    API-->>Client: Echo (tenant validado)
+    Note over Client,API: Tenant ativo, rate limit aplicado
+```
+
+**Caracteristicas:**
+- Vendas/admin Pace cria tenant via API
+- Cliente faz a integracao do lado dele (sem acesso ao codigo Pace)
+- Caddy + Let's Encrypt fornece TLS publico
+- Rate limit per-tenant aplicado (Bifrost spend cap + Redis sliding window)
+- Hot reload do TenantStore (sem restart) ou reload via admin API
+
+### Fase 3 — Self-service onboarding + ops (epic 013)
+
+**Atores:** cliente externo (sem intervencao Pace) + ops team.
+
+```mermaid
+sequenceDiagram
+    participant Client as Cliente Externo
+    participant Signup as Signup UI
+    participant Stripe as Stripe
+    participant AdminAPI as Admin API
+    participant Postgres as TenantStore Postgres
+    participant Ops as Ops Team
+    participant Alerting as Prometheus + Grafana
+
+    Client->>Signup: Cadastro self-service
+    Signup->>Stripe: Cria customer + checkout
+    Stripe-->>Signup: webhook payment_succeeded
+    Signup->>AdminAPI: POST /admin/tenants (Stripe token)
+    AdminAPI->>Postgres: INSERT tenant (RLS policies)
+    AdminAPI-->>Signup: tenant credentials
+    Signup-->>Client: Onboarding wizard:<br/>"configure webhook"
+    Client->>Client: Configura webhook
+    Note over Client: Operacao normal
+    Client->>AdminAPI: Envia 1000 msgs/min (anomaly)
+    AdminAPI->>AdminAPI: Circuit breaker abre
+    AdminAPI->>Alerting: Metrica spike
+    Alerting->>Ops: PagerDuty alert
+    Ops->>AdminAPI: PATCH /admin/tenants/{id} disable=true
+    Ops->>Client: Email + investigacao
+```
+
+**Caracteristicas:**
+- Zero intervencao manual no happy path
+- Postgres como source of truth (RLS, audit trail, backup)
+- Circuit breaker per-tenant impede 1 cliente derrubar outros
+- Billing automatizado via Stripe
+- Alertas Prometheus quando tenant ultrapassa thresholds
+- Migracao YAML → Postgres feita uma unica vez ([ADR-023](../decisions/ADR-023-tenant-store-postgres-migration.md))
 
 ---
 
