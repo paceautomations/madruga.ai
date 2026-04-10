@@ -419,11 +419,15 @@ def reject_gate(conn: sqlite3.Connection, run_id: str) -> bool:
 
 
 def get_pending_gates(conn: sqlite3.Connection, platform_id: str) -> list[dict]:
-    """List all runs with gate_status='waiting_approval' for a platform."""
+    """List all runs with gate_status='waiting_approval' for a platform.
+
+    Excludes cancelled/failed runs — stale gates must not block the scheduler.
+    """
     rows = conn.execute(
         "SELECT run_id, platform_id, epic_id, node_id, gate_status, "
         "gate_notified_at, started_at FROM pipeline_runs "
-        "WHERE platform_id=? AND gate_status='waiting_approval' ORDER BY started_at",
+        "WHERE platform_id=? AND gate_status='waiting_approval' "
+        "AND status NOT IN ('cancelled', 'failed') ORDER BY started_at",
         (platform_id,),
     ).fetchall()
     return [dict(r) for r in rows]
