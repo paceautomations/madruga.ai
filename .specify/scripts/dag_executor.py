@@ -1569,7 +1569,11 @@ async def dispatch_node_async(
             return
         while True:
             chunk = await stream.read(8192)
-            if not chunk:
+            # Guard: EOF (empty) OR non-bytes (broken mock that would otherwise
+            # infinite-loop and blow up RAM via AsyncMock.call_args_list). Real
+            # asyncio.StreamReader always returns bytes, so this is a pure
+            # test-safety net with zero cost in production.
+            if not chunk or not isinstance(chunk, (bytes, bytearray)):
                 return
             buf.extend(chunk)
 

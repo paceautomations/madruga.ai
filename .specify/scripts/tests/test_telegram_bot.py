@@ -103,7 +103,7 @@ class TestNotifyGate:
         adapter = AsyncMock()
         adapter.ask_choice.return_value = 99
 
-        asyncio.get_event_loop().run_until_complete(notify_gate(adapter, 123, gate, conn))
+        asyncio.run(notify_gate(adapter, 123, gate, conn))
 
         adapter.ask_choice.assert_called_once()
         call_args = adapter.ask_choice.call_args
@@ -124,7 +124,7 @@ class TestNotifyGate:
         adapter = AsyncMock()
         adapter.ask_choice.return_value = 99
 
-        asyncio.get_event_loop().run_until_complete(notify_gate(adapter, 123, gate, conn))
+        asyncio.run(notify_gate(adapter, 123, gate, conn))
 
         row = conn.execute(
             "SELECT telegram_message_id, gate_notified_at FROM pipeline_runs WHERE run_id='run-1'"
@@ -154,7 +154,7 @@ class TestHandleGateCallback:
 
         adapter = AsyncMock()
 
-        asyncio.get_event_loop().run_until_complete(handle_gate_callback(callback, adapter, conn))
+        asyncio.run(handle_gate_callback(callback, adapter, conn))
 
         # DB updated
         row = conn.execute("SELECT gate_status FROM pipeline_runs WHERE run_id='run-1'").fetchone()
@@ -183,7 +183,7 @@ class TestHandleGateCallback:
 
         adapter = AsyncMock()
 
-        asyncio.get_event_loop().run_until_complete(handle_gate_callback(callback, adapter, conn))
+        asyncio.run(handle_gate_callback(callback, adapter, conn))
 
         # Should not edit message
         adapter.edit_message.assert_not_called()
@@ -212,7 +212,7 @@ class TestRejectGate:
 
         adapter = AsyncMock()
 
-        asyncio.get_event_loop().run_until_complete(handle_gate_callback(callback, adapter, conn))
+        asyncio.run(handle_gate_callback(callback, adapter, conn))
 
         row = conn.execute("SELECT gate_status FROM pipeline_runs WHERE run_id='run-1'").fetchone()
         assert row[0] == "rejected"
@@ -325,7 +325,7 @@ class TestNotifyOnewayDecision:
         adapter.ask_choice.return_value = 42
 
         decision = _sample_decision()
-        asyncio.get_event_loop().run_until_complete(notify_oneway_decision(adapter, 123, decision, conn))
+        asyncio.run(notify_oneway_decision(adapter, 123, decision, conn))
 
         adapter.ask_choice.assert_called_once()
         call_args = adapter.ask_choice.call_args
@@ -385,7 +385,7 @@ class TestHandleDecisionCallback:
 
         adapter = AsyncMock()
 
-        asyncio.get_event_loop().run_until_complete(handle_decision_callback(callback, adapter, conn))
+        asyncio.run(handle_decision_callback(callback, adapter, conn))
 
         # Event recorded
         row = conn.execute("SELECT payload FROM events WHERE action='decision_resolved'").fetchone()
@@ -445,7 +445,7 @@ class TestHandleHelp:
 
         adapter = AsyncMock()
         message = MagicMock()
-        asyncio.get_event_loop().run_until_complete(handle_help(message, adapter, 123))
+        asyncio.run(handle_help(message, adapter, 123))
         adapter.send.assert_called_once()
         text = adapter.send.call_args[0][1]
         assert "/status" in text
@@ -460,7 +460,7 @@ class TestHandleGatesCommand:
         conn = _make_conn()
         adapter = AsyncMock()
         message = MagicMock()
-        asyncio.get_event_loop().run_until_complete(handle_gates(message, adapter, 123, conn))
+        asyncio.run(handle_gates(message, adapter, 123, conn))
         adapter.send.assert_called_once()
         assert "nenhum" in adapter.send.call_args[0][1].lower()
 
@@ -471,7 +471,7 @@ class TestHandleGatesCommand:
         _insert_gate(conn, "run-1", platform_id="prosauai", node_id="specify", notified=False)
         adapter = AsyncMock()
         message = MagicMock()
-        asyncio.get_event_loop().run_until_complete(handle_gates(message, adapter, 123, conn))
+        asyncio.run(handle_gates(message, adapter, 123, conn))
         adapter.send.assert_called_once()
         text = adapter.send.call_args[0][1]
         assert "specify" in text
@@ -495,7 +495,7 @@ class TestHandleStatus:
             import pathlib
 
             with patch("telegram_bot.REPO_ROOT", pathlib.Path(tmpdir)):
-                asyncio.get_event_loop().run_until_complete(handle_status(message, adapter, 123, conn))
+                asyncio.run(handle_status(message, adapter, 123, conn))
         adapter.send.assert_called_once()
         assert "nenhuma" in adapter.send.call_args[0][1].lower()
 
@@ -525,7 +525,7 @@ class TestHandleStatus:
             (plat_dir / "platform.yaml").write_text("name: test-plat\n")
 
             with patch("telegram_bot.REPO_ROOT", pathlib.Path(tmpdir)):
-                asyncio.get_event_loop().run_until_complete(handle_status(message, adapter, 123, conn))
+                asyncio.run(handle_status(message, adapter, 123, conn))
 
         adapter.send.assert_called_once()
         text = adapter.send.call_args[0][1]
@@ -545,10 +545,18 @@ class TestHandleFreetext:
         message.text = "what is the pipeline status?"
         message.bot = AsyncMock()
 
+        # ``communicate`` is overridden with a plain MagicMock so that calling
+        # it inside the production ``asyncio.wait_for(proc.communicate(), ...)``
+        # does NOT create a dangling coroutine (which would fire a
+        # "coroutine never awaited" RuntimeWarning because wait_for is mocked
+        # to bypass the actual await). The real subprocess Process has
+        # ``communicate`` as async, but here we short-circuit at wait_for.
         mock_proc = AsyncMock()
-        mock_proc.communicate.return_value = (
-            b'{"result": "The pipeline is healthy.", "total_cost_usd": 0.05}',
-            b"",
+        mock_proc.communicate = MagicMock(
+            return_value=(
+                b'{"result": "The pipeline is healthy.", "total_cost_usd": 0.05}',
+                b"",
+            )
         )
         mock_proc.returncode = 0
 
@@ -557,7 +565,7 @@ class TestHandleFreetext:
             patch("asyncio.create_subprocess_exec", return_value=mock_proc),
             patch("asyncio.wait_for", return_value=mock_proc.communicate.return_value),
         ):
-            asyncio.get_event_loop().run_until_complete(handle_freetext(message, adapter, 123, conn))
+            asyncio.run(handle_freetext(message, adapter, 123, conn))
 
         adapter.send.assert_called_once()
         text = adapter.send.call_args[0][1]
@@ -575,17 +583,27 @@ class TestHandleFreetext:
         message.text = "some question"
         message.bot = AsyncMock()
 
+        # Override ``communicate`` and ``kill`` as plain MagicMocks:
+        #   - ``communicate`` would otherwise return a dangling coroutine when
+        #     called inside the mocked ``wait_for``.
+        #   - ``kill`` mirrors the real ``asyncio.subprocess.Process.kill`` —
+        #     a synchronous method, not a coroutine. Without this override,
+        #     ``AsyncMock.kill()`` returns an unawaited coroutine fired in the
+        #     except TimeoutError branch.
         mock_proc = AsyncMock()
+        mock_proc.communicate = MagicMock(return_value=(b"", b""))
+        mock_proc.kill = MagicMock()
 
         with (
             patch("telegram_bot.REPO_ROOT", MagicMock()),
             patch("asyncio.create_subprocess_exec", return_value=mock_proc),
             patch("asyncio.wait_for", side_effect=asyncio.TimeoutError),
         ):
-            asyncio.get_event_loop().run_until_complete(handle_freetext(message, adapter, 123, conn))
+            asyncio.run(handle_freetext(message, adapter, 123, conn))
 
         adapter.send.assert_called_once()
         assert "timeout" in adapter.send.call_args[0][1].lower()
+        mock_proc.kill.assert_called_once()
 
     def test_empty_message_ignored(self):
         from telegram_bot import handle_freetext
@@ -595,7 +613,7 @@ class TestHandleFreetext:
         message = MagicMock()
         message.text = ""
 
-        asyncio.get_event_loop().run_until_complete(handle_freetext(message, adapter, 123, conn))
+        asyncio.run(handle_freetext(message, adapter, 123, conn))
         adapter.send.assert_not_called()
 
     def test_reject_records_event(self):
@@ -612,7 +630,7 @@ class TestHandleFreetext:
 
         adapter = AsyncMock()
 
-        asyncio.get_event_loop().run_until_complete(handle_decision_callback(callback, adapter, conn))
+        asyncio.run(handle_decision_callback(callback, adapter, conn))
 
         row = conn.execute("SELECT payload FROM events WHERE action='decision_resolved'").fetchone()
         assert "rejected" in row[0]

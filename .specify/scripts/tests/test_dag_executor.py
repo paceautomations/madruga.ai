@@ -11,6 +11,43 @@ import pytest
 from dag_executor import CircuitBreaker, Node
 
 
+def _mock_async_proc(
+    stdout: bytes = b"",
+    stderr: bytes = b"",
+    returncode: int = 0,
+) -> AsyncMock:
+    """Build an AsyncMock process compatible with the streaming drainer in
+    ``dispatch_node_async``.
+
+    The new drainer calls ``stream.read(8192)`` until the stream returns empty
+    bytes (EOF). A bare ``AsyncMock()`` with only ``.communicate`` configured
+    leaves ``.stdout`` / ``.stderr`` as auto-generated child mocks that return
+    non-bytes MagicMocks — ``_drain`` would loop forever and blow up RAM via
+    ``AsyncMock.call_args_list``. This helper wires up stdin/stdout/stderr/wait
+    so tests exercise the real code path cleanly.
+
+    Returns a mock that:
+      * yields ``stdout`` then ``b""`` on successive stdout.read() calls
+      * yields ``stderr`` then ``b""`` on successive stderr.read() calls
+      * sets ``.returncode`` to ``returncode``
+      * has usable ``.stdin.write`` / ``.stdin.drain`` / ``.stdin.close``
+      * has awaitable ``.wait`` and synchronous ``.kill``
+    """
+    mp = AsyncMock()
+    mp.returncode = returncode
+    mp.stdin = AsyncMock()
+    mp.stdin.write = MagicMock()
+    mp.stdin.drain = AsyncMock()
+    mp.stdin.close = MagicMock()
+    mp.stdout = AsyncMock()
+    mp.stdout.read = AsyncMock(side_effect=[stdout, b""])
+    mp.stderr = AsyncMock()
+    mp.stderr.read = AsyncMock(side_effect=[stderr, b""])
+    mp.wait = AsyncMock(return_value=returncode)
+    mp.kill = MagicMock()
+    return mp
+
+
 # --- Fix: trace creation must happen AFTER gate check ---
 
 
@@ -204,9 +241,7 @@ async def test_dispatch_node_async_success():
     """dispatch_node_async returns (True, None) on success."""
     from dag_executor import dispatch_node_async
 
-    mock_proc = AsyncMock()
-    mock_proc.communicate.return_value = (b"output", b"")
-    mock_proc.returncode = 0
+    mock_proc = _mock_async_proc(stdout=b"output", stderr=b"", returncode=0)
 
     with (
         patch("dag_executor.shutil.which", return_value="/usr/bin/claude"),
@@ -220,19 +255,34 @@ async def test_dispatch_node_async_success():
 
 @pytest.mark.asyncio
 async def test_dispatch_node_async_timeout():
-    """dispatch_node_async returns (False, timeout message) on timeout."""
+    """dispatch_node_async returns (False, timeout message) on timeout.
+
+    The refactored dispatcher uses streaming drainers + ``process.wait()``
+    under a single ``asyncio.wait_for``. To trigger the timeout branch we
+    make the FIRST ``wait()`` hang; ``kill()`` then rewires ``wait`` to
+    return immediately (mirroring real subprocess semantics where SIGKILL
+    makes the child exit and the subsequent wait resolve).
+    """
     from dag_executor import dispatch_node_async
 
-    mock_proc = AsyncMock()
-    mock_proc.communicate.side_effect = asyncio.TimeoutError()
-    mock_proc.kill = MagicMock()
-    mock_proc.wait = AsyncMock()
+    mock_proc = _mock_async_proc(stdout=b"", stderr=b"", returncode=0)
+
+    async def _hang() -> None:
+        await asyncio.sleep(3600)
+
+    mock_proc.wait = AsyncMock(side_effect=_hang)
+
+    def _kill_effect() -> None:
+        # After SIGKILL, subsequent wait() returns immediately.
+        mock_proc.wait = AsyncMock(return_value=-9)
+
+    mock_proc.kill = MagicMock(side_effect=_kill_effect)
 
     with (
         patch("dag_executor.shutil.which", return_value="/usr/bin/claude"),
         patch("dag_executor.asyncio.create_subprocess_exec", return_value=mock_proc),
     ):
-        success, error, _stdout = await dispatch_node_async(_make_node(), "/tmp", "test", timeout=5)
+        success, error, _stdout = await dispatch_node_async(_make_node(), "/tmp", "test", timeout=1)
 
     assert success is False
     assert "timeout" in error
@@ -241,12 +291,14 @@ async def test_dispatch_node_async_timeout():
 
 @pytest.mark.asyncio
 async def test_dispatch_node_async_failure():
-    """dispatch_node_async returns (False, error) on non-zero exit code."""
+    """dispatch_node_async returns (False, error) on non-zero exit code.
+
+    stderr is captured by the drainer and passed to ``_extract_claude_error``
+    which falls back to the stderr string when stdout is empty / not JSON.
+    """
     from dag_executor import dispatch_node_async
 
-    mock_proc = AsyncMock()
-    mock_proc.communicate.return_value = (b"", b"something went wrong")
-    mock_proc.returncode = 1
+    mock_proc = _mock_async_proc(stdout=b"", stderr=b"something went wrong", returncode=1)
 
     with (
         patch("dag_executor.shutil.which", return_value="/usr/bin/claude"),
@@ -1101,9 +1153,11 @@ async def test_db_write_failure_does_not_block_dispatch():
     """
     from dag_executor import dispatch_node_async
 
-    mock_proc = AsyncMock()
-    mock_proc.communicate.return_value = (b'{"usage": {"input_tokens": 100}}', b"")
-    mock_proc.returncode = 0
+    mock_proc = _mock_async_proc(
+        stdout=b'{"usage": {"input_tokens": 100}}',
+        stderr=b"",
+        returncode=0,
+    )
 
     with (
         patch("dag_executor.shutil.which", return_value="/usr/bin/claude"),
