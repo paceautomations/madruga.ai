@@ -91,6 +91,48 @@ Sem stdout JSON capturado no primeiro dispatch (easter mata o processo antes), n
 
 **Nao intervi** — o sistema se recupera sozinho. Documentado como pattern recorrente na synthesis abaixo.
 
+### T043 (2026-04-11 12:49) — 3a ocorrencia + hipotese B confirmada
+
+Na rodada de hoje (07:56 restart), T043 hit o mesmo pattern. Primeiro dispatch 12:38:00, timeout 600s em 12:49:04, retry 1/3 automatico em 12:49:14.
+
+**Diagnostico do Fix #1a capturou pela primeira vez:** `.pipeline/timeout-diagnostics/implement_T043_1775911744.stdout` — **0 bytes**. Nenhum byte em stdout durante 600s inteiros.
+
+**Hipotese B confirmada, C refutada:**
+- Hipotese B (agent em loop pos-Write sem fechar response): stdout vazio bate perfeitamente — se o agent estivesse em tool calls, o JSON stream ja teria escrito events de tool_use/tool_result.
+- Hipotese C (slow token stream): refutada — slow stream teria produzido bytes parciais durante 600s, ainda que incompletos.
+
+**`--max-turns 100` (Fix #1a parte B) tambem esta armado** mas nao foi atingido — agent travou antes de consumir turns, provavelmente no primeiro ou segundo tool round-trip pos-Write.
+
+**Causa raiz concreta (nova evidencia):** claude -p nao emite nenhum token apos certo ponto. Pode ser loop no client SDK aguardando SSE event que nao chega, ou deadlock na propria CLI. Nao e mais hipotese — e observacao.
+
+**Proximo nivel de diagnostico (se ocorrer de novo):** `strace -p <pid> -e network 2>&1 | head` durante hang pode mostrar se o client esta em `read()` bloqueante na conexao SSE. Alternativa menos invasiva: `ss -tnp | grep <pid>` para ver estado do socket HTTPS.
+
+**Resolucao T043:** retry 1/3 completou em 9:18 (558s LLM) — segundo ataque fechou em tempo, sem bater timeout. Total wall com hang+retry: 20:34. **Fix #1a validado em producao:** zero perda de trabalho, diagnostico salvo, retry automatico, epic progrediu normalmente. Duration lost: ~10 min (1 timeout window full).
+
+### T044 (2026-04-11 13:09) — 4a ocorrencia, pattern refinado
+
+Imediatamente apos T043, T044 tambem hit silent hang. Mesmo perfil:
+- **Timeout:** 13:09:42 (600s, 0 bytes em stdout) — diagnostico salvo em `.pipeline/timeout-diagnostics/implement_T044_1775912982.stdout`
+- **Retry 1/3:** 13:09:54
+
+**Correlacao nova:** T043 e T044 sao tasks consecutivas de migracao pesada (`webhooks.py` / `main.py` lifespan) e ambas foram dispatched apos `Session-resume bound tripped (prev_tokens_in>=700000) — forcing fresh session`. Nao confundir com causa: T039 tambem teve fresh session e completou normalmente.
+
+**Hipotese refinada:** silent hang correlaciona com **tasks de integracao/migracao complexa** (refactor multi-file) mais do que com tokens brutos. As tasks leves (scaffold, enums, constantes) originais do epic 003 tambem hangaram, entao nao e complexidade puramente — pode ser um modo de falha mais geral no client SDK ao abrir nova conexao SSE sob carga.
+
+**Duration lost acumulado neste run:** ~20 min (T043 + T044 timeouts, retries ainda nao consolidados).
+
+### Opportunity — pair-program skill thresholds per-node
+
+Durante o monitoring do judge (13:00-13:04), classifiquei como `critical` porque a skill tem threshold global de 10min. Mas `judge` tem timeout de **3000s** (50 min, vs 600s para implement) e roda 4 personas em paralelo. 10-15 min e' normal.
+
+**Fix sugerido no `.claude/commands/madruga/pair-program.md`:**
+- implement: watch @ 8min, critical @ 11min (atual ~10min global)
+- analyze/analyze-post: watch @ 10min, critical @ 15min
+- judge/qa: watch @ 20min, critical @ 40min
+- reconcile/roadmap: watch @ 10min, critical @ 15min
+
+Tabela e' trivial de manter (query `pipeline_runs` filtrada por node_id) e evita falsos positivos que queimam ciclos do observador.
+
 ---
 
 ## Session Synthesis (em andamento)

@@ -69,9 +69,9 @@
 
 ### Implementation for US1 + US5
 
-- [ ] T017 [US5] Implementar `MentionMatchers` frozen dataclass em `prosauai/core/router/matchers.py` com campos (lid_opaque, phone, keywords), classmethod `from_tenant(tenant: Tenant)`, e metodo `matches(message: InboundMessage) -> bool` implementando 3 estrategias de deteccao: LID JID lookup, phone JID lookup, keyword substring case-insensitive
-- [ ] T018 [US1] Implementar funcao `classify(message: InboundMessage, state: StateSnapshot, matchers: MentionMatchers) -> MessageFacts` pura em `prosauai/core/router/facts.py` — extrair channel de `message.is_group`, event_kind de `message.event`, content_kind de `message.media_type`/`message.text`/`message.event`, from_me de `message.from_me`, has_mention de `matchers.matches(message)`, is_membership_event de `message.event == "group-participants.update"`, is_duplicate e conversation_in_handoff de `state`
-- [ ] T019 [US1] Exportar `classify`, `MessageFacts`, `StateSnapshot`, `Channel`, `EventKind`, `ContentKind` no `prosauai/core/router/__init__.py` como public API parcial
+- [X] T017 [US5] Implementar `MentionMatchers` frozen dataclass em `prosauai/core/router/matchers.py` com campos (lid_opaque, phone, keywords), classmethod `from_tenant(tenant: Tenant)`, e metodo `matches(message: InboundMessage) -> bool` implementando 3 estrategias de deteccao: LID JID lookup, phone JID lookup, keyword substring case-insensitive
+- [X] T018 [US1] Implementar funcao `classify(message: InboundMessage, state: StateSnapshot, matchers: MentionMatchers) -> MessageFacts` pura em `prosauai/core/router/facts.py` — extrair channel de `message.is_group`, event_kind de `message.event`, content_kind de `message.media_type`/`message.text`/`message.event`, from_me de `message.from_me`, has_mention de `matchers.matches(message)`, is_membership_event de `message.event == "group-participants.update"`, is_duplicate e conversation_in_handoff de `state`
+- [X] T019 [US1] Exportar `classify`, `MessageFacts`, `StateSnapshot`, `Channel`, `EventKind`, `ContentKind` no `prosauai/core/router/__init__.py` como public API parcial
 
 **Checkpoint**: Layer 1 completa — classificacao pura funcional e testavel isoladamente
 
@@ -85,21 +85,21 @@
 
 ### Tests for US2 + US3
 
-- [ ] T020 [P] [US2] Criar testes de `RoutingEngine.decide()` em `tests/unit/test_engine.py`: primeira regra que casa ganha, default aplicado quando nenhuma casa, prioridade respeitada (menor numero primeiro), regras com `when` mais especifico nao sao avaliadas se uma anterior ja casou (10+ testes)
-- [ ] T021 [P] [US3] Criar testes de agent resolution em `tests/unit/test_engine.py`: regra RESPOND com agent especifico → usa agent da regra, regra RESPOND sem agent + tenant com default → usa tenant default, regra RESPOND sem agent + tenant sem default → `AgentResolutionError`, decisoes LOG_ONLY/DROP/BYPASS_AI/EVENT_HOOK nao tentam resolver agent (4+ testes)
-- [ ] T022 [P] [US2] Criar testes do YAML loader em `tests/unit/test_loader.py`: carga valida com 9 regras, rejeicao de config sem `default`, rejeicao de `priority` duplicado, rejeicao de campo desconhecido (extra="forbid"), rejeicao de `action` invalida, validacao de `version: 1`, validacao de `tenant` obrigatorio, carga de multiplos arquivos independentes (15+ testes negativos)
-- [ ] T023 [P] [US2] Criar testes do overlap analysis em `tests/unit/test_loader.py`: duas regras com `when` identico → overlap detectado, regra generica (wildcard) + regra especifica com campo adicional → overlap detectado, duas regras disjuntas por campo → sem overlap, guards universais com `when` parcial verificados corretamente, config real `ariel.yaml` passa sem overlap (8+ testes)
+- [X] T020 [P] [US2] Criar testes de `RoutingEngine.decide()` em `tests/unit/test_engine.py`: primeira regra que casa ganha, default aplicado quando nenhuma casa, prioridade respeitada (menor numero primeiro), regras com `when` mais especifico nao sao avaliadas se uma anterior ja casou (10+ testes)
+- [X] T021 [P] [US3] Criar testes de agent resolution em `tests/unit/test_engine.py`: regra RESPOND com agent especifico → usa agent da regra, regra RESPOND sem agent + tenant com default → usa tenant default, regra RESPOND sem agent + tenant sem default → `AgentResolutionError`, decisoes LOG_ONLY/DROP/BYPASS_AI/EVENT_HOOK nao tentam resolver agent (4+ testes)
+- [X] T022 [P] [US2] Criar testes do YAML loader em `tests/unit/test_loader.py`: carga valida com 9 regras, rejeicao de config sem `default`, rejeicao de `priority` duplicado, rejeicao de campo desconhecido (extra="forbid"), rejeicao de `action` invalida, validacao de `version: 1`, validacao de `tenant` obrigatorio, carga de multiplos arquivos independentes (15+ testes negativos)
+- [X] T023 [P] [US2] Criar testes do overlap analysis em `tests/unit/test_loader.py`: duas regras com `when` identico → overlap detectado, regra generica (wildcard) + regra especifica com campo adicional → overlap detectado, duas regras disjuntas por campo → sem overlap, guards universais com `when` parcial verificados corretamente, config real `ariel.yaml` passa sem overlap (8+ testes)
 
 ### Implementation for US2 + US3
 
-- [ ] T024 [US2] Implementar `RoutingEngine` frozen dataclass em `prosauai/core/router/engine.py` com `rules: tuple[Rule, ...]` (ordenadas por priority ASC) e `default: Rule`; metodo `decide(facts: MessageFacts, tenant_ctx: Tenant) -> Decision` que itera regras, retorna Decision da primeira que casa; se nenhuma casa, aplica default
-- [ ] T025 [US3] Implementar agent resolution dentro de `RoutingEngine.decide()`: para action RESPOND, resolver agent_id de `rule.agent` ou fallback `tenant_ctx.default_agent_id`; se ambos None, raise `AgentResolutionError` com mensagem clara
-- [ ] T026 [US2] Implementar pydantic models para schema YAML em `prosauai/core/router/loader.py`: `RuleConfig` (name, priority, when, action, agent, target, reason), `RoutingConfig` (version, tenant, rules, default) com `model_config = ConfigDict(extra="forbid")`; validators para `version == 1`, `priority` unico, `default` obrigatorio
-- [ ] T027 [US2] Implementar funcao `load_routing_config(path: Path) -> RoutingEngine` em `prosauai/core/router/loader.py` que le YAML, valida via pydantic, converte para `Rule` + `RoutingEngine`
-- [ ] T028 [US2] Implementar overlap analysis pairwise em `prosauai/core/router/loader.py`: funcao `check_no_overlaps(rules: list[Rule])` que gera todos os `MessageFacts` validos (~400 combinacoes do produto cartesiano de enums filtrado por invariantes), para cada par de regras verifica se algum fact casa com ambas; se overlap encontrado, raise `RoutingConfigError` com nomes das regras conflitantes. Integrar no `load_routing_config()` apos parse
-- [ ] T029 [P] [US2] Criar fixture `config/routing/ariel.yaml` com 9 regras para tenant pace-internal: drop_self_echo (p0), drop_duplicate (p1), drop_reaction (p2), handoff_bypass (p5), group_membership (p10), individual_support (p100), group_mention_support (p110), group_silent_log (p120) + default RESPOND
-- [ ] T030 [P] [US2] Criar fixture `config/routing/resenhai.yaml` para tenant resenha-internal com priorities community-first: group_mention_support priority mais baixo, group_silent_log obrigatorio, individual_support priority 100 + default RESPOND
-- [ ] T031 [US2] Exportar `RoutingEngine`, `Rule`, `Decision`, subtipos, `Action`, `load_routing_config` no `prosauai/core/router/__init__.py`
+- [X] T024 [US2] Implementar `RoutingEngine` frozen dataclass em `prosauai/core/router/engine.py` com `rules: tuple[Rule, ...]` (ordenadas por priority ASC) e `default: Rule`; metodo `decide(facts: MessageFacts, tenant_ctx: Tenant) -> Decision` que itera regras, retorna Decision da primeira que casa; se nenhuma casa, aplica default
+- [X] T025 [US3] Implementar agent resolution dentro de `RoutingEngine.decide()`: para action RESPOND, resolver agent_id de `rule.agent` ou fallback `tenant_ctx.default_agent_id`; se ambos None, raise `AgentResolutionError` com mensagem clara
+- [X] T026 [US2] Implementar pydantic models para schema YAML em `prosauai/core/router/loader.py`: `RuleConfig` (name, priority, when, action, agent, target, reason), `RoutingConfig` (version, tenant, rules, default) com `model_config = ConfigDict(extra="forbid")`; validators para `version == 1`, `priority` unico, `default` obrigatorio
+- [X] T027 [US2] Implementar funcao `load_routing_config(path: Path) -> RoutingEngine` em `prosauai/core/router/loader.py` que le YAML, valida via pydantic, converte para `Rule` + `RoutingEngine`
+- [X] T028 [US2] Implementar overlap analysis pairwise em `prosauai/core/router/loader.py`: funcao `check_no_overlaps(rules: list[Rule])` que gera todos os `MessageFacts` validos (~400 combinacoes do produto cartesiano de enums filtrado por invariantes), para cada par de regras verifica se algum fact casa com ambas; se overlap encontrado, raise `RoutingConfigError` com nomes das regras conflitantes. Integrar no `load_routing_config()` apos parse
+- [X] T029 [P] [US2] Criar fixture `config/routing/ariel.yaml` com 9 regras para tenant pace-internal: drop_self_echo (p0), drop_duplicate (p1), drop_reaction (p2), handoff_bypass (p5), group_membership (p10), individual_support (p100), group_mention_support (p110), group_silent_log (p120) + default RESPOND
+- [X] T030 [P] [US2] Criar fixture `config/routing/resenhai.yaml` para tenant resenha-internal com priorities community-first: group_mention_support priority mais baixo, group_silent_log obrigatorio, individual_support priority 100 + default RESPOND
+- [X] T031 [US2] Exportar `RoutingEngine`, `Rule`, `Decision`, subtipos, `Action`, `load_routing_config` no `prosauai/core/router/__init__.py`
 
 **Checkpoint**: Layer 2 completa — engine de regras funcional com configs reais validadas. Classificacao + decisao funcionam end-to-end em testes.
 
@@ -113,9 +113,9 @@
 
 ### Tests for US4 (Property-Based)
 
-- [ ] T032 [US4] Criar test exaustivo em `tests/unit/test_mece_exhaustive.py`: gerar todas as combinacoes validas de `MessageFacts` do produto cartesiano `Channel x EventKind x ContentKind x bool^5` (filtrando invariantes invalidas); para cada combinacao e cada fixture YAML real (ariel.yaml, resenhai.yaml), assertar `len(matching_rules) == 1` (ou 0 + default); verificar que default e sempre alcancavel
-- [ ] T033 [US4] Criar Hypothesis test em `tests/unit/test_mece_exhaustive.py`: usar `@given(st.text(), st.text(), st.from_regex(...))` para campos livres (instance, sender_phone, group_id) combinados com enums fixos; verificar que campos string livres nao afetam unicidade do match
-- [ ] T034 [US4] Criar teste de reachability em `tests/unit/test_mece_reachability.py`: para cada regra que filtra por `instance` especifico em cada fixture YAML, verificar que existe ao menos 1 combinacao de facts que a atinge (detecta shadow rules — regras que nunca matcham porque wildcard precede)
+- [X] T032 [US4] Criar test exaustivo em `tests/unit/test_mece_exhaustive.py`: gerar todas as combinacoes validas de `MessageFacts` do produto cartesiano `Channel x EventKind x ContentKind x bool^5` (filtrando invariantes invalidas); para cada combinacao e cada fixture YAML real (ariel.yaml, resenhai.yaml), assertar `len(matching_rules) == 1` (ou 0 + default); verificar que default e sempre alcancavel
+- [X] T033 [US4] Criar Hypothesis test em `tests/unit/test_mece_exhaustive.py`: usar `@given(st.text(), st.text(), st.from_regex(...))` para campos livres (instance, sender_phone, group_id) combinados com enums fixos; verificar que campos string livres nao afetam unicidade do match
+- [X] T034 [US4] Criar teste de reachability em `tests/unit/test_mece_reachability.py`: para cada regra que filtra por `instance` especifico em cada fixture YAML, verificar que existe ao menos 1 combinacao de facts que a atinge (detecta shadow rules — regras que nunca matcham porque wildcard precede)
 
 **Checkpoint**: MECE provado em CI — nenhuma combinacao valida de fatos casa com 0 ou 2+ regras
 
@@ -129,14 +129,14 @@
 
 ### Tests for US6
 
-- [ ] T035 [P] [US6] Criar testes de CLI `verify` em `tests/unit/test_verify.py`: config valida → exit 0 + "N rules loaded", config sem default → exit 1 + mensagem de erro, config com overlap → exit 1 + nomes das regras conflitantes (3+ testes)
-- [ ] T036 [P] [US6] Criar testes de CLI `explain` em `tests/unit/test_verify.py`: facts de mensagem individual → "individual_support matched", facts de from_me=true → "drop_self_echo matched", facts invalidos (JSON malformado) → exit 1 (3+ testes)
+- [X] T035 [P] [US6] Criar testes de CLI `verify` em `tests/unit/test_verify.py`: config valida → exit 0 + "N rules loaded", config sem default → exit 1 + mensagem de erro, config com overlap → exit 1 + nomes das regras conflitantes (3+ testes)
+- [X] T036 [P] [US6] Criar testes de CLI `explain` em `tests/unit/test_verify.py`: facts de mensagem individual → "individual_support matched", facts de from_me=true → "drop_self_echo matched", facts invalidos (JSON malformado) → exit 1 (3+ testes)
 
 ### Implementation for US6
 
-- [ ] T037 [US6] Implementar CLI `verify` em `prosauai/core/router/verify.py`: argparse com subcomando `verify <path>`, chama `load_routing_config()`, printa resultado ou erro, exit code 0/1
-- [ ] T038 [US6] Implementar CLI `explain` em `prosauai/core/router/verify.py`: argparse com subcomando `explain --tenant <slug> --facts <json>`, carrega config do tenant, parseia facts JSON, roda `engine.decide()`, printa regra casada + reason + detalhes de match
-- [ ] T039 [US6] Configurar pre-commit hook para rodar `python -m prosauai.core.router.verify` em todos os `config/routing/*.yaml` alterados em `.pre-commit-config.yaml`
+- [X] T037 [US6] Implementar CLI `verify` em `prosauai/core/router/verify.py`: argparse com subcomando `verify <path>`, chama `load_routing_config()`, printa resultado ou erro, exit code 0/1
+- [X] T038 [US6] Implementar CLI `explain` em `prosauai/core/router/verify.py`: argparse com subcomando `explain --tenant <slug> --facts <json>`, carrega config do tenant, parseia facts JSON, roda `engine.decide()`, printa regra casada + reason + detalhes de match
+- [X] T039 [US6] Configurar pre-commit hook para rodar `python -m prosauai.core.router.verify` em todos os `config/routing/*.yaml` alterados em `.pre-commit-config.yaml`
 
 **Checkpoint**: DX completa — config invalida nao entra no repo, operador pode simular roteamento localmente
 
@@ -150,20 +150,20 @@
 
 ### Tests for US7 + US8
 
-- [ ] T040 [P] [US7] Criar testes de constantes OTel em `tests/unit/test_conventions.py`: validar existencia e formato das 6 novas constantes (MATCHED_RULE, ROUTING_ACTION, DROP_REASON, EVENT_HOOK_TARGET, MESSAGE_IS_REACTION, MESSAGE_MEDIA_TYPE) no namespace flat `prosauai.*`
-- [ ] T041 [P] [US8] Criar teste de equivalencia em `tests/integration/test_captured_fixtures.py`: para cada uma das 26 fixtures reais do 003, classificar com novo `classify()` + `engine.decide()` e assertar que a `Action` resultante e equivalente ao `MessageRoute` legado (usando tabela de equivalencia: SUPPORT→RESPOND, GROUP_RESPOND→RESPOND, GROUP_SAVE_ONLY→LOG_ONLY, GROUP_EVENT→EVENT_HOOK, HANDOFF_ATIVO→BYPASS_AI, IGNORE→DROP); atualizar `TEST_TENANTS` com `default_agent_id=None`
+- [X] T040 [P] [US7] Criar testes de constantes OTel em `tests/unit/test_conventions.py`: validar existencia e formato das 6 novas constantes (MATCHED_RULE, ROUTING_ACTION, DROP_REASON, EVENT_HOOK_TARGET, MESSAGE_IS_REACTION, MESSAGE_MEDIA_TYPE) no namespace flat `prosauai.*`
+- [X] T041 [P] [US8] Criar teste de equivalencia em `tests/integration/test_captured_fixtures.py`: para cada uma das 26 fixtures reais do 003, classificar com novo `classify()` + `engine.decide()` e assertar que a `Action` resultante e equivalente ao `MessageRoute` legado (usando tabela de equivalencia: SUPPORT→RESPOND, GROUP_RESPOND→RESPOND, GROUP_SAVE_ONLY→LOG_ONLY, GROUP_EVENT→EVENT_HOOK, HANDOFF_ATIVO→BYPASS_AI, IGNORE→DROP); atualizar `TEST_TENANTS` com `default_agent_id=None`
 
 ### Implementation for US7
 
-- [ ] T042 [US7] Adicionar 6 novas constantes em `prosauai/observability/conventions.py`: `MATCHED_RULE = "prosauai.matched_rule"`, `ROUTING_ACTION = "prosauai.action"`, `DROP_REASON = "prosauai.drop_reason"`, `EVENT_HOOK_TARGET = "prosauai.event_target"`, `MESSAGE_IS_REACTION = "prosauai.is_reaction"`, `MESSAGE_MEDIA_TYPE = "prosauai.media_type"`
+- [X] T042 [US7] Adicionar 6 novas constantes em `prosauai/observability/conventions.py`: `MATCHED_RULE = "prosauai.matched_rule"`, `ROUTING_ACTION = "prosauai.action"`, `DROP_REASON = "prosauai.drop_reason"`, `EVENT_HOOK_TARGET = "prosauai.event_target"`, `MESSAGE_IS_REACTION = "prosauai.is_reaction"`, `MESSAGE_MEDIA_TYPE = "prosauai.media_type"`
 
 ### Implementation for US8 — Migracao
 
-- [ ] T043 [US8] Migrar `prosauai/api/webhooks.py` para usar `await route(message, redis, engine, matchers, tenant)` em vez de `route_message(msg, tenant)`; implementar `match/case` sobre `Decision` com tratamento exaustivo dos 5 subtipos; adicionar 2 spans irmaos `router.classify` + `router.decide` sob span `webhook_whatsapp` com atributos OTel das novas constantes; remover span legado `route_message`
-- [ ] T044 [US8] Migrar `prosauai/main.py` lifespan para carregar `RoutingEngine` + `MentionMatchers` no startup: iterar tenants ativos, carregar `config/routing/{tenant.id}.yaml` via `load_routing_config()`, construir `MentionMatchers.from_tenant(tenant)`, armazenar em `app.state.engines: dict[str, RoutingEngine]` e `app.state.matchers: dict[str, MentionMatchers]`; fail-fast se tenant ativo nao tem config YAML correspondente
-- [ ] T045 [US8] Implementar funcao `route()` async em `prosauai/core/router/__init__.py`: orquestra `StateSnapshot.load()` → `classify()` → `engine.decide()`, retorna `Decision`
-- [ ] T046 [US8] Remover enum `MessageRoute`, `RouteResult`, funcoes `route_message()`, `_is_bot_mentioned()`, `_is_handoff_ativo()` de `prosauai/core/router.py` (arquivo legado); grep para confirmar zero consumers restantes
-- [ ] T047 [US8] Atualizar ou substituir `tests/unit/test_router.py` (003) — migrar testes relevantes para os novos arquivos de teste granulares (`test_facts.py`, `test_engine.py`, `test_matchers.py`) ou deletar se ja cobertos
+- [X] T043 [US8] Migrar `prosauai/api/webhooks.py` para usar `await route(message, redis, engine, matchers, tenant)` em vez de `route_message(msg, tenant)`; implementar `match/case` sobre `Decision` com tratamento exaustivo dos 5 subtipos; adicionar 2 spans irmaos `router.classify` + `router.decide` sob span `webhook_whatsapp` com atributos OTel das novas constantes; remover span legado `route_message`
+- [X] T044 [US8] Migrar `prosauai/main.py` lifespan para carregar `RoutingEngine` + `MentionMatchers` no startup: iterar tenants ativos, carregar `config/routing/{tenant.id}.yaml` via `load_routing_config()`, construir `MentionMatchers.from_tenant(tenant)`, armazenar em `app.state.engines: dict[str, RoutingEngine]` e `app.state.matchers: dict[str, MentionMatchers]`; fail-fast se tenant ativo nao tem config YAML correspondente
+- [X] T045 [US8] Implementar funcao `route()` async em `prosauai/core/router/__init__.py`: orquestra `StateSnapshot.load()` → `classify()` → `engine.decide()`, retorna `Decision`
+- [X] T046 [US8] Remover enum `MessageRoute`, `RouteResult`, funcoes `route_message()`, `_is_bot_mentioned()`, `_is_handoff_ativo()` de `prosauai/core/router.py` (arquivo legado); grep para confirmar zero consumers restantes
+- [X] T047 [US8] Atualizar ou substituir `tests/unit/test_router.py` (003) — migrar testes relevantes para os novos arquivos de teste granulares (`test_facts.py`, `test_engine.py`, `test_matchers.py`) ou deletar se ja cobertos
 
 **Checkpoint**: Router legado completamente substituido. 26 fixtures passam. Spans OTel visiveis. Zero referencias ao enum legado.
 
@@ -173,10 +173,10 @@
 
 **Purpose**: Atualizacao de documentacao, validacao final, cleanup
 
-- [ ] T048 [P] Atualizar `platforms/prosauai/business/process.md`: Fase B (Agent Resolution) deixa de ser promessa e vira documentacao da implementacao real com `classify()` + `RoutingEngine.decide()` + agent resolution
-- [ ] T049 [P] Atualizar `platforms/prosauai/engineering/domain-model.md`: Router aggregate com `classify()` + `decide()` separados; `InboundMessage` confirmado como aggregate name; `Tenant` com `default_agent_id` flat (nao JSONB settings)
-- [ ] T050 Validacao final: rodar `grep -r "MessageRoute\|route_message\|RouteResult\|_is_bot_mentioned\|_is_handoff_ativo" prosauai/` → zero matches; rodar `grep -r "ParsedMessage" prosauai/ tests/` → zero matches; rodar todos os testes `pytest tests/ -v` → 95+ testes passando
-- [ ] T051 Rodar verificacao `quickstart.md`: executar comandos do quickstart (verify ariel.yaml, explain com facts de exemplo, pytest) e confirmar que todos funcionam conforme documentado
+- [X] T048 [P] Atualizar `platforms/prosauai/business/process.md`: Fase B (Agent Resolution) deixa de ser promessa e vira documentacao da implementacao real com `classify()` + `RoutingEngine.decide()` + agent resolution
+- [X] T049 [P] Atualizar `platforms/prosauai/engineering/domain-model.md`: Router aggregate com `classify()` + `decide()` separados; `InboundMessage` confirmado como aggregate name; `Tenant` com `default_agent_id` flat (nao JSONB settings)
+- [X] T050 Validacao final: rodar `grep -r "MessageRoute\|route_message\|RouteResult\|_is_bot_mentioned\|_is_handoff_ativo" prosauai/` → zero matches; rodar `grep -r "ParsedMessage" prosauai/ tests/` → zero matches; rodar todos os testes `pytest tests/ -v` → 95+ testes passando
+- [X] T051 Rodar verificacao `quickstart.md`: executar comandos do quickstart (verify ariel.yaml, explain com facts de exemplo, pytest) e confirmar que todos funcionam conforme documentado
 
 ---
 
