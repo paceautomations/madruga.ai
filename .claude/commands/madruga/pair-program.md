@@ -66,6 +66,28 @@ conn.close()
 
 # 4. Current git branch MUST match epic branch
 git branch --show-current
+
+# 5. Epic branch in the EXTERNAL repo clone must have remote tracking
+#    (prevents worktree collision — easter-tracking.md 004 incident 2026-04-10 20:06).
+#    Skip silently for self-ref platforms; for external repos, warn if upstream missing.
+python3 -c "
+import sys, subprocess
+sys.path.insert(0, '.specify/scripts')
+from ensure_repo import _is_self_ref, _load_repo_binding, ensure_repo
+binding = _load_repo_binding('<platform>')
+if not _is_self_ref(binding['name']):
+    repo = ensure_repo('<platform>')
+    branch = f\"{binding['epic_branch_prefix']}<epic>\"
+    r = subprocess.run(
+        ['git', '-C', str(repo), 'rev-parse', '--abbrev-ref', f'{branch}@{{upstream}}'],
+        capture_output=True, text=True,
+    )
+    if r.returncode != 0:
+        print(f'WARNING: branch {branch} has no remote tracking in {repo}. '
+              f'Run: git -C {repo} push -u origin {branch}')
+    else:
+        print(f'OK: {branch} tracks {r.stdout.strip()}')
+"
 ```
 
 **STOP and escalate if:**
@@ -73,6 +95,7 @@ git branch --show-current
 - On `main` branch → NEVER run L2 commands on main
 - Epic status is `blocked` → root cause must be fixed + committed before unblocking (see Phase 3)
 - Any child process stuck with `wchan=futex_wait_queue` and no progress > 5 min
+- External repo epic branch without remote tracking → `git push -u origin <branch>` in the external clone BEFORE easter picks it up (otherwise `worktree add` collides with the still-checked-out local branch)
 
 ### Phase 1 — Observation Loop
 

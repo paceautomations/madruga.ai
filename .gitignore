@@ -19,6 +19,7 @@ venv/
 .pipeline/*.bak*
 .pipeline/backups/
 .pipeline/logs/
+.pipeline/timeout-diagnostics/
 platforms/*/model/output/
 .env
 htmlcov/

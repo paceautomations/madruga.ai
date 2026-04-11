@@ -718,13 +718,19 @@ def test_task_needs_gates_negative_case():
 
 
 def test_compose_task_prompt_data_model_gated(tmp_path):
-    """data-model.md is OMITTED for tasks that don't touch models."""
+    """Legacy gating: data-model.md is OMITTED for tasks that don't touch models.
+
+    CACHE_ORDERED=1 (the default) force-includes data_model to keep the
+    cache prefix uniform across tasks. This gating only applies under
+    MADRUGA_CACHE_ORDERED=0 (legacy path).
+    """
     from dag_executor import compose_task_prompt
 
     epic_dir = _make_epic_dir(tmp_path, **{"data-model.md": "# Data Model\nEntity definitions."})
     task = _make_task(description="Update README", files=["README.md"])
 
-    prompt = compose_task_prompt(task, epic_dir, "test-plat", "001-test")
+    with patch.dict(os.environ, {"MADRUGA_CACHE_ORDERED": "0"}):
+        prompt = compose_task_prompt(task, epic_dir, "test-plat", "001-test")
     assert "Data Model" not in prompt
     assert "Entity definitions" not in prompt
 
@@ -742,13 +748,19 @@ def test_compose_task_prompt_data_model_included_for_model_task(tmp_path):
 
 
 def test_compose_task_prompt_contracts_gated(tmp_path):
-    """contracts/*.md OMITTED for tasks that don't touch APIs."""
+    """Legacy gating: contracts/*.md OMITTED for tasks that don't touch APIs.
+
+    CACHE_ORDERED=1 (the default) force-includes contracts to keep the
+    cache prefix uniform across tasks. This gating only applies under
+    MADRUGA_CACHE_ORDERED=0 (legacy path).
+    """
     from dag_executor import compose_task_prompt
 
     epic_dir = _make_epic_dir(tmp_path, **{"contracts__webhook-api.md": "# Webhook contract"})
     task = _make_task(description="Update README", files=["README.md"])
 
-    prompt = compose_task_prompt(task, epic_dir, "test-plat", "001-test")
+    with patch.dict(os.environ, {"MADRUGA_CACHE_ORDERED": "0"}):
+        prompt = compose_task_prompt(task, epic_dir, "test-plat", "001-test")
     assert "webhook-api" not in prompt
     assert "Webhook contract" not in prompt
 
@@ -811,6 +823,149 @@ def test_implement_context_swept_at_cycle_start(tmp_path):
     assert not ctx_path.exists()
 
 
+# --- Phase 5: Cache-optimal reorder (MADRUGA_CACHE_ORDERED) ---
+
+
+def test_compose_task_prompt_cache_ordered_prefix_comes_first(tmp_path):
+    """Under CACHE_ORDERED=1, stable sections (plan/spec) come BEFORE task card."""
+    from dag_executor import compose_task_prompt
+
+    epic_dir = _make_epic_dir(
+        tmp_path,
+        **{
+            "tasks.md": "## Phase 1\n- [ ] T001 Do stuff\n",
+            "data-model.md": "# Data Model\nEntities.",
+            "contracts__api.md": "# API contract",
+        },
+    )
+    task = _make_task(files=["README.md"])
+    prompt = compose_task_prompt(task, epic_dir, "test-plat", "001-test")
+
+    # Cue at position 0 (cache-safe constant)
+    assert prompt.startswith("(Implementing one SpecKit task")
+
+    # plan comes before the task card header
+    assert prompt.index("Implementation Plan") < prompt.index("You are implementing task")
+    # spec comes before the "All Tasks" section (which is in the variable suffix)
+    assert prompt.index("## Specification") < prompt.index("## All Tasks")
+    # data_model and contracts force-included (even though task doesn't touch them)
+    assert "## Data Model" in prompt
+    assert "## Contract: api.md" in prompt
+
+
+def test_compose_task_prompt_cache_ordered_stable_prefix_byte_equal(tmp_path):
+    """The cacheable prefix is byte-identical across tasks with different files/descriptions.
+
+    This is THE core invariant that unlocks Claude's 1h-TTL prefix cache
+    across tasks in the same epic. Any drift breaks cache alignment.
+    """
+    from dag_executor import compose_task_prompt
+
+    epic_dir = _make_epic_dir(
+        tmp_path,
+        **{
+            "tasks.md": "## Phase 1\n- [ ] T001 Something\n- [ ] T999 Something else\n",
+            "data-model.md": "# Data Model\nEntities.",
+            "contracts__api.md": "# API contract",
+        },
+    )
+    t_model = _make_task("T001", "Create entity", files=["models/user.py"], us_tag="US1")
+    t_readme = _make_task("T999", "Update README", files=["README.md"], us_tag="US3")
+
+    p1 = compose_task_prompt(t_model, epic_dir, "test-plat", "001-test")
+    p2 = compose_task_prompt(t_readme, epic_dir, "test-plat", "001-test")
+
+    # "## All Tasks (current progress)" is the first section of the variable
+    # suffix. Everything before it must be byte-identical.
+    marker = "## All Tasks"
+    b1 = p1.index(marker)
+    b2 = p2.index(marker)
+    assert p1[:b1] == p2[:b2], (
+        f"Stable prefix diverges at first {min(b1, b2)} bytes — Claude prefix cache will miss on non-first tasks."
+    )
+
+
+def test_compose_task_prompt_cache_ordered_rollback_legacy_layout(tmp_path):
+    """MADRUGA_CACHE_ORDERED=0 restores the legacy layout (task card at top)."""
+    from dag_executor import compose_task_prompt
+
+    epic_dir = _make_epic_dir(
+        tmp_path,
+        **{"data-model.md": "# DM", "contracts__api.md": "# API"},
+    )
+    task = _make_task(files=["README.md"])
+
+    with patch.dict(os.environ, {"MADRUGA_CACHE_ORDERED": "0"}):
+        prompt = compose_task_prompt(task, epic_dir, "test-plat", "001-test")
+
+    # Legacy invariants: task card first, no cue line, scoped gating active
+    assert prompt.startswith("You are implementing task T001")
+    assert "(Implementing one SpecKit task" not in prompt
+    # Legacy with default SCOPED_CONTEXT=1: data_model/contracts gated OUT
+    # for a README task (doesn't touch models or api)
+    assert "## Data Model" not in prompt
+    assert "## Contract: api.md" not in prompt
+
+
+def test_compose_task_prompt_cache_ordered_resume_no_prefix(tmp_path):
+    """resume=True skips the static prefix, keeps cue + reordered suffix."""
+    from dag_executor import compose_task_prompt
+
+    epic_dir = _make_epic_dir(tmp_path, **{"data-model.md": "# DM"})
+    task = _make_task()
+    prompt = compose_task_prompt(task, epic_dir, "test-plat", "001-test", resume=True)
+
+    # No prefix: plan/spec/data_model/contracts all absent
+    assert "Implementation Plan" not in prompt
+    assert "## Specification" not in prompt
+    assert "## Data Model" not in prompt
+    # Cue still present (cache-safe constant)
+    assert prompt.startswith("(Implementing one SpecKit task")
+    # Header (task card) still added at the end
+    assert "You are implementing task T001" in prompt
+
+
+def test_compose_task_prompt_cache_ordered_missing_data_model(tmp_path):
+    """Missing data-model.md → prefix stays aligned across tasks; no error."""
+    from dag_executor import compose_task_prompt
+
+    # No data-model.md, no contracts/ — minimal epic (only tasks.md for boundary)
+    epic_dir = _make_epic_dir(
+        tmp_path,
+        **{"tasks.md": "## Phase 1\n- [ ] T001 A\n- [ ] T002 B\n"},
+    )
+    t1 = _make_task("T001", files=["models/user.py"])
+    t2 = _make_task("T002", files=["README.md"])
+
+    p1 = compose_task_prompt(t1, epic_dir, "test-plat", "001-test")
+    p2 = compose_task_prompt(t2, epic_dir, "test-plat", "001-test")
+
+    # Prefix still aligned even when optional sections are missing
+    b1 = p1.index("## All Tasks")
+    b2 = p2.index("## All Tasks")
+    assert p1[:b1] == p2[:b2]
+    # data_model legitimately absent for both
+    assert "## Data Model" not in p1
+    assert "## Data Model" not in p2
+
+
+def test_compose_task_prompt_cache_ordered_log_field(tmp_path, caplog):
+    """prompt_composed log line includes cache_ordered=True when flag is on."""
+    import logging
+
+    from dag_executor import compose_task_prompt
+
+    epic_dir = _make_epic_dir(tmp_path)
+    task = _make_task()
+    with caplog.at_level(logging.INFO, logger="dag_executor"):
+        compose_task_prompt(task, epic_dir, "test-plat", "001-test")
+
+    # Default on → cache_ordered=True in the log event
+    relevant = [r for r in caplog.records if "prompt_composed" in r.getMessage()]
+    assert relevant, "Expected prompt_composed log entry"
+    assert "cache_ordered=True" in relevant[-1].getMessage()
+
+
 def test_parse_tasks_extracts_us_tag(tmp_path):
     """parse_tasks extracts [US*] tag from task descriptions."""
     from dag_executor import parse_tasks
@@ -862,15 +1017,36 @@ def test_parse_claude_output_no_json_returns_nulls():
 
     # No output at all
     result = parse_claude_output("")
-    assert result == {"tokens_in": None, "tokens_out": None, "cost_usd": None, "duration_ms": None}
+    assert result == {
+        "tokens_in": None,
+        "tokens_out": None,
+        "cost_usd": None,
+        "duration_ms": None,
+        "cache_read": None,
+        "cache_create": None,
+    }
 
     # None input
     result = parse_claude_output(None)
-    assert result == {"tokens_in": None, "tokens_out": None, "cost_usd": None, "duration_ms": None}
+    assert result == {
+        "tokens_in": None,
+        "tokens_out": None,
+        "cost_usd": None,
+        "duration_ms": None,
+        "cache_read": None,
+        "cache_create": None,
+    }
 
     # Non-JSON output (e.g., raw text from failed subprocess)
     result = parse_claude_output("Error: something went wrong\nTraceback...")
-    assert result == {"tokens_in": None, "tokens_out": None, "cost_usd": None, "duration_ms": None}
+    assert result == {
+        "tokens_in": None,
+        "tokens_out": None,
+        "cost_usd": None,
+        "duration_ms": None,
+        "cache_read": None,
+        "cache_create": None,
+    }
 
     # Valid JSON but missing usage fields
     result = parse_claude_output('{"result": "ok"}')

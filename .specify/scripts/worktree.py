@@ -21,6 +21,23 @@ def _branch_exists_on_remote(repo_path: Path, branch: str) -> bool:
     return bool(result.stdout.strip())
 
 
+def _branch_exists_locally(repo_path: Path, branch: str) -> bool:
+    """Check if a branch exists locally in the given repo.
+
+    Returns True when ``git branch --list <branch>`` prints a matching ref,
+    False otherwise. Used to detect the "exists local but not remote" state
+    that breaks ``git worktree add -b`` — see easter-tracking.md for epic
+    prosauai/004-router-mece, incident 2026-04-10 20:06.
+    """
+    result = subprocess.run(
+        ["git", "branch", "--list", branch],
+        cwd=str(repo_path),
+        capture_output=True,
+        text=True,
+    )
+    return bool(result.stdout.strip())
+
+
 def _get_cascade_base(repo_path: Path, platform_name: str, fallback: str) -> str:
     """Return the best base ref for a new epic worktree.
 
@@ -109,14 +126,40 @@ def create_worktree(platform_name: str, epic_slug: str) -> Path:
     # Create worktree
     wt_path.parent.mkdir(parents=True, exist_ok=True)
 
-    if _branch_exists_on_remote(repo_path, branch):
+    remote_exists = _branch_exists_on_remote(repo_path, branch)
+    local_exists = _branch_exists_locally(repo_path, branch)
+
+    if remote_exists:
+        # Case (a): branch on remote — checkout without -b.
         log.info("Branch '%s' exists on remote — checking out", branch)
         subprocess.run(
             ["git", "worktree", "add", str(wt_path), branch],
             cwd=str(repo_path),
             check=True,
         )
+    elif local_exists:
+        # Case (b): local-only branch (e.g. user pre-created it manually, or a
+        # previous run created it without pushing). Push to establish tracking,
+        # then check out. Note: the branch may currently be checked out in the
+        # main clone — if so, `git worktree add` will fail with a clear message
+        # and the user must `git checkout <base>` in the main clone first.
+        # See easter-tracking.md for epic prosauai/004-router-mece (2026-04-10).
+        log.warning(
+            "Branch '%s' exists locally but not on remote — pushing then checking out",
+            branch,
+        )
+        subprocess.run(
+            ["git", "push", "-u", "origin", branch],
+            cwd=str(repo_path),
+            check=True,
+        )
+        subprocess.run(
+            ["git", "worktree", "add", str(wt_path), branch],
+            cwd=str(repo_path),
+            check=True,
+        )
     else:
+        # Case (c): new branch — create from cascade base.
         cascade_base = _get_cascade_base(repo_path, platform_name, base_branch)
         log.info("Creating worktree: %s (branch: %s from %s)", wt_path, branch, cascade_base)
         subprocess.run(

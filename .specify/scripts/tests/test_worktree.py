@@ -228,6 +228,31 @@ class TestBranchExistsOnRemote:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# _branch_exists_locally
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+class TestBranchExistsLocally:
+    def test_returns_true_when_branch_found(self, tmp_path):
+        from worktree import _branch_exists_locally
+
+        mock_result = MagicMock()
+        mock_result.stdout = "  epic/myplat/001-feat\n"
+
+        with patch("worktree.subprocess.run", return_value=mock_result):
+            assert _branch_exists_locally(tmp_path, "epic/myplat/001-feat") is True
+
+    def test_returns_false_when_empty(self, tmp_path):
+        from worktree import _branch_exists_locally
+
+        mock_result = MagicMock()
+        mock_result.stdout = ""
+
+        with patch("worktree.subprocess.run", return_value=mock_result):
+            assert _branch_exists_locally(tmp_path, "nonexistent") is False
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # create_worktree
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -274,6 +299,7 @@ class TestCreateWorktree:
         assert result == wt_path
 
     def test_creates_worktree_existing_branch(self, tmp_path):
+        """Case (a): branch on remote — checkout without -b."""
         from worktree import create_worktree
 
         repos_base = tmp_path / "repos"
@@ -287,6 +313,9 @@ class TestCreateWorktree:
             patch("ensure_repo._resolve_repos_base", return_value=repos_base),
             patch("worktree.subprocess.run") as mock_run,
             patch("worktree._branch_exists_on_remote", return_value=True),
+            # Remote exists → local_exists is not consulted, but patch to keep
+            # the test hermetic (real call would shell out to git).
+            patch("worktree._branch_exists_locally", return_value=False),
         ):
             create_worktree("myplat", "001-feat")
 
@@ -297,7 +326,8 @@ class TestCreateWorktree:
         assert "add" in wt_add_call
         assert "-b" not in wt_add_call
 
-    def test_creates_worktree_new_branch(self, tmp_path):
+    def test_creates_worktree_local_only_branch(self, tmp_path):
+        """Case (b): branch exists locally but not on remote — push + checkout without -b."""
         from worktree import create_worktree
 
         repos_base = tmp_path / "repos"
@@ -311,6 +341,36 @@ class TestCreateWorktree:
             patch("ensure_repo._resolve_repos_base", return_value=repos_base),
             patch("worktree.subprocess.run") as mock_run,
             patch("worktree._branch_exists_on_remote", return_value=False),
+            patch("worktree._branch_exists_locally", return_value=True),
+        ):
+            create_worktree("myplat", "001-feat")
+
+        # Should have called fetch + push -u origin + worktree add (no -b)
+        assert mock_run.call_count == 3
+        push_call = mock_run.call_args_list[1][0][0]
+        assert push_call[:2] == ["git", "push"]
+        assert "-u" in push_call and "origin" in push_call
+        wt_add_call = mock_run.call_args_list[2][0][0]
+        assert "worktree" in wt_add_call
+        assert "add" in wt_add_call
+        assert "-b" not in wt_add_call
+
+    def test_creates_worktree_new_branch(self, tmp_path):
+        """Case (c): branch absent everywhere — create with -b from cascade base."""
+        from worktree import create_worktree
+
+        repos_base = tmp_path / "repos"
+        repo_path = repos_base / "myorg" / "other-repo"
+        repo_path.mkdir(parents=True)
+
+        with (
+            patch("ensure_repo._load_repo_binding", return_value=_make_binding()),
+            patch("ensure_repo._is_self_ref", return_value=False),
+            patch("ensure_repo.ensure_repo", return_value=repo_path),
+            patch("ensure_repo._resolve_repos_base", return_value=repos_base),
+            patch("worktree.subprocess.run") as mock_run,
+            patch("worktree._branch_exists_on_remote", return_value=False),
+            patch("worktree._branch_exists_locally", return_value=False),
             patch("worktree._get_cascade_base", return_value="origin/main"),
         ):
             create_worktree("myplat", "001-feat")

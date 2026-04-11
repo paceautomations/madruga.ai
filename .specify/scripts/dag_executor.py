@@ -183,8 +183,9 @@ _AUTONOMOUS_DISPATCH = (
 def parse_claude_output(stdout: str) -> dict:
     """Extract tokens/cost from claude -p --output-format json stdout.
 
-    Returns dict with keys: tokens_in, tokens_out, cost_usd, duration_ms.
-    All values default to None on parse failure (best-effort, FR-011).
+    Returns dict with keys: tokens_in, tokens_out, cost_usd, duration_ms,
+    cache_read, cache_create. All values default to None on parse failure
+    (best-effort, FR-011).
 
     `tokens_in` is the TOTAL input sent to the model — sum of raw input_tokens
     plus cache reads and cache writes. When prompt caching is active (default),
@@ -192,12 +193,22 @@ def parse_claude_output(stdout: str) -> dict:
     and severely undercounts the real input. The portal displays this value, so
     we aggregate all three fields here to reflect the actual prompt size.
 
+    `cache_read` and `cache_create` are ALSO exposed separately so Phase 5
+    (cache-optimal reorder) can empirically verify prefix cache hit rate.
+
     If total_cost_usd is missing but token counts are available, estimates
     cost using Sonnet pricing as fallback (see _estimate_cost_usd). Note that
     the estimate will overcount cost in cache-heavy runs (cache reads cost less
     than fresh input), but total_cost_usd from the CLI is preferred and correct.
     """
-    result: dict = {"tokens_in": None, "tokens_out": None, "cost_usd": None, "duration_ms": None}
+    result: dict = {
+        "tokens_in": None,
+        "tokens_out": None,
+        "cost_usd": None,
+        "duration_ms": None,
+        "cache_read": None,
+        "cache_create": None,
+    }
     if not stdout:
         return result
     try:
@@ -212,6 +223,8 @@ def parse_claude_output(stdout: str) -> dict:
             result["tokens_in"] = None
         else:
             result["tokens_in"] = (input_tokens or 0) + (cache_read or 0) + (cache_create or 0)
+        result["cache_read"] = cache_read
+        result["cache_create"] = cache_create
         result["tokens_out"] = usage.get("output_tokens")
         result["cost_usd"] = data.get("total_cost_usd")
         result["duration_ms"] = data.get("duration_ms")
@@ -355,6 +368,17 @@ ENV_BARE_LITE = "MADRUGA_BARE_LITE"
 ENV_KILL_IMPLEMENT_CONTEXT = "MADRUGA_KILL_IMPLEMENT_CONTEXT"
 ENV_SCOPED_CONTEXT = "MADRUGA_SCOPED_CONTEXT"
 ENV_STRICT_SETTINGS = "MADRUGA_STRICT_SETTINGS"  # opt-in (default off)
+ENV_CACHE_ORDERED = "MADRUGA_CACHE_ORDERED"  # Phase 5: cache-optimal prefix order
+
+# Byte-identical cue at position 0 of the user prompt under CACHE_ORDERED.
+# Must never vary per task — any task-specific bytes here would invalidate
+# Claude's prefix cache across the whole epic. Signals to Claude that the
+# task card is at the END of the prompt (leverages recency bias).
+_CACHE_PREFIX_CUE = "(Implementing one SpecKit task — task card at end of prompt.)\n"
+
+# Slack reserved in the MAX_PROMPT_BYTES budget for the deferred header
+# section under CACHE_ORDERED (header is added AFTER the file-inlining loop).
+_HEADER_BUDGET_PADDING = 200
 
 
 def _flag(name: str, default: str = "1") -> bool:
@@ -548,59 +572,96 @@ def compose_task_prompt(
         sections.append((name, content, size))
         total_size += size
 
-    add("header", header)
-
     # Read tasks.md exactly once — both the "recent_done" derivation and the
-    # "All Tasks" section below share this single in-memory copy.
+    # "All Tasks" section share this single in-memory copy.
     tasks_md_path = epic_dir / "tasks.md"
     try:
         tasks_text: str | None = tasks_md_path.read_text(encoding="utf-8")
     except OSError:
         tasks_text = None
 
-    if _flag(ENV_KILL_IMPLEMENT_CONTEXT):
-        done_ids: list[str] = []
-        if tasks_text is not None:
-            done_ids = [t.id for t in _parse_tasks_from_text(tasks_text) if t.checked][-5:]
-        if done_ids:
-            add(
-                "recent_done",
-                f"\n---\n\n## Recent progress\nLast tasks completed in this cycle: {', '.join(done_ids)}",
-            )
-    else:
-        add("implement_context", _read_context(epic_dir / "implement-context.md", "Prior Tasks Completed"))
-    if tasks_text is not None:
-        add("tasks", _format_context(tasks_text, "All Tasks (current progress)"))
+    def _recent_done_section() -> str | None:
+        if tasks_text is None:
+            return None
+        done_ids = [t.id for t in _parse_tasks_from_text(tasks_text) if t.checked][-5:]
+        if not done_ids:
+            return None
+        return f"\n---\n\n## Recent progress\nLast tasks completed in this cycle: {', '.join(done_ids)}"
 
-    # Static docs — skip on resume (already in session context)
-    if not resume:
-        add("plan", _read_context(epic_dir / "plan.md", "Implementation Plan"))
-        add("spec", _read_context(epic_dir / "spec.md", "Specification"))
+    cache_ordered = _flag(ENV_CACHE_ORDERED)
+    header_deferred = False
 
-        # Rollback: MADRUGA_SCOPED_CONTEXT=0 restores the old always-include behavior.
-        scoped = _flag(ENV_SCOPED_CONTEXT)
-
-        if (not scoped) or _task_needs_data_model(task):
+    if cache_ordered:
+        # ─── STABLE PREFIX (cacheable across tasks in the same epic) ───
+        add("cue", _CACHE_PREFIX_CUE)
+        if not resume:
+            add("plan", _read_context(epic_dir / "plan.md", "Implementation Plan"))
+            add("spec", _read_context(epic_dir / "spec.md", "Specification"))
+            # Force-include data_model + contracts under CACHE_ORDERED: the
+            # ~20KB "waste" per non-touching task buys a uniform prefix across
+            # ALL tasks in the epic, unlocking 1h-TTL cache on tasks 2..N.
+            # Math: uniform 64KB prefix × 0.9 (cache_read cost) = 58KB saved
+            # vs fragmented 44KB prefix × 0.9 = 40KB. Net +18KB saved per
+            # cached task. See ADR-021 Phase 5 addendum for full derivation.
             add("data_model", _read_context(epic_dir / "data-model.md", "Data Model"))
+            contracts_dir = epic_dir / "contracts"
+            if contracts_dir.is_dir():
+                for contract_file in sorted(contracts_dir.glob("*.md")):
+                    add(
+                        f"contract:{contract_file.name}",
+                        _read_context(contract_file, f"Contract: {contract_file.name}"),
+                    )
 
-        contracts_dir = epic_dir / "contracts"
-        if contracts_dir.is_dir() and ((not scoped) or _task_needs_contracts(task)):
-            for contract_file in sorted(contracts_dir.glob("*.md")):
-                add(
-                    f"contract:{contract_file.name}",
-                    _read_context(contract_file, f"Contract: {contract_file.name}"),
-                )
-
-        analyze_path = epic_dir / "analyze-report.md"
-        if scoped:
-            add("analyze_report", _analyze_report_slice(analyze_path, task.id))
+        # ─── VARIABLE SUFFIX (task-specific, not cached) ───
+        # tasks.md goes in the suffix because mark_task_done flips [ ]→[X]
+        # between dispatches, changing bytes and invalidating cache.
+        if tasks_text is not None:
+            add("tasks", _format_context(tasks_text, "All Tasks (current progress)"))
+        if _flag(ENV_KILL_IMPLEMENT_CONTEXT):
+            add("recent_done", _recent_done_section())
         else:
-            add("analyze_report", _read_context(analyze_path, "Pre-Implementation Analysis"))
+            add("implement_context", _read_context(epic_dir / "implement-context.md", "Prior Tasks Completed"))
+        if not resume:
+            add("analyze_report", _analyze_report_slice(epic_dir / "analyze-report.md", task.id))
+        # Header (task card) added LAST, after the file-inlining loop below.
+        header_deferred = True
+    else:
+        # LEGACY path — byte-identical to pre-Phase-5 output. Any edit here
+        # invalidates the rollback guarantee (MADRUGA_CACHE_ORDERED=0).
+        add("header", header)
+        if _flag(ENV_KILL_IMPLEMENT_CONTEXT):
+            add("recent_done", _recent_done_section())
+        else:
+            add("implement_context", _read_context(epic_dir / "implement-context.md", "Prior Tasks Completed"))
+        if tasks_text is not None:
+            add("tasks", _format_context(tasks_text, "All Tasks (current progress)"))
 
-    # Include referenced files that already exist (so task can build on prior work)
+        if not resume:
+            add("plan", _read_context(epic_dir / "plan.md", "Implementation Plan"))
+            add("spec", _read_context(epic_dir / "spec.md", "Specification"))
+            scoped = _flag(ENV_SCOPED_CONTEXT)
+            if (not scoped) or _task_needs_data_model(task):
+                add("data_model", _read_context(epic_dir / "data-model.md", "Data Model"))
+            contracts_dir = epic_dir / "contracts"
+            if contracts_dir.is_dir() and ((not scoped) or _task_needs_contracts(task)):
+                for contract_file in sorted(contracts_dir.glob("*.md")):
+                    add(
+                        f"contract:{contract_file.name}",
+                        _read_context(contract_file, f"Contract: {contract_file.name}"),
+                    )
+            analyze_path = epic_dir / "analyze-report.md"
+            if scoped:
+                add("analyze_report", _analyze_report_slice(analyze_path, task.id))
+            else:
+                add("analyze_report", _read_context(analyze_path, "Pre-Implementation Analysis"))
+
+    # Include referenced files that already exist (so task can build on prior work).
+    # Under CACHE_ORDERED the header has not been added yet; reserve its byte
+    # count in the budget so we never drop the task card to fit a file.
+    header_reserve = len(header.encode()) + _HEADER_BUDGET_PADDING if header_deferred else 0
     dropped_files: list[str] = []
     for file_path in task.files:
-        if total_size >= MAX_PROMPT_BYTES:
+        if total_size + header_reserve >= MAX_PROMPT_BYTES:
             dropped_files.append(file_path)
             continue
         full_path = Path(file_path)
@@ -614,6 +675,9 @@ def compose_task_prompt(
             continue
         add(f"file:{file_path}", f"\n---\n\n## Existing file: {file_path}\n\n```\n{content}\n```")
 
+    if header_deferred:
+        add("header", header)
+
     if dropped_files:
         log.warning(
             "prompt_budget_exceeded task=%s total_bytes=%d limit=%d dropped_files=%s",
@@ -624,9 +688,10 @@ def compose_task_prompt(
         )
 
     log.info(
-        "prompt_composed task=%s resume=%s total_bytes=%d sections=%s",
+        "prompt_composed task=%s resume=%s cache_ordered=%s total_bytes=%d sections=%s",
         task.id,
         resume,
+        cache_ordered,
         total_size,
         {name: size for name, _, size in sections},
     )
@@ -1260,10 +1325,28 @@ def dispatch_node(
             log.error("Node '%s' failed: %s", node.id, error)
             return False, error, result.stdout
         return True, None, result.stdout
-    except subprocess.TimeoutExpired:
-        error = f"timeout after {timeout}s"
-        log.error("Node '%s': %s", node.id, error)
-        return False, error, None
+    except subprocess.TimeoutExpired as exc:
+        # ``subprocess.run(capture_output=True)`` attaches the partial stdout
+        # to the ``TimeoutExpired`` exception — persist it alongside the async
+        # variant for symmetric diagnostics.
+        partial_bytes = exc.stdout or b""
+        partial = partial_bytes.decode(errors="replace") if isinstance(partial_bytes, bytes) else str(partial_bytes)
+        try:
+            diag_dir = REPO_ROOT / ".pipeline" / "timeout-diagnostics"
+            diag_dir.mkdir(parents=True, exist_ok=True)
+            fname = f"{node.id.replace(':', '_')}_{int(time.time())}.stdout"
+            (diag_dir / fname).write_text(partial[:200_000], encoding="utf-8")
+            log.error(
+                "Node '%s': timeout after %ds — partial stdout (%d bytes) saved to %s",
+                node.id,
+                timeout,
+                len(partial),
+                diag_dir / fname,
+            )
+        except Exception as diag_exc:  # noqa: BLE001 — diagnostic best-effort
+            log.warning("Could not persist timeout diagnostic: %s", diag_exc)
+            log.error("Node '%s': timeout after %ds", node.id, timeout)
+        return False, f"timeout after {timeout}s", partial or None
 
 
 def verify_outputs(node: Node, platform_dir: Path) -> tuple[bool, str | None]:
@@ -1471,32 +1554,79 @@ async def dispatch_node_async(
     )
     # A8: register so shutdown can terminate us
     _active_subprocesses.add(process)
+    # Streaming buffers so we can inspect partial output on timeout. Replaces
+    # the prior ``process.communicate()`` call — communicate() only yields
+    # stdout/stderr AFTER the child closes its pipes, which means on timeout
+    # asyncio.wait_for cancels the task and the partial output is lost. With
+    # manual drainers we keep a live copy in-process.
+    # See easter-tracking.md (epic prosauai/004-router-mece) for the "silent
+    # hang in claude -p stream" pattern that motivated this.
+    stdout_buf = bytearray()
+    stderr_buf = bytearray()
+
+    async def _drain(stream: asyncio.StreamReader | None, buf: bytearray) -> None:
+        if stream is None:
+            return
+        while True:
+            chunk = await stream.read(8192)
+            if not chunk:
+                return
+            buf.extend(chunk)
+
     try:
         # Pipe the (potentially very large) prompt via stdin to avoid the Linux
         # ``MAX_ARG_STRLEN=128KB`` per-argument limit on execve. Postmortem:
         # T042's prompt was ~155KB (accumulated implement-context.md + plan +
         # spec + data-model + contracts) and crashed with ``OSError [Errno 7]
         # Argument list too long`` before claude even started.
-        prompt_bytes = prompt.encode("utf-8") if prompt else None
-        stdout, stderr = await asyncio.wait_for(
-            process.communicate(input=prompt_bytes),
-            timeout=timeout,
-        )
-        stdout_text = stdout.decode() if stdout else ""
+        if prompt and process.stdin is not None:
+            process.stdin.write(prompt.encode("utf-8"))
+            await process.stdin.drain()
+            process.stdin.close()
+
+        try:
+            await asyncio.wait_for(
+                asyncio.gather(
+                    _drain(process.stdout, stdout_buf),
+                    _drain(process.stderr, stderr_buf),
+                    process.wait(),
+                ),
+                timeout=timeout,
+            )
+        except asyncio.TimeoutError:
+            process.kill()
+            await process.wait()
+            partial = stdout_buf.decode(errors="replace")
+            # Persist partial stdout to disk so we can diagnose silent hangs
+            # without capturing it from journalctl (claude -p JSON mode writes
+            # the whole response at the end — partial output is the only clue
+            # about whether the agent was mid-tool-use or mid-auto-review).
+            try:
+                diag_dir = REPO_ROOT / ".pipeline" / "timeout-diagnostics"
+                diag_dir.mkdir(parents=True, exist_ok=True)
+                fname = f"{node.id.replace(':', '_')}_{int(time.time())}.stdout"
+                (diag_dir / fname).write_text(partial[:200_000], encoding="utf-8")
+                log.error(
+                    "Node '%s': timeout after %ds — partial stdout (%d bytes) saved to %s",
+                    node.id,
+                    timeout,
+                    len(partial),
+                    diag_dir / fname,
+                )
+            except Exception as exc:  # noqa: BLE001 — diagnostic best-effort
+                log.warning("Could not persist timeout diagnostic: %s", exc)
+                log.error("Node '%s': timeout after %ds", node.id, timeout)
+            return False, f"timeout after {timeout}s", partial or None
+
+        stdout_text = stdout_buf.decode(errors="replace")
         if process.returncode != 0:
             # Claude CLI with --output-format json often fails silently (empty stderr,
             # error details embedded in stdout JSON). Parse stdout to surface the real
             # cause (e.g. context_length_exceeded, rate_limit, max_turns).
-            error = _extract_claude_error(stdout_text, stderr, process.returncode)
+            error = _extract_claude_error(stdout_text, bytes(stderr_buf), process.returncode)
             log.error("Node '%s' failed: %s", node.id, error)
             return False, error, stdout_text
         return True, None, stdout_text
-    except asyncio.TimeoutError:
-        process.kill()
-        await process.wait()
-        error = f"timeout after {timeout}s"
-        log.error("Node '%s': %s", node.id, error)
-        return False, error, None
     finally:
         _active_subprocesses.discard(process)
 
@@ -2233,6 +2363,16 @@ def build_dispatch_cmd(
 
     # Defense-in-depth: block dangerous git operations
     cmd.extend(["--disallowedTools", DISALLOWED_TOOLS])
+
+    # Safety net against silent hangs in ``claude -p`` auto-review loops —
+    # tasks typically need 20–40 turns, so a ceiling of 100 is 2.5–5× the
+    # normal and only fires on pathological loops. Set
+    # ``MADRUGA_MAX_TURNS=0`` / ``unlimited`` to disable. See
+    # easter-tracking.md (prosauai/004-router-mece) for the motivating
+    # incidents (T004, T006 silent-hang pattern).
+    max_turns = os.environ.get("MADRUGA_MAX_TURNS", "100")
+    if max_turns and max_turns not in ("0", "unlimited"):
+        cmd.extend(["--max-turns", max_turns])
 
     log.info(
         "dispatch_cmd node=%s system_prompt_bytes=%d flags=%s",

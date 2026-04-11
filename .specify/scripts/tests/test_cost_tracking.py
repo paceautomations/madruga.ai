@@ -15,6 +15,17 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from dag_executor import _estimate_cost_usd, parse_claude_output
 from db_pipeline import complete_run, insert_run, upsert_platform
 
+# Expected shape when parse_claude_output cannot extract any fields — used by
+# all "empty / malformed input" test cases below.
+_EMPTY_RESULT = {
+    "tokens_in": None,
+    "tokens_out": None,
+    "cost_usd": None,
+    "duration_ms": None,
+    "cache_read": None,
+    "cache_create": None,
+}
+
 # ---------------------------------------------------------------------------
 # Fixtures — real JSON from claude -p --output-format json (research.md)
 # ---------------------------------------------------------------------------
@@ -187,9 +198,17 @@ class TestParseClaudeOutputCorrectExtraction:
         assert result["duration_ms"] == 8500
         assert result["cost_usd"] == pytest.approx(0.045)
 
-    def test_return_dict_has_exactly_four_keys(self):
+    def test_return_dict_has_expected_keys(self):
         result = parse_claude_output(json.dumps(REAL_JSON_NO_TOOLS))
-        assert set(result.keys()) == {"tokens_in", "tokens_out", "cost_usd", "duration_ms"}
+        # cache_read/cache_create added in Phase 5 for cache-hit visibility.
+        assert set(result.keys()) == {
+            "tokens_in",
+            "tokens_out",
+            "cost_usd",
+            "duration_ms",
+            "cache_read",
+            "cache_create",
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -243,7 +262,7 @@ class TestParseClaudeOutputMissingFields:
     def test_completely_empty_json_object(self):
         """Empty JSON object — all fields None."""
         result = parse_claude_output("{}")
-        assert result == {"tokens_in": None, "tokens_out": None, "cost_usd": None, "duration_ms": None}
+        assert result == _EMPTY_RESULT
 
     def test_usage_is_none(self):
         """usage key present but value is None (not dict)."""
@@ -264,38 +283,38 @@ class TestParseClaudeOutputMalformedJson:
 
     def test_invalid_json_string(self):
         result = parse_claude_output("{not valid json}")
-        assert result == {"tokens_in": None, "tokens_out": None, "cost_usd": None, "duration_ms": None}
+        assert result == _EMPTY_RESULT
 
     def test_truncated_json(self):
         """JSON cut off mid-stream (e.g., process killed)."""
         truncated = json.dumps(REAL_JSON_NO_TOOLS)[:50]
         result = parse_claude_output(truncated)
-        assert result == {"tokens_in": None, "tokens_out": None, "cost_usd": None, "duration_ms": None}
+        assert result == _EMPTY_RESULT
 
     def test_json_array_instead_of_object(self):
         """JSON is a valid array, not an object."""
         result = parse_claude_output("[1, 2, 3]")
         # list has no .get() — should be caught by AttributeError
-        assert result == {"tokens_in": None, "tokens_out": None, "cost_usd": None, "duration_ms": None}
+        assert result == _EMPTY_RESULT
 
     def test_json_string_literal(self):
         """JSON is a plain string, not an object."""
         result = parse_claude_output('"just a string"')
-        assert result == {"tokens_in": None, "tokens_out": None, "cost_usd": None, "duration_ms": None}
+        assert result == _EMPTY_RESULT
 
     def test_json_number_literal(self):
         result = parse_claude_output("42")
-        assert result == {"tokens_in": None, "tokens_out": None, "cost_usd": None, "duration_ms": None}
+        assert result == _EMPTY_RESULT
 
     def test_plain_text_output(self):
         """Non-JSON text (e.g., raw assistant response without --output-format json)."""
         result = parse_claude_output("Hello! I'm Claude, ready to help.")
-        assert result == {"tokens_in": None, "tokens_out": None, "cost_usd": None, "duration_ms": None}
+        assert result == _EMPTY_RESULT
 
     def test_json_with_extra_text_before(self):
         """Stray text before JSON (e.g., logging prefix)."""
         result = parse_claude_output("INFO: " + json.dumps(REAL_JSON_NO_TOOLS))
-        assert result == {"tokens_in": None, "tokens_out": None, "cost_usd": None, "duration_ms": None}
+        assert result == _EMPTY_RESULT
 
 
 # ---------------------------------------------------------------------------
@@ -308,16 +327,16 @@ class TestParseClaudeOutputEmptyInput:
 
     def test_empty_string(self):
         result = parse_claude_output("")
-        assert result == {"tokens_in": None, "tokens_out": None, "cost_usd": None, "duration_ms": None}
+        assert result == _EMPTY_RESULT
 
     def test_whitespace_only(self):
         result = parse_claude_output("   \n\t  ")
-        assert result == {"tokens_in": None, "tokens_out": None, "cost_usd": None, "duration_ms": None}
+        assert result == _EMPTY_RESULT
 
     def test_none_input(self):
         """None should not crash — return defaults."""
         result = parse_claude_output(None)
-        assert result == {"tokens_in": None, "tokens_out": None, "cost_usd": None, "duration_ms": None}
+        assert result == _EMPTY_RESULT
 
 
 # ---------------------------------------------------------------------------
