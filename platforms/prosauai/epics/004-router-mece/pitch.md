@@ -1,7 +1,7 @@
 ---
 id: "004"
 title: "Router MECE — Classificacao pura + regras externalizadas + agent resolution"
-status: in_progress
+status: shipped
 phase: now
 features:
   - "Router em duas camadas: classify() puro + RoutingEngine declarativo"
@@ -17,6 +17,7 @@ arch:
   modules: [M3]
   contexts: [channel]
   containers: [prosauai-api]
+delivered_at: 2026-04-11
 ---
 
 # 004 — Router MECE

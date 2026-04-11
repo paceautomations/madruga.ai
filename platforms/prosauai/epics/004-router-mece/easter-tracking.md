@@ -135,26 +135,57 @@ Tabela e' trivial de manter (query `pipeline_runs` filtrada por node_id) e evita
 
 ---
 
-## Session Synthesis (em andamento)
+## Session Synthesis (2026-04-11)
 
-Sera atualizado quando o epic completar (ou em checkpoint intermediario).
+Epic 004 **shipped** em 2026-04-11 14:26:08. Run completo cobriu 51 implement tasks + 5 nodes L2 (analyze-post, judge, qa, reconcile, roadmap-reassess). Este run consolidou 2 sessions: 2026-04-10 20:06 -> 2026-04-11 00:42 (T001-T017, interrompido por daemon crash/WSL hibernation) + 2026-04-11 07:56 -> 14:26 (resumed at T017 rescue, completou T018-T051 + nodes pos-implement).
 
-### Root causes (ate agora)
+### Root causes (4, agrupados por origem)
 
-- **Mistura manual+automatico ao promover draft** — ao criar branches manualmente no clone principal do repo externo durante `epic-context`, quebrei o assumption do `worktree.py` de que ele e o unico criador de branches. Preventivo: quando promover draft, deixar easter criar tudo via worktree, ou pushar branches manuais para origin imediatamente (antes do primeiro dispatch).
+1. **Silent hang em claude -p pos-Write** (4 ocorrencias: T004, T006, T043, T044) — agent trava sem emitir bytes em stdout durante 600s (`0 bytes` confirmado via diagnostico do Fix #1a). Hipotese B confirmada, C refutada. Causa raiz concreta: client SDK ou CLI entra em estado onde nao recebe nem `is_error` nem `result` event do SSE stream, levando easter a acionar timeout. **Mitigacao existente:** retry automatico 1/3 resolve — 2a tentativa sempre fecha rapido (55s-558s) porque o filesystem ja tem o trabalho feito. **Impacto neste run:** ~20 min perdidos (T043 + T044, ~10 min cada window).
 
-### Improvement opportunities
+2. **Worktree branch collision por mistura manual+automatico** (1 ocorrencia: 2026-04-10 20:06) — branch criada manualmente no clone externo antes do easter dispatch quebrou `_branch_exists_on_remote` heuristic. **Fixado durante este run:** commit `7f96a3f` adicionou `_branch_exists_locally` + 3-case dispatch em `worktree.py` (post-mortem fixes #2, #3, #4). **Tests added:** 21 em `test_worktree.py`.
 
-- **`worktree.py` deveria detectar branch local existente**: `create_worktree` so chama `_branch_exists_on_remote`. Se a branch existe localmente mas nao remotamente, cai no ramo errado e falha com `git worktree add -b <existing>`. Fix mais limpo: adicionar `_branch_exists_locally(repo_path, branch)` e tratar 3 casos: (a) existe em remote → checkout sem `-b`; (b) existe so local → push + checkout sem `-b` ou `git worktree add <path> <branch>` (sem `-b`); (c) nao existe → create com `-b`.
-- **`worktree.py` deveria verificar branch checkout collision**: antes de `git worktree add`, checar `git branch --list <branch>` + `git worktree list` para detectar que a branch ja esta checked out em outro worktree. Mensagem de erro mais clara que `'X' is already used by worktree at 'Y'`.
-- **Cascade base logic desatualizado apos merge**: `_get_cascade_base` preferiu `origin/epic/prosauai/003-multi-tenant-foundation` sobre `origin/develop` apesar do 003 ja ter mergeado. Deveria preferir `origin/<base_branch>` quando a ultima shipped branch ja foi mergeada nele. Gap pre-existente, nao bloqueador, mas gera confusao.
-- **`epic-context` skill deveria documentar**: quando promover draft, a skill cria branch madruga **e** branch no repo externo. Se o usuario ja criou branch manualmente, pular. Fluxo atual e inconsistente com a assumption do `worktree.py`.
-- **Pair-program pre-flight deveria checar push state**: antes de deixar easter rodar, verificar que toda branch local de epic tem tracking remoto. `git rev-parse --abbrev-ref <branch>@{upstream}` retorna nao-zero se nao tem tracking.
+3. **Dispatch instrumentation gap** — antes deste epic, easter matava processos em timeout sem capturar stdout parcial, tornando impossivel distinguir hipoteses de silent hang. **Fixado neste run:** commit `7f96a3f` + `61a17fc` refatoraram `dispatch_node_async` para usar streaming drainers com buffer persistido em `.pipeline/timeout-diagnostics/` + `--max-turns 100` como safety net adicional (post-mortem Fix #1a). **Validado em producao nesta sessao:** diagnostico de T043 e T044 foi o primeiro uso real, confirmando hipotese B.
 
-### Metrics (ate agora)
+4. **Metric `duration_ms` enganoso** — a coluna extrai `duration_ms` do JSON do claude CLI ([dag_executor.py:230](../../../../.specify/scripts/dag_executor.py#L230)), que e LLM turn time, nao wall-clock. Tasks rapidas no LLM (ex: T024 em 63s) podem ter wall clock 10x maior devido a tool executions. Nao causa bug, mas obscurece analise de performance. Nao fixado.
 
-- Incidents: 1 (worktree branch collision, 2 falhas encadeadas)
-- Time lost: ~3 min
-- Fixes committed: 0 (intervencoes foram operacionais no repo externo, nao em codigo)
-- Tests added: 0
-- Improvement items registered: 5
+### Improvement opportunities — madruga.ai
+
+**Eficiencia de tokens & cache:**
+- **Silent hang root-cause investigation nao resolvida**: o Fix #1a mitiga o sintoma via retry, mas nao previne. Proximo nivel: instrumentar o client SDK com `strace -p <pid> -e network` durante o hang para ver se esta em `read()` bloqueante no socket SSE. Alternativa: rodar `ss -tnp | grep <pid>` durante um hang ao vivo. Sem isso, continua sendo mitigacao reativa.
+- **Metric `wall_clock_ms` deveria co-existir com `duration_ms`**: adicionar coluna em `pipeline_runs` medida pelo Python wrapper (time.monotonic() antes/depois do subprocess) para dar visibilidade real de quanto tempo cada task consumiu do pipeline. Permite calcular throughput honesto. Baixo risco, ~5 LOC.
+
+**Observability & pair-program:**
+- **Thresholds per-node no `pair-program`**: skill atual tem 10min global para `critical`, mas `judge`/`qa` tem timeout 3000s (50 min) e roda 10-15 min normalmente. Tabela por node_id evita falsos positivos. Ver bullet anterior com mapa sugerido.
+- **Partial stdout buffer em `/proc/<pid>/fd` nao investigado durante hang ao vivo**: quando T043 e T044 hangaram, nao tentei ler o buffer do pipe nao-fechado. Pode ter conteudo que o kernel ainda nao entregou ao reader. Proxima vez, `cat /proc/<pid>/fd/1` durante hang para ver se ha partial JSON.
+
+**Worktree & dispatch (ja fixados neste run):**
+- ✅ `_branch_exists_locally` helper + 3-case dispatch (commit `7f96a3f`)
+- ✅ Streaming drainers + partial stdout capture (commit `7f96a3f`)
+- ✅ `--max-turns 100` safety net (commit `7f96a3f`)
+- ✅ `epic-context.md` callout "nunca crie branch manualmente" (commit `7f96a3f`)
+- ✅ `pair-program.md` pre-flight push state check (commit `7f96a3f`)
+
+### Improvement opportunities — prosauai
+
+- **Session-resume bound at 700K tokens e recorrente em epics longos**: epic 004 tripou 2 vezes (T039 e T044) — todas as vezes forcando `resume=False` e prompt grande (99K-102K bytes). Implica custo alto de cache miss. Investigar se o reset de session pode reutilizar o prefix cache do prompt system (seções stable) para evitar re-pagamento completo.
+- **Tasks de "migracao multi-file" (T043: webhooks.py, T044: main.py lifespan) sao as que mais travam**: o spec/plan/tasks deveria quebrar esses em sub-tasks mais focadas (1 file = 1 task) para reduzir o size do context por task e a propensao a silent hang. Pattern observavel em epic 003 tambem.
+- **51 tasks em 1 epic e alto**: a sequencia longa amplifica o custo de cada hang (mais chance de pegar um). Epic breakdown deveria preferir epics menores (~30 tasks max) para amortizar risco.
+
+### Metrics (session totals)
+
+- **Incidents criticos:** 2 (worktree collision 2026-04-10 20:06; silent hang cluster T043+T044 2026-04-11)
+- **Time lost:** ~23 min total (3 min worktree + 20 min silent hangs)
+- **Fixes committed durante o epic run:** 2 (commits `7f96a3f` e `61a17fc`)
+- **Tests added durante o run:** ~30 (`test_worktree.py` +21, `test_dag_executor.py` +4 novos test cases, `test_telegram_bot.py` fixes)
+- **Improvement items registered:** 10 (5 do run anterior + 5 novos)
+- **Tasks executadas neste run:** 35 implement tasks (T017 rescue + T018-T051) + 5 L2 nodes (analyze-post, judge, qa, reconcile, roadmap-reassess) = **40 total**
+- **Epic total duration:** ~18h+ (drafted at 2026-04-10, shipped 2026-04-11 14:26)
+- **Epic status:** **shipped** ✅
+
+### Handoff
+
+- Working tree do repo `madruga.ai`: platform files modificados durante reconcile — verificar com `git status`
+- Epic branch `epic/prosauai/004-router-mece` no repo externo: ready for PR review
+- Fase pos-epic sugerida: usuario roda `/madruga:ship` quando pronto para mergear
+- Easter daemon segue rodando (systemctl --user status madruga-easter) — nao parei, aguardo instrucao do usuario
