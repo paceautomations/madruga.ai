@@ -1,6 +1,6 @@
 import { useMemo, useState, useCallback } from 'react';
 import PlatformCards from './PlatformCards';
-import { NODE_LABELS, resolveNodeHref } from '../../lib/constants';
+import { EASTER_BASE, NODE_LABELS, resolveNodeHref } from '../../lib/constants';
 
 // ── Types ──
 
@@ -69,7 +69,6 @@ const STATUS_BADGE: Record<string, { bg: string; color: string }> = {
   proposed: { bg: 'var(--sl-color-gray-7, #111)', color: 'var(--sl-color-gray-4, #666)' },
 };
 
-const EASTER_API = 'http://localhost:8000';
 
 // ── Helpers (same logic as original Astro frontmatter) ──
 
@@ -204,7 +203,7 @@ export default function ExecutionTab({ allPlatforms, initialPlatformId }: Execut
 
   const handleQueue = useCallback(async (epicId: string) => {
     try {
-      const res = await fetch(`${EASTER_API}/api/epics/${selectedId}/${epicId}/queue`, { method: 'POST' });
+      const res = await fetch(`${EASTER_BASE}/api/epics/${selectedId}/${epicId}/queue`, { method: 'POST' });
       if (res.ok) {
         setStatusOverrides((prev) => ({ ...prev, [epicId]: 'queued' }));
       } else {
