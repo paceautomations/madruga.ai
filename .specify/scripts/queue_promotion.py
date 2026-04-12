@@ -14,6 +14,7 @@ from pathlib import Path
 
 from config import REPO_ROOT
 from db_core import _now, get_conn
+from ensure_repo import DirtyTreeError  # canonical definition in ensure_repo.py
 
 log = logging.getLogger(__name__)
 
@@ -28,9 +29,6 @@ class PromotionResult:
     attempts: int = 0
     duration_ms: int = 0
     error_message: str | None = None
-
-
-from ensure_repo import DirtyTreeError  # noqa: F401 — canonical definition in ensure_repo.py
 
 
 def _checkout_epic_branch(

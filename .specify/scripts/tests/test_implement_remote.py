@@ -9,6 +9,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+import ensure_repo
 import implement_remote
 
 
@@ -228,6 +229,7 @@ class TestCallSiteSwap:
 
         with (
             patch.object(implement_remote, "REPO_ROOT", tmp_path),
+            patch.object(ensure_repo, "REPO_ROOT", tmp_path),
             patch("ensure_repo.get_repo_work_dir", return_value=mock_work_dir) as mock_grwd,
             patch("dag_executor.build_dispatch_cmd", return_value=["echo", "test"]),
             patch("implement_remote.subprocess.run", return_value=MagicMock(returncode=0)),
@@ -243,6 +245,7 @@ class TestCallSiteSwap:
 
         with (
             patch.object(implement_remote, "REPO_ROOT", tmp_path),
+            patch.object(ensure_repo, "REPO_ROOT", tmp_path),
             patch("ensure_repo.get_repo_work_dir", return_value=tmp_path) as mock_grwd,
             patch("dag_executor.build_dispatch_cmd", return_value=["echo", "test"]),
             patch("implement_remote.subprocess.run", return_value=MagicMock(returncode=0)),

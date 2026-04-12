@@ -146,7 +146,9 @@ def run_implement(
     import sys
 
     sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from ensure_repo import get_repo_work_dir
+    from ensure_repo import _is_self_ref, _load_repo_binding, get_repo_work_dir
+
+    binding = _load_repo_binding(platform_name)
 
     # Resolve working directory (dispatches based on repo.isolation in platform.yaml)
     work_dir = get_repo_work_dir(platform_name, epic_slug)
