@@ -38,18 +38,18 @@
 
 **CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T003 Rewrite migration 001_create_schema.sql — create schemas prosauai, prosauai_ops, observability, admin; move tenant_id() to prosauai_ops; create schema_migrations table in prosauai_ops; keep uuid-ossp extension in public (file: migrations/001_create_schema.sql)
-- [ ] T004 [P] Rewrite migration 002_customers.sql — prefix all tables with prosauai., update RLS policies to use prosauai_ops.tenant_id(), prefix indexes with prosauai. (file: migrations/002_customers.sql)
-- [ ] T005 [P] Rewrite migration 003_conversations.sql — prefix tables with prosauai., update RLS to prosauai_ops.tenant_id(), update FK to prosauai.customers(id) (file: migrations/003_conversations.sql)
-- [ ] T006 [P] Rewrite migration 003b_conversation_states.sql — prefix with prosauai., update FK to prosauai.conversations(id), update RLS (file: migrations/003b_conversation_states.sql)
-- [ ] T007 Rewrite migration 004_messages.sql — prefix with prosauai., add PARTITION BY RANGE (created_at), PK composta (id, created_at), create 3 initial monthly partitions, update RLS to prosauai_ops.tenant_id() (file: migrations/004_messages.sql)
-- [ ] T008 [P] Rewrite migration 005_agents_prompts.sql — prefix prosauai.agents and prosauai.prompts, update RLS to prosauai_ops.tenant_id() (file: migrations/005_agents_prompts.sql)
-- [ ] T009 [P] Rewrite migration 006_eval_scores.sql — prefix prosauai.eval_scores, remove FK REFERENCES messages(id), add comment explaining app-level validation, update RLS to prosauai_ops.tenant_id() (file: migrations/006_eval_scores.sql)
-- [ ] T010 Rewrite migration 007_seed_data.sql — replace psql \set variables with hardcoded deterministic UUIDs, prefix all tables with prosauai., use pure SQL (no psql-specific syntax) (file: migrations/007_seed_data.sql)
-- [ ] T011 Implement migration runner with asyncpg: bootstrap schema_migrations table, list .sql files in order, apply pending migrations in individual transactions, record checksum SHA-256, structured logging via structlog. Expose run_migrations() for library use and CLI via python -m (file: prosauai/ops/migrate.py, ~80 LOC) — ref: contracts/migration-runner.md
-- [ ] T012 Update asyncpg connection pool to set search_path = prosauai,prosauai_ops,public via server_settings parameter in create_pool() (file: prosauai/db/pool.py)
-- [ ] T013 Integrate migration runner into API startup lifespan — call await run_migrations() before create_pool(), fail-fast if migration fails (file: prosauai/main.py)
-- [ ] T014 Write tests for migration runner: applies DDL correctly, re-execution is idempotent, failed migration rolls back and blocks subsequent, checksum drift detection logs warning (file: tests/ops/test_migrate.py)
+- [x] T003 Rewrite migration 001_create_schema.sql — create schemas prosauai, prosauai_ops, observability, admin; move tenant_id() to prosauai_ops; create schema_migrations table in prosauai_ops; keep uuid-ossp extension in public (file: migrations/001_create_schema.sql)
+- [x] T004 [P] Rewrite migration 002_customers.sql — prefix all tables with prosauai., update RLS policies to use prosauai_ops.tenant_id(), prefix indexes with prosauai. (file: migrations/002_customers.sql)
+- [x] T005 [P] Rewrite migration 003_conversations.sql — prefix tables with prosauai., update RLS to prosauai_ops.tenant_id(), update FK to prosauai.customers(id) (file: migrations/003_conversations.sql)
+- [x] T006 [P] Rewrite migration 003b_conversation_states.sql — prefix with prosauai., update FK to prosauai.conversations(id), update RLS (file: migrations/003b_conversation_states.sql)
+- [x] T007 Rewrite migration 004_messages.sql — prefix with prosauai., add PARTITION BY RANGE (created_at), PK composta (id, created_at), create 3 initial monthly partitions, update RLS to prosauai_ops.tenant_id() (file: migrations/004_messages.sql)
+- [x] T008 [P] Rewrite migration 005_agents_prompts.sql — prefix prosauai.agents and prosauai.prompts, update RLS to prosauai_ops.tenant_id() (file: migrations/005_agents_prompts.sql)
+- [x] T009 [P] Rewrite migration 006_eval_scores.sql — prefix prosauai.eval_scores, remove FK REFERENCES messages(id), add comment explaining app-level validation, update RLS to prosauai_ops.tenant_id() (file: migrations/006_eval_scores.sql)
+- [x] T010 Rewrite migration 007_seed_data.sql — replace psql \set variables with hardcoded deterministic UUIDs, prefix all tables with prosauai., use pure SQL (no psql-specific syntax) (file: migrations/007_seed_data.sql)
+- [x] T011 Implement migration runner with asyncpg: bootstrap schema_migrations table, list .sql files in order, apply pending migrations in individual transactions, record checksum SHA-256, structured logging via structlog. Expose run_migrations() for library use and CLI via python -m (file: prosauai/ops/migrate.py, ~80 LOC) — ref: contracts/migration-runner.md
+- [x] T012 Update asyncpg connection pool to set search_path = prosauai,prosauai_ops,public via server_settings parameter in create_pool() (file: prosauai/db/pool.py)
+- [x] T013 Integrate migration runner into API startup lifespan — call await run_migrations() before create_pool(), fail-fast if migration fails (file: prosauai/main.py)
+- [x] T014 Write tests for migration runner: applies DDL correctly, re-execution is idempotent, failed migration rolls back and blocks subsequent, checksum drift detection logs warning (file: tests/ops/test_migrate.py)
 
 **Checkpoint**: All migrations rewritten with schema isolation. Migration runner applies them automatically. pool.py uses correct search_path. Schema isolation and deploy foundation are ready.
 
