@@ -48,10 +48,11 @@ Node.js 20+ | Python 3.11+ | `copier` >= 9.4.0
 - LOC estimates: multiply by 1.5-2x (docstrings, argparse, logging are not in the base).
 - **Easter naming** (A12): the 24/7 orchestrator daemon has two aliases — `easter` is the Python module (`.specify/scripts/easter.py`), `madruga-easter` is the systemd user service (`etc/systemd/madruga-easter.service`). Same process, different views: logs via `journalctl --user -u madruga-easter`, code lives in `easter:app`.
 - **`.pipeline/madruga.db` is NOT tracked** (A1): fresh clones run `make seed` to reproduce it from `platforms/*/platform.yaml` + pitches + ADRs. Tracking a live WAL DB caused `row missing from index` corruption on `git checkout`/`stash`.
-- **Bare-lite dispatch env vars** (ADR-021): `dag_executor.build_dispatch_cmd` adds `--strict-mcp-config`, `--disable-slash-commands`, `--tools`, `--no-session-persistence` to every `claude -p` invocation under OAuth. `compose_task_prompt` gates `data-model.md`/`contracts/`/`analyze-report.md` on task metadata. Rollback kill-switches (default all on):
+- **Bare-lite dispatch env vars** (ADR-021): `dag_executor.build_dispatch_cmd` adds `--strict-mcp-config`, `--disable-slash-commands`, `--tools`, `--no-session-persistence` to every `claude -p` invocation under OAuth. `compose_task_prompt` gates `data-model.md`/`contracts/`/`analyze-report.md` on task metadata (legacy mode) and reorders sections for cache-optimal prefix (Phase 5). Rollback kill-switches (default all on):
   - `MADRUGA_BARE_LITE=0` → restore legacy dispatch flags
   - `MADRUGA_KILL_IMPLEMENT_CONTEXT=0` → restore `implement-context.md` append/read
-  - `MADRUGA_SCOPED_CONTEXT=0` → re-include all static docs unconditionally
+  - `MADRUGA_SCOPED_CONTEXT=0` → re-include all static docs unconditionally (legacy path only)
+  - `MADRUGA_CACHE_ORDERED=0` → restore legacy section order (task card at top, scoped gating active). Under the default `=1`, stable sections (plan/spec/data_model/contracts) are force-included at the START of the user prompt so Claude's 1h-TTL prefix cache hits on tasks 2..N within the same epic
   - `MADRUGA_STRICT_SETTINGS=1` (opt-in) → add `--setting-sources project` (requires audit of `settings.local.json` first)
 - **`sync_memory.py` hook respects `MADRUGA_DISPATCH=1`** — the flag set by `dag_executor._dispatch_env()` now short-circuits the script to avoid PostToolUse subprocess storms + WAL contention inside dispatched sessions.
 
@@ -102,6 +103,8 @@ Direct edits bypass validation (frontmatter, handoff chains, archetype complianc
 - Supabase Postgres (schema `observability`, gerenciado pelo Phoenix); Redis 7 (buffers de debounce) (epic/prosauai/002-observability)
 - Python 3.12 + FastAPI >=0.115, pydantic 2.x, pydantic-settings, redis[hiredis] >=5.0, httpx, structlog, pyyaml, opentelemetry-sdk (epic/prosauai/003-multi-tenant-foundation)
 - Redis 7 (idempotência + debounce buffers), YAML file (tenant config) (epic/prosauai/003-multi-tenant-foundation)
+- Python 3.12 (match/case, StrEnum nativo) + FastAPI >=0.115, pydantic 2.x, redis[hiredis] >=5.0, httpx, structlog, opentelemetry-sdk, hypothesis (dev) (epic/prosauai/004-router-mece)
+- Redis 7 (state lookup: seen + handoff keys), YAML em disco (routing config) (epic/prosauai/004-router-mece)
 
 ## Recent Changes
 - epic/madruga-ai/017-observability-tracing-evals: Added Python 3.11+ (backend), TypeScript/React (portal) + sqlite3 (stdlib), structlog, FastAPI (easter), React + @xyflow/react (portal existente), Astro Starlight

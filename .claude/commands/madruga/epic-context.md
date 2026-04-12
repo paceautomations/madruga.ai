@@ -72,6 +72,8 @@ If both conditions met:
 
 **Path C: Normal mode, no draft** (current behavior)
 
+**Important:** NEVER manually create the epic branch in the external repo. The `epic-context` skill handles this automatically via Path C below. Manual creation causes a collision between the main clone (where the branch was created) and the worktree `easter` spawns for the epic — `git worktree add` refuses to check out a branch already in use by another worktree. See `easter-tracking.md` for epic 004, incident at 2026-04-10 20:06.
+
 ```bash
 BRANCH="epic/<platform>/<NNN-slug>"
 BASE_BRANCH="<base_branch from platform.yaml>"

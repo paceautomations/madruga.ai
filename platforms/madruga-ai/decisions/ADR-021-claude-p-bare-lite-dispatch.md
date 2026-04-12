@@ -129,10 +129,94 @@ if os.environ.get("MADRUGA_DISPATCH") == "1":
 - **`--setting-sources project`** (Phase 3) pode esconder hooks/permissions que algum dispatch dependia. Por isso gated em opt-in; aplicar só após auditoria
 - **Prompt caching invalidation** quando `--tools` muda entre nodes: aceito, cada node tem cache independente (já era assim)
 
+## Phase 5 Addendum — Cache-Optimal Reorder (2026-04-11)
+
+### Contexto adicional
+
+Após a validação de Phases 0-4 em produção (`prosauai/004-router-mece`, live monitoring), inspecionando o campo `cache_creation.ephemeral_1h_input_tokens` no output JSON do `claude -p` descobrimos que o **Claude Code CLI usa prompt caching com TTL de 1 HORA** sob OAuth (não 5 minutos). Um ciclo L2 inteiro (~50 tasks × ~2min) cabe confortavelmente dentro de uma única janela de cache.
+
+Porém, o `compose_task_prompt` original (Phases 0-4) colocava conteúdo task-específico (`header` com `task.id`, `recent_done`) no INÍCIO do user prompt. Como o cache da Anthropic é **prefix-based**, o primeiro byte diferente invalidava todo o cache hit. Estávamos pagando full price em ~44KB de `plan+spec` idêntico toda task.
+
+### Decisão
+
+Adicionar flag `MADRUGA_CACHE_ORDERED=1` (default on) que ativa uma segunda ordenação de seções no `compose_task_prompt`:
+
+**Nova ordem sob `CACHE_ORDERED=1`:**
+```
+──── STABLE PREFIX (cacheável) ────
+1. cue            — constante byte-idêntica `_CACHE_PREFIX_CUE` em dag_executor.py
+2. plan.md
+3. spec.md
+4. data-model.md  — FORCE-INCLUDED (sem gating)
+5. contracts/*.md — FORCE-INCLUDED (sem gating)
+
+──── VARIABLE SUFFIX ────
+6. tasks.md       — checkboxes flipam → suffix
+7. recent_done
+8. analyze-report (sliced per task)
+9. file:* (inlined)
+10. header        — task card LAST (leverage recency bias)
+```
+
+**Ordem legacy sob `CACHE_ORDERED=0`** (byte-idêntica ao pré-Phase-5) permanece como safety net.
+
+### Decisão controversa: force-include `data_model` + `contracts`
+
+A gating de Action 3a (só injetar se task tocar `models/`/`api/`) economiza ~12-20KB em tasks que não tocam — mas **fragmenta o prefixo**: T001 tem contracts, T003 não, prefixo diverge em byte ~44K, cache miss a partir dali.
+
+**Math**: prefixo uniforme 64KB × 0.9 (cache_read cost) = 58KB economizados por task 2+ vs prefixo fragmentado 44KB × 0.9 = 40KB. **Net +18KB por task cacheada**. Amortizado sobre ~50 tasks do epic, a economia de prefixo uniforme supera o custo de re-incluir docs não-usadas.
+
+Trade-off aceito. Legacy path preserva gating para rollback.
+
+### Consequencias adicionais
+
+#### Positivas (Phase 5)
+- **Esperada redução adicional de -50% a -70%** em `tokens_in` cumulative para tasks 2..N (cache hit no prefixo de ~64KB). Combinado com Phases 0-4: projetada redução total ~80% vs baseline original de 2.6M/task
+- **Cache metrics visíveis**: `parse_claude_output` agora expõe `cache_read` e `cache_create` como chaves separadas no dict retornado, permitindo validação empírica do cache hit rate
+- **`prompt_composed` log inclui `cache_ordered=True|False`** — permite correlacionar a flag ao tamanho observado
+- **Rollback byte-equal preservado** — teste `test_compose_task_prompt_cache_ordered_rollback_legacy_layout` garante que `MADRUGA_CACHE_ORDERED=0` restaura o comportamento pré-Phase-5 sem drift
+
+#### Negativas (Phase 5)
+- **Task card (`header`) no final do prompt** — quebra a convenção "instrução no topo", mitigada pelo `_CACHE_PREFIX_CUE` no byte 0 que sinaliza ao modelo que o task card está no final
+- **~20KB de I/O de disco desperdiçado** por task não-touching (força a leitura de `data-model.md` + `contracts/*.md` mesmo quando irrelevantes). Custo: ~2ms por task na Linux page cache, negligível vs multi-second `claude -p`
+- **Função `compose_task_prompt` cresceu para ~130 LOC** com as duas branches. Drift risk entre branches é o preço do rollback byte-equal — aceito
+
+### Riscos adicionais (Phase 5)
+
+- **Claude pode perder foco com header no final** — teoria de recency bias sugere o oposto, mas requer validação empírica. Mitigação: `_CACHE_PREFIX_CUE` no início + monitoramento manual das primeiras 5 dispatches pós-switch
+- **`tasks.md` no suffix perde cache hit nessa seção** — aceito por design (mark_task_done flipa checkboxes). Prefix cache ainda cobre plan+spec+data_model+contracts
+- **Resume path degrada graciosamente** — sem prefixo estável (plan/spec já na history da sessão), apenas `cue` + suffix. Teste `test_compose_task_prompt_cache_ordered_resume_no_prefix` cobre
+
+### Tests adicionais (6 novos em test_dag_executor.py)
+
+- `test_compose_task_prompt_cache_ordered_prefix_comes_first` — asserts plan before header
+- `test_compose_task_prompt_cache_ordered_stable_prefix_byte_equal` — **invariante crítica**: prefixo byte-idêntico entre T001 (model task) e T999 (readme task)
+- `test_compose_task_prompt_cache_ordered_rollback_legacy_layout` — rollback via `CACHE_ORDERED=0`
+- `test_compose_task_prompt_cache_ordered_resume_no_prefix` — resume path consistente
+- `test_compose_task_prompt_cache_ordered_missing_data_model` — degradação graciosa
+- `test_compose_task_prompt_cache_ordered_log_field` — `prompt_composed` log inclui `cache_ordered=True`
+
+### Rollback
+
+Padrão idêntico às phases anteriores:
+```ini
+# ~/.config/systemd/user/madruga-easter.service.d/override.conf
+[Service]
+Environment=MADRUGA_CACHE_ORDERED=0
+```
+`systemctl --user restart madruga-easter`. Rollback em <10 segundos.
+
+### Pendente (post-merge)
+
+Validação empírica em ciclo L2 real: esperar `004-router-mece` terminar, ativar flag no próximo epic, medir `cache_read_input_tokens` trajectory. **Sinal de sucesso**: mediana de `cache_read` para T002+ ≥ 40,000 tokens e `tokens_in` mediana ≤ 350K (vs ~625K atual). Threshold de abort: se judge/qa failure rate subir 5% ou mais, rollback.
+
+---
+
 ## Referencias
 
-- Plan: `/home/gabrielhamu/.claude/plans/goofy-humming-mitten.md`
+- Plan: `/home/gabrielhamu/.claude/plans/goofy-humming-mitten.md` (seções Phase 0-4 + Phase 5 addendum)
 - Baseline empírico: `/tmp/madruga-token-baseline.json` (46 tasks do epic 003, 4.96MB agregado)
+- Live monitoring de 004-router-mece com prompt_composed logs (media 78KB/task pre-Phase-5)
 - [ADR-010: Claude -p Subprocess como Interface Programatica](./ADR-010-claude-p-subprocess.md)
 - [Claude Code CLI reference](https://docs.anthropic.com/en/docs/claude-code/cli-reference)
 - [Anthropic Prompt Caching](https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching)
@@ -141,3 +225,4 @@ if os.environ.get("MADRUGA_DISPATCH") == "1":
   - `.specify/scripts/tests/test_dag_executor.py::test_task_needs_*` (4 tests)
   - `.specify/scripts/tests/test_dag_executor.py::test_compose_task_prompt_*gated*` (4 tests)
   - `.specify/scripts/tests/test_dag_executor.py::test_*_rollback` / `*_legacy_*` (4 tests)
+  - `.specify/scripts/tests/test_dag_executor.py::test_compose_task_prompt_cache_ordered_*` (6 tests — Phase 5)
