@@ -181,6 +181,17 @@ def promote_queued_epic(platform_id: str) -> PromotionResult:
     for attempt in range(1, 4):
         if attempt > 1:
             time.sleep(backoff_delays[attempt - 2])  # 1s after fail 1, 2s after fail 2
+            # Clean up partial git state from prior failed attempt
+            subprocess.run(
+                ["git", "reset", "HEAD", "--", "."],
+                cwd=str(repo_path),
+                capture_output=True,
+            )
+            subprocess.run(
+                ["git", "checkout", "--", "."],
+                cwd=str(repo_path),
+                capture_output=True,
+            )
 
         log.info(
             "promotion_attempt_started",

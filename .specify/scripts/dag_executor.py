@@ -924,7 +924,7 @@ def _needs_code_cwd(node: Node) -> bool:
 def _epic_output_dir(platform_name: str, epic_slug: str) -> str:
     """Return epic output dir — absolute for external repos, relative for self-ref.
 
-    External repos run with cwd inside the clone/worktree, so a relative
+    External repos run with cwd inside the clone, so a relative
     ``platforms/…`` path would create artefacts in the wrong repository.
     Returning an absolute path ensures they always land in madruga.ai.
     """
