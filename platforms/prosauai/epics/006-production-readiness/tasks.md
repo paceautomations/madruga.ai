@@ -103,7 +103,7 @@
 
 **Independent Test**: Subir stack prod, gerar traces, reiniciar Phoenix, verificar que traces anteriores persistem na UI.
 
-- [ ] T022 [US5] Configure Phoenix in docker-compose.prod.yml: set PHOENIX_SQL_DATABASE_URL to postgresql connection string pointing to local Postgres, set PHOENIX_SQL_DATABASE_SCHEMA=observability, remove phoenix_data SQLite volume override (file: docker-compose.prod.yml)
+- [x] T022 [US5] Configure Phoenix in docker-compose.prod.yml: set PHOENIX_SQL_DATABASE_URL to postgresql connection string pointing to local Postgres, set PHOENIX_SQL_DATABASE_SCHEMA=observability, remove phoenix_data SQLite volume override (file: docker-compose.prod.yml)
 
 **Checkpoint**: Phoenix uses Postgres in prod (traces survive restarts), SQLite in dev (zero-config).
 
