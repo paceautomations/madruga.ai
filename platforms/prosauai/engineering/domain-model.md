@@ -64,35 +64,50 @@ classDiagram
         +reset()
     }
 
-    class RouteDecision {
+    class Action {
         <<enumeration>>
-        SUPPORT
-        GROUP_RESPOND
-        GROUP_SAVE_ONLY
-        GROUP_EVENT
-        HANDOFF_ATIVO
-        IGNORE
+        RESPOND
+        LOG_ONLY
+        DROP
+        BYPASS_AI
+        EVENT_HOOK
     }
 
-    class RoutingRule {
-        +uuid id
-        +uuid tenant_id
-        +string phone_number
-        +json match_conditions
-        +uuid agent_id
+    class MessageFacts {
+        +string instance
+        +EventKind event_kind
+        +ContentKind content_kind
+        +Channel channel
+        +bool from_me
+        +string sender_phone
+        +string sender_lid_opaque
+        +string group_id
+        +bool has_mention
+        +bool is_membership_event
+        +bool is_duplicate
+        +bool conversation_in_handoff
+    }
+
+    class Rule {
+        +string name
         +int priority
-        +bool is_active
-        +matches(msg: InboundMessage) bool
+        +dict when
+        +Action action
+        +uuid agent
+        +string target
+        +string reason
+        +matches(facts: MessageFacts) bool
+    }
+
+    class RoutingEngine {
+        +tuple rules
+        +Rule default
+        +decide(facts: MessageFacts, tenant: Tenant) Decision
     }
 
     class Router {
-        +uuid message_id
-        +RouteDecision decision
-        +uuid resolved_agent_id
-        +string reason
-        +json routing_metadata
-        +classify(messages: InboundMessage[]) RouteDecision
-        +resolve_agent(decision: RouteDecision, rules: RoutingRule[]) uuid
+        +classify(message, state, matchers) MessageFacts
+        +route(message, state, matchers, engine, tenant) tuple
     }
 
     class DeliveryAttempt {
@@ -114,9 +129,11 @@ classDiagram
 
     InboundMessage --> DebounceBuffer : buffered in
     DebounceBuffer --> Router : flushed to
-    Router --> RouteDecision : classifies
-    Router --> RoutingRule : evaluates (priority order)
-    Router --> DeliveryAttempt : triggers (if not IGNORE)
+    Router --> MessageFacts : classifies (pure function)
+    MessageFacts --> RoutingEngine : input to decide()
+    RoutingEngine --> Rule : evaluates (priority order)
+    RoutingEngine --> Action : returns Decision
+    Router --> DeliveryAttempt : triggers (if not DROP)
 ```
 
 </details>
@@ -132,7 +149,7 @@ class IncomingMessage(BaseModel):
     sender_name: str | None
     group_id: str | None          # None = individual, JID = grupo
     channel_type: Literal["individual", "group"]
-    message_type: Literal["text", "image", "audio", "document", "sticker", "contact", "location", "event"]
+    message_type: Literal["text", "image", "audio", "video", "document", "sticker", "contact", "location", "live_location", "poll", "reaction", "event"]
     content: str                   # texto ou descricao de midia
     media_url: str | None
     media_type: str | None
@@ -309,7 +326,7 @@ CREATE TABLE route_decisions (
     buffer_key      TEXT NOT NULL,
     message_ids     UUID[] NOT NULL,
     decision        TEXT NOT NULL CHECK (decision IN (
-        'SUPPORT', 'GROUP_RESPOND', 'GROUP_SAVE_ONLY', 'GROUP_EVENT', 'HANDOFF_ATIVO', 'IGNORE'
+        'RESPOND', 'LOG_ONLY', 'DROP', 'BYPASS_AI', 'EVENT_HOOK'
     )),
     reason          TEXT,
     routing_metadata JSONB,
@@ -321,19 +338,23 @@ CREATE POLICY tenant_isolation ON route_decisions USING (tenant_id = auth.tenant
 CREATE INDEX idx_route_tenant ON route_decisions (tenant_id);
 CREATE INDEX idx_route_decision ON route_decisions (tenant_id, decision, decided_at DESC);
 
--- M3: Routing Rules — configuracao per-phone-number (ADR-006 extensao)
--- Define QUAL agente atende cada tipo de mensagem por numero de telefone do tenant.
--- RouteDecision (SUPPORT, GROUP_RESPOND, etc.) define O QUE ACONTECE.
--- RoutingRule define QUEM ATENDE (qual agent_id).
--- Avaliacao: priority ASC (menor = maior prioridade), first-match wins.
--- Sem regras para um numero → tenant.settings.default_agent_id.
+-- M3: Routing Rules — configuracao declarativa YAML per-tenant (epic 004)
+-- Implementacao atual: rules carregadas de config/routing/{tenant}.yaml no startup.
+-- Cada regra tem: name, priority, when (condicoes sobre MessageFacts), action, agent (opcional).
+-- classify() puro → MessageFacts; RoutingEngine.decide() avalia rules por priority ASC, first-match wins.
+-- Agent resolution: rule.agent > tenant.default_agent_id > AgentResolutionError.
+-- MECE garantido em 4 camadas: tipo (enums), schema (pydantic), runtime (discriminated union), CI (property-based).
+-- Tabela abaixo e a versao DB-backed planejada para epic 006 (Configurable Routing DB).
 CREATE TABLE routing_rules (
     id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id        UUID NOT NULL REFERENCES tenants(id),
-    phone_number     TEXT NOT NULL,           -- numero WhatsApp (instance) que esta regra aplica
-    match_conditions JSONB NOT NULL,          -- {"channel_type": "individual"} ou {"channel_type": "group", "has_mention": true}
-    agent_id         UUID NOT NULL REFERENCES agents(id),
+    name             TEXT NOT NULL,            -- identificador unico da regra dentro do tenant
     priority         INT NOT NULL DEFAULT 100, -- menor = maior prioridade
+    when_conditions  JSONB NOT NULL,           -- {"channel": "group", "has_mention": true, "event_kind": "message"}
+    action           TEXT NOT NULL CHECK (action IN ('RESPOND', 'LOG_ONLY', 'DROP', 'BYPASS_AI', 'EVENT_HOOK')),
+    agent_id         UUID REFERENCES agents(id), -- opcional: so para RESPOND
+    target           TEXT,                     -- handler target para BYPASS_AI/EVENT_HOOK
+    reason           TEXT,                     -- motivo (obrigatorio para DROP)
     is_active        BOOLEAN NOT NULL DEFAULT TRUE,
     created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -341,7 +362,7 @@ CREATE TABLE routing_rules (
 
 ALTER TABLE routing_rules ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON routing_rules USING (tenant_id = auth.tenant_id());
-CREATE INDEX idx_routing_tenant_phone ON routing_rules (tenant_id, phone_number, priority);
+CREATE INDEX idx_routing_tenant_priority ON routing_rules (tenant_id, priority);
 CREATE INDEX idx_routing_tenant ON routing_rules (tenant_id);
 
 -- M11: Tentativas de entrega
@@ -374,12 +395,13 @@ CREATE INDEX idx_delivery_pending ON delivery_attempts (status) WHERE status = '
 4. **DeliveryAttempt retry com backoff exponencial** — base 2s, max 3 tentativas
 5. **Mensagens de grupo sempre carregam `group_jid` e `sender_jid`** — constraint NOT NULL quando `is_group = TRUE`
 6. **Buffer flush e atomico** — todas mensagens do buffer sao processadas juntas ou nenhuma
-7. **IGNORE nao cria DeliveryAttempt** — mensagens ignoradas terminam no route_decisions
+7. **DROP nao cria DeliveryAttempt** — mensagens descartadas terminam no route_decisions
 
-#### Routing Rules (ADR-006 extensao)
+#### Routing Engine (epic 004 — MECE)
 
-8. **Routing rules avaliadas por priority ASC, first-match wins** — se nenhuma regra casa, usa `tenants.settings.default_agent_id`
-9. **Numero sem routing rules usa tenant default para todos os tipos** — routing rules sao opt-in, nao obrigatorias
+8. **Routing rules avaliadas por priority ASC, first-match wins** — sem match usa regra default do tenant
+9. **Agent resolution: rule.agent > tenant.default_agent_id > AgentResolutionError** — validacao fail-fast no startup
+10. **MECE garantido em 4 camadas** — tipo (enums), schema (pydantic validates overlaps), runtime (discriminated union), CI (property-based testing)
 10. **RouteDecision e RoutingRule sao ortogonais** — RouteDecision define o path (SUPPORT, GROUP_RESPOND, etc.), RoutingRule define qual agent_id atende
 
 ---
@@ -1057,7 +1079,7 @@ Dominio passivo. Consome eventos de todos os outros dominios para prover tracing
 
 | Ferramenta | Papel | Integracao |
 |-----------|-------|-----------|
-| **LangFuse** | Tracing de LLM calls, prompt management, sessoes | SDK Python, traces por conversation_id |
+| **Phoenix (Arize)** | Tracing distribuido fim-a-fim, waterfall UI, SpanQL queries. Self-hosted, Postgres backend. Substitui LangFuse | OTel SDK Python → OTLP gRPC :4317, fire-and-forget |
 | **DeepEval** | Avaliacao offline de qualidade (faithfulness, relevance, toxicity) | Batch jobs no worker, scores → eval_scores |
 | **Promptfoo** | Teste de regressao de prompts pre-deploy | CI/CD, red-teaming, comparacao A/B |
 
@@ -1140,7 +1162,7 @@ ORDER BY avg_score ASC;
 2. **Usage events sao fire-and-forget** — falha ao gravar nao bloqueia o fluxo principal
 3. **Eval scores podem ser gerados async** — batch jobs no worker processam em background
 4. **Retencao de 90 dias para usage_events** — alem disso, agregados em tabela resumo
-5. **LangFuse trace_id = conversation_id** — correlacao 1:1 para facilitar debugging
+5. **Phoenix trace_id = conversation_id** — correlacao 1:1 para facilitar debugging. Phoenix substitui LangFuse (epic 002)
 
 ---
 

@@ -1,6 +1,6 @@
 ---
 title: "Solution Overview"
-updated: 2026-04-10
+updated: 2026-04-12
 sidebar:
   order: 2
 ---
@@ -18,14 +18,45 @@ Em grupos WhatsApp, o agente participa quando mencionado — publica ranking, re
 
 ## Implementado — Funcional hoje
 
+### Epic 001 — Channel Pipeline
+
 | Feature | Descricao | Epic |
 |---------|-----------|------|
-| **Recepcao de mensagens** | Webhook FastAPI recebe mensagens WhatsApp via Evolution API com validacao HMAC-SHA256 | 001 |
-| **Smart Router** | Classifica mensagens em 6 categorias: individual, grupo com/sem @mention, evento de grupo, handoff (stub), ignore | 001 |
+| **Recepcao de mensagens** | Webhook FastAPI recebe mensagens WhatsApp via Evolution API | 001 |
 | **Debounce** | Agrupa mensagens rapidas (janela 3s + jitter) via Redis Lua script atomico | 001 |
-| **Echo response** | Responde com echo do texto recebido (sem IA — fundacao para epic 003) | 001 |
-| **Roteamento de grupo** | Grupos com @mention recebem resposta; sem @mention apenas log estruturado | 001 |
+| **Echo response** | Responde com echo do texto recebido (sem IA — fundacao para epic 005) | 001 |
 | **Health check** | Endpoint `/health` com status do Redis e degradacao graciosa | 001 |
+
+### Epic 002 — Observability
+
+| Feature | Descricao | Epic |
+|---------|-----------|------|
+| **Tracing distribuido** | OpenTelemetry SDK com spans manuais por etapa do pipeline (webhook, classify, decide) | 002 |
+| **Phoenix (Arize)** | UI de observabilidade self-hosted (:6006) + ingestao OTLP gRPC (:4317). Substitui LangFuse | 002 |
+| **structlog bridge** | Correlacao log↔trace: `trace_id`/`span_id` injetados em todo log estruturado | 002 |
+| **Exporter health** | `ExporterHealthTracker` monitora status de exportacao OTel (thread-safe). Health endpoint reflete estado | 002 |
+
+### Epic 003 — Multi-Tenant Foundation
+
+| Feature | Descricao | Epic |
+|---------|-----------|------|
+| **Multi-tenant auth** | `X-Webhook-Secret` per-tenant com constant-time compare. Substitui HMAC imaginario que rejeitava 100% dos webhooks reais | 003 |
+| **TenantStore** | `Tenant` frozen dataclass (10 campos) + `TenantStore` file-backed YAML com interpolacao `${ENV_VAR}`. 2 tenants reais: Ariel + ResenhAI | 003 |
+| **Parser Evolution v2.3.0** | 13 tipos de mensagem suportados: text, image, video, audio (PTT), document, sticker, contact, location, live_location, poll, reaction, event, group_metadata. 12 correcoes contra 26 fixtures capturadas reais | 003 |
+| **Idempotency** | Redis SETNX per `(tenant_id, message_id)` com TTL 24h. Neutraliza retries agressivos da Evolution API | 003 |
+| **Deploy isolado** | Tailscale (dev) + Docker network privada `pace-net` (prod). Zero porta publica exposta | 003 |
+
+### Epic 004 — Router MECE
+
+| Feature | Descricao | Epic |
+|---------|-----------|------|
+| **classify() puro** | Funcao pura (sem I/O) que deriva `MessageFacts` a partir da mensagem + estado pre-carregado. Enums: `Channel` (individual/group), `EventKind` (message/group_membership/group_metadata/protocol/unknown), `ContentKind` (text/media/structured/reaction/empty) | 004 |
+| **RoutingEngine declarativo** | Avalia regras por prioridade (menor = maior), first-match wins. 5 tipos de acao: RESPOND, LOG_ONLY, DROP, BYPASS_AI, EVENT_HOOK | 004 |
+| **Config YAML per-tenant** | Regras de roteamento em `config/routing/{tenant}.yaml`. Cada tenant tem suas proprias regras com prioridades e condicoes | 004 |
+| **MentionMatchers** | Deteccao de mencao com 3 estrategias: opaque @lid, phone number, keywords configurados por tenant | 004 |
+| **Agent resolution** | Resolucao de agente: rule.agent > tenant.default_agent_id > AgentResolutionError. Validacao fail-fast no startup | 004 |
+| **MECE 4 camadas** | Garantias de exaustividade: (1) tipo (enums), (2) schema (pydantic validates overlaps), (3) runtime (discriminated union), (4) CI (property-based testing) | 004 |
+| **CLI verification** | `prosauai router verify` e `prosauai router explain` para validar regras de roteamento | 004 |
 
 ---
 

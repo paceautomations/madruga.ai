@@ -1,6 +1,6 @@
 ---
 title: "Containers"
-updated: 2026-04-10
+updated: 2026-04-12
 sidebar:
   order: 4
 ---
@@ -21,7 +21,7 @@ graph LR
     admin_user(("Admin / Operador"))
 
     subgraph prosauai ["ProsaUAI Platform"]
-        subgraph prosauai_api ["prosauai-api :8040"]
+        subgraph prosauai_api ["prosauai-api :8050"]
             api_webhook["Webhook receiver<br/><small>HMAC-SHA256 validation</small>"]
             api_rest["REST endpoints<br/><small>/api/v1/*</small>"]
             api_socketio["Socket.io gateway<br/><small>realtime push</small>"]
@@ -49,7 +49,7 @@ graph LR
     end
 
     subgraph llm_proxy ["LLM Proxy"]
-        bifrost["Bifrost :8050<br/><small>Go — rate limit + fallback</small>"]
+        bifrost["Bifrost :8080<br/><small>Go — rate limit + fallback</small>"]
     end
 
     subgraph observability ["Observability"]
@@ -110,12 +110,12 @@ graph LR
 
 | # | Container | Bounded Context | Tecnologia | Responsabilidade | Protocol In | Protocol Out |
 |---|-----------|----------------|------------|------------------|-------------|-------------|
-| 1 | prosauai-api | Channel | Python 3.12 + FastAPI | Webhook receiver, REST endpoints, Socket.io gateway | HTTPS (webhook, REST) | Redis Streams, Socket.io, asyncpg |
+| 1 | prosauai-api :8050 | Channel | Python 3.12 + FastAPI | Webhook receiver, REST endpoints, Socket.io gateway | HTTPS (webhook, REST) | Redis keys, Socket.io, asyncpg |
 | 2 | prosauai-worker | Conversation, Safety, Operations | Python 3.12 + ARQ | Debounce (Lua 3s + jitter), LLM orchestration (semaphore cap), delivery, eval, triggers. Concurrency: `max_jobs=20`, `llm_semaphore=10`, backpressure at queue depth > 100 | Redis Streams (XREADGROUP) | asyncpg, HTTP (Bifrost, Evolution), OTLP gRPC (Phoenix) |
 | 3 | prosauai-admin | — (apresentacao) | Next.js 15 + shadcn/ui | Dashboard, conversation viewer, prompt manager, handoff queue | HTTPS + JWT | REST API, Supabase JS |
 | 4 | Redis 7 | — (infra) | Redis | Message streams, cache, PubSub, debounce state | Redis protocol | Redis protocol |
 | 5 | Supabase ProsaUAI | — (infra) | PG 15 + pgvector + RLS | Persistent state multi-tenant | asyncpg SQL, Supabase JS | PG LISTEN/NOTIFY |
-| 6 | Bifrost | — (proxy) | Go binary | LLM proxy: rate limit, cost tracking | HTTP POST | OpenAI API |
+| 6 | Bifrost :8080 | — (proxy) | Go binary | LLM proxy: rate limit, cost tracking | HTTP POST | OpenAI API |
 | 7 | Phoenix (Arize) | Observability | Docker (self-hosted) | Tracing fim-a-fim (OTel spans), waterfall UI, SpanQL queries. Postgres backend (Supabase) | OTLP gRPC :4317 | asyncpg SQL (Supabase) |
 | 8 | Infisical | — (infra) | Docker (self-hosted) | Secrets vault: envelope encryption, rotation | HTTPS REST SDK | — |
 | 9 | Evolution API | Channel | Cloud mode (managed) | WhatsApp gateway: send/receive messages | HTTP POST (sendText) | Webhook POST |
@@ -126,7 +126,7 @@ graph LR
 
 | De | Para | Protocolo | Padrao | Justificativa |
 |----|------|-----------|--------|---------------|
-| Evolution API | prosauai-api | HTTPS webhook (HMAC-SHA256) | async | WhatsApp messages inbound |
+| Evolution API | prosauai-api | HTTPS webhook (X-Webhook-Secret) | async | WhatsApp messages inbound |
 | prosauai-api | Redis | XADD stream:messages | async | Desacoplamento intake → processing |
 | prosauai-api | prosauai-admin | Socket.io WebSocket | async (push) | Realtime updates (new messages, handoff alerts) |
 | Redis | prosauai-worker | XREADGROUP (BLOCK 5000ms) | async (pull) | Consumer group permite horizontal scaling |
@@ -164,17 +164,17 @@ graph LR
 
 | Container | Status | Epic | Notas |
 |-----------|--------|------|-------|
-| prosauai-api | ✅ Parcial | 001 | Webhook + health + debounce (asyncio task). Sem XADD Streams — usa Redis keys diretamente. OTel SDK + structlog bridge (epic 002) |
-| prosauai-worker | ⏳ Planejado | — | Debounce flush, LLM orchestration, delivery migram para ARQ worker em epic futuro |
+| prosauai-api | ✅ Operacional | 001-004 | Webhook + health + debounce + multi-tenant auth (X-Webhook-Secret) + MECE router + idempotency. OTel SDK + structlog bridge. Usa Redis keys diretamente (sem Streams). Port 8050 |
+| prosauai-worker | ⏳ Planejado | — | LLM orchestration, delivery migram para ARQ worker em epic futuro (005+) |
 | prosauai-admin | ⏳ Planejado | — | — |
-| Redis 7 | ✅ Parcial | 001 | Debounce keys (buf:/tmr:) + keyspace notifications. Sem Streams ainda |
+| Redis 7 | ✅ Operacional | 001-004 | Debounce keys (buf:/tmr:) + keyspace notifications + idempotency (seen:tenant_id:msg_id SETNX 24h) |
 | Supabase ProsaUAI | ⏳ Planejado | — | — |
 | Bifrost | ⏳ Planejado | — | — |
 | Phoenix (Arize) | ✅ Operacional | 002 | Substitui LangFuse ([ADR-020](../decisions/ADR-020-phoenix-observability.md)). UI :6006 + gRPC :4317. Postgres backend (Supabase) |
-| LangFuse v3 | ❌ Superseded | — | Substituido por Phoenix no epic 002. Ver [ADR-020](../decisions/ADR-020-phoenix-observability.md) |
 | Infisical | ⏳ Planejado | — | Config via .env nesta fase |
 | Evolution API | ✅ Integrado | 001 | Cloud mode, mock em testes |
-| TenantStore (file) | ⏳ Drafted | 003 | YAML file-backed, lifespan loader, 2 tenants reais (Ariel + ResenhAI). Migracao para Postgres em [ADR-023](../decisions/ADR-023-tenant-store-postgres-migration.md) |
+| TenantStore (file) | ✅ Operacional | 003 | YAML file-backed, lifespan loader, ${VAR} interpolation, 2 tenants reais (Ariel + ResenhAI). Migracao para Postgres em [ADR-023](../decisions/ADR-023-tenant-store-postgres-migration.md) |
+| Router MECE | ✅ Operacional | 004 | classify() pure + RoutingEngine declarativa + config YAML per-tenant (config/routing/*.yaml) + MECE verification (4 camadas) + MentionMatchers (3 estrategias) |
 | Caddy 2 (edge proxy) | 📋 Planejado | 012 (Fase 2) | TLS automatico via Let's Encrypt; reverse proxy para prosauai-api; rate limit por IP. Ver [ADR-021](../decisions/ADR-021-caddy-edge-proxy.md) |
 | Admin API | 📋 Planejado | 012 (Fase 2) | Endpoints `POST/GET/PATCH/DELETE /admin/tenants`; auth via master token. Ver [ADR-022](../decisions/ADR-022-admin-api.md) |
 | TenantStore (Postgres) | 📋 Planejado | 013 (Fase 3) | Migracao YAML → Postgres; schema gerenciado em Supabase com RLS herdada de [ADR-011](../decisions/ADR-011-pool-rls-multi-tenant.md). Trigger: >=5 tenants reais |
@@ -185,7 +185,7 @@ graph LR
 
 A arquitetura multi-tenant evolui em 3 fases. Cada fase tem trigger de entrada explicito; nenhuma e antecipada sem dor real para evita-la.
 
-### Fase 1 — Multi-tenant estrutural (epic 003, in draft)
+### Fase 1 — Multi-tenant estrutural (epic 003, shipped)
 
 **Topologia:** prosauai-api isolado por rede (Tailscale dev / Docker network privada prod), TenantStore file-backed YAML, 2 tenants reais (Ariel + ResenhAI), per-tenant credentials/keys/idempotency. **Zero porta exposta na internet.**
 

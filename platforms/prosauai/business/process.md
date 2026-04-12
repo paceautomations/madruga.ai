@@ -1,14 +1,14 @@
 ---
 title: "Business Process"
 description: 'Fluxo de negocio da plataforma ProsaUAI: mensagem individual (1:1), grupo (@mention), handoff humano, triggers proativos, multi-tenant.'
-updated: 2026-04-10
+updated: 2026-04-12
 sidebar:
   order: 3
 ---
 
 # Business Process — Pipeline Completo
 
-Todos os caminhos da plataforma ProsaUAI: mensagem individual (1:1), grupo (@mention), handoff humano, triggers proativos. **14 modulos, 6 paths de roteamento, 3 decision points.**
+Todos os caminhos da plataforma ProsaUAI: mensagem individual (1:1), grupo (@mention), handoff humano, triggers proativos. **14 modulos, 5 tipos de acao de roteamento (RESPOND, LOG_ONLY, DROP, BYPASS_AI, EVENT_HOOK), 3 decision points.**
 
 > [→ Ver arquitetura de containers](../engineering/blueprint/#containers) | [→ Ver domain model](../engineering/domain-model/)
 
@@ -22,8 +22,8 @@ flowchart TD
     M1 -->|InboundMessage| M2["M2 Debounce<br/>(Channel)"]
     M2 -->|BufferedBatch| M3{"M3 Smart Router<br/>Decision Point #1"}
 
-    M3 -->|SUPPORT / GROUP| M4["M4 Clientes<br/>(Conversation)"]
-    M3 -->|HANDOFF_ATIVO| M12["M12 Handoff<br/>(Operations)"]
+    M3 -->|RESPOND| M4["M4 Clientes<br/>(Conversation)"]
+    M3 -->|BYPASS_AI| M12["M12 Handoff<br/>(Operations)"]
 
     M4 -->|CustomerContext| M5["M5 Contexto<br/>(Conversation)"]
     M5 -->|AgentContext| M6["M6 Guardrails Entrada<br/>(Safety)"]
@@ -42,7 +42,7 @@ flowchart TD
 
     M11 -->|POST sendText| EVO[/"Evolution API"/]
 
-    M14["M14 Observabilidade"] -.->|Traces| LF[/"LangFuse"/]
+    M14["M14 Observabilidade"] -.->|"OTLP gRPC traces"| PH[/"Phoenix (Arize)"/]
 
     style M3 fill:#f9f,stroke:#333
     style M9 fill:#f9f,stroke:#333
@@ -68,8 +68,8 @@ sequenceDiagram
 
     Agent->>EVO: Mensagem WhatsApp
     EVO->>M1: Webhook POST (JSON)
-    Note over M1: Validacao HMAC-SHA256 obrigatoria
-    Note over M1: Tipos: texto, audio, imagem,<br/>video, documento, sticker,<br/>contato, localizacao
+    Note over M1: Validacao X-Webhook-Secret per-tenant<br/>(constant-time compare)
+    Note over M1: 13 tipos: text, image, video,<br/>audio (PTT), document, sticker,<br/>contact, location, live_location,<br/>poll, reaction, event, group_metadata
 
     M1->>M2: InboundMessage normalizado
     M2->>Redis: Lua script atomico (buffer 3s + jitter 0-1s)
@@ -80,60 +80,59 @@ sequenceDiagram
 
 </details>
 
-### Fase 2: Decision Point #1 — Smart Router (Two-Phase)
+### Fase 2: Decision Point #1 — MECE Router (Two-Layer)
 
 <details>
-<summary>6 caminhos de roteamento + resolucao de agente configuravel por numero</summary>
+<summary>5 acoes de roteamento declarativo + resolucao de agente per-tenant</summary>
 
-O Smart Router opera em **duas fases**:
+O Router MECE opera em **duas camadas** (epic 004):
 
-**Fase A — Route Classification** (o que acontece): classifica a mensagem em 1 dos 6 paths com base em atributos da mensagem (is_group, @mention, from_me, handoff state). Os 6 paths sao fixos e iguais para todos os tenants.
+**Layer 1 — classify()** (funcao pura, sem I/O): deriva `MessageFacts` a partir da mensagem + estado pre-carregado. Classifica em enums tipados: `Channel` (individual/group), `EventKind` (message/group_membership/group_metadata/protocol/unknown), `ContentKind` (text/media/structured/reaction/empty).
 
-**Fase B — Agent Resolution** (quem atende): para routes que precisam de agente (SUPPORT, GROUP_RESPOND), avalia as `routing_rules` configuradas para o tenant + phone_number. Avaliacao por priority ASC, first-match wins. Sem regra = `tenants.settings.default_agent_id`.
+**Layer 2 — RoutingEngine.decide()** (declarativo): avalia regras YAML per-tenant por prioridade (menor = maior), first-match wins. 5 tipos de acao: RESPOND, LOG_ONLY, DROP, BYPASS_AI, EVENT_HOOK.
 
 ```mermaid
 flowchart LR
-    M3{"M3 Smart Router"}
+    M3{"M3 Router MECE"}
 
-    subgraph "Fase A: Route Classification"
-        M3 -->|"1. SUPPORT"| P1["Pipeline completo (1:1)"]
-        M3 -->|"2. GROUP_RESPOND"| P2["Pipeline com contexto de grupo"]
-        M3 -->|"3. GROUP_SAVE_ONLY"| P3["Salva sem LLM<br/>(zero custo)"]
-        M3 -->|"4. GROUP_EVENT"| P6["Evento de membership<br/>(welcome/saida)"]
-        M3 -->|"5. HANDOFF_ATIVO"| P4["Bypass IA<br/>→ M12 Handoff"]
-        M3 -->|"6. IGNORE"| P5["Duplicata ou<br/>evento interno"]
+    subgraph "Layer 1: classify()"
+        MSG["InboundMessage"] --> FACTS["MessageFacts<br/>(channel, event_kind,<br/>content_kind, has_mention,<br/>from_me, is_duplicate,<br/>conversation_in_handoff)"]
     end
 
-    subgraph "Fase B: Agent Resolution"
-        P1 --> RR{"routing_rules<br/>(priority ASC)"}
-        P2 --> RR
-        RR -->|"Match"| AG["agent_id resolvido"]
-        RR -->|"No match"| DF["default_agent_id<br/>(tenant settings)"]
-        AG --> M4["→ M4 Clientes"]
-        DF --> M4
+    subgraph "Layer 2: RoutingEngine.decide()"
+        FACTS --> RULES{"Rules YAML<br/>per-tenant<br/>(priority ASC)"}
+        RULES -->|"RESPOND"| P1["Pipeline IA completo<br/>(agent_id resolvido)"]
+        RULES -->|"LOG_ONLY"| P3["Log sem resposta<br/>(zero custo)"]
+        RULES -->|"DROP"| P5["Descarta<br/>(echo, duplicata)"]
+        RULES -->|"BYPASS_AI"| P4["Bypass IA<br/>→ M12 Handoff"]
+        RULES -->|"EVENT_HOOK"| P6["Handler especializado<br/>(membership, metadata)"]
+        RULES -->|"Sem match"| DEF["Default rule<br/>(per-tenant config)"]
     end
+
+    P1 --> M4["→ M4 Clientes"]
 
     style M3 fill:#f9f,stroke:#333
-    style RR fill:#ffd,stroke:#333
+    style RULES fill:#ffd,stroke:#333
     style P3 fill:#eee,stroke:#999
-    style P6 fill:#eee,stroke:#999
     style P5 fill:#eee,stroke:#999
 ```
 
-**Caminhos (Fase A):**
-- **SUPPORT** → Pipeline completo para mensagem individual (1:1)
-- **GROUP_RESPOND** → Mesmo pipeline, com contexto de grupo (@mention)
-- **GROUP_SAVE_ONLY** → Salva mensagem no historico sem acionar LLM (zero custo)
-- **GROUP_EVENT** → Evento de membership (welcome, saida de membro) — aciona trigger template sem LLM
-- **HANDOFF_ATIVO** → Conversa ja escalada — bypass completo da IA, direto para atendente humano
-- **IGNORE** → Duplicata detectada ou evento interno — descarta
+**Acoes do router:**
+- **RESPOND** → Pipeline IA completo. Agent resolution: `rule.agent` > `tenant.default_agent_id` > `AgentResolutionError`
+- **LOG_ONLY** → Log estruturado sem resposta (grupo sem @mention, eventos de protocolo)
+- **DROP** → Descarta silenciosamente (echo do bot = previne loop, duplicatas via idempotency)
+- **BYPASS_AI** → Bypass completo da IA, direto para handler humano (conversa em handoff ativo)
+- **EVENT_HOOK** → Dispatch para handler especializado (membership de grupo, metadata)
 
-**Resolucao de agente (Fase B):**
-- Cada numero WhatsApp do tenant pode ter `routing_rules` diferentes (ex: individual → vendas, grupo → suporte)
-- Regras armazenadas em `routing_rules` table com `match_conditions` JSONB (ex: `{"channel_type": "individual"}`)
-- Avaliacao por priority (menor = maior prioridade), first-match wins
-- Sem regras configuradas → usa `tenants.settings.default_agent_id`
-- Config via admin panel, sem deploy — ver [ADR-006](../decisions/ADR-006-agent-as-data/) e [domain-model](../engineering/domain-model/)
+**Config YAML per-tenant** (`config/routing/{tenant}.yaml`):
+- Cada tenant tem suas proprias regras com prioridades e condicoes
+- Regras sao pares `when` (condicoes sobre MessageFacts) + `action` + `agent` (opcional)
+- Condicoes avaliadas por igualdade (AND): `from_me`, `is_duplicate`, `channel`, `has_mention`, `event_kind`, `conversation_in_handoff`, `is_membership_event`
+- MECE garantido em 4 camadas: (1) tipo (enums), (2) schema (pydantic valida overlaps), (3) runtime (discriminated union), (4) CI (property-based testing)
+
+**MentionMatchers** (deteccao de @mention em grupo):
+- 3 estrategias: opaque @lid, phone number, keywords configurados por tenant
+- Carregados no startup a partir de `tenant.mention_lid_opaque`, `tenant.mention_phone`, `tenant.mention_keywords`
 
 </details>
 
@@ -347,18 +346,18 @@ flowchart LR
     M12["M12 Handoff"] -.->|Trace handoff events| M14
     M13["M13 Triggers"] -.->|Trace trigger events| M14
 
-    M14["M14 Observabilidade"] -->|"Traces + scores<br/>(fire-and-forget)"| LF[/"LangFuse"/]
+    M14["M14 Observabilidade"] -->|"OTLP gRPC traces<br/>(fire-and-forget)"| PH[/"Phoenix (Arize)"/]
 
     style M14 fill:#eee,stroke:#999,stroke-dasharray: 5 5
-    style LF fill:#eee,stroke:#999,stroke-dasharray: 5 5
+    style PH fill:#eee,stroke:#999,stroke-dasharray: 5 5
 ```
 
 **Stack de observabilidade:**
-- **LangFuse**: Traces com spans por modulo (M1-M13)
-- **DeepEval + Promptfoo**: Scores de eval (online + offline)
-- **trace_id** = conversation_id (correlacao end-to-end)
-- **Fire-and-forget**: falha na observabilidade NAO bloqueia o pipeline
-- **Prompt versions**: source of truth no LangFuse
+- **Phoenix (Arize)**: Self-hosted (:6006 UI + :4317 gRPC). Substitui LangFuse — single container, Postgres backend, sem ClickHouse
+- **OpenTelemetry SDK**: Auto-instrumentation (FastAPI, httpx, redis) + spans manuais de dominio (webhook, classify, decide)
+- **structlog bridge**: `trace_id`/`span_id` injetados em todo log estruturado via processor `add_otel_context`
+- **DeepEval + Promptfoo**: Scores de eval (online + offline) — planejado para epic 005+
+- **Fire-and-forget**: falha na observabilidade NAO bloqueia o pipeline (BatchSpanProcessor com force_flush no shutdown)
 
 </details>
 

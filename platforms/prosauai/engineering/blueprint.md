@@ -124,42 +124,63 @@ graph LR
 prosauai/
 ├── prosauai/
 │   ├── __init__.py
-│   ├── main.py               # FastAPI app, lifespan, structlog config
+│   ├── main.py               # FastAPI app, lifespan (tenants + routing engines + Redis + debounce)
 │   ├── config.py              # pydantic-settings + .env
 │   ├── core/                  # Core domain logic
-│   │   ├── formatter.py       # Evolution API payload → ParsedMessage
-│   │   ├── router.py          # Smart Router (6 rotas), RouteResult
-│   │   └── debounce.py        # DebounceManager (Redis Lua + keyspace notifications)
+│   │   ├── tenant.py          # Tenant frozen dataclass (9 fields)
+│   │   ├── tenant_store.py    # YAML loader + ${VAR} interpolation
+│   │   ├── formatter.py       # Evolution v2.3.0 payload → ParsedMessage (13 tipos)
+│   │   ├── idempotency.py     # Redis SETNX deduplication (24h TTL per-tenant)
+│   │   ├── debounce.py        # DebounceManager (Redis Lua + keyspace notifications, tenant-prefixed)
+│   │   └── router/            # Epic 004: Router MECE
+│   │       ├── __init__.py    # Public API: route() + models
+│   │       ├── facts.py       # MessageFacts + classify() pure function
+│   │       ├── engine.py      # RoutingEngine + Rule evaluation (priority-based)
+│   │       ├── loader.py      # YAML routing config loader + MECE verification
+│   │       ├── matchers.py    # MentionMatchers (3-strategy: @lid, phone, keywords)
+│   │       ├── errors.py      # Custom exceptions
+│   │       └── verify.py      # MECE overlap verification CLI
 │   ├── channels/              # Channel adapters (ACL boundary)
 │   │   ├── base.py            # MessagingProvider ABC
 │   │   └── evolution.py       # EvolutionProvider (httpx async)
 │   ├── api/                   # FastAPI endpoints
-│   │   ├── webhooks.py        # POST /webhook/whatsapp/{instance}
-│   │   ├── health.py          # GET /health
-│   │   └── dependencies.py    # HMAC verification, Redis injection
+│   │   ├── webhooks.py        # POST /webhook/whatsapp/{instance_name}
+│   │   ├── health.py          # GET /health (status + Redis + OTel)
+│   │   └── dependencies.py    # resolve_tenant_and_authenticate() (X-Webhook-Secret)
 │   └── observability/         # OTel SDK + Phoenix integration (epic 002)
 │       ├── __init__.py
 │       ├── setup.py           # configure_observability() — SDK + exporter
 │       ├── conventions.py     # SpanAttributes constants (prosauai.*, gen_ai.*)
 │       ├── structlog_bridge.py # add_otel_context processor (log↔trace)
-│       └── tracing.py         # get_tracer(), W3C context inject/extract
+│       ├── tracing.py         # get_tracer(), W3C context inject/extract
+│       └── health.py          # ExporterHealthTracker (thread-safe export status)
+├── config/                    # Tenant & routing configuration
+│   ├── tenants.yaml           # Active tenants (gitignored, ${VAR} interpolated)
+│   ├── tenants.example.yaml   # Template with instructions
+│   └── routing/               # Per-tenant routing rules (YAML)
+│       ├── ariel.yaml         # Pace-internal tenant rules
+│       └── resenhai.yaml      # ResenhAI tenant rules
 ├── tests/                     # pytest (unit + integration)
-│   ├── fixtures/              # Evolution API payload fixtures
-│   ├── unit/                  # Unit tests
-│   └── integration/           # Integration tests
+│   ├── conftest.py            # Fixtures + parametrized discovery
+│   ├── fixtures/captured/     # 26 real-payload fixture pairs (*.input.json + *.expected.yaml)
+│   ├── unit/                  # 24 unit test modules
+│   └── integration/           # 5 integration test modules
+├── tools/                     # Payload capture & anonymization
+├── scripts/                   # Automation (e2e-validate, verify-routing-configs)
 ├── pyproject.toml             # Deps, ruff, pytest config
-├── Dockerfile                 # Multi-stage build
+├── Dockerfile                 # Multi-stage build (port 8050)
 ├── docker-compose.yml         # api + redis + phoenix
-└── .env.example               # Environment template
+└── .env.example               # Environment template (40+ vars)
 ```
 
-> **Nota**: A estrutura `src/domain/` com BCs separados e `src/infra/` sera evolucao natural quando epics futuros adicionarem Supabase e ARQ worker. A estrutura atual (flat packages) e adequada para o escopo atual (channel pipeline + observability).
+> **Nota**: A estrutura `src/domain/` com BCs separados e `src/infra/` sera evolucao natural quando epics futuros adicionarem Supabase e ARQ worker. A estrutura atual (packages por concern) e adequada para o escopo atual (channel pipeline + multi-tenant + observability + MECE router).
 
 | Convencao | Regra |
 |-----------|-------|
-| Packages por concern | `core/` (dominio), `api/` (endpoints), `channels/` (adapters), `observability/` (cross-cutting) |
+| Packages por concern | `core/` (dominio), `api/` (endpoints), `channels/` (adapters), `observability/` (cross-cutting), `core/router/` (routing engine) |
+| Config per-tenant | `config/tenants.yaml` (identidade) + `config/routing/*.yaml` (regras de roteamento) |
 | RLS tests | Obrigatorios para toda nova tabela com tenant_id |
-| Secrets | Nunca em codigo; sempre via Infisical SDK |
+| Secrets | Nunca em codigo; sempre via env vars (.env) — Infisical SDK em fase futura |
 
 ---
 
@@ -187,7 +208,7 @@ prosauai/
 | Loop detection | Similaridade de pattern + semantic entre ultimas N respostas | — | [ADR-016](../decisions/ADR-016-agent-runtime-safety/) |
 | Prompt injection defense | Sandwich pattern (system → user → system), input sanitization, output scan | — | [ADR-016](../decisions/ADR-016-agent-runtime-safety/) |
 | Tool safety | Pydantic strict schema, whitelist enforcement, server-side tenant_id injection | — | [ADR-016](../decisions/ADR-016-agent-runtime-safety/) |
-| Webhook validation | HMAC-SHA256 por tenant na Evolution API | — | [ADR-017](../decisions/ADR-017-secrets-management/) |
+| Webhook validation | X-Webhook-Secret per-tenant (constant-time compare) | — | — |
 
 ### 4.3 Secrets & Encryption
 
