@@ -1,0 +1,73 @@
+# ProsauAI — Production Overrides
+#
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Minimum VPS requirements: 2 vCPU, 4GB RAM, 40GB SSD
+#
+# Changes from dev:
+#   - Phoenix uses Postgres backend (not SQLite) with schema 'observability'
+#   - Netdata for host monitoring (CPU, RAM, disk, containers)
+#   - Retention cron for LGPD compliance (daily purge of expired data)
+#   - Resource limits on auxiliary containers
+
+x-logging: &prod-logging
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "5"
+
+services:
+  phoenix:
+    environment:
+      PHOENIX_SQL_DATABASE_URL: postgresql://${POSTGRES_USER:-prosauai}:${POSTGRES_PASSWORD:-prosauai}@postgres:5432/${POSTGRES_DB:-prosauai}
+      PHOENIX_SQL_DATABASE_SCHEMA: observability
+    volumes: []  # Remove phoenix_data SQLite volume from dev
+    logging: *prod-logging
+
+  netdata:
+    image: netdata/netdata:stable
+    ports:
+      - "127.0.0.1:19999:19999"
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - apparmor:unconfined
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - netdataconfig:/etc/netdata
+      - netdatalib:/var/lib/netdata
+      - netdatacache:/var/cache/netdata
+    logging: *prod-logging
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    restart: unless-stopped
+
+  retention-cron:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: >
+      sh -c "while true; do
+        python -m prosauai.ops.retention_cli --dry-run=false;
+        sleep 86400;
+      done"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-prosauai}:${POSTGRES_PASSWORD:-prosauai}@postgres:5432/${POSTGRES_DB:-prosauai}
+    logging: *prod-logging
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  netdataconfig:
+  netdatalib:
+  netdatacache:
