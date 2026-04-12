@@ -259,7 +259,7 @@ When the platform's running slot becomes free, the easter daemon auto-promotes t
 - **Dequeue**: `platform_cli.py dequeue <platform> <epic>` reverts `queued` → `drafted` without losing artifacts
 - **Queue inspection**: `platform_cli.py queue-list <platform>` shows queued epics in FIFO order
 - **Feature flag**: `MADRUGA_QUEUE_PROMOTION` env var (default **off**). Must restart easter to toggle.
-- **Isolation mode**: Platforms with `repo.isolation: branch` in `platform.yaml` use the main clone (branch checkout) instead of worktrees, so developers see the active epic branch in their editor.
+- **Branch isolation**: External platforms use the main clone directly (branch checkout). The developer sees the active epic branch in their editor without navigating to a worktree path. This is the only isolation mode — worktree support was removed in epic 024.
 
 Safety: drafted and queued epics cannot accidentally enter the L2 cycle because:
 1. Easter only polls `status='in_progress'` (easter.py poll_active_epics)
@@ -269,15 +269,10 @@ Safety: drafted and queued epics cannot accidentally enter the L2 cycle because:
 
 ### Parallel Epics Constraint (ARCHITECTURAL INVARIANT)
 
-**Self-ref platforms (repo.name == own repo) MUST execute epics sequentially — NEVER in parallel.**
-Parallel epic execution is ONLY safe for external repos, where each epic gets an isolated git worktree (`worktree.py`).
+**All platforms execute epics sequentially — one epic at a time per platform.**
+External platforms use branch checkout in the main clone (`ensure_repo.get_repo_work_dir`). Self-ref platforms (repo.name == own repo) use `REPO_ROOT` directly.
 
-Why: self-ref platforms share a single working directory, DB (`.pipeline/madruga.db`), and skill/knowledge files. Parallel epics would cause:
-1. Branch checkout conflicts (two epics overwriting each other's files)
-2. SQLite state desync (post_save.py writes to different DB copies)
-3. Stale skills (worktree freezes `.claude/commands/` at branch point)
-
-If parallel self-ref epics are ever needed, ALL L2 skills (not just implement) must run inside the worktree, and the DB must use a shared absolute path. Until then: sequential only.
+Why sequential: the pipeline assumes one working directory per platform. Parallel epics would cause branch checkout conflicts and SQLite state desync. The auto-promotion queue (epic 024) enforces FIFO ordering within this constraint.
 
 ### Cycle Steps
 

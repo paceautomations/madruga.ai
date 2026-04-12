@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import fcntl
+import functools
 import logging
 import shutil
 import subprocess
@@ -18,8 +19,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 # ── Helpers ──────────────────────────────────────────────────────────
 
 
+@functools.lru_cache(maxsize=16)
 def _load_repo_binding(name: str) -> dict:
-    """Read repo binding from platforms/<name>/platform.yaml."""
+    """Read repo binding from platforms/<name>/platform.yaml (cached)."""
     manifest_path = REPO_ROOT / "platforms" / name / "platform.yaml"
     if not manifest_path.exists():
         raise SystemExit(f"ERROR: platforms/{name}/platform.yaml not found")
@@ -41,7 +43,6 @@ def _load_repo_binding(name: str) -> dict:
         "name": repo_name,
         "base_branch": repo.get("base_branch", "main"),
         "epic_branch_prefix": repo.get("epic_branch_prefix", f"epic/{name}/"),
-        "isolation": repo.get("isolation", "worktree"),
     }
 
 
@@ -152,32 +153,20 @@ class DirtyTreeError(Exception):
 def get_repo_work_dir(platform_name: str, epic_slug: str) -> Path:
     """Resolve the working directory for an epic's L2 cycle.
 
-    Dispatches based on repo.isolation in platform.yaml:
-      - "worktree" (default): returns a new or existing worktree path.
-      - "branch": returns the platform's main clone path after checking out
-        the epic branch.
-
-    Self-ref platforms short-circuit to REPO_ROOT regardless of isolation setting.
+    For external platforms: clones/fetches the repo, checks out the epic branch
+    in the main clone, and returns the clone path.
+    For self-ref platforms: returns REPO_ROOT (no checkout needed).
     """
     binding = _load_repo_binding(platform_name)
 
     if _is_self_ref(binding["name"]):
         return REPO_ROOT
 
-    isolation = binding.get("isolation", "worktree")
+    repo_path = ensure_repo(platform_name)
+    from queue_promotion import _checkout_epic_branch
 
-    if isolation == "branch":
-        repo_path = ensure_repo(platform_name)
-        from queue_promotion import _checkout_epic_branch
-
-        _checkout_epic_branch(repo_path, epic_slug, binding)
-        return repo_path
-    elif isolation == "worktree":
-        from worktree import create_worktree
-
-        return create_worktree(platform_name, epic_slug)
-    else:
-        raise ValueError(f"Unknown isolation mode: {isolation!r} for platform {platform_name}")
+    _checkout_epic_branch(repo_path, epic_slug, binding)
+    return repo_path
 
 
 if __name__ == "__main__":
