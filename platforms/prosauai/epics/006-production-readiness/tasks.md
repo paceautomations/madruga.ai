@@ -134,7 +134,7 @@
 
 - [x] T025 [US3] Implement retention logic: purge_expired_messages using partitions.drop_expired_partitions() + ensure_future_partitions(); purge_expired_conversations DELETE batch (LIMIT 1000) on closed conversations > 90d; purge_expired_eval_scores DELETE batch > 90d; purge_expired_traces DELETE on observability schema spans > 90d. Never touch admin.audit_log. All comparisons use UTC. Orchestrator run_retention() calls all purge functions + logs totals with structlog (run_id, table, rows_purged, partitions_dropped, duration_ms) (file: prosauai/ops/retention.py, ~120 LOC) — ref: contracts/retention-cli.md
 - [x] T026 [US3] Implement retention CLI entry point: argparse with --dry-run (default true), --database-url (default $DATABASE_URL), --log-level. Connects via asyncpg with asyncio.run(), calls run_retention(), exits with code 0/1/2 per contract (file: prosauai/ops/retention_cli.py, ~40 LOC) — ref: contracts/retention-cli.md
-- [ ] T027 [US3] Write tests for retention: dry-run lists without deleting, purge removes only expired data, partitions are created for future months, expired partitions are dropped, batch DELETE respects LIMIT, re-execution is idempotent, audit_log is never touched (file: tests/ops/test_retention.py)
+- [x] T027 [US3] Write tests for retention: dry-run lists without deleting, purge removes only expired data, partitions are created for future months, expired partitions are dropped, batch DELETE respects LIMIT, re-execution is idempotent, audit_log is never touched (file: tests/ops/test_retention.py)
 
 **Checkpoint**: Data retention fully automated. LGPD compliance from day 1 of production.
 
