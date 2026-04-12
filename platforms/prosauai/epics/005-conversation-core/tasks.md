@@ -219,7 +219,7 @@
 
 **Purpose**: Melhorias que afetam múltiplas user stories.
 
-- [ ] T059 [P] Adicionar docstrings em todos os módulos públicos de `prosauai/conversation/` e `prosauai/safety/`
+- [x] T059 [P] Adicionar docstrings em todos os módulos públicos de `prosauai/conversation/` e `prosauai/safety/`
 - [ ] T060 [P] Verificar cobertura de testes ≥80% por módulo (M4-M10) com `pytest --cov`
 - [ ] T061 Rodar validação do quickstart.md — verificar que todos os comandos funcionam (docker compose up, migrations, seed, health check)
 - [ ] T062 [P] Verificar que todos os OTel spans do pipeline são visíveis no Phoenix (conversation.process, conversation.customer_lookup, conversation.context_build, conversation.input_guard, conversation.classify, conversation.generate, conversation.evaluate, conversation.output_guard, conversation.deliver, conversation.save_eval)
