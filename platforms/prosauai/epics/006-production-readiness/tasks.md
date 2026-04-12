@@ -146,7 +146,7 @@
 
 **Independent Test**: Acessar localhost:19999 e verificar metricas de host e containers.
 
-- [ ] T028 [US7] Configure Netdata container in docker-compose.prod.yml: image netdata/netdata:stable, bind 127.0.0.1:19999, cap_add SYS_PTRACE, security_opt apparmor:unconfined, mount /proc /sys /var/run/docker.sock read-only, mem_limit 256m, restart unless-stopped (file: docker-compose.prod.yml)
+- [x] T028 [US7] Configure Netdata container in docker-compose.prod.yml: image netdata/netdata:stable, bind 127.0.0.1:19999, cap_add SYS_PTRACE, security_opt apparmor:unconfined, mount /proc /sys /var/run/docker.sock read-only, mem_limit 256m, restart unless-stopped (file: docker-compose.prod.yml)
 
 **Checkpoint**: Host monitoring operational. Disk/RAM/CPU alerts pre-configured by Netdata defaults.
 
