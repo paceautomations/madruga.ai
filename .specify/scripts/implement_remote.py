@@ -142,7 +142,7 @@ def run_implement(
     dry_run: bool = False,
     create_pr_flag: bool = False,
 ) -> int:
-    """Orchestrate: ensure_repo → worktree → prompt → claude -p."""
+    """Orchestrate: get_repo_work_dir → prompt → claude -p."""
     import sys
 
     sys.path.insert(0, str(Path(__file__).resolve().parent))

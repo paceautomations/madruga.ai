@@ -906,7 +906,7 @@ def _resolve_code_dir(platform_name: str, epic_slug: str | None) -> Path:
 
     For self-ref platforms: returns REPO_ROOT.
     For external platforms with an epic: delegates to get_repo_work_dir()
-    which handles both worktree and branch isolation modes.
+    which clones/fetches the repo and checks out the epic branch.
     For L1 (no epic): returns REPO_ROOT (L1 nodes don't touch code).
     """
     if not epic_slug:
@@ -2420,9 +2420,8 @@ def run_pipeline(
     Returns exit code: 0=success or paused at gate, 1=failure.
 
     ARCHITECTURAL INVARIANT: This function processes epics sequentially.
-    Parallel epic execution is ONLY safe for external repos (via worktree
-    isolation). Self-ref platforms share working dir, DB, and skills —
-    see pipeline-dag-knowledge.md "Parallel Epics Constraint".
+    All platforms execute one epic at a time. External repos use branch
+    checkout in the main clone — see pipeline-dag-knowledge.md.
     """
     _quick_mode_ctx.set(quick)
 

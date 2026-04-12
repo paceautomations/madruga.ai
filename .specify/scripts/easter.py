@@ -266,7 +266,7 @@ async def dag_scheduler(conn, semaphore, shutdown_event, poll_interval=15, platf
                     logger.info("dispatching_epic", epic_id=epic_id, platform=epic_platform_id)
 
                     # F3: Proactive branch checkout before dispatch
-                    # For external repos, worktree handles branching — skip checkout.
+                    # For external repos, get_repo_work_dir handles branch checkout.
                     branch = epic.get("branch_name")
                     if branch:
                         import subprocess as _sp
