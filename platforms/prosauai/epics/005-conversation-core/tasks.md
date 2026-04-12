@@ -222,7 +222,7 @@
 - [x] T059 [P] Adicionar docstrings em todos os módulos públicos de `prosauai/conversation/` e `prosauai/safety/`
 - [x] T060 [P] Verificar cobertura de testes ≥80% por módulo (M4-M10) com `pytest --cov`
 - [x] T061 Rodar validação do quickstart.md — verificar que todos os comandos funcionam (docker compose up, migrations, seed, health check)
-- [ ] T062 [P] Verificar que todos os OTel spans do pipeline são visíveis no Phoenix (conversation.process, conversation.customer_lookup, conversation.context_build, conversation.input_guard, conversation.classify, conversation.generate, conversation.evaluate, conversation.output_guard, conversation.deliver, conversation.save_eval)
+- [x] T062 [P] Verificar que todos os OTel spans do pipeline são visíveis no Phoenix (conversation.process, conversation.customer_lookup, conversation.context_build, conversation.input_guard, conversation.classify, conversation.generate, conversation.evaluate, conversation.output_guard, conversation.deliver, conversation.save_eval)
 - [ ] T063 Code review final: verificar que FALLBACK_MESSAGE é usado em todos os error paths, connection pool sizing alinhado ao semáforo (10), e timeout de 5s para pool esgotado
 
 ---
