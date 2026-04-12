@@ -98,9 +98,9 @@ graph LR
 
 | Ambiente | Finalidade | Infra |
 |----------|------------|-------|
-| local | Desenvolvimento e testes | Docker Compose completo (todos servicos) |
+| local | Desenvolvimento e testes | `docker-compose.yml` — todos servicos (Phoenix SQLite, sem Netdata/retention) |
 | staging | QA, red-teaming, testes de integracao | Subset producao; tenants de teste |
-| production | Tenants reais | Full stack; monitoring ativo |
+| production | Tenants reais | `docker compose -f docker-compose.yml -f docker-compose.prod.yml up` — Phoenix Postgres, Netdata, retention-cron. VPS minimo: 2 vCPU, 4GB RAM, 40GB SSD |
 
 ### 2.2 CI/CD
 
@@ -184,6 +184,59 @@ prosauai/
 
 ---
 
+## 3b. Database Schema Layout (epic 006)
+
+> Detalhes completos em [ADR-024](../decisions/ADR-024-schema-isolation.md) e [data-model.md](../epics/006-production-readiness/data-model.md).
+
+| Schema | Conteudo | Gerenciado por |
+|--------|----------|----------------|
+| `prosauai` | 7 tabelas de negocio: customers, conversations, conversation_states, messages (particionada), agents, prompts, eval_scores | Migrations da app (`migrations/*.sql`) |
+| `prosauai_ops` | `tenant_id()` (funcao RLS helper), `schema_migrations` (tracking) | Migrations da app |
+| `observability` | Tabelas Phoenix (traces, spans) | Phoenix auto-managed (`PHOENIX_SQL_DATABASE_SCHEMA`) |
+| `admin` | Reservado — tenants, audit_log (epic 013) | Futuro |
+| `auth` | Supabase-managed (GoTrue) — **NAO TOCAR** | Supabase |
+| `public` | Extensions (`uuid-ossp`) — **NAO CRIAR OBJETOS** | Supabase |
+
+**Particionamento**: Tabela `messages` usa `PARTITION BY RANGE (created_at)` com particoes mensais. Purge via `DROP TABLE partition` (<100ms). Particoes futuras criadas 3 meses a frente pelo cron de retention.
+
+**search_path**: Connection pool configura `search_path = prosauai,prosauai_ops,public` — queries existentes funcionam sem schema prefix.
+
+## 3c. Migration Runner (epic 006)
+
+Migrations aplicadas automaticamente no startup da API (fail-fast):
+
+```python
+# prosauai/main.py (lifespan)
+await run_migrations(dsn=settings.database_url, migrations_dir=Path("./migrations"))
+```
+
+- **Forward-only**: Sem rollback. Correcoes via nova migration
+- **Idempotente**: Re-execucao nao aplica migrations ja registradas
+- **Checksum**: SHA-256 do conteudo detecta drift
+- **Tracking**: `prosauai_ops.schema_migrations` (version, applied_at, checksum)
+
+CLI: `python -m prosauai.ops.migrate --database-url $DATABASE_URL`
+
+## 3d. Log Persistence (epic 006)
+
+Todos os containers Docker com log rotation configurado:
+
+```yaml
+# docker-compose.yml
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "5"
+```
+
+- **Max total por service**: 250MB (50m x 5 files)
+- **Max total stack** (5 services): 1.25GB
+- **Aplicado a**: api, redis, postgres, phoenix + netdata, retention-cron (prod)
+- **Logs sobrevivem restarts** e sao acessiveis via `docker compose logs`
+
+---
+
 ## 4. Concerns Transversais
 
 ### 4.1 Autenticacao & Autorizacao
@@ -192,7 +245,7 @@ prosauai/
 |---------|-----------|-----|
 | Autenticacao tenant admin | Supabase Auth (JWT) — login email/password | — |
 | Isolamento de dados | Pool + RLS com `SET LOCAL` por transacao | [ADR-011](../decisions/ADR-011-pool-rls-multi-tenant/) |
-| Wrapper RLS | `auth.tenant_id()` STABLE SECURITY DEFINER — todas as policies usam | [ADR-011](../decisions/ADR-011-pool-rls-multi-tenant/) |
+| Wrapper RLS | `prosauai_ops.tenant_id()` STABLE SECURITY DEFINER — todas as policies usam | [ADR-011](../decisions/ADR-011-pool-rls-multi-tenant/), [ADR-024](../decisions/ADR-024-schema-isolation/) |
 | Indexes obrigatorios | `tenant_id` em toda tabela de dados, sem excecao | [ADR-011](../decisions/ADR-011-pool-rls-multi-tenant/) |
 | Service role key | Nunca exposta no frontend; apenas server-side | [ADR-011](../decisions/ADR-011-pool-rls-multi-tenant/) |
 | Tenant context | Sempre `SET LOCAL` (transaction-scoped), nunca `SET` global | [ADR-011](../decisions/ADR-011-pool-rls-multi-tenant/) |
@@ -321,7 +374,7 @@ prosauai/
 | Item | Status | Nota |
 |------|--------|------|
 | Consent flow no 1o contato | Desenhado | [ADR-018](../decisions/ADR-018-data-retention-lgpd/) |
-| Retention cron automatico (diario) | Desenhado | [ADR-018](../decisions/ADR-018-data-retention-lgpd/) — cascade delete |
+| Retention cron automatico (diario) | ✅ Implementado | [ADR-018](../decisions/ADR-018-data-retention-lgpd/) — `prosauai/ops/retention.py` + container `retention-cron` (epic 006) |
 | SAR endpoint | Desenhado | [ADR-018](../decisions/ADR-018-data-retention-lgpd/) — 15 dias SLA |
 | PII detection pre-LLM | Desenhado | [ADR-016](../decisions/ADR-016-agent-runtime-safety/) — Layer A regex |
 | Encryption at rest | Supabase managed | Transparente via provider |

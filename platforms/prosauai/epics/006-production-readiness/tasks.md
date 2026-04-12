@@ -161,7 +161,7 @@
 - [x] T031 [P] Update ADR-018: add Implementation section referencing prosauai/ops/retention.py, document partitioning as purge strategy (DROP PARTITION), document effective retention 90-120d due to monthly granularity (file: platforms/prosauai/decisions/ADR-018-data-retention-lgpd.md)
 - [x] T032 [P] Update ADR-020: add note about PHOENIX_SQL_DATABASE_SCHEMA=observability for prod, document SQLite dev vs Postgres prod split via docker-compose.prod.yml (file: platforms/prosauai/decisions/ADR-020-phoenix-observability.md)
 - [x] T033 Update containers.md: add Netdata to container matrix, add retention-cron container, update Phoenix status (Postgres backend in prod), update Postgres status (schema isolation), add scaling notes for partitioned messages (file: platforms/prosauai/engineering/containers.md)
-- [ ] T034 Update blueprint.md: add schema layout section (prosauai + prosauai_ops + observability + admin), add log persistence to infrastructure stack, document migration runner in deployment section (file: platforms/prosauai/engineering/blueprint.md)
+- [x] T034 Update blueprint.md: add schema layout section (prosauai + prosauai_ops + observability + admin), add log persistence to infrastructure stack, document migration runner in deployment section (file: platforms/prosauai/engineering/blueprint.md)
 
 ---
 
