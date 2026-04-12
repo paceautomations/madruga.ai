@@ -157,7 +157,6 @@ MadrugaError (base)
 | MADRUGA_MODE | manual | Gate mode: manual/interactive/auto |
 | MADRUGA_EXECUTOR_TIMEOUT | 3000s | Skill execution timeout |
 | MADRUGA_MAX_CONCURRENT | 3 | Max concurrent pipeline runs |
-| MADRUGA_QUEUE_PROMOTION | 0 (off) | Auto-promover epics queued quando slot libera. Opt-in |
 | MADRUGA_BARE_LITE | 1 (on) | Dispatch com bare-lite flags (--strict-mcp-config, --tools). 0 → legacy |
 | MADRUGA_SCOPED_CONTEXT | 1 (on) | Incluir docs scoped por task. 0 → inclui tudo |
 | MADRUGA_CACHE_ORDERED | 1 (on) | Reordenar prompt para cache-optimal prefix. 0 → legacy order |

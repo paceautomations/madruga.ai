@@ -1232,12 +1232,16 @@ async def _run_implement_phases(
             complete_run(conn, run_id, status="failed", error=error)
             log.error("Phase '%s' failed with zero progress: %s", phase_label, error)
 
-            if consecutive_phase_failures >= IMPLEMENT_MAX_CONSECUTIVE_FAILURES:
-                log.error(
-                    "Aborting phase dispatch: %d consecutive failures. Fix root cause before re-dispatching.",
-                    consecutive_phase_failures,
-                )
-                break
+        # Auto-commit after each phase with progress to avoid DirtyTreeError on restart
+        if phase_completed > 0:
+            _auto_commit_epic(cwd, platform_name, epic_slug)
+
+        if consecutive_phase_failures >= IMPLEMENT_MAX_CONSECUTIVE_FAILURES:
+            log.error(
+                "Aborting phase dispatch: %d consecutive failures. Fix root cause before re-dispatching.",
+                consecutive_phase_failures,
+            )
+            break
 
     summary = f"{total_completed}/{total_tasks} tasks completed (phase dispatch)"
     all_done = total_completed >= total_tasks

@@ -255,17 +255,17 @@ This enables planning multiple epics ahead while another epic is executing on it
 `/epic-context --queue <platform> <epic>` (or `platform_cli.py queue <platform> <epic>`) marks a drafted epic as `queued`.
 When the platform's running slot becomes free, the easter daemon auto-promotes the oldest queued epic to `in_progress` (FIFO).
 
-- **Status**: `queued` (DB status — easter auto-promotes when slot frees AND `MADRUGA_QUEUE_PROMOTION=1`)
+- **Status**: `queued` (DB status — easter auto-promotes when slot frees)
 - **Dequeue**: `platform_cli.py dequeue <platform> <epic>` reverts `queued` → `drafted` without losing artifacts
 - **Queue inspection**: `platform_cli.py queue-list <platform>` shows queued epics in FIFO order
-- **Feature flag**: `MADRUGA_QUEUE_PROMOTION` env var (default **off**). Must restart easter to toggle.
+- **Always-on**: Queue promotion runs unconditionally — no feature flag needed (flag removed in epic 025).
 - **Branch isolation**: External platforms use the main clone directly (branch checkout). The developer sees the active epic branch in their editor without navigating to a worktree path. This is the only isolation mode — worktree support was removed in epic 024.
 
 Safety: drafted and queued epics cannot accidentally enter the L2 cycle because:
 1. Easter only polls `status='in_progress'` (easter.py poll_active_epics)
 2. All other L2 skills check `current_branch starts with epic/` (pipeline-contract-base.md Step 0)
 3. `compute_epic_status()` in db.py does not auto-promote `drafted` or `queued` epics
-4. Auto-promotion hook is gated by `MADRUGA_QUEUE_PROMOTION=1` (default off)
+4. Auto-promotion hook only fires after an epic ships and platform slot is verified empty
 
 ### Parallel Epics Constraint (ARCHITECTURAL INVARIANT)
 

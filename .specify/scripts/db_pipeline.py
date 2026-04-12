@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import sqlite3
+from datetime import datetime
 from pathlib import Path
 
 import yaml
@@ -38,6 +39,10 @@ _EPIC_STATUS_MAP = {
     "cancelled": "cancelled",
     "canceled": "cancelled",
 }
+
+# Claude's duration_ms is inference-only and can be wildly low (4s reported vs
+# 16min real). When below this threshold, complete_run() substitutes wall-clock.
+_WALL_CLOCK_THRESHOLD_MS = 10_000
 
 # Fields allowed in complete_run() updates — validated at import time to prevent SQL injection
 _COMPLETE_RUN_FIELDS = frozenset(
@@ -461,8 +466,21 @@ def insert_run(conn: sqlite3.Connection, platform_id: str, node_id: str, **kwarg
 
 
 def complete_run(conn: sqlite3.Connection, run_id: str, status: str = "completed", **kwargs) -> None:
+    completed_at = _now()
+    # Wall-clock fallback: Claude's duration_ms is inference-only and can be
+    # wildly low (4s reported vs 16min real). Substitute wall-clock when the
+    # reported value is suspiciously short.
+    reported = kwargs.get("duration_ms")
+    if reported is not None and reported < _WALL_CLOCK_THRESHOLD_MS:
+        row = conn.execute("SELECT started_at FROM pipeline_runs WHERE run_id=?", (run_id,)).fetchone()
+        if row and row[0]:
+            wall_ms = int(
+                (datetime.fromisoformat(completed_at) - datetime.fromisoformat(row[0])).total_seconds() * 1000
+            )
+            if wall_ms > reported:
+                kwargs["duration_ms"] = wall_ms
     sets = ["status=?", "completed_at=?"]
-    vals: list = [status, _now()]
+    vals: list = [status, completed_at]
     for field in _COMPLETE_RUN_FIELDS:
         if field in kwargs:
             sets.append(f"{field}=?")

@@ -355,31 +355,28 @@ async def dag_scheduler(conn, semaphore, shutdown_event, poll_interval=15, platf
                         _running_epics.discard(epic_id)
                         unbind_contextvars("epic_id", "platform")
 
-                        # --- epic 024: auto-promotion hook ---
-                        if os.environ.get("MADRUGA_QUEUE_PROMOTION", "0") == "1":
-                            try:
-                                # Check if platform's slot is now empty (sequential invariant)
-                                has_running = await asyncio.to_thread(_platform_has_running_epic, epic_platform_id)
-                                if not has_running:
-                                    from queue_promotion import promote_queued_epic
+                        # --- auto-promotion hook (always-on since epic 025) ---
+                        try:
+                            has_running = await asyncio.to_thread(_platform_has_running_epic, epic_platform_id)
+                            if not has_running:
+                                from queue_promotion import promote_queued_epic
 
-                                    result = await asyncio.to_thread(promote_queued_epic, epic_platform_id)
-                                    logger.info(
-                                        "auto_promotion_hook_result",
-                                        platform=epic_platform_id,
-                                        freed_epic=epic_id,
-                                        result_status=result.status,
-                                        promoted_epic=result.epic_id,
-                                        duration_ms=result.duration_ms,
-                                        attempts=result.attempts,
-                                    )
-                            except Exception:
-                                logger.exception(
-                                    "promotion_hook_unhandled_exception",
+                                result = await asyncio.to_thread(promote_queued_epic, epic_platform_id)
+                                logger.info(
+                                    "auto_promotion_hook_result",
                                     platform=epic_platform_id,
                                     freed_epic=epic_id,
+                                    result_status=result.status,
+                                    promoted_epic=result.epic_id,
+                                    duration_ms=result.duration_ms,
+                                    attempts=result.attempts,
                                 )
-                        # --- end epic 024 ---
+                        except Exception:
+                            logger.exception(
+                                "promotion_hook_unhandled_exception",
+                                platform=epic_platform_id,
+                                freed_epic=epic_id,
+                            )
             finally:
                 try:
                     poll_conn.close()
@@ -737,12 +734,13 @@ async def lifespan(app: FastAPI):
 
             # A8: propagate SIGTERM down the claude subprocess tree so they
             # can flush/exit cleanly instead of being SIGKILL'd when systemd's
-            # TimeoutStopSec expires. Bounded to 10s — any survivors get
-            # SIGKILL'd inside terminate_active_subprocesses.
+            # TimeoutStopSec expires (60s). 45s for subprocesses + 15s for
+            # easter shutdown (WAL checkpoint, lock file). Previously 10s
+            # caused premature SIGKILL on long nodes (judge ~12min).
             try:
                 from dag_executor import terminate_active_subprocesses
 
-                signalled = await terminate_active_subprocesses(graceful_timeout=10.0)
+                signalled = await terminate_active_subprocesses(graceful_timeout=45.0)
                 if signalled:
                     logger.info("shutdown_terminated_children", count=signalled)
             except Exception:

@@ -1219,65 +1219,33 @@ def test_aggregate_completed_nodes_no_implement():
 
 
 class TestPromotionHook:
-    """Tests for the MADRUGA_QUEUE_PROMOTION gated hook in dag_scheduler."""
+    """Tests for the auto-promotion hook in dag_scheduler (always-on since epic 025)."""
 
-    def test_noop_when_flag_unset(self):
-        """T078: env var unset → promote_queued_epic NOT called."""
-        import os
-        from unittest.mock import patch as _patch
-
-        os.environ.pop("MADRUGA_QUEUE_PROMOTION", None)
-
-        with _patch("queue_promotion.promote_queued_epic") as mock_promote:
-            # Simulate the flag check directly
-            if os.environ.get("MADRUGA_QUEUE_PROMOTION", "0") == "1":
-                mock_promote("prosauai")
-            mock_promote.assert_not_called()
-
-    def test_noop_when_flag_zero(self):
-        """T079: env var = '0' → promote_queued_epic NOT called."""
-        import os
-        from unittest.mock import patch as _patch
-
-        with _patch.dict(os.environ, {"MADRUGA_QUEUE_PROMOTION": "0"}):
-
-            with _patch("queue_promotion.promote_queued_epic") as mock_promote:
-                if os.environ.get("MADRUGA_QUEUE_PROMOTION", "0") == "1":
-                    mock_promote("prosauai")
-                mock_promote.assert_not_called()
-
-    def test_fires_when_flag_one(self):
-        """T080: env var = '1' → promote_queued_epic IS called."""
-        import os
+    def test_promotion_fires_unconditionally(self):
+        """promote_queued_epic is called when platform slot frees."""
         from unittest.mock import patch as _patch
 
         from queue_promotion import PromotionResult
 
         mock_result = PromotionResult(status="promoted", epic_id="005-next")
 
-        with _patch.dict(os.environ, {"MADRUGA_QUEUE_PROMOTION": "1"}):
-            with _patch("queue_promotion.promote_queued_epic", return_value=mock_result) as mock_promote:
-                if os.environ.get("MADRUGA_QUEUE_PROMOTION", "0") == "1":
-                    result = mock_promote("prosauai")
-                    assert result.status == "promoted"
-                mock_promote.assert_called_once_with("prosauai")
+        with _patch("queue_promotion.promote_queued_epic", return_value=mock_result) as mock_promote:
+            result = mock_promote("prosauai")
+            assert result.status == "promoted"
+            mock_promote.assert_called_once_with("prosauai")
 
     def test_exception_does_not_crash(self):
-        """T081: promote raises → caught, poll loop continues."""
-        import os
+        """promote raises → caught, poll loop continues."""
         from unittest.mock import patch as _patch
 
-        with _patch.dict(os.environ, {"MADRUGA_QUEUE_PROMOTION": "1"}):
-            with _patch("queue_promotion.promote_queued_epic", side_effect=KeyError("boom")):
-                # Simulate the bare except from the hook
-                try:
-                    if os.environ.get("MADRUGA_QUEUE_PROMOTION", "0") == "1":
-                        from queue_promotion import promote_queued_epic
+        with _patch("queue_promotion.promote_queued_epic", side_effect=KeyError("boom")):
+            try:
+                from queue_promotion import promote_queued_epic
 
-                        promote_queued_epic("prosauai")
-                    assert False, "Should have raised"
-                except Exception:
-                    pass  # Hook catches all exceptions — poll loop continues
+                promote_queued_epic("prosauai")
+                assert False, "Should have raised"
+            except Exception:
+                pass  # Hook catches all exceptions — poll loop continues
 
     def test_platform_has_running_epic_helper(self, tmp_db):
         """T082 helper: _platform_has_running_epic returns correct values."""

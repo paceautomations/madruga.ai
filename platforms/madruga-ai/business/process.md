@@ -115,7 +115,7 @@ flowchart TB
 
 ### Skill Map — Flow 4: Easter (operacional)
 
-> Mesmas skills do Flow 2, executadas autonomamente pelo easter via DAG executor + MADRUGA_MODE. Apos epic ser shipped, queue promotion auto-promove o proximo epic enfileirado (se MADRUGA_QUEUE_PROMOTION=1). Ver tabela do Flow 2.
+> Mesmas skills do Flow 2, executadas autonomamente pelo easter via DAG executor + MADRUGA_MODE. Apos epic ser shipped, queue promotion auto-promove o proximo epic enfileirado. Ver tabela do Flow 2.
 
 ---
 
@@ -497,7 +497,7 @@ sequenceDiagram
 **Premissas para este fluxo:**
 - Easter usa as **mesmas skills** que o PM-Arquiteto usa interativamente — zero duplicacao
 - Decisoes 1-way door **sempre** escalam para humano, mesmo em modo autonomo (MADRUGA_MODE=auto nao bypassa 1-way-door)
-- Queue promotion e opt-in via MADRUGA_QUEUE_PROMOTION=1 (default off). Restart do daemon necessario para toggle
+- Queue promotion e always-on — quando um epic e shipped e a fila tem epics queued, o proximo e auto-promovido
 - Epics executam sequencialmente — 1 por plataforma. Promocao respeita FIFO (ordered by updated_at)
 - Cascade branch: novo epic parte do tip do epic anterior (nao de main), garantindo historico incremental
 
@@ -558,7 +558,7 @@ gitgraph
 
 ### Queue Promotion (Auto)
 
-Quando um epic e shipped e `MADRUGA_QUEUE_PROMOTION=1`, o easter hook:
+Quando um epic e shipped, o easter hook automaticamente:
 
 1. **Consulta fila:** `get_next_queued_epic(platform_id)` — busca o mais antigo por `updated_at ASC`
 2. **Dirty-tree guard:** Verifica se o clone tem mudancas nao commitadas. Se sim → epic vira `blocked` + notificacao ntfy
@@ -694,7 +694,6 @@ make logs            # tail logs (easter + portal)
 | `MADRUGA_MODE` | `manual` | Gate mode: manual (pausa), interactive (prompt y/n), auto (end-to-end) |
 | `MADRUGA_EXECUTOR_TIMEOUT` | `3000` (s) | Timeout por skill dispatch |
 | `MADRUGA_MAX_CONCURRENT` | `3` | Max dispatches simultaneos |
-| `MADRUGA_QUEUE_PROMOTION` | `0` (off) | Auto-promover epics queued. Opt-in. Restart necessario |
 | `MADRUGA_BARE_LITE` | `1` (on) | Dispatch com flags bare-lite (--strict-mcp-config, --tools, etc). `0` → legacy |
 | `MADRUGA_SCOPED_CONTEXT` | `1` (on) | Incluir docs scoped por task (data-model, contracts). `0` → inclui tudo |
 | `MADRUGA_CACHE_ORDERED` | `1` (on) | Reordenar prompt para cache-optimal prefix. `0` → legacy order |
@@ -788,7 +787,7 @@ O git post-commit hook (`hook_post_commit.py`) e instalado via `make install-hoo
 | 7 | O epic cycle (Flow 2) e o fluxo mais executado — roda N vezes por plataforma | Confirmado |
 | 8 | Epics executam sequencialmente — 1 por plataforma por vez | Confirmado |
 | 9 | Commits rastreados automaticamente via post-commit hook | Confirmado |
-| 10 | Queue promotion e opt-in (MADRUGA_QUEUE_PROMOTION=1, default off) | Confirmado |
+| 10 | Queue promotion e always-on — auto-promove proximo epic queued quando slot libera | Confirmado |
 | 11 | Diagramas Mermaid inline em .md sao a source of truth visual (ADR-020) | Confirmado |
 
 ---
