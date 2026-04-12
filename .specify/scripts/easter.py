@@ -1121,6 +1121,35 @@ async def commits_stats(
     }
 
 
+# --- Epic Queue Management ---
+
+
+@app.post("/api/epics/{platform_id}/{epic_id}/queue")
+async def queue_epic(platform_id: str, epic_id: str):
+    """Transition a drafted epic to queued status."""
+    from db_core import _now, get_conn, migrate
+
+    with get_conn() as conn:
+        migrate(conn)
+        row = conn.execute(
+            "SELECT status FROM epics WHERE platform_id=? AND epic_id=?",
+            (platform_id, epic_id),
+        ).fetchone()
+        if row is None:
+            return JSONResponse(status_code=404, content={"error": f"Epic {epic_id} not found"})
+        if row["status"] != "drafted":
+            return JSONResponse(
+                status_code=409,
+                content={"error": f"Cannot queue: status is '{row['status']}', expected 'drafted'"},
+            )
+        conn.execute(
+            "UPDATE epics SET status='queued', updated_at=? WHERE platform_id=? AND epic_id=?",
+            (_now(), platform_id, epic_id),
+        )
+        conn.commit()
+    return {"status": "queued", "epic_id": epic_id, "platform_id": platform_id}
+
+
 # --- CLI Entry Point ---
 
 

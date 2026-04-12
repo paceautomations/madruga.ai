@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import PlatformCards from './PlatformCards';
 import { NODE_LABELS, resolveNodeHref } from '../../lib/constants';
 
@@ -61,6 +61,15 @@ const PHASES = [
 ];
 
 const ALL_L2_STAGES = ['epic-context', 'specify', 'clarify', 'plan', 'tasks', 'analyze', 'implement', 'analyze-post', 'judge', 'qa', 'reconcile'];
+
+const STATUS_BADGE: Record<string, { bg: string; color: string }> = {
+  drafted: { bg: 'var(--sl-color-gray-6, #222)', color: 'var(--sl-color-gray-3, #888)' },
+  queued: { bg: '#78350f', color: '#fbbf24' },
+  blocked: { bg: '#450a0a', color: '#f87171' },
+  proposed: { bg: 'var(--sl-color-gray-7, #111)', color: 'var(--sl-color-gray-4, #666)' },
+};
+
+const EASTER_API = 'http://localhost:8000';
 
 // ── Helpers (same logic as original Astro frontmatter) ──
 
@@ -190,6 +199,23 @@ export default function ExecutionTab({ allPlatforms, initialPlatformId }: Execut
     return { layers, staleNodes, nextStep, kanban, totalEpics, shippedEpics, activeEpics };
   }, [platform]);
 
+  // Track epics whose status was changed via the UI (optimistic updates)
+  const [statusOverrides, setStatusOverrides] = useState<Record<string, string>>({});
+
+  const handleQueue = useCallback(async (epicId: string) => {
+    try {
+      const res = await fetch(`${EASTER_API}/api/epics/${selectedId}/${epicId}/queue`, { method: 'POST' });
+      if (res.ok) {
+        setStatusOverrides((prev) => ({ ...prev, [epicId]: 'queued' }));
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || `Failed to queue epic ${epicId}`);
+      }
+    } catch {
+      alert('Easter API not reachable. Start the daemon first.');
+    }
+  }, [selectedId]);
+
   const handleSelect = (id: string) => {
     // Navigate to the new platform's control panel (full reload syncs sidebar + dropdown)
     const hash = window.location.hash || '#execution';
@@ -315,13 +341,32 @@ export default function ExecutionTab({ allPlatforms, initialPlatformId }: Execut
                       {cards.length > 0 && <span style={S.colCount}>{cards.length}</span>}
                     </div>
                     <div style={S.colBody}>
-                      {cards.map((epic) => (
+                      {cards.map((epic) => {
+                        const effectiveStatus = statusOverrides[epic.id] || epic.status;
+                        const badge = phase.id === 'backlog' ? STATUS_BADGE[effectiveStatus] : null;
+                        const showQueueBtn = phase.id === 'backlog' && effectiveStatus === 'drafted';
+                        return (
                         <a key={epic.id} href={`/${selectedId}/epics/${epic.id}/pitch/`} style={{ ...S.epicCard, ...(phase.id === 'shipped' ? { borderLeft: '2px solid #22c55e', opacity: 0.65 } : {}) }}>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.1rem' }}>
                             <span style={{ fontSize: '0.6rem', color: 'var(--sl-color-gray-4, #666)', fontWeight: 700, fontFamily: 'var(--sl-font-mono, monospace)' }}>{epic.id.split('-')[0]}</span>
-                            {epic.subStage && <span style={{ fontSize: '0.5rem', padding: '0.05rem 0.25rem', borderRadius: 3, background: 'var(--sl-color-gray-7, #111)', color: 'var(--sl-color-gray-4, #666)', textTransform: 'uppercase', fontWeight: 700 }}>{epic.subStage}</span>}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                              {badge && <span style={{ fontSize: '0.5rem', padding: '0.05rem 0.3rem', borderRadius: 3, background: badge.bg, color: badge.color, textTransform: 'uppercase', fontWeight: 700 }}>{effectiveStatus}</span>}
+                              {epic.subStage && <span style={{ fontSize: '0.5rem', padding: '0.05rem 0.25rem', borderRadius: 3, background: 'var(--sl-color-gray-7, #111)', color: 'var(--sl-color-gray-4, #666)', textTransform: 'uppercase', fontWeight: 700 }}>{epic.subStage}</span>}
+                            </div>
                           </div>
                           <span style={{ display: 'block', fontSize: '0.72rem', lineHeight: 1.3, color: 'var(--sl-color-gray-2, #ccc)' }}>{epic.title}</span>
+                          {showQueueBtn && (
+                            <button
+                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleQueue(epic.id); }}
+                              style={{
+                                marginTop: '0.3rem', padding: '0.15rem 0.5rem', fontSize: '0.55rem', fontWeight: 700,
+                                background: '#78350f', color: '#fbbf24', border: '1px solid #92400e', borderRadius: 4,
+                                cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.05em',
+                              }}
+                            >
+                              ▶ Queue
+                            </button>
+                          )}
                           {epic.done > 0 && (
                             <div style={{ marginTop: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                               <div style={{ flex: 1, height: 2, background: 'var(--sl-color-gray-5, #333)', borderRadius: 1, overflow: 'hidden' }}>
@@ -331,7 +376,8 @@ export default function ExecutionTab({ allPlatforms, initialPlatformId }: Execut
                             </div>
                           )}
                         </a>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 );
