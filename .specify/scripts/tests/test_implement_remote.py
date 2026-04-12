@@ -197,3 +197,56 @@ class TestRunImplement:
             result = implement_remote.run_implement("myplat", "001-feat")
 
         assert result == 2
+
+
+# ══════════════════════════════════════
+# Epic 024: get_repo_work_dir call-site swap (T070–T072)
+# ══════════════════════════════════════
+
+
+class TestCallSiteSwap:
+    """Verify implement_remote uses get_repo_work_dir instead of create_worktree."""
+
+    @staticmethod
+    def _setup_epic_dir(tmp_path, plat_name):
+        """Create minimal epic dir with required artifacts."""
+        plat_dir = tmp_path / "platforms" / plat_name
+        plat_dir.mkdir(parents=True)
+        epic_dir = plat_dir / "epics" / "001-test"
+        epic_dir.mkdir(parents=True)
+        for f in ("spec.md", "plan.md", "tasks.md"):
+            (epic_dir / f).write_text(f"# {f}\ncontent")
+        return plat_dir, epic_dir
+
+    def test_uses_get_repo_work_dir(self, tmp_path):
+        """T070: run_implement calls get_repo_work_dir."""
+        plat_dir, epic_dir = self._setup_epic_dir(tmp_path, "ext")
+        (plat_dir / "platform.yaml").write_text("name: ext\nrepo:\n  org: testorg\n  name: ext-repo\n")
+
+        mock_work_dir = tmp_path / "work"
+        mock_work_dir.mkdir()
+
+        with (
+            patch.object(implement_remote, "REPO_ROOT", tmp_path),
+            patch("ensure_repo.get_repo_work_dir", return_value=mock_work_dir) as mock_grwd,
+            patch("dag_executor.build_dispatch_cmd", return_value=["echo", "test"]),
+            patch("implement_remote.subprocess.run", return_value=MagicMock(returncode=0)),
+        ):
+            implement_remote.run_implement("ext", "001-test")
+
+        mock_grwd.assert_called_once_with("ext", "001-test")
+
+    def test_selfref_dispatches_via_get_repo_work_dir(self, tmp_path):
+        """T072: Self-ref platform also goes through get_repo_work_dir."""
+        plat_dir, epic_dir = self._setup_epic_dir(tmp_path, "myplat")
+        (plat_dir / "platform.yaml").write_text("name: myplat\nrepo:\n  org: paceautomations\n  name: madruga.ai\n")
+
+        with (
+            patch.object(implement_remote, "REPO_ROOT", tmp_path),
+            patch("ensure_repo.get_repo_work_dir", return_value=tmp_path) as mock_grwd,
+            patch("dag_executor.build_dispatch_cmd", return_value=["echo", "test"]),
+            patch("implement_remote.subprocess.run", return_value=MagicMock(returncode=0)),
+        ):
+            implement_remote.run_implement("myplat", "001-test")
+
+        mock_grwd.assert_called_once_with("myplat", "001-test")
