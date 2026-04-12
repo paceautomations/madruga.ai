@@ -826,7 +826,7 @@ def cmd_queue(name: str, epic_id: str) -> None:
         if row is None:
             _error(f"Epic {epic_id} not found for platform {name}.")
             sys.exit(2)
-        current = row[0] if isinstance(row, tuple) else row["status"]
+        current = row["status"]
         if current != "drafted":
             _error(f"Cannot queue epic {epic_id}: current status is '{current}', expected 'drafted'.")
             sys.exit(3)
@@ -855,7 +855,7 @@ def cmd_dequeue(name: str, epic_id: str) -> None:
         if row is None:
             _error(f"Epic {epic_id} not found for platform {name}.")
             sys.exit(2)
-        current = row[0] if isinstance(row, tuple) else row["status"]
+        current = row["status"]
         if current != "queued":
             _error(f"Cannot dequeue epic {epic_id}: current status is '{current}', expected 'queued'.")
             sys.exit(3)
@@ -893,9 +893,9 @@ def cmd_queue_list(name: str, as_json: bool = False) -> None:
             "queue": [
                 {
                     "position": i + 1,
-                    "epic_id": r["epic_id"] if isinstance(r, dict) else r[0],
-                    "title": r["title"] if isinstance(r, dict) else r[1],
-                    "queued_at": r["updated_at"] if isinstance(r, dict) else r[2],
+                    "epic_id": r["epic_id"],
+                    "title": r["title"],
+                    "queued_at": r["updated_at"],
                 }
                 for i, r in enumerate(rows)
             ],
@@ -906,10 +906,7 @@ def cmd_queue_list(name: str, as_json: bool = False) -> None:
     print(f"\nQueue for platform {name} ({len(rows)} epics):\n")
     print(f"  {'#':<4s} {'Epic ID':<30s} {'Title':<35s} {'Queued at'}")
     for i, r in enumerate(rows):
-        eid = r["epic_id"] if isinstance(r, dict) else r[0]
-        title = r["title"] if isinstance(r, dict) else r[1]
-        queued_at = r["updated_at"] if isinstance(r, dict) else r[2]
-        print(f"  {i + 1:<4d} {eid:<30s} {title:<35s} {queued_at}")
+        print(f"  {i + 1:<4d} {r['epic_id']:<30s} {r['title']:<35s} {r['updated_at']}")
 
 
 if __name__ == "__main__":

@@ -126,10 +126,12 @@ def _get_cascade_base(repo_path: Path, binding: dict) -> str:
 def _notify(message: str) -> None:
     """Best-effort notification via existing ntfy channel."""
     try:
-        from ntfy import ntfy_alert, get_ntfy_topic
+        import os
 
-        topic = get_ntfy_topic()
+        topic = os.environ.get("MADRUGA_NTFY_TOPIC")
         if topic:
+            from ntfy import ntfy_alert
+
             ntfy_alert(topic, message)
     except Exception:
         log.debug("notify_delivery_failed", exc_info=True)

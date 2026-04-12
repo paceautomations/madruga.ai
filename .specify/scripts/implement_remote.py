@@ -150,7 +150,7 @@ def run_implement(
 
     binding = _load_repo_binding(platform_name)
 
-    # Resolve working directory (dispatches based on repo.isolation in platform.yaml)
+    # Resolve working directory (self-ref → REPO_ROOT, external → clone + branch checkout)
     work_dir = get_repo_work_dir(platform_name, epic_slug)
 
     # Compose prompt
