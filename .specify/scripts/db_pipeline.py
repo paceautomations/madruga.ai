@@ -29,6 +29,7 @@ _EPIC_STATUS_MAP = {
     "planned": "proposed",
     "drafted": "drafted",
     "draft": "drafted",
+    "queued": "queued",
     "in_progress": "in_progress",
     "in progress": "in_progress",
     "shipped": "shipped",
@@ -332,6 +333,19 @@ def get_epics(conn: sqlite3.Connection, platform_id: str) -> list[dict]:
         (platform_id,),
     ).fetchall()
     return [dict(r) for r in rows]
+
+
+def get_next_queued_epic(conn: sqlite3.Connection, platform_id: str) -> dict | None:
+    """Return the oldest queued epic for a platform (FIFO by updated_at), or None."""
+    row = conn.execute(
+        "SELECT epic_id, platform_id, title, branch_name, updated_at"
+        " FROM epics"
+        " WHERE platform_id = ? AND status = 'queued'"
+        " ORDER BY updated_at ASC, epic_id ASC"
+        " LIMIT 1",
+        (platform_id,),
+    ).fetchone()
+    return dict(row) if row else None
 
 
 # ══════════════════════════════════════
@@ -914,7 +928,7 @@ def compute_epic_status(
     Pass completed_ids to avoid a redundant DB query when caller already has the data.
     Safety: never regresses shipped to a lesser status.
     """
-    if current_status in ("blocked", "cancelled", "shipped", "drafted"):
+    if current_status in ("blocked", "cancelled", "shipped", "drafted", "queued"):
         return current_status, None
 
     if completed_ids is None:
