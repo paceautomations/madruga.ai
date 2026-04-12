@@ -203,3 +203,91 @@ class TestEnsureRepo:
             ensure_repo.ensure_repo("myplat")
 
         mock_rmtree.assert_called_once_with(repo_path)
+
+
+# ══════════════════════════════════════
+# Epic 024: get_repo_work_dir tests (T054–T063)
+# ══════════════════════════════════════
+
+
+class TestGetRepoWorkDir:
+    """T054–T058: get_repo_work_dir dispatch logic."""
+
+    def test_selfref_short_circuits(self, tmp_path):
+        """T054: Self-ref platform → returns REPO_ROOT, no git ops."""
+        (tmp_path / "platforms" / "madruga-ai").mkdir(parents=True)
+        (tmp_path / "platforms" / "madruga-ai" / "platform.yaml").write_text(
+            "name: madruga-ai\nrepo:\n  org: paceautomations\n  name: madruga.ai\n"
+        )
+
+        with patch.object(ensure_repo, "REPO_ROOT", tmp_path):
+            result = ensure_repo.get_repo_work_dir("madruga-ai", "001-test")
+
+        assert result == tmp_path
+
+    def test_worktree_mode_default(self, tmp_path):
+        """T055: No isolation key → delegates to create_worktree."""
+        (tmp_path / "platforms" / "ext").mkdir(parents=True)
+        (tmp_path / "platforms" / "ext" / "platform.yaml").write_text(
+            "name: ext\nrepo:\n  org: testorg\n  name: ext-repo\n  base_branch: main\n"
+        )
+
+        with (
+            patch.object(ensure_repo, "REPO_ROOT", tmp_path),
+            patch("worktree.create_worktree", return_value=Path("/tmp/wt")) as mock_wt,
+        ):
+            result = ensure_repo.get_repo_work_dir("ext", "001-test")
+
+        assert result == Path("/tmp/wt")
+        mock_wt.assert_called_once_with("ext", "001-test")
+
+    def test_worktree_mode_explicit(self, tmp_path):
+        """T056: isolation: worktree → delegates to create_worktree."""
+        (tmp_path / "platforms" / "ext").mkdir(parents=True)
+        (tmp_path / "platforms" / "ext" / "platform.yaml").write_text(
+            "name: ext\nrepo:\n  org: testorg\n  name: ext-repo\n  isolation: worktree\n"
+        )
+
+        with (
+            patch.object(ensure_repo, "REPO_ROOT", tmp_path),
+            patch("worktree.create_worktree", return_value=Path("/tmp/wt")) as mock_wt,
+        ):
+            result = ensure_repo.get_repo_work_dir("ext", "001-test")
+
+        assert result == Path("/tmp/wt")
+        mock_wt.assert_called_once()
+
+    def test_branch_mode_calls_checkout(self, tmp_path):
+        """T057: isolation: branch → calls ensure_repo + _checkout_epic_branch."""
+        (tmp_path / "platforms" / "ext").mkdir(parents=True)
+        (tmp_path / "platforms" / "ext" / "platform.yaml").write_text(
+            "name: ext\nrepo:\n  org: testorg\n  name: ext-repo\n"
+            "  base_branch: develop\n  epic_branch_prefix: 'epic/ext/'\n"
+            "  isolation: branch\n"
+        )
+        clone_path = tmp_path / "repos" / "ext-repo"
+        clone_path.mkdir(parents=True)
+
+        with (
+            patch.object(ensure_repo, "REPO_ROOT", tmp_path),
+            patch("ensure_repo.ensure_repo", return_value=clone_path) as mock_ensure,
+            patch("queue_promotion._checkout_epic_branch") as mock_checkout,
+        ):
+            result = ensure_repo.get_repo_work_dir("ext", "001-test")
+
+        assert result == clone_path
+        mock_ensure.assert_called_once_with("ext")
+        mock_checkout.assert_called_once()
+
+    def test_unknown_isolation_raises(self, tmp_path):
+        """T058: isolation: foo → ValueError."""
+        (tmp_path / "platforms" / "ext").mkdir(parents=True)
+        (tmp_path / "platforms" / "ext" / "platform.yaml").write_text(
+            "name: ext\nrepo:\n  org: testorg\n  name: ext-repo\n  isolation: foo\n"
+        )
+
+        with (
+            patch.object(ensure_repo, "REPO_ROOT", tmp_path),
+            pytest.raises(ValueError, match="Unknown isolation mode"),
+        ):
+            ensure_repo.get_repo_work_dir("ext", "001-test")

@@ -144,6 +144,45 @@ def ensure_repo(platform_name: str) -> Path:
             pass
 
 
+class DirtyTreeError(Exception):
+    """Raised when a repo working tree has uncommitted changes."""
+
+
+def get_repo_work_dir(platform_name: str, epic_slug: str) -> Path:
+    """Resolve the working directory for an epic's L2 cycle.
+
+    Dispatches based on repo.isolation in platform.yaml:
+      - "worktree" (default): returns a new or existing worktree path.
+      - "branch": returns the platform's main clone path after checking out
+        the epic branch.
+
+    Self-ref platforms short-circuit to REPO_ROOT regardless of isolation setting.
+    """
+    binding = _load_repo_binding(platform_name)
+
+    if _is_self_ref(binding["name"]):
+        return REPO_ROOT
+
+    # Read isolation mode from platform.yaml
+    manifest_path = REPO_ROOT / "platforms" / platform_name / "platform.yaml"
+    with open(manifest_path) as f:
+        manifest = yaml.safe_load(f)
+    isolation = manifest.get("repo", {}).get("isolation", "worktree")
+
+    if isolation == "branch":
+        repo_path = ensure_repo(platform_name)
+        from queue_promotion import _checkout_epic_branch
+
+        _checkout_epic_branch(repo_path, epic_slug, binding)
+        return repo_path
+    elif isolation == "worktree":
+        from worktree import create_worktree
+
+        return create_worktree(platform_name, epic_slug)
+    else:
+        raise ValueError(f"Unknown isolation mode: {isolation!r} for platform {platform_name}")
+
+
 if __name__ == "__main__":
     import argparse
 
