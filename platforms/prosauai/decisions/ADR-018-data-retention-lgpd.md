@@ -144,6 +144,62 @@ pii_patterns = {
 - **NUNCA armazenar numero WhatsApp em plain text** em logs ou traces — usar hash SHA-256
 - **NUNCA reter dados alem do periodo configurado** — cron job de purge e obrigatorio, nao opcional
 
+## Implementacao (epic 006)
+
+> Adicionado no epic 006-production-readiness. Implementacao concreta da retention policy descrita acima.
+
+### Estrategia de purge por tabela
+
+| Tabela | Metodo | Modulo | Justificativa |
+|--------|--------|--------|---------------|
+| `prosauai.messages` (particionada) | `DROP TABLE partition` (DDL) | `prosauai/ops/partitions.py` | Instantaneo (<100ms), sem write amplification, bypassa RLS automaticamente |
+| `prosauai.conversations` (closed) | `DELETE` batch (LIMIT 1000) | `prosauai/ops/retention.py` | Tabela nao-particionada, batch limita lock duration |
+| `prosauai.eval_scores` | `DELETE` batch (LIMIT 1000) | `prosauai/ops/retention.py` | Tabela nao-particionada |
+| `observability.spans` (Phoenix) | `DELETE WHERE start_time < threshold` | `prosauai/ops/retention.py` | Schema gerenciado pelo Phoenix |
+| `admin.audit_log` | **NUNCA** | — | Compliance — retencao minima 365d, sem purge automatico |
+
+### Particionamento como estrategia de purge
+
+A tabela `messages` foi criada com `PARTITION BY RANGE (created_at)` e particoes mensais (ex: `prosauai.messages_2026_04`). Isso permite:
+
+1. **Purge instantaneo**: `DROP TABLE prosauai.messages_2026_01` remove toda a particao em <100ms, sem DML
+2. **Zero write amplification**: Nao precisa DELETE row-by-row com vacuum posterior
+3. **Bypass automatico de RLS**: DDL (`DROP TABLE`) nao e afetado por RLS policies
+4. **Idempotencia natural**: Particao ja removida nao causa erro na re-execucao
+
+### Retencao efetiva: 90-120 dias
+
+Devido a granularidade mensal das particoes, o purge so ocorre quando **TODOS** os dados da particao tem >90 dias. Uma particao do mes-limite (com dados < 90 dias e > 90 dias) permanece intacta ate expirar completamente. Na pratica, a retencao efetiva e 90-120 dias dependendo do timing.
+
+Trade-off aceito: simplicidade (sem DELETE parcial dentro de particao) vs compliance (margem conservadora favorece o usuario — dados sao retidos por mais tempo, nao menos).
+
+### Cron de retention
+
+Implementado como container Docker (`retention-cron`) com loop `sleep 86400` (24h):
+
+```bash
+# docker-compose.prod.yml
+command: >
+  sh -c "while true; do
+    python -m prosauai.ops.retention_cli --dry-run=false;
+    sleep 86400;
+  done"
+```
+
+- **Default dry-run**: CLI executa em modo `--dry-run` por padrao (seguranca)
+- **UTC everywhere**: Todas as comparacoes de data usam `now() AT TIME ZONE 'UTC'`
+- **Idempotente**: Re-execucao apos restart nao causa duplicacao
+- **Logging estruturado**: structlog com campos `run_id`, `table`, `rows_purged`, `partitions_dropped`, `duration_ms`
+
+### Lifecycle de particoes
+
+O cron tambem gerencia o lifecycle de particoes:
+
+1. **Cria particoes futuras**: 3 meses a frente (previne erro de INSERT sem particao)
+2. **Remove particoes expiradas**: Onde todos os dados tem >90 dias
+
+Codigo: `prosauai/ops/partitions.py` (ensure_future_partitions + drop_expired_partitions)
+
 ## Alternativas consideradas
 
 ### Sem retention policy (guardar tudo indefinidamente)
