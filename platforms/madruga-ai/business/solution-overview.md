@@ -1,6 +1,6 @@
 ---
 title: "Solution Overview"
-updated: 2026-04-05
+updated: 2026-04-12
 sidebar:
   order: 2
 ---
@@ -47,6 +47,17 @@ Tudo vive em um unico lugar, versionado, consultavel por qualquer membro do time
 | **Qualidade de codigo e DX** | db.py dividido em 4 modulos (db_core, db_pipeline, db_decisions, db_observability), error hierarchy tipada, structured logging (log_utils), 644 testes automatizados em 29 arquivos | Base de codigo sustentavel — cada modulo tem responsabilidade unica, erros sao tipados, logs parseados por CI |
 | **Pipeline intelligence** | Cost tracking (tokens_in/out, cost_usd por run), hallucination guard (detecta outputs sem tool calls), quick-fix skill (fast lane L2 para bug fixes: specify→implement→judge) | Custo visivel, outputs fabricados bloqueados, bug fixes sem overhead de 11 passos |
 | **Governanca de AI infrastructure** | CODEOWNERS (review obrigatorio em .claude/), CONTRIBUTING.md, SECURITY.md, PR template, skill-lint extensivel com blast radius detection | Mudancas em AI instructions nunca passam sem review — governanca minima estabelecida |
+
+---
+
+## Implementado (cont.) — Epics 022-024
+
+| Feature | Descricao | Por que é importante |
+|---------|-----------|---------------------|
+| **Mermaid inline migration** | Removida toda infraestrutura LikeC4 (8 arquivos .likec4, VitePlugin, componentes React dedicados, 5 paginas .astro). Diagramas Mermaid inline nos proprios .md de arquitetura. ADR-020 supersede ADR-001 | Zero tooling extra para diagramas. GitHub, Starlight e qualquer viewer Markdown renderiza. Reducao de ~50% em configuracao do portal |
+| **Commit traceability** | Post-commit hook automatico: detecta platform e epic de cada commit por branch/file path, persiste na tabela `commits`. Portal tab Changes com filtros por epic, stats ad-hoc vs epic-bound. Backfill retroativo do historico completo | Ponte entre rastreabilidade de artefatos (skills) e mudancas de codigo (git). Responde "quais commits compoem o epic N?" sem CLI manual |
+| **Queue promotion e branch checkout** | CLI `queue/dequeue/queue-list` para enfileirar epics. Easter auto-promove o mais antigo (FIFO) quando slot libera. Branch checkout direto no clone (sem worktree). Cascade branch: novo epic parte do tip do anterior | "Enfileira 3 epics sexta-feira, confere resultados segunda." Elimina handoff manual entre epics sequenciais. Developer ve branch ativo no editor sem navegar para worktree |
+| **Pair-program companion** | Skill `/madruga:pair-program` — observer em tempo real de easter runs. Classifica ticks como healthy/opportunity/critical. Registra melhorias em easter-tracking.md. Intervem cirurgicamente so em issues criticos | Supervisao automatica de execucao autonoma sem overhead de atencao constante |
 
 ---
 

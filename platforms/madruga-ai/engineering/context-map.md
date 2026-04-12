@@ -1,6 +1,6 @@
 ---
 title: "Context Map"
-updated: 2026-04-06
+updated: 2026-04-12
 sidebar:
   order: 3
 ---
@@ -82,7 +82,7 @@ graph TD
 |------------|-------|---------------|--------|
 | Big Ball of Mud | Sem boundaries claros | Todos os contextos comunicam com todos | OK — 6 relacoes, nao N² |
 | Shared Kernel excessivo | Acoplamento forte | >2 contextos compartilhando kernel | OK — apenas PO↔PS (justificado pelo monolito) |
-| God Context | 1 contexto faz tudo | Contexto com >5 aggregates | ATENCAO — Pipeline Orchestration (dag_executor 2,117 LOC) e candidato a decomposicao |
+| God Context | 1 contexto faz tudo | Contexto com >5 aggregates | ATENCAO — Pipeline Orchestration (dag_executor ~2,500 LOC) e candidato a decomposicao |
 | Contexto isolado | Contexto sem relacoes | Nenhum no mapa | OK — todos os 5 BCs tem pelo menos 1 relacao |
 
 ---

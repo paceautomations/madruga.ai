@@ -1,29 +1,29 @@
 ---
 title: "Roadmap"
-updated: 2026-04-10
+updated: 2026-04-12
 ---
 # ProsaUAI — Delivery Roadmap
 
-> Sequenciamento de epics, milestones e definicao de MVP. Atualizado: 2026-04-10 (slot 003 preenchido com Multi-Tenant Foundation + draft 004-router-mece + Fase 2/3 documentadas em ADR-021/022/023).
+> Sequenciamento de epics, milestones e definicao de MVP. Atualizado: 2026-04-12 (epics 001-004 shipped; proximo: epic 005 Conversation Core).
 
 ---
 
 ## Status
 
-**Lifecycle:** building — epic 001 (Channel Pipeline) entregue 2026-04-09.
+**Lifecycle:** building — epics 001-004 entregues, MVP a 80%.
 **L1 Pipeline:** 12/13 nodes completos. Revisao completa realizada em 2026-04-07.
 **L1 Pendente:** codebase-map (opcional — plataforma greenfield, sem valor agregado).
-**L2 Status:** Epic 001 shipped (52 tasks, 122 testes, judge 92%, QA 97%). Epic 002 in-progress. Epics 003 e 004 drafted.
-**Proximo marco:** terminar epic 002 (Observability), promover epic 003 (Multi-Tenant Foundation), depois epic 004 (Router MECE). Prod deploy unico apos 003 + 004 mergerem.
+**L2 Status:** Epic 001 shipped (52 tasks, 122 testes, judge 92%, QA 97%). Epic 002 shipped (Phoenix + OTel). Epic 003 shipped (multi-tenant auth + parser reality + deploy). Epic 004 shipped (MECE routing engine + agent resolution).
+**Proximo marco:** iniciar epic 005 (Conversation Core) — ultimo epic MVP. Apos 005, prod deploy completo com IA generativa.
 
 ---
 
 ## MVP
 
 **MVP Epics:** 001-channel-pipeline + 002-observability + 003-multi-tenant-foundation + 004-router-mece + 005-conversation-core
-**MVP Criterion:** Agente recebe mensagem WhatsApp **multi-tenant** (>=2 instancias Evolution reais), parseia 100% dos payloads reais (vs 50% hoje), responde com IA, persiste em BD, **com observabilidade total da jornada** e **router MECE provado em CI**.
-**Total MVP Estimate:** ~6-7 semanas (1w done + 1w 002 + 1w 003 + 1w 004 + 2w 005)
-**Progresso MVP:** 20% (001 entregue; 002 in-progress; 003, 004, 005 pendentes)
+**MVP Criterion:** Agente recebe mensagem WhatsApp **multi-tenant** (>=2 instancias Evolution reais), parseia 100% dos payloads reais, responde com IA, persiste em BD, **com observabilidade total da jornada** e **router MECE provado em CI**.
+**Total MVP Estimate:** ~6-7 semanas (4w done + 2w 005)
+**Progresso MVP:** 80% (001, 002, 003, 004 shipped; 005 pendente)
 
 ---
 
@@ -35,9 +35,9 @@ gantt
     dateFormat YYYY-MM-DD
     section MVP
     001 Channel Pipeline (DONE)   :done, a1, 2026-04-08, 1d
-    002 Observability              :a2, after a1, 1w
-    003 Multi-Tenant Foundation    :a3, after a2, 1w
-    004 Router MECE                :a4, after a3, 1w
+    002 Observability (DONE)       :done, a2, after a1, 1w
+    003 Multi-Tenant Foundation (DONE) :done, a3, after a2, 1w
+    004 Router MECE (DONE)         :done, a4, after a3, 1w
     005 Conversation Core          :a5, after a4, 2w
     section Post-MVP
     006 Configurable Routing (DB) + Groups :a6, after a5, 1w
@@ -62,9 +62,9 @@ gantt
 | Ordem | Epic | Deps | Risco | Milestone | Status |
 |-------|------|------|-------|-----------|--------|
 | 1 | 001: Channel Pipeline | — | baixo | MVP | **shipped** (52 tasks, 122 testes, judge 92%) |
-| 2 | 002: Observability (Phoenix + OTel) | 001 | medio | MVP | **in-progress** (branch epic/prosauai/002-observability) |
-| 3 | 003: Multi-Tenant Foundation (auth + parser reality + deploy) | 002 | medio | MVP | **drafted** (pitch em epics/003-multi-tenant-foundation/) |
-| 4 | 004: Router MECE | 003 | medio | MVP | **drafted** (pitch em epics/004-router-mece/) |
+| 2 | 002: Observability (Phoenix + OTel) | 001 | medio | MVP | **shipped** (Phoenix + OTel SDK + structlog bridge) |
+| 3 | 003: Multi-Tenant Foundation (auth + parser reality + deploy) | 002 | medio | MVP | **shipped** (TenantStore YAML, X-Webhook-Secret auth, 26 fixtures, idempotency Redis) |
+| 4 | 004: Router MECE | 003 | medio | MVP | **shipped** (classify() + RoutingEngine declarativa, MECE 4 camadas, config YAML per-tenant) |
 | 5 | 005: Conversation Core | 004 | medio | MVP | sugerido |
 | 6 | 006: Configurable Routing (DB) + Groups | 004, 005 | baixo | Post-MVP | sugerido — escopo reduzido pelo 004 |
 | 7 | 007: Agent Tools | 005 | medio | Post-MVP | sugerido |
@@ -134,18 +134,18 @@ graph LR
 | Custo LLM acima do esperado no MVP | Pendente (epic 005) | Alto | Baixa | Bifrost com fallback Sonnet → Haiku |
 | Complexidade de grupo subestimada | **Eliminado (epic 001)** | — | — | Smart Router 6 rotas funcional |
 | Observability ops complexity | **Mitigado (epic 002)** | Baixo | Baixa | Phoenix (Arize) substitui LangFuse — single container, Postgres backend, sem ClickHouse ([ADR-020](../decisions/ADR-020-phoenix-observability.md)) |
-| OTel overhead em hot path do webhook | Novo (epic 002) | Baixo | Baixa | Sampling configuravel + benchmark p50/p95/p99 antes/depois |
-| Reconcile pendente do epic 001 (12 propostas) | Carregado (epic 002) | Baixo | — | Aplicar como primeira tarefa do epic 002 (status updates de docs) |
-| Router nao-MECE hardcoded bloqueia agent resolution | **Endereçado (epic 004 draft)** | Alto | — | `classify()` puro + `RoutingEngine` declarativa + garantias MECE em 4 camadas (tipo/schema/runtime/CI) |
-| **Servico rejeita 100% dos webhooks reais (HMAC imaginario)** | **Endereçado (epic 003 draft)** | Critico | — | Rip-and-replace HMAC, X-Webhook-Secret per-tenant validado empiricamente 2026-04-10 |
-| **Parser falha em 50% das mensagens reais (messageType errados)** | **Endereçado (epic 003 draft)** | Critico | — | 12 correcoes contra 26 fixtures capturadas reais; fixture sintetica deletada |
-| Refactor multi-tenant posterior seria doloroso | **Endereçado (epic 003 draft)** | Alto | — | Multi-tenant **estrutural** desde dia 1 (Alternativa D); 2 tenants reais (Ariel + ResenhAI) operando em paralelo |
-| Merge conflict entre 003 (router T7) e 004 (router rip-and-replace) | **Endereçado (epic 003 draft)** | Medio | — | T7 cirurgica (<= 30 linhas); 004 e rip-and-replace; sequencia back-to-back de main, sem cascade |
+| OTel overhead em hot path do webhook | **Mitigado (epic 002)** | Baixo | Baixa | Sampling configuravel + BatchSpanProcessor fire-and-forget |
+| Reconcile pendente do epic 001 (12 propostas) | **Eliminado (epic 002)** | — | — | Aplicado durante epic 002 |
+| Router nao-MECE hardcoded bloqueia agent resolution | **Eliminado (epic 004)** | — | — | `classify()` puro + `RoutingEngine` declarativa + MECE 4 camadas (tipo/schema/runtime/CI). Agent resolution implementada |
+| **Servico rejeita 100% dos webhooks reais (HMAC imaginario)** | **Eliminado (epic 003)** | — | — | X-Webhook-Secret per-tenant validado empiricamente com 2 tenants reais |
+| **Parser falha em 50% das mensagens reais (messageType errados)** | **Eliminado (epic 003)** | — | — | 12 correcoes contra 26 fixtures capturadas reais; 13 tipos de mensagem suportados |
+| Refactor multi-tenant posterior seria doloroso | **Eliminado (epic 003)** | — | — | Multi-tenant estrutural desde dia 1; 2 tenants reais (Ariel + ResenhAI) operando em paralelo |
+| Merge conflict entre 003 (router T7) e 004 (router rip-and-replace) | **Eliminado** | — | — | Sequencia back-to-back executada sem conflitos |
 
 ---
 
-*Proximos passos: terminar epic 002 (Observability). Promover epic 003 (Multi-Tenant Foundation) apos 002 mergar — delta review adiciona `tenant_id` em spans do 002. Depois 004-router-mece. Prod deploy unico apos 003 + 004 mergerem.*
+*Proximos passos: iniciar epic 005 (Conversation Core) — ultimo epic MVP. Epics 001-004 entregues e mergeados em develop.*
 
 ---
 
-> **Proximo passo:** terminar `epic/prosauai/002-observability` em andamento. Depois: `/madruga:epic-context prosauai 003` (sem `--draft`) para promover, fazer delta review do 002 (`tenant_id` em spans), criar branch `epic/prosauai/003-multi-tenant-foundation` e entrar no ciclo L2.
+> **Proximo passo:** `/madruga:epic-context prosauai 005` para criar branch `epic/prosauai/005-conversation-core` e iniciar o ciclo L2. Apos 005, primeiro deploy de producao com IA generativa real.

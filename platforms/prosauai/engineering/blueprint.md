@@ -1,6 +1,6 @@
 ---
 title: "Engineering Blueprint"
-updated: 2026-04-10
+updated: 2026-04-12
 sidebar:
   order: 1
 ---
@@ -18,7 +18,7 @@ Referencia tecnica consolidada da plataforma **ProsaUAI — Agentes WhatsApp**: 
 
 | Componente | Runtime | Porta/Protocolo | Scaling |
 |------------|---------|-----------------|---------|
-| prosauai-api | Python 3.12, FastAPI + uvicorn | 8040/HTTP | Horizontal (stateless) |
+| prosauai-api | Python 3.12, FastAPI + uvicorn | 8050/HTTP | Horizontal (stateless) |
 | prosauai-worker | Python 3.12, ARQ (async task queue) | — (consumer) | Horizontal (Redis consumer groups) |
 | prosauai-admin | Next.js 15, shadcn/ui | 3000/HTTP | Horizontal (stateless) |
 | Redis 7 | Managed ou self-hosted | 6379/TCP | Single instance + Sentinel (HA) |
@@ -61,7 +61,7 @@ graph LR
         evolution-api["Evolution API<br/><small>WhatsApp Gateway</small>"]
         supabase-resenhai[("Supabase ResenhAI<br/><small>PG 15 read-only</small>")]
         openai-gpt-mini["OpenAI GPT mini"]
-        langfuse["LangFuse v3"]
+        phoenix-ext["Phoenix (Arize)<br/><small>OTel traces</small>"]
         infisical["Infisical"]
     end
 
@@ -87,7 +87,7 @@ graph LR
     %% Worker → External
     prosauai-worker -- "POST sendText" --> evolution-api
     prosauai-worker -- "asyncpg read-only" --> supabase-resenhai
-    prosauai-worker -. "HTTPS SDK traces" .-> langfuse
+    prosauai-worker -. "OTLP gRPC traces" .-> phoenix-ext
     prosauai-worker -- "SDK secret read" --> infisical
 
     %% Bifrost → LLMs

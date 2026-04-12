@@ -1,6 +1,6 @@
 ---
 title: "Domain Model"
-updated: 2026-04-06
+updated: 2026-04-12
 sidebar:
   order: 2
 ---
@@ -17,7 +17,7 @@ sidebar:
 | # | Bounded Context | Proposito | Justificativa de Separacao | Aggregates |
 |---|----------------|-----------|---------------------------|------------|
 | 1 | **Pipeline Orchestration** | Parsear DAG, despachar skills, gerenciar retry/circuit breaker | Linguagem propria (node, gate, dispatch, trace), ciclo de vida independente (parse → sort → dispatch → retry) | PipelineExecution, CircuitBreaker |
-| 2 | **Pipeline State** | CRUD de platforms, epics, nodes, runs, artifact provenance | Dominio de persistencia com regras proprias (migrations, seed, hash verification), linguagem distinta (upsert, seed, migrate) | Platform, Epic, PipelineNode, PipelineRun |
+| 2 | **Pipeline State** | CRUD de platforms, epics, nodes, runs, commits, artifact provenance | Dominio de persistencia com regras proprias (migrations, seed, hash verification), linguagem distinta (upsert, seed, migrate) | Platform, Epic, PipelineNode, PipelineRun, Commit |
 | 3 | **Observability** | Traces, eval scores, stats, export | Lifecycle independente — consome dados de runs mas tem logica propria (scoring heuristico, agregacao, retention) | Trace, EvalScore |
 | 4 | **Decision & Memory** | ADRs, memory entries, FTS5 search, classificacao 1-way/2-way | Dominio distinto com linguagem propria (supersede, decision_type, content_hash), busca full-text independente | Decision, MemoryEntry |
 | 5 | **Notifications** | Comunicacao com humano via Telegram/ntfy | Canal de I/O externo com backoff, offset persistence, inline keyboards — totalmente desacoplado do pipeline core | GateNotification |
@@ -120,10 +120,10 @@ classDiagram
 | Aspecto | Descricao |
 |---------|-----------|
 | **Nome** | Pipeline State |
-| **Proposito** | Persistir e consultar estado de platforms, epics, nodes, runs, artifact provenance |
-| **Linguagem Ubiqua** | upsert, seed, migrate, platform_id, epic_id, node_id, run_id, gate_status, output_hash |
-| **Aggregates** | Platform, Epic, PipelineRun |
-| **Modulos** | db_core.py, db_pipeline.py, post_save.py, config.py |
+| **Proposito** | Persistir e consultar estado de platforms, epics, nodes, runs, commits, artifact provenance |
+| **Linguagem Ubiqua** | upsert, seed, migrate, platform_id, epic_id, node_id, run_id, gate_status, output_hash, commit, source |
+| **Aggregates** | Platform, Epic, PipelineRun, Commit |
+| **Modulos** | db_core.py, db_pipeline.py, post_save.py, hook_post_commit.py, queue_promotion.py, config.py |
 
 
 ### Aggregates
@@ -164,9 +164,12 @@ classDiagram
     class Epic {
         +String epic_id
         +String platform_id
-        +String status (proposed|drafted|in_progress|shipped|blocked|cancelled)
+        +String status (proposed|drafted|queued|in_progress|shipped|blocked|cancelled)
         +String branch_name
         +datetime delivered_at
+        +queue() void
+        +dequeue() void
+        +promote() void
     }
     class EpicNode {
         +String node_id
@@ -180,8 +183,12 @@ classDiagram
 **Invariants:**
 | # | Invariant | Descricao | Quando Checar |
 |---|-----------|-----------|---------------|
-| 1 | Status valido | status IN (proposed, drafted, in_progress, shipped, blocked, cancelled) | Update |
+| 1 | Status valido | status IN (proposed, drafted, queued, in_progress, shipped, blocked, cancelled) | Update |
 | 2 | Branch obrigatoria | in_progress requer branch_name != null | Transicao para in_progress |
+| 3 | Sequential constraint | Apenas 1 epic in_progress por plataforma por vez | Transicao para in_progress |
+| 4 | Queue → only from drafted | queue() so aceita status=drafted | queue |
+| 5 | Dequeue → only from queued | dequeue() so aceita status=queued, reverte para drafted | dequeue |
+| 6 | Promote FIFO | promote() seleciona epic mais antigo por updated_at ASC | promote |
 
 #### Aggregate: PipelineRun
 
@@ -207,6 +214,30 @@ classDiagram
 |---|-----------|-----------|---------------|
 | 1 | Gate antes de prosseguir | Se gate = human/1-way-door, gate_status deve ser approved antes do proximo node | Dispatch |
 | 2 | Custo nao negativo | cost_usd >= 0 | Complete |
+
+#### Aggregate: Commit
+
+```mermaid
+classDiagram
+    class Commit {
+        +String sha (PK, UNIQUE)
+        +String message
+        +String author
+        +String platform_id
+        +String epic_id (nullable)
+        +String source (hook|backfill|manual|reseed)
+        +datetime committed_at
+        +JSON files_json
+    }
+```
+
+**Invariants:**
+| # | Invariant | Descricao | Quando Checar |
+|---|-----------|-----------|---------------|
+| 1 | SHA unico | sha e UNIQUE — INSERT OR IGNORE para idempotencia | Insert |
+| 2 | Epic_id nullable | Commits ad-hoc (fora de epic) tem epic_id = NULL | Insert |
+| 3 | Source valido | source IN (hook, backfill, manual, reseed) | Insert |
+| 4 | Platform detection automatica | Branch epic/<platform>/<NNN> → extrai platform; file paths → detecta; default → madruga-ai | hook_post_commit |
 
 ---
 
@@ -304,7 +335,7 @@ CREATE TABLE platforms (
 CREATE TABLE epics (
     epic_id TEXT NOT NULL, platform_id TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'proposed'
-        CHECK (status IN ('proposed','drafted','in_progress','shipped','blocked','cancelled')),
+        CHECK (status IN ('proposed','drafted','queued','in_progress','shipped','blocked','cancelled')),
     branch_name TEXT, delivered_at TEXT,
     PRIMARY KEY (epic_id, platform_id)
 );
@@ -330,6 +361,16 @@ CREATE TABLE eval_scores (
     node_id TEXT NOT NULL, run_id TEXT,
     dimension TEXT NOT NULL CHECK (dimension IN ('quality','adherence_to_spec','completeness','cost_efficiency')),
     score REAL NOT NULL CHECK (score >= 0 AND score <= 10)
+);
+
+-- Context: Pipeline State (Commit Traceability)
+CREATE TABLE commits (
+    sha TEXT PRIMARY KEY,
+    message TEXT NOT NULL, author TEXT,
+    platform_id TEXT NOT NULL, epic_id TEXT,
+    source TEXT NOT NULL DEFAULT 'hook'
+        CHECK (source IN ('hook','backfill','manual','reseed')),
+    committed_at TEXT NOT NULL, files_json TEXT
 );
 
 -- Context: Decision & Memory

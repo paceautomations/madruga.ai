@@ -1,6 +1,6 @@
 ---
 title: "Roadmap"
-updated: 2026-04-05
+updated: 2026-04-12
 ---
 # Madruga AI — Delivery Roadmap
 
@@ -52,6 +52,10 @@ gantt
     019 AI Infra as Code         :done, e019, 2026-04-05, 1d
     020 Code Quality & DX        :done, e020, 2026-04-05, 1d
     021 Pipeline Intelligence    :done, e021, 2026-04-05, 1d
+    section Maturidade
+    022 Mermaid Migration        :done, e022, 2026-04-06, 1d
+    023 Commit Traceability      :done, e023, 2026-04-08, 1d
+    024 Sequential Execution UX  :done, e024, 2026-04-12, 1d
 ```
 
 | # | Epic | Descricao | Status | Concluido |
@@ -72,6 +76,9 @@ gantt
 | 019 | AI Infrastructure as Code | CODEOWNERS (.claude/ requer review), CONTRIBUTING.md (regras de PR, commits, AI code), SECURITY.md (trust model, secrets, subprocess isolation), PR template, skill-lint com blast radius detection. | **shipped** | 2026-04-05 |
 | 020 | Code Quality & DX | db.py (2.268 LOC) dividido em 4 modulos (db_core, db_pipeline, db_decisions, db_observability). Error hierarchy (errors.py). Structured logging (log_utils.py). Memory consolidation. 644 testes em 29 arquivos (~10.800 LOC). | **shipped** | 2026-04-05 |
 | 021 | Pipeline Intelligence | Cost tracking (tokens_in/out, cost_usd parseados do claude -p JSON output). Hallucination guard (detecta outputs sem tool calls). Quick-fix skill (fast lane L2: specify→implement→judge). | **shipped** | 2026-04-05 |
+| 022 | Mermaid Migration | Removida infraestrutura LikeC4 (8 arquivos .likec4, VitePlugin, componentes React, 5 paginas .astro). Diagramas Mermaid inline nos .md. ADR-020 supersede ADR-001. ~50% reducao config portal. | **shipped** | 2026-04-06 |
+| 023 | Commit Traceability | Post-commit hook: detecta platform/epic por branch/file path, persiste em tabela `commits` (migration 014). Portal tab Changes com filtros. Backfill retroativo do historico completo. | **shipped** | 2026-04-08 |
+| 024 | Sequential Execution UX | Queue promotion: CLI queue/dequeue/queue-list. Easter auto-promote FIFO. Branch checkout direto (worktree removido). Cascade branch. DirtyTreeError. Pair-program companion. Migration 017. Flag MADRUGA_QUEUE_PROMOTION. | **shipped** | 2026-04-12 |
 
 ---
 
@@ -93,6 +100,10 @@ gantt
     019 AI Infra as Code         :done, e019, 2026-04-05, 1d
     020 Code Quality & DX        :done, e020, 2026-04-05, 1d
     021 Pipeline Intelligence    :done, e021, 2026-04-05, 1d
+    section Maturidade
+    022 Mermaid Migration        :done, e022, 2026-04-06, 1d
+    023 Commit Traceability      :done, e023, 2026-04-08, 1d
+    024 Sequential Execution UX  :done, e024, 2026-04-12, 1d
 ```
 
 ### Sequencia e Justificativa
@@ -114,12 +125,15 @@ gantt
 
 ```mermaid
 graph LR
-    E012["012 Multi-repo\nImplement (2w)"]
-    E013["013 DAG Executor\n+ SpeckitBridge (6w)"]
-    E014["014 Telegram\nNotifications (2w)"]
-    E015["015 Subagent Judge\n+ Decision Classifier (2w)"]
-    E016["016 Easter 24/7 (2w)"]
-    E017["017 Observability\nTracing & Evals (2w)"]
+    E012["012 Multi-repo\nImplement"]
+    E013["013 DAG Executor\n+ Bridge"]
+    E014["014 Telegram\nNotifications"]
+    E015["015 Subagent Judge"]
+    E016["016 Easter 24/7"]
+    E017["017 Observability"]
+    E022["022 Mermaid\nMigration"]
+    E023["023 Commit\nTraceability"]
+    E024["024 Sequential\nExecution UX"]
 
     E012 --> E013
     E013 --> E014
@@ -127,27 +141,32 @@ graph LR
     E014 --> E016
     E015 --> E016
     E016 --> E017
+    E017 --> E022
+    E022 --> E023
+    E023 --> E024
 ```
 
 ---
 
 ## Milestones
 
-| Milestone | Epics | Criterio de Sucesso | Estimativa |
-|-----------|-------|---------------------|------------|
-| **ProsaUAI Operacional** | 012 | `speckit.implement` executa em repo ProsaUAI via worktree, PR criado com `gh` | Semana 2 | Tooling pronto (ensure_repo, worktree, implement_remote). Falta teste end-to-end com ProsaUAI real. |
-| **Runtime Funcional** | 012, 013 | DAG executor processa 1 pipeline L1 completo via CLI, human gates pausam/resumem corretamente | Semana 8 | Tooling pronto (ensure_repo, worktree, dag_executor). Falta teste end-to-end com claude -p real. |
-| **Autonomia MVP** | 012-016 | 1 epic completo (pitch-to-PR) processado pelo easter em repo ProsaUAI, com Telegram notifications e Subagent Judge review | **Alcancado 2026-04-01** — todos os 5 epics MVP shipped. MADRUGA_MODE=auto habilita execucao end-to-end. Falta validacao end-to-end com ProsaUAI real. |
+| Milestone | Epics | Criterio de Sucesso | Status |
+|-----------|-------|---------------------|--------|
+| **ProsaUAI Operacional** | 012 | `speckit.implement` executa em repo ProsaUAI, PR criado com `gh` | **Alcancado 2026-03-31** |
+| **Runtime Funcional** | 012, 013 | DAG executor processa 1 pipeline L1 completo via CLI, human gates pausam/resumem corretamente | **Alcancado 2026-03-31** |
+| **Autonomia MVP** | 012-016 | 1 epic completo (pitch-to-PR) processado pelo easter com Telegram + Judge | **Alcancado 2026-04-01** — MADRUGA_MODE=auto habilita execucao end-to-end |
+| **Maturidade Pipeline** | 017-021 | Observabilidade, hardening, code quality, governance, intelligence | **Alcancado 2026-04-05** |
+| **Queue Automation** | 022-024 | Mermaid inline, commit traceability, queue promotion com auto-promote FIFO | **Alcancado 2026-04-12** — easter auto-promove epics enfileirados |
 
 ---
 
 ## Proximos Epics (candidatos)
 
-> Todos os epics planejados (018-021) foram shipped em 2026-04-05. Proximos candidatos a definir.
+> Todos os epics planejados (018-024) foram shipped ate 2026-04-12. Pipeline maduro com 24 epics entregues. Proximos candidatos a definir.
 
 | # | Candidato | Problema | Prioridade | Status |
 |---|-----------|----------|------------|--------|
-| — | ProsaUAI end-to-end | Primeiro epic completo processado pelo Easter em repo externo ProsaUAI — validacao real do pipeline autonomo pitch-to-PR | P0 | candidato |
+| — | ProsaUAI end-to-end | Primeiro epic completo processado pelo Easter em repo externo ProsaUAI — validacao real do pipeline autonomo pitch-to-PR | P0 | em execucao (epics 001-004 shipped) |
 | — | Roadmap auto-atualizado | Roadmap gerado automaticamente do estado real dos ciclos, com drift score e status de milestones | P2 | candidato |
 
 ---
@@ -161,8 +180,9 @@ graph LR
 | Calibracao de personas do Subagent Judge | Reviews com muito noise (false positives) | Media | **Mitigado**: 4 personas fixas + Judge filtra por Accuracy/Actionability/Severity. Calibrado com 7 ADRs reais. |
 | aiogram breaking changes | TelegramAdapter quebra sem aviso | Baixa | Pin version. Health check detecta falha. Fallback log-only. Nao ocorreu ate agora. |
 | Team size = 1 | Nenhum paralelismo real entre 014 e 015 | Alta | **Materializado**: todos os epics foram sequenciais. Appetite real ~1d cada (vs 2w planejado). |
-| Documentation drift acumulado | Drift entre implementacao e docs cresce sem reconcile regular | Media | **Materializado**: 4/13 docs outdated no reconcile consolidado 017-021. Mitigacao: rodar reconcile apos cada epic. |
+| Documentation drift acumulado | Drift entre implementacao e docs cresce sem reconcile regular | Media | **Materializado**: 4/13 docs outdated no reconcile consolidado 017-021. Mitigacao: rodar reconcile apos cada epic. Full reconcile feito em 2026-04-12 (8 docs atualizados). |
 | stdlib shadowing (platform.py) | Import do modulo errado causa erros sutis | Media | **Mitigado**: renomeado para platform_cli.py + teste automatizado. |
+| Dirty tree bloqueando queue promotion | Promocao automatica falha se clone tem mudancas nao commitadas | Baixa | **Mitigado**: DirtyTreeError detecta e transiciona epic para blocked + notificacao ntfy. |
 
 ---
 
@@ -175,8 +195,8 @@ graph LR
 | Migracao de codigo de general/ | Abandonada. Runtime sera construido do zero em madruga.ai, capturando aprendizados mas sem migracao de codigo. | Nunca — decisao permanente (ADR-017, ADR-018). |
 | Multi-tenant (N operadores) | Single-operator hoje (Gabriel). Multi-tenant adiciona autenticacao, isolamento, billing — complexidade injustificada. | Quando houver segundo operador com plataformas proprias. |
 | Supabase migration | SQLite funciona bem na escala atual. | Quando >5 plataformas ativas ou portal precisar de real-time. |
-| Wave-based parallel execution | Complexo (1-2d), valor especulativo. | Quando implementando epics grandes (6w+) com muitas tasks independentes. |
-| Portal pipeline dashboard (visual DAG) | Nice-to-have. Portal ja tem status via CLI e tab Runs. | Quando 3+ plataformas ativas. |
+| Wave-based parallel execution | Complexo (1-2d), valor especulativo. Sequential execution UX (024) resolve o problema pragmaticamente. | Quando implementando epics grandes (6w+) com muitas tasks independentes. |
+| Portal pipeline dashboard (visual DAG) | Nice-to-have. Portal ja tem status via CLI, tab Runs e tab Changes. | Quando 3+ plataformas ativas. |
 | Pre-commit hooks (detect-secrets, shellcheck) | Overhead para solo dev. CI scan (epic 019) cobre o essencial. | Quando houver time >1 pessoa. |
 
 ---
@@ -192,7 +212,7 @@ graph LR
 handoff:
   from: roadmap
   to: epic-context
-  context: "MVP completo (012-016 shipped). Epic 017 (Observability) em progresso. Proximo passo: completar L2 do epic 017."
+  context: "24 epics shipped (006-024). Pipeline maduro com queue promotion, commit traceability, observabilidade completa. ProsaUAI epics em execucao autonoma."
   blockers: []
   confidence: Alta
   kill_criteria: "Mudanca fundamental nos epics planejados ou reordenacao de prioridades"

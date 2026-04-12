@@ -1,6 +1,6 @@
 ---
 title: "Vision"
-updated: 2026-04-02
+updated: 2026-04-12
 sidebar:
   order: 1
 ---
@@ -90,11 +90,11 @@ Uso interno — sem pricing externo. Custo operacional: consumo de API Claude (c
 
 | Metrica | Hoje | 6 meses | 12 meses |
 |---------|------|---------|----------|
-| Plataformas documentadas | 2 (ProsaUAI + Madruga AI) | 5+ | 10+ |
-| Epics processados autonomamente | 0% (tooling pronto, falta end-to-end com ProsaUAI) | 80% | 95% |
+| Plataformas documentadas | 2 (ProsaUAI + Madruga AI, 24 epics shipped) | 5+ | 10+ |
+| Epics processados autonomamente | ~50% (pipeline funcional, ProsaUAI epics em execucao) | 80% | 95% |
 | Architectural drift detection | Auto-detect (reconcile 9 categorias) | Auto-fix (drift < 0.3) | Auto-fix continuo |
 | Time-to-spec (pitch → spec.md) | ~1h (semi-autonomo com skills) | ~30min autonomo | ~15min autonomo |
-| Skills disponiveis | 24 (13 L1 + 11 L2) | 26+ (+ observability, codebase map) | 30+ |
+| Skills disponiveis | 25+ (13 L1 + 12 L2 + quick cycle + pair-program) | 28+ | 30+ |
 | Cobertura Vision (artefatos preenchidos) | 100% Madruga AI, ~60% ProsaUAI | 95%+ por plataforma | 100% com auto-sync |
 
 ---
@@ -115,7 +115,7 @@ Uso interno — sem pricing externo. Custo operacional: consumo de API Claude (c
 
 | # | Risco | Impacto | Mitigacao |
 |---|-------|---------|-----------|
-| 1 | Context rot em execucao autonoma — context window cheia degrada qualidade | Alto — specs geradas ficam incompletas ou inconsistentes | Execucao em waves com subagents frescos (`speckit.execute-wave`). Cada wave recebe contexto limpo. |
+| 1 | Context rot em execucao autonoma — context window cheia degrada qualidade | Alto — specs geradas ficam incompletas ou inconsistentes | Dispatch via `claude -p` com contexto limpo por node. Bare-lite flags (ADR-021) cortam ~30-50% input tokens. |
 | 2 | Drift entre arquitetura e codigo — implementacao diverge do modelo | Alto — documentacao vira ficcao, perde confianca | RECONCILE loop: compara diff vs arquitetura, auto-update se drift < 0.3, escala humano se drift >= 0.3 |
 | 3 | Over-engineering do easter — complexidade desnecessaria no runtime | Medio — atrasa entrega, aumenta manutencao | Principio de pragmatismo. Ship imperfect. Testes cobrindo fluxo critico (51 testes existentes). |
 | 4 | Dependencia de Claude API — rate limits, mudancas de pricing, downtime | Alto — pipeline autonomo para completamente | Circuit breaker + retry com backoff exponencial. Fallback para modo interativo. Throttle configuravel. |

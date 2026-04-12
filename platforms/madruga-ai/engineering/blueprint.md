@@ -1,12 +1,12 @@
 ---
 title: "Engineering Blueprint"
-updated: 2026-04-06
+updated: 2026-04-12
 sidebar:
   order: 1
 ---
 # Madruga AI — Engineering Blueprint
 
-> Decisoes de engenharia, cross-cutting concerns, topologia e NFRs. Derivado dos 20 ADRs e do codebase real (~8,500 LOC Python + ~3,500 LOC portal). Ultima atualizacao: 2026-04-06.
+> Decisoes de engenharia, cross-cutting concerns, topologia e NFRs. Derivado dos 21 ADRs e do codebase real (~12,800 LOC Python + ~16,800 LOC testes + ~3,500 LOC portal). Ultima atualizacao: 2026-04-12.
 >
 > Artefatos relacionados: [Domain Model](../domain-model/) · [Context Map](../context-map/) · [Containers](../containers/) · [Integrations](../integrations/) · [ADRs](../decisions/)
 
@@ -28,6 +28,7 @@ sidebar:
 | Pipeline | Custom DAG executor | ADR-017 | Airflow, Prefect — custom por YAML-driven + claude -p dispatch |
 | Templates | Copier >= 9.4 | ADR-002 | Cookiecutter, Yeoman — Copier por `copier update` + `_skip_if_exists` |
 | Review AI | 4 personas + Judge | ADR-019 | Debate engine (superseded ADR-007) — Agent tool nativo elimina runtime custom |
+| Dispatch otimizado | Bare-lite flags (--strict-mcp-config, --tools, etc) | ADR-021 | Full flags — bare-lite corta ~30-50% input tokens sob OAuth |
 | Governanca | Decision gates (1-way/2-way) | ADR-013 | Manual-only, auto-only — hybrid por seguranca + velocidade |
 
 ---
@@ -78,13 +79,20 @@ madruga.ai/
 ├── .claude/commands/       # 30+ skill definitions (markdown)
 ├── .claude/knowledge/      # Pipeline contracts, DAG knowledge
 ├── .claude/rules/          # Plan review, hooks
-├── .specify/scripts/       # Python backend (~8,500 LOC)
+├── .specify/scripts/       # Python backend (~12,800 LOC)
 │   ├── easter.py           # Easter (scheduler, API, bot)
 │   ├── dag_executor.py     # DAG engine (sort, dispatch, circuit breaker)
-│   ├── platform_cli.py     # CLI management
-│   ├── db_pipeline.py      # SQLite schema + CRUD
+│   ├── platform_cli.py     # CLI management (queue/dequeue/status)
+│   ├── db_core.py          # Connection lifecycle, migrations, FTS5
+│   ├── db_pipeline.py      # Platform/epic CRUD, run tracking
+│   ├── db_decisions.py     # ADRs, memory, FTS5 search
+│   ├── db_observability.py # Traces, eval scores, stats
+│   ├── queue_promotion.py  # Epic queue auto-promotion
+│   ├── hook_post_commit.py # Git post-commit hook (commit traceability)
 │   ├── telegram_bot.py     # aiogram handlers
-│   └── tests/              # pytest suite
+│   ├── ensure_repo.py      # Repo management (branch checkout + worktree)
+│   └── tests/              # pytest suite (~16,800 LOC)
+├── .specify/pipeline.yaml  # Shared pipeline DAG definition (L1 + L2 + quick)
 ├── .specify/templates/     # Copier template (platform scaffold)
 ├── platforms/              # N platform directories
 │   └── <name>/             # business/, engineering/, decisions/, epics/
@@ -142,11 +150,18 @@ MadrugaError (base)
 | MADRUGA_MODE | manual | Gate mode: manual/interactive/auto |
 | MADRUGA_EXECUTOR_TIMEOUT | 3000s | Skill execution timeout |
 | MADRUGA_MAX_CONCURRENT | 3 | Max concurrent pipeline runs |
-| ANTHROPIC_API_KEY | (keychain) | Claude API auth (opcional) |
+| MADRUGA_QUEUE_PROMOTION | 0 (off) | Auto-promover epics queued quando slot libera. Opt-in |
+| MADRUGA_BARE_LITE | 1 (on) | Dispatch com bare-lite flags (--strict-mcp-config, --tools). 0 → legacy |
+| MADRUGA_SCOPED_CONTEXT | 1 (on) | Incluir docs scoped por task. 0 → inclui tudo |
+| MADRUGA_CACHE_ORDERED | 1 (on) | Reordenar prompt para cache-optimal prefix. 0 → legacy order |
+| MADRUGA_KILL_IMPLEMENT_CONTEXT | 1 (on) | Desabilitar implement-context.md append/read. 0 → legacy |
+| MADRUGA_DISPATCH | 0 | Flag interno: dag_executor seta em dispatch sessions para prevenir hook storms |
+| ANTHROPIC_API_KEY | (keychain) | Claude API auth (opcional — keychain preferido) |
 | MADRUGA_TELEGRAM_BOT_TOKEN | — | Telegram bot auth |
 | MADRUGA_SENTRY_DSN | — | Sentry error tracking (opcional) |
+| MADRUGA_NTFY_TOPIC | — | ntfy.sh push alerts (fallback de Telegram) |
 
-**Justificativa:** Single-machine deployment. Env vars cobrem 100% — config files adicionariam complexidade sem beneficio.
+**Justificativa:** Single-machine deployment. Env vars cobrem 100% — config files adicionariam complexidade sem beneficio. Kill-switches (BARE_LITE, SCOPED_CONTEXT, CACHE_ORDERED) permitem rollback granular sem redeploy.
 
 ### 4.4 Resiliencia
 
@@ -178,10 +193,11 @@ MadrugaError (base)
 
 | Store | Tipo | Dados | Tamanho Estimado |
 |-------|------|-------|------------------|
-| madruga.db | SQLite WAL | Platforms, epics, nodes, runs, traces, evals, decisions, memory | ~5-50MB |
-| platforms/*/ | Filesystem (git) | Markdown docs, ADRs, epic artifacts | ~15K linhas .md |
+| madruga.db | SQLite WAL | Platforms, epics, nodes, runs, traces, evals, decisions, memory, commits | ~5-50MB |
+| platforms/*/ | Filesystem (git) | Markdown docs, ADRs, epic artifacts | ~20K linhas .md |
 | portal/dist/ | Static files | HTML/JS/CSS gerado por Astro build | ~50MB |
 | .claude/commands/ | Filesystem (git) | 30+ skill definitions (markdown) | ~3K linhas |
+| .specify/scripts/ | Filesystem (git) | Python backend + tests | ~29K linhas |
 
 ---
 
