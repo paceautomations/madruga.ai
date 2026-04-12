@@ -93,6 +93,7 @@ function findNextStep(nodes: NodeData[]) {
 
 function getEpicPhase(epic: EpicData): { phaseId: string; subStage: string } {
   if (epic.status === 'shipped') return { phaseId: 'shipped', subStage: '' };
+  if (epic.status === 'drafted' || epic.status === 'queued' || epic.status === 'proposed' || epic.status === 'blocked') return { phaseId: 'backlog', subStage: '' };
   if (!epic.nodes || epic.nodes.length === 0) return { phaseId: 'backlog', subStage: '' };
   const doneIds = new Set(epic.nodes.filter((n) => n.status === 'done' || n.status === 'skipped').map((n) => n.id));
   if (doneIds.size >= ALL_L2_STAGES.length) return { phaseId: 'shipped', subStage: '' };

@@ -2,7 +2,7 @@
 title: "Epic 005 — Conversation Core"
 epic_id: "005-conversation-core"
 platform: prosauai
-status: drafted
+status: shipped
 created: 2026-04-12
 updated: 2026-04-12
 appetite: 2 semanas

@@ -42,7 +42,7 @@ Seis gaps concretos foram identificados ao cruzar o estado atual do codigo com o
 
 ### Gap 1 — Tabelas de negocio no schema `public`
 
-As 7 migrations do epic 005 (`001_create_schema.sql` a `006_eval_scores.sql`) criam todas as tabelas no schema `public` do Postgres. O Supabase usa `public` para suas proprias tabelas e funcoes (auth, storage, realtime). **Conflito garantido no deploy.**
+As 8 migrations do epic 005 (`001_create_schema.sql` a `007_seed_data.sql`, incluindo `003b_conversation_states.sql`) criam todas as tabelas no schema `public` do Postgres. O Supabase usa `public` para suas proprias tabelas e funcoes (auth, storage, realtime). **Conflito garantido no deploy.**
 
 Alem disso, a migration `001_create_schema.sql` cria `CREATE SCHEMA IF NOT EXISTS auth` e a funcao `auth.tenant_id()`. O Supabase ja tem seu proprio schema `auth` com funcoes e tabelas (`auth.users`, `auth.sessions`, etc.). Criar `auth.tenant_id()` dentro do schema `auth` do Supabase pode colidir com funcoes existentes ou futuras do provider.
 
@@ -50,7 +50,8 @@ Alem disso, a migration `001_create_schema.sql` cria `CREATE SCHEMA IF NOT EXIST
 - `migrations/001_create_schema.sql:9` — `CREATE SCHEMA IF NOT EXISTS auth;`
 - `migrations/001_create_schema.sql:16` — `CREATE OR REPLACE FUNCTION auth.tenant_id()`
 - `migrations/002_customers.sql:6` — `CREATE TABLE IF NOT EXISTS customers (` — sem schema prefix, vai para `public`
-- Todas as 7 migrations seguem o mesmo padrao: tabelas no `public`, RLS referenciando `auth.tenant_id()`
+- Todas as 8 migrations seguem o mesmo padrao: tabelas no `public`, RLS referenciando `auth.tenant_id()`
+- `007_seed_data.sql` insere dados iniciais de agents/prompts — tambem precisa referenciar schema `prosauai`
 - ADR-023 ja preve `schema admin` para tenants/audit na Fase 3, mas nenhum schema para tabelas de negocio
 
 **Impacto:** Se aplicar as migrations no Supabase como estao, ou (a) tabelas colidem com o namespace `public` do Supabase, ou (b) `auth.tenant_id()` conflita com o schema `auth` gerenciado pelo Supabase. Ambos cenarios exigem rewrite das migrations — muito mais doloroso com dados existentes.
@@ -108,8 +109,11 @@ Sem particionamento, a tabela cresce como monolito. O purge do ADR-018 (90 dias)
 
 Com particionamento por mes (`PARTITION BY RANGE (created_at)`):
 - Purge vira `DROP PARTITION` — instantaneo, sem write amplification
-- Queries com filtro por data usam partition pruning — 10x mais rapido
 - VACUUM opera por particao, nao na tabela inteira
+
+**Nota sobre partition pruning:** As queries atuais do app (`repositories.py:312-365`) filtram por `conversation_id`, nao por `created_at` no WHERE. Partition pruning **nao beneficia** essas queries — o Postgres precisa scanear todas as particoes. O beneficio principal do particionamento e no **purge** (`DROP PARTITION` instantaneo vs DELETE lento) e em queries futuras com filtro temporal.
+
+Para o volume projetado (365K msgs/ano com 10 tenants, ~1M rows em 3 anos), Postgres lida bem sem particao. Particionamento e uma otimizacao para **purge eficiente**, nao para performance de leitura no cenario atual
 
 **Custo de fazer agora vs depois:** Criar tabela particionada desde o inicio = trocar `CREATE TABLE` na migration. Migrar tabela existente com dados para particionada = `pg_rewrite` + downtime + script de migracao. **Fazer agora e trivial; fazer depois e doloroso.**
 
@@ -176,6 +180,22 @@ A funcao `prosauai_ops.tenant_id()` e semanticamente identica a `auth.tenant_id(
 - Todas as RLS policies: trocar `auth.tenant_id()` por `prosauai_ops.tenant_id()`
 - `SET search_path = prosauai, prosauai_ops, public` na connection string ou no pool init
 
+**Impacto no codigo Python (`pool.py`):**
+
+O `pool.py` atual (`prosauai/db/pool.py`) nao configura `search_path` — todas as queries usam nomes de tabela sem schema prefix (ex: `SELECT * FROM messages`). Apos mover tabelas para schema `prosauai`, **todas as queries do app quebram** se `search_path` nao for configurado.
+
+Solucao recomendada: adicionar `server_settings` no `asyncpg.create_pool()`:
+
+```python
+pool = await asyncpg.create_pool(
+    dsn=settings.database_url,
+    server_settings={'search_path': 'prosauai,prosauai_ops,public'},
+    ...
+)
+```
+
+Com isso, **zero mudanca nas queries SQL existentes** — o `search_path` resolve `messages` como `prosauai.messages` transparentemente. O migration runner (S7) deve usar a mesma configuracao
+
 ### S2 — Phoenix Postgres Backend (Gap 2)
 
 Alterar `docker-compose.yml` e criar `docker-compose.prod.yml`:
@@ -223,7 +243,7 @@ Adicionar sidecar ou log shipper para enviar logs a servico externo:
 
 **Recomendacao:** Better Stack free tier como ponto de partida. Setup minimo (Docker log driver suporta HTTP drain). Upgrade para Grafana Cloud Loki quando epic 013 implementar Prometheus + Grafana (stack unificada).
 
-**Para compliance ADR-018 (30d retention):** o Docker log rotation local garante os 30 dias (5 * 50MB = 250MB por service, rotacionado por tamanho). Para busca, o log aggregation externo e necessario.
+**Para compliance ADR-018 (30d retention):** Docker `json-file` driver rotaciona **por tamanho, nao por tempo**. Se um service gera >250MB de logs em 10 dias, logs mais antigos sao descartados antes dos 30 dias. A retention de 30d depende do volume real de logs — monitorar apos deploy e ajustar `max-size` se necessario. Para **garantia** de 30d, log aggregation externo (Camada 2) deve ser tratado como requisito, nao opcional.
 
 ### S4 — Data Retention Cron Job (Gap 4)
 
@@ -266,11 +286,24 @@ retention-cron:
 
 Alternativa: `crontab` no host (`0 3 * * * docker compose exec api python -m prosauai.ops.retention_cli`). Menos elegante, mais simples.
 
+**RLS Bypass para Purge:**
+
+A tabela `messages` tem policy RLS `messages_no_delete` que nega todo DELETE (`FOR DELETE USING (false)`). O cron de purge precisa bypassing RLS:
+
+| Metodo | Descricao | Seguranca |
+|--------|-----------|-----------|
+| `DROP PARTITION` | DDL, nao DML — bypassa RLS policies automaticamente | Seguro (operacao administrativa, nao query de dados) |
+| Role `service_role` (Supabase) | Supabase service_role tem `BYPASSRLS` por default | Seguro se credencial for exclusiva do cron container |
+| `SET LOCAL role = 'postgres'` | Superuser ignora RLS | Evitar — privilegio excessivo |
+
+**Recomendacao:** Para mensagens particionadas, usar `DROP PARTITION` (instantaneo, sem DML). Para tabelas nao particionadas (conversations, eval_scores), executar DELETE com role `service_role` do Supabase. O container `retention-cron` usa `DATABASE_URL` com credencial service_role dedicada (nao a mesma do app que usa role RLS-restricted).
+
 **Safeguards:**
 - `--dry-run` mode obrigatorio no primeiro deploy (loga o que seria deletado, nao deleta)
 - Logs de cada execucao com count de rows deletadas por tabela
 - Nunca deleta `admin.audit_log` (365d retention, sem purge automatico)
 - Respeita retention configuravel por tenant (query joinada com config do tenant)
+- Cron container usa credencial `service_role` separada — nunca compartilha com app container
 
 ### S5 — Particionamento de Messages (Gap 5)
 
@@ -313,12 +346,24 @@ CREATE TABLE prosauai.messages_2026_04
 | CREATE TABLE | Simples | PK deve incluir `created_at` |
 | FK de conversation_id | Direto | FK nao suportada em tabela particionada PG — usar trigger ou constraint check |
 | Purge (90d) | DELETE lento, write amplification | DROP PARTITION instantaneo |
-| Queries por data | Full table scan | Partition pruning |
+| Queries por data | Full table scan | Partition pruning (somente queries com filtro `created_at` no WHERE) |
 | Complexidade | Zero | Moderada (automacao de particoes) |
 
 **Decisao sobre FK:** Postgres nao suporta FK referenciando tabela particionada **como child**. A FK `messages.conversation_id → conversations.id` funciona normalmente (messages referencia conversations, nao o contrario). A limitacao e que `conversations.id` nao pode ter FK apontando para `messages` particionada — o que nao e necessario no schema atual.
 
 **IMPORTANTE:** A FK `messages.conversation_id REFERENCES conversations(id)` funciona em tabela particionada a partir do **Postgres 12+**. Supabase usa PG 15 — sem problema. A PK composta `(id, created_at)` e necessaria porque PG exige que a partition key faca parte da PK/UK.
+
+**FK INBOUND — `eval_scores.message_id REFERENCES messages(id)`:**
+
+Com PK composta `(id, created_at)`, a coluna `id` sozinha perde a constraint UNIQUE. A FK em `eval_scores` (migration 006:14) que referencia `messages(id)` **quebra**.
+
+| Opcao | Descricao | Pros | Cons |
+|-------|-----------|------|------|
+| A — UNIQUE global em `id` | `CREATE UNIQUE INDEX ON prosauai.messages(id)` | FK funciona sem mudanca em eval_scores | PG 15 suporta unique indexes globais em partitioned tables. Verificar compatibilidade Supabase. Custo de escrita marginal (UUID = distribuicao uniforme) |
+| B — Drop FK, constraint na app | Remover `REFERENCES messages(id)` de eval_scores. Validar no codigo Python | Zero overhead. Simples | Perde garantia de integridade referencial no BD |
+| C — FK composta | Adicionar `message_created_at` em eval_scores. FK `(message_id, message_created_at) REFERENCES messages(id, created_at)` | Integridade mantida | Coluna extra em eval_scores. Queries mais verbosas |
+
+**Recomendacao:** Opcao A. PG 15 suporta `CREATE UNIQUE INDEX ... ON partitioned_table(col)` desde PG 11 (com restricoes resolvidas no 14+). UUID v4 distribui uniformemente entre particoes. Custo de storage: ~40 bytes por row de overhead no index — negligivel para volume projetado.
 
 ### S6 — Host Monitoring Basico (Gap 6)
 
@@ -346,6 +391,8 @@ netdata:
 - Network (bandwidth, errors)
 - Containers Docker (CPU, RAM, restart count)
 - Alertas pre-configurados (disco >80%, RAM >90%, etc.)
+
+**Nota de seguranca:** Montar `/var/run/docker.sock` (mesmo read-only) expoe a API Docker ao container — pode listar containers, imagens, volumes e secrets. Para VPS com dados sensíveis, avaliar o trade-off. Alternativa: Netdata sem o Docker collector (perde metricas por container, mantem host metrics) ou cAdvisor (sem socket mount).
 
 **Alternativa minima (custo zero, sem container):**
 
@@ -386,15 +433,16 @@ migrations/
 | dbmate | Go binary, SQL puro, zero deps | Nao Python | Bom alternativo |
 | Manual (scripts numerados) | Zero deps | Sem tracking, sem rollback, sem validacao | Status quo — insuficiente |
 
-**Alternativa simplificada (se Yoyo for demais):**
+**Decisao: Script Python custom (nao Yoyo).**
 
-Script Python custom que:
+O projeto usa asyncpg direto sem ORM e mantem principio "stdlib + pyyaml". Adicionar Yoyo (que depende de psycopg2) so para <15 migrations e overhead injustificado. Script custom:
+
 1. Cria tabela `prosauai_ops.schema_migrations (version TEXT PRIMARY KEY, applied_at TIMESTAMPTZ)`
 2. Lista `migrations/*.sql` em ordem numerica
 3. Aplica apenas as que nao estao na tabela
 4. Registra cada aplicacao
 
-~50 linhas de Python. Sem rollback, mas com tracking e idempotencia.
+~50 linhas de Python. Sem rollback (desnecessario para schema forward-only), com tracking e idempotencia. Usa `psycopg2` sync (migrations rodam antes do app — nao precisa async).
 
 **Integracao com docker-compose:**
 
@@ -414,7 +462,7 @@ Migrations rodam antes do app iniciar. Se falharem, container nao sobe (fail-fas
 
 | Dep | Status | Impacto |
 |-----|--------|---------|
-| 005 Conversation Core | **em andamento** | Migrations que serao reescritas. Epic 006 pode iniciar em paralelo (reescrita das migrations) ou sequencial (apos 005 mergear) |
+| 005 Conversation Core | **shipped** | Migrations existem no repo. Nenhum ambiente Postgres de producao recebeu as migrations — reescrita e segura (nao ha dados a migrar). Se migrations forem aplicadas em prod antes do 006, sera necessario migration de renomeacao de schema (mais complexo) |
 | ADR-018 (Data Retention) | Accepted | Define regras de retention que este epic implementa |
 | ADR-020 (Phoenix) | Accepted | Define Phoenix com Postgres backend — este epic implementa |
 | ADR-011 (Pool + RLS) | Accepted | Define RLS pattern — este epic ajusta namespace da funcao helper |
@@ -422,7 +470,7 @@ Migrations rodam antes do app iniciar. Se falharem, container nao sobe (fail-fas
 
 ## Rabbit Holes
 
-1. **Alembic ou SQLAlchemy** — NAO. O projeto usa asyncpg direto sem ORM. Adicionar SQLAlchemy so para migration runner e overhead desnecessario. Yoyo ou script custom sao suficientes.
+1. **Alembic, SQLAlchemy ou Yoyo** — NAO. O projeto usa asyncpg direto sem ORM. Adicionar SQLAlchemy so para migration runner e overhead desnecessario. Script custom ~50 LOC e suficiente para <15 migrations e alinha com filosofia do projeto (zero deps extras).
 2. **Grafana + Prometheus agora** — NAO. Epic 013 (Fase 3) e o lugar certo. Netdata cobre monitoring basico sem a complexidade de provisionar dashboards.
 3. **Log aggregation pago** — NAO como requisito. Docker log rotation (camada 1) e obrigatoria. Aggregation externo e recomendado mas nao blocker para deploy.
 4. **Particionamento de TODAS as tabelas** — NAO. So `messages` justifica (append-only, maior volume). Demais tabelas sao pequenas ou tem lifecycle diferente.
@@ -444,8 +492,8 @@ Migrations rodam antes do app iniciar. Se falharem, container nao sobe (fail-fas
 2. **Supabase-safe**: Migrations aplicaveis num Supabase real sem conflitos de namespace. Testado com `supabase db push` ou equivalente.
 3. **Phoenix Postgres**: `docker-compose.prod.yml` configura Phoenix com Postgres backend. UI acessivel e traces persistidos apos restart do container Phoenix.
 4. **Log rotation**: Todos os services no docker-compose tem `logging` configurado com `max-size` e `max-file`. Verificavel com `docker inspect`.
-5. **Purge funcional**: `python -m prosauai.ops.retention_cli --dry-run` lista corretamente os dados que seriam purgados. `--dry-run=false` executa o purge. Logs de execucao com contagem de rows.
-6. **Particionamento messages**: Tabela `messages` criada como `PARTITION BY RANGE (created_at)`. Particoes para 3 meses criadas automaticamente. `EXPLAIN ANALYZE` de query com filtro de data mostra partition pruning.
+5. **Purge funcional**: `python -m prosauai.ops.retention_cli --dry-run` lista corretamente os dados que seriam purgados. `--dry-run=false` executa o purge. Logs de execucao com contagem de rows. Purge de messages usa `DROP PARTITION` (bypassa RLS). Purge de demais tabelas usa role `service_role` com `BYPASSRLS`.
+6. **Particionamento messages**: Tabela `messages` criada como `PARTITION BY RANGE (created_at)`. Particoes para 3 meses criadas automaticamente. `EXPLAIN ANALYZE` de query com filtro de data mostra partition pruning. UNIQUE index global em `id` garante integridade da FK `eval_scores.message_id`.
 7. **Migration runner**: Migrations aplicadas automaticamente no startup do container. Tabela de tracking registra quais migrations ja rodaram. Re-executar o runner nao aplica migrations duplicadas.
 8. **Host monitoring**: Dashboard Netdata acessivel na VPS (localhost:19999). Alertas de disco e RAM funcionais.
 9. **Docker Compose prod**: `docker-compose.prod.yml` completo com todos os services configurados para producao (log rotation, Phoenix Postgres, Netdata, retention cron).
@@ -461,7 +509,7 @@ Migrations rodam antes do app iniciar. Se falharem, container nao sobe (fail-fas
 | 4 | Logs | Docker json-file com rotation obrigatorio; aggregation externo recomendado | ADR-018 (atualizar consequencias) |
 | 5 | Retention | Cron job Python diario. DROP PARTITION para messages, DELETE batch para demais | ADR-018 (ja decide; este epic implementa) |
 | 6 | Messages | PARTITION BY RANGE (created_at) por mes | Novo — documentar em ADR-018 ou ADR dedicado |
-| 7 | Migrations | Yoyo ou script custom com tracking em `prosauai_ops.schema_migrations` | Novo — nenhum ADR existente |
+| 7 | Migrations | Script Python custom (~50 LOC) com tracking em `prosauai_ops.schema_migrations` | Novo — nenhum ADR existente |
 | 8 | Monitoring | Netdata ate epic 013 (Prometheus + Grafana) | Containers.md (atualizar) |
 
 ## Suggested Approach
@@ -472,7 +520,7 @@ Migrations rodam antes do app iniciar. Se falharem, container nao sobe (fail-fas
 2. Reescrever migration 001: criar schemas `prosauai`, `prosauai_ops`, extensions, funcao `prosauai_ops.tenant_id()`
 3. Reescrever migrations 002-006: prefixar tabelas com `prosauai.`, atualizar RLS policies para `prosauai_ops.tenant_id()`
 4. Reescrever migration 004 (messages): adicionar `PARTITION BY RANGE (created_at)`
-5. Implementar migration runner (Yoyo config ou script custom)
+5. Implementar migration runner (script custom `prosauai/ops/migrate.py`)
 6. Criar script de criacao automatica de particoes (`prosauai/ops/partitions.py`)
 7. Testar: aplicar migrations em Postgres limpo, verificar schemas, RLS, partitions
 8. Atualizar ADR-011: trocar `auth.tenant_id()` por `prosauai_ops.tenant_id()`
@@ -523,10 +571,10 @@ Migrations rodam antes do app iniciar. Se falharem, container nao sobe (fail-fas
 
 | Risco | Impacto | Probabilidade | Mitigacao |
 |-------|---------|---------------|-----------|
-| Particionamento de messages quebra queries existentes do epic 005 | Alto | Baixa | PK composta `(id, created_at)` — queries por `id` precisam incluir `created_at` ou usar index. Testar todas as queries do conversation pipeline |
+| Particionamento de messages quebra queries existentes do epic 005 | Alto | Baixa | PK composta `(id, created_at)` + UNIQUE global em `id`. FK `eval_scores.message_id` funciona via unique index. Queries por `conversation_id` nao se beneficiam de pruning mas mantem performance via index herdado |
 | `prosauai_ops.tenant_id()` quebra RLS em tabelas ja criadas | Alto | Zero (se feito antes de prod) | Migrations sao reescritas, nao alteradas. Nenhum dado existe ainda |
 | Phoenix nao suporta Postgres schema customizado | Medio | Baixa | Phoenix gerencia seu proprio schema. Se nao suportar `search_path`, usar database separado ou schema default |
-| Yoyo nao suporta asyncpg | Baixo | Media | Yoyo usa psycopg2 sync — OK para migrations (rodam antes do app). Se inaceitavel, usar script custom |
+| Script custom de migration tem bugs edge-case | Baixo | Baixa | Script e <50 LOC, testavel com pytest. Sem rollback (forward-only). Tracking via tabela `schema_migrations` garante idempotencia |
 | Docker log rotation nao suficiente para 30d retention | Baixo | Media | Depende do volume de logs. 250MB por service deve cobrir 30d para 2-10 tenants. Monitorar e ajustar `max-size` |
 
 ---
