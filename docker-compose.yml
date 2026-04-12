@@ -1,0 +1,72 @@
+# ProsauAI — Development Docker Compose
+#
+# Usage: docker compose up -d
+# Docs:  platforms/prosauai/epics/006-production-readiness/quickstart.md
+#
+# NOTE: Migrations are applied automatically by the API on startup
+#       via prosauai.ops.migrate (no initdb.d mount needed).
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-prosauai}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-prosauai}
+      POSTGRES_DB: ${POSTGRES_DB:-prosauai}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-prosauai}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  phoenix:
+    image: arizephoenix/phoenix:latest
+    ports:
+      - "6006:6006"
+      - "4317:4317"
+    volumes:
+      - phoenix_data:/data
+    environment:
+      PHOENIX_WORKING_DIR: /data
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8050:8050"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-prosauai}:${POSTGRES_PASSWORD:-prosauai}@postgres:5432/${POSTGRES_DB:-prosauai}
+      REDIS_URL: redis://redis:6379/0
+      PHOENIX_COLLECTOR_ENDPOINT: http://phoenix:4317
+      MIGRATIONS_DIR: /app/migrations
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:
+  phoenix_data:

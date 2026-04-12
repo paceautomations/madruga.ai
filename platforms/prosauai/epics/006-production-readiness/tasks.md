@@ -77,7 +77,7 @@
 
 **Independent Test**: Subir stack em ambiente limpo com docker compose prod e verificar todos containers healthy + API respondendo /health.
 
-- [ ] T018 [US1] Remove ./migrations:/docker-entrypoint-initdb.d:ro volume mount from Postgres service — migrations now managed by runner in API startup (file: docker-compose.yml)
+- [x] T018 [US1] Remove ./migrations:/docker-entrypoint-initdb.d:ro volume mount from Postgres service — migrations now managed by runner in API startup (file: docker-compose.yml)
 - [ ] T019 [US1] Create docker-compose.prod.yml with production overrides: Phoenix Postgres backend with PHOENIX_SQL_DATABASE_SCHEMA=observability, Netdata container on 127.0.0.1:19999 with resource limits (mem_limit: 256m), retention-cron container with sleep 86400 loop and resource limits (mem_limit: 128m), add prod volumes (netdataconfig, netdatalib, netdatacache). Include VPS requirements comment: 2 vCPU, 4GB RAM, 40GB SSD (file: docker-compose.prod.yml)
 - [ ] T020 [US1] Create .env.example with all required environment variables documented: POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB, DATABASE_URL, PHOENIX_SQL_DATABASE_URL, plus retention-cron DATABASE_URL with service_role credentials (file: .env.example — update if exists)
 
