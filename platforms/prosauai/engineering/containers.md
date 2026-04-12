@@ -22,7 +22,7 @@ graph LR
 
     subgraph prosauai ["ProsaUAI Platform"]
         subgraph prosauai_api ["prosauai-api :8050"]
-            api_webhook["Webhook receiver<br/><small>HMAC-SHA256 validation</small>"]
+            api_webhook["Webhook receiver<br/><small>X-Webhook-Secret per-tenant</small>"]
             api_rest["REST endpoints<br/><small>/api/v1/*</small>"]
             api_socketio["Socket.io gateway<br/><small>realtime push</small>"]
         end
@@ -65,7 +65,7 @@ graph LR
 
     %% Actor → Platform
     agent -- "HTTPS" --> api_webhook
-    evolution-api -- "webhook POST<br/>HMAC-SHA256" --> api_webhook
+    evolution-api -- "webhook POST<br/>X-Webhook-Secret" --> api_webhook
     admin_user -- "HTTPS + JWT" --> prosauai_admin
 
     %% API internal

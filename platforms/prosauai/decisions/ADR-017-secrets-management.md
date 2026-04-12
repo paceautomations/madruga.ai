@@ -76,26 +76,22 @@ Motivo: Infisical tem menor footprint operacional para time de 5. Migra para Vau
 | DEK por tenant | 180 dias | Re-encrypt credentials com novo DEK |
 | Supabase JWT secret | 90 dias | Rotate via Supabase dashboard/API |
 
-### 4. Webhook HMAC-SHA256 Obrigatorio
+### 4. Webhook X-Webhook-Secret Obrigatorio (atualizado epic 003)
 
 ```python
 # TODA webhook da Evolution API DEVE ser validada
+# NOTA: Evolution API nao implementa HMAC-SHA256 (confirmado via source-dive).
+# Implementacao real usa header X-Webhook-Secret per-tenant com constant-time compare.
 import hmac
-import hashlib
 
 def validate_webhook(request, tenant_webhook_secret: str) -> bool:
-    signature = request.headers.get("X-Webhook-Signature")
-    if not signature:
+    secret = request.headers.get("X-Webhook-Secret")
+    if not secret:
         return False  # rejeitar silenciosamente
-    expected = hmac.new(
-        tenant_webhook_secret.encode(),
-        request.body,
-        hashlib.sha256
-    ).hexdigest()
-    return hmac.compare_digest(signature, expected)
+    return hmac.compare_digest(secret, tenant_webhook_secret)
 ```
 
-Requests sem signature valida sao rejeitados com 401. Logados como security event no LangFuse (ADR-007).
+Requests sem secret valido sao rejeitados com 401. Logados como security event no Phoenix (ADR-020).
 
 ### 5. Runtime Secret Injection
 
@@ -127,7 +123,7 @@ Toda leitura de secret logada com:
 - `source_ip`
 - `action` (read, rotate, create, delete)
 
-Logs imutaveis no LangFuse ou storage separado. Retention: 1 ano (compliance).
+Logs imutaveis no Phoenix ou storage separado. Retention: 1 ano (compliance).
 
 ## Alternativas consideradas
 

@@ -117,7 +117,7 @@ epic_cycle:
     - id: plan
       skill: "speckit.plan"
       outputs: ["{epic}/plan.md"]
-      depends: ["specify"]
+      depends: ["clarify"]
       gate: auto
 
     - id: tasks

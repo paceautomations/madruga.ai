@@ -333,7 +333,9 @@ async def test_retry_with_async_sleep():
     breaker = CircuitBreaker()
     call_count = 0
 
-    async def mock_dispatch(node, cwd, prompt, timeout=3000, guardrail=None, resume_session_id=None, platform_name=""):
+    async def mock_dispatch(
+        node, cwd, prompt, timeout=3000, guardrail=None, resume_session_id=None, platform_name="", **kwargs
+    ):
         nonlocal call_count
         call_count += 1
         if call_count < 3:
@@ -358,7 +360,9 @@ async def test_circuit_breaker_with_async_dispatch():
 
     breaker = CircuitBreaker(max_failures=1)
 
-    async def mock_dispatch(node, cwd, prompt, timeout=3000, guardrail=None, resume_session_id=None, platform_name=""):
+    async def mock_dispatch(
+        node, cwd, prompt, timeout=3000, guardrail=None, resume_session_id=None, platform_name="", **kwargs
+    ):
         return False, "permanent error", None
 
     with (
@@ -368,6 +372,8 @@ async def test_circuit_breaker_with_async_dispatch():
         success, error, _stdout = await dispatch_with_retry_async(_make_node(), "/tmp", "test", 600, breaker)
 
     assert success is False
+    # Same-error escalation: "permanent error" is unknown, escalates after 3.
+    # With 4 attempts and same unknown error, breaker gets a failure on attempt 3.
     assert breaker.state == "open"
 
 
@@ -2337,3 +2343,353 @@ def test_compose_task_prompt_uses_epic_output_dir(tmp_path):
 
     assert f"SPECIFY_BASE_DIR={abs_dir}/" in prompt
     assert f"Save ALL output to: {abs_dir}/" in prompt
+
+
+# ── Phase dispatch tests ──────────────────────────────────────────────
+
+
+def test_group_tasks_by_phase_basic():
+    """Groups tasks correctly by phase field."""
+    from dag_executor import TaskItem, group_tasks_by_phase
+
+    tasks = [
+        TaskItem("T001", "task 1", False, "Phase 1: Setup", False),
+        TaskItem("T002", "task 2", False, "Phase 1: Setup", False),
+        TaskItem("T003", "task 3", False, "Phase 2: Core", False),
+    ]
+    result = group_tasks_by_phase(tasks)
+    assert len(result) == 2
+    assert result[0][0] == "Phase 1: Setup"
+    assert [t.id for t in result[0][1]] == ["T001", "T002"]
+    assert result[1][0] == "Phase 2: Core"
+    assert [t.id for t in result[1][1]] == ["T003"]
+
+
+def test_group_tasks_by_phase_splits_large():
+    """Phases with >max_per_phase tasks are split into sub-phases."""
+    from dag_executor import TaskItem, group_tasks_by_phase
+
+    tasks = [TaskItem(f"T{i:03d}", f"task {i}", False, "Phase 1: Big", False) for i in range(1, 16)]
+    result = group_tasks_by_phase(tasks, max_per_phase=12)
+    assert len(result) == 2
+    assert "part 1" in result[0][0]
+    assert len(result[0][1]) == 12
+    assert "part 2" in result[1][0]
+    assert len(result[1][1]) == 3
+
+
+def test_group_tasks_by_phase_skips_checked():
+    """Only unchecked tasks are included in phase groups."""
+    from dag_executor import TaskItem, group_tasks_by_phase
+
+    tasks = [
+        TaskItem("T001", "done", True, "Phase 1: A", False),
+        TaskItem("T002", "pending", False, "Phase 1: A", False),
+        TaskItem("T003", "done", True, "Phase 2: B", False),
+    ]
+    result = group_tasks_by_phase(tasks)
+    assert len(result) == 1
+    assert result[0][0] == "Phase 1: A"
+    assert [t.id for t in result[0][1]] == ["T002"]
+
+
+def test_group_tasks_by_phase_no_phases_empty():
+    """Returns empty list when all tasks have phase='' (no headers)."""
+    from dag_executor import TaskItem, group_tasks_by_phase
+
+    tasks = [
+        TaskItem("T001", "task 1", False, "", False),
+        TaskItem("T002", "task 2", False, "", False),
+    ]
+    result = group_tasks_by_phase(tasks)
+    assert result == []
+
+
+def test_group_tasks_by_phase_preserves_order():
+    """Phase order matches file order (not alphabetical)."""
+    from dag_executor import TaskItem, group_tasks_by_phase
+
+    tasks = [
+        TaskItem("T001", "t", False, "Phase 2: Zebra", False),
+        TaskItem("T002", "t", False, "Phase 1: Alpha", False),
+    ]
+    result = group_tasks_by_phase(tasks)
+    assert result[0][0] == "Phase 2: Zebra"
+    assert result[1][0] == "Phase 1: Alpha"
+
+
+def test_group_tasks_by_phase_single_phase():
+    """All tasks in one phase → single group."""
+    from dag_executor import TaskItem, group_tasks_by_phase
+
+    tasks = [TaskItem(f"T{i:03d}", f"t{i}", False, "Phase 1: Only", False) for i in range(1, 4)]
+    result = group_tasks_by_phase(tasks)
+    assert len(result) == 1
+    assert len(result[0][1]) == 3
+
+
+def test_phase_max_turns_formula():
+    """_phase_max_turns applies correct formula and cap."""
+    from dag_executor import _phase_max_turns
+
+    assert _phase_max_turns(5) == 150
+    assert _phase_max_turns(10) == 250
+    assert _phase_max_turns(20) == 400  # capped
+
+
+def test_phase_max_turns_edge_cases():
+    """Edge cases: 0 and 1 tasks."""
+    from dag_executor import _phase_max_turns
+
+    assert _phase_max_turns(0) == 50
+    assert _phase_max_turns(1) == 70
+
+
+def test_verify_phase_completion_all_done(tmp_path):
+    """All tasks marked [X] → all completed."""
+    from dag_executor import TaskItem, _verify_phase_completion
+
+    tasks_md = tmp_path / "tasks.md"
+    tasks_md.write_text("## Phase 1: A\n- [X] T001 task 1\n- [X] T002 task 2\n- [X] T003 task 3\n")
+    phase_tasks = [
+        TaskItem("T001", "task 1", False, "Phase 1: A", False),
+        TaskItem("T002", "task 2", False, "Phase 1: A", False),
+        TaskItem("T003", "task 3", False, "Phase 1: A", False),
+    ]
+    completed, pending = _verify_phase_completion(tasks_md, phase_tasks)
+    assert completed == ["T001", "T002", "T003"]
+    assert pending == []
+
+
+def test_verify_phase_completion_partial(tmp_path):
+    """3/5 done → correct split."""
+    from dag_executor import TaskItem, _verify_phase_completion
+
+    tasks_md = tmp_path / "tasks.md"
+    tasks_md.write_text(
+        "## Phase 1: A\n- [x] T001 task 1\n- [x] T002 task 2\n- [ ] T003 task 3\n- [x] T004 task 4\n- [ ] T005 task 5\n"
+    )
+    phase_tasks = [TaskItem(f"T{i:03d}", f"task {i}", False, "Phase 1: A", False) for i in range(1, 6)]
+    completed, pending = _verify_phase_completion(tasks_md, phase_tasks)
+    assert completed == ["T001", "T002", "T004"]
+    assert pending == ["T003", "T005"]
+
+
+def test_verify_phase_completion_none_done(tmp_path):
+    """All [ ] → none completed."""
+    from dag_executor import TaskItem, _verify_phase_completion
+
+    tasks_md = tmp_path / "tasks.md"
+    tasks_md.write_text("## Phase 1: A\n- [ ] T001 task 1\n- [ ] T002 task 2\n")
+    phase_tasks = [
+        TaskItem("T001", "task 1", False, "Phase 1: A", False),
+        TaskItem("T002", "task 2", False, "Phase 1: A", False),
+    ]
+    completed, pending = _verify_phase_completion(tasks_md, phase_tasks)
+    assert completed == []
+    assert pending == ["T001", "T002"]
+
+
+def test_classify_error_deterministic():
+    """Deterministic errors classified correctly."""
+    from dag_executor import _classify_error
+
+    assert _classify_error("output is unfilled template: plan.md") == "deterministic"
+    assert _classify_error("exitcode 1 stdout_len=0") == "deterministic"
+    assert _classify_error("output not found: spec.md") == "deterministic"
+
+
+def test_classify_error_transient():
+    """Transient errors classified correctly."""
+    from dag_executor import _classify_error
+
+    assert _classify_error("claude_error[rate_limit: exceeded]") == "transient"
+    assert _classify_error("asyncio timeout after 3000s") == "transient"
+    assert _classify_error("context_length_exceeded: 1.2M tokens") == "transient"
+
+
+def test_classify_error_unknown():
+    """Unknown errors classified correctly."""
+    from dag_executor import _classify_error
+
+    assert _classify_error("zombie — daemon restart or crash") == "unknown"
+    assert _classify_error("some random error") == "unknown"
+    assert _classify_error(None) == "unknown"
+    assert _classify_error("") == "unknown"
+
+
+def test_build_dispatch_cmd_max_turns_override():
+    """max_turns_override takes precedence over env var."""
+    from dag_executor import Node, build_dispatch_cmd
+
+    node = Node("implement:phase-1", "speckit.implement", [], [], "auto", "implementation", False, None)
+    with patch.dict(os.environ, {"MADRUGA_MAX_TURNS": "100"}, clear=False):
+        cmd = build_dispatch_cmd(node, "test prompt", "test-plat", max_turns_override=250)
+    assert "--max-turns" in cmd
+    idx = cmd.index("--max-turns")
+    assert cmd[idx + 1] == "250"
+
+
+def test_build_dispatch_cmd_max_turns_default():
+    """Without override, uses MADRUGA_MAX_TURNS env var."""
+    from dag_executor import Node, build_dispatch_cmd
+
+    node = Node("implement:T001", "speckit.implement", [], [], "auto", "implementation", False, None)
+    with patch.dict(os.environ, {"MADRUGA_MAX_TURNS": "100"}, clear=False):
+        cmd = build_dispatch_cmd(node, "test prompt", "test-plat")
+    assert "--max-turns" in cmd
+    idx = cmd.index("--max-turns")
+    assert cmd[idx + 1] == "100"
+
+
+def test_compose_phase_prompt_all_task_ids(tmp_path):
+    """Phase prompt contains all task IDs."""
+    from dag_executor import TaskItem, compose_phase_prompt
+
+    epic_dir = tmp_path / "epics" / "001-test"
+    epic_dir.mkdir(parents=True)
+    (epic_dir / "plan.md").write_text("# Plan")
+    (epic_dir / "spec.md").write_text("# Spec")
+    (epic_dir / "tasks.md").write_text("## Phase 1\n- [ ] T001 a\n- [ ] T002 b\n")
+
+    tasks = [
+        TaskItem("T001", "first task", False, "Phase 1", False),
+        TaskItem("T002", "second task", False, "Phase 1", False),
+    ]
+    with patch("dag_executor._epic_output_dir", return_value="/out"):
+        prompt = compose_phase_prompt("Phase 1", tasks, epic_dir, "plat", "001-test")
+    assert "T001" in prompt
+    assert "T002" in prompt
+    assert "first task" in prompt
+    assert "second task" in prompt
+
+
+def test_compose_phase_prompt_execution_instructions(tmp_path):
+    """Phase prompt includes execution instructions."""
+    from dag_executor import TaskItem, compose_phase_prompt
+
+    epic_dir = tmp_path / "epics" / "001-test"
+    epic_dir.mkdir(parents=True)
+    (epic_dir / "tasks.md").write_text("## Phase 1\n- [ ] T001 a\n")
+
+    tasks = [TaskItem("T001", "a", False, "Phase 1", False)]
+    with patch("dag_executor._epic_output_dir", return_value="/out"):
+        prompt = compose_phase_prompt("Phase 1", tasks, epic_dir, "plat", "001-test")
+    assert "Execute these tasks" in prompt
+    assert "sequentially" in prompt
+    assert "Git commit" in prompt
+
+
+@pytest.mark.asyncio
+async def test_circuit_breaker_same_error_deterministic():
+    """2x deterministic error → early stop (no 3rd/4th attempt)."""
+    from dag_executor import Node, dispatch_with_retry_async
+
+    node = Node("implement:T001", "speckit.implement", [], [], "auto", "", False, None)
+    breaker = MagicMock()
+    breaker.check.return_value = True
+
+    call_count = 0
+
+    async def mock_dispatch(*args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        return False, "output is unfilled template: plan.md", None
+
+    with patch("dag_executor.dispatch_node_async", side_effect=mock_dispatch):
+        success, error, _ = await dispatch_with_retry_async(node, "/tmp", "prompt", 60, breaker)
+
+    assert success is False
+    assert "unfilled template" in error
+    assert call_count == 2  # stopped after 2nd identical deterministic error
+
+
+@pytest.mark.asyncio
+async def test_circuit_breaker_transient_full_retry():
+    """Transient errors get full retry cycle (4 attempts)."""
+    from dag_executor import Node, dispatch_with_retry_async
+
+    node = Node("implement:T001", "speckit.implement", [], [], "auto", "", False, None)
+    breaker = MagicMock()
+    breaker.check.return_value = True
+
+    call_count = 0
+
+    async def mock_dispatch(*args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        return False, "claude_error[rate_limit: exceeded]", None
+
+    with patch("dag_executor.dispatch_node_async", side_effect=mock_dispatch):
+        with patch("asyncio.sleep", new_callable=AsyncMock):
+            success, error, _ = await dispatch_with_retry_async(node, "/tmp", "prompt", 60, breaker)
+
+    assert success is False
+    assert call_count == 4  # all 4 attempts made
+
+
+@pytest.mark.asyncio
+async def test_circuit_breaker_different_errors_no_escalation():
+    """Different errors at each attempt → all 4 attempts made."""
+    from dag_executor import Node, dispatch_with_retry_async
+
+    node = Node("implement:T001", "speckit.implement", [], [], "auto", "", False, None)
+    breaker = MagicMock()
+    breaker.check.return_value = True
+
+    errors = iter(["error A", "error B", "error C", "error D"])
+
+    async def mock_dispatch(*args, **kwargs):
+        return False, next(errors), None
+
+    with patch("dag_executor.dispatch_node_async", side_effect=mock_dispatch):
+        with patch("asyncio.sleep", new_callable=AsyncMock):
+            success, _, _ = await dispatch_with_retry_async(node, "/tmp", "prompt", 60, breaker)
+
+    assert success is False
+    assert breaker.record_failure.call_count == 1  # only final failure recorded
+
+
+@pytest.mark.asyncio
+async def test_circuit_breaker_same_error_unknown():
+    """3x same unknown error → escalation (no 4th attempt)."""
+    from dag_executor import Node, dispatch_with_retry_async
+
+    node = Node("implement:T001", "speckit.implement", [], [], "auto", "", False, None)
+    breaker = MagicMock()
+    breaker.check.return_value = True
+
+    call_count = 0
+
+    async def mock_dispatch(*args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        return False, "zombie — daemon restart or crash", None
+
+    with patch("dag_executor.dispatch_node_async", side_effect=mock_dispatch):
+        with patch("asyncio.sleep", new_callable=AsyncMock):
+            success, error, _ = await dispatch_with_retry_async(node, "/tmp", "prompt", 60, breaker)
+
+    assert success is False
+    assert call_count == 3  # stopped after 3rd unknown error
+
+
+@pytest.mark.asyncio
+async def test_max_turns_override_threaded_to_dispatch():
+    """max_turns_override reaches build_dispatch_cmd through the call chain."""
+    from dag_executor import Node, dispatch_with_retry_async
+
+    node = Node("implement:phase-1", "speckit.implement", [], [], "auto", "", False, None)
+    breaker = MagicMock()
+    breaker.check.return_value = True
+
+    captured_kwargs = {}
+
+    async def mock_dispatch(*args, **kwargs):
+        captured_kwargs.update(kwargs)
+        return True, None, '{"type":"result"}'
+
+    with patch("dag_executor.dispatch_node_async", side_effect=mock_dispatch):
+        await dispatch_with_retry_async(node, "/tmp", "prompt", 60, breaker, max_turns_override=250)
+
+    assert captured_kwargs.get("max_turns_override") == 250

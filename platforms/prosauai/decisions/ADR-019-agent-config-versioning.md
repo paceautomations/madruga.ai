@@ -80,7 +80,7 @@ M8 recebe request
   → Se nao existe canary:
       usa active config
   → Executa agente com config selecionado
-  → Tag no LangFuse trace: config_version_id = versao usada
+  → Tag no Phoenix/OTel trace: config_version_id = versao usada
   → eval_scores vinculados ao config_version_id
 ```
 

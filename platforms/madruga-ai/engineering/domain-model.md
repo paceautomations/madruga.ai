@@ -37,8 +37,8 @@ sidebar:
 | Aspecto | Descricao |
 |---------|-----------|
 | **Nome** | Pipeline Orchestration |
-| **Proposito** | Parsear DAG de platform.yaml, ordenar topologicamente, despachar skills via claude -p, gerenciar retry com circuit breaker |
-| **Linguagem Ubiqua** | node, gate, dispatch, topological sort, circuit breaker, half-open, backoff, skill, trace |
+| **Proposito** | Parsear DAG de platform.yaml, ordenar topologicamente, despachar skills via claude -p (phase-based dispatch para implement), gerenciar retry com same-error circuit breaker |
+| **Linguagem Ubiqua** | node, gate, dispatch, phase, topological sort, circuit breaker, half-open, backoff, skill, trace, deterministic error, transient error |
 | **Aggregates** | PipelineExecution, CircuitBreaker |
 | **Modulos** | dag_executor.py, easter.py, worktree.py, ensure_repo.py, implement_remote.py |
 
@@ -110,6 +110,9 @@ classDiagram
 | 1 | Open apos N falhas | state = open quando failure_count >= max_failures | record_failure |
 | 2 | Half-open apos recovery | state = half_open apos recovery_seconds desde last_failure | check |
 | 3 | Reset em sucesso | failure_count = 0 e state = closed apos sucesso em half_open | record_success |
+| 4 | Deterministic early escalation | 2 erros identicos deterministicos (unfilled template, exitcode, output not found) → abortar retries | dispatch_with_retry_async |
+| 5 | Transient full cycle | Erros transientes (rate_limit, timeout, context_length) → ciclo completo de retry sem escalacao | dispatch_with_retry_async |
+| 6 | Unknown escalation | 3 erros identicos desconhecidos → abortar retries | dispatch_with_retry_async |
 
 ---
 

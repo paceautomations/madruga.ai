@@ -1,6 +1,6 @@
 ---
 title: "Context Map"
-updated: 2026-04-07
+updated: 2026-04-12
 sidebar:
   order: 3
 ---
@@ -51,7 +51,7 @@ flowchart LR
     bifrost["Bifrost"]
     supabase-prosauai[("Supabase ProsaUAI")]
     supabase-resenhai[("Supabase ResenhAI")]
-    langfuse["LangFuse"]
+    phoenix["Phoenix (Arize)"]
 
     %% === Pipeline Flow (intra-BC: sem label) ===
     M1 --> M2
@@ -89,7 +89,7 @@ flowchart LR
     M13 -. "Pub-Sub" .-> M14
 
     %% === Observability → External ===
-    M14 -- "Conformist" --> langfuse
+    M14 -- "Conformist" --> phoenix
 ```
 
 ---
@@ -102,7 +102,7 @@ flowchart LR
 | 2 | Channel (M1) → Channel (M2) | Intra-BC | Mensagem normalizada segue para debounce |
 | 3 | Channel (M2) → Channel (M3) | Intra-BC | Batch debounced segue para roteamento |
 | 4 | Channel (M3) → Conversation (M4) | ACL | Traduz InboundMessage → ConversationRequest |
-| 5 | Channel (M3) → Operations (M12) | ACL | Bypass IA — rota HANDOFF_ATIVO direto para handoff |
+| 5 | Channel (M3) → Operations (M12) | ACL | Bypass IA — acao BYPASS_AI direto para handoff |
 | 6 | Conversation (M4) → Conversation (M5) | Intra-BC | CustomerContext alimenta montagem de contexto |
 | 7 | Conversation (M5) → Safety (M6) | Customer-Supplier | AgentContext validado por guardrails de entrada |
 | 8 | Safety (M6) → Conversation (M7) | Customer-Supplier | Mensagem sanitizada segue para classificacao |
@@ -120,7 +120,7 @@ flowchart LR
 | 20 | Conversation (M4) → Supabase ProsaUAI | ACL | Repositories com ACL isolam domain models do schema SQL |
 | 21 | Channel (M2) → Redis | ACL | Debounce via Lua scripts com ACL isolando detalhes |
 | 22 | M1, M5, M8, M9, M12, M13 → Observability (M14) | Pub-Sub | Eventos de todos os modulos para tracing passivo |
-| 23 | Observability (M14) → LangFuse | Conformist | Conforma-se ao SDK/API do LangFuse |
+| 23 | Observability (M14) → Phoenix (Arize) | Conformist | Conforma-se ao OTel SDK/OTLP gRPC do Phoenix |
 
 ---
 
@@ -140,7 +140,7 @@ flowchart LR
 
 | Padrao | Descricao | Quando Usar | Usado Em |
 |--------|-----------|-------------|----------|
-| **Conformist** | Downstream adota modelo do upstream sem traducao | Upstream estavel e confiavel | Evolution API → Channel, Channel → Evolution API, Observability → LangFuse |
+| **Conformist** | Downstream adota modelo do upstream sem traducao | Upstream estavel e confiavel | Evolution API → Channel, Channel → Evolution API, Observability → Phoenix |
 | **ACL** | Traduz modelo externo para modelo interno | Upstream tem modelo diferente | Channel → Conversation, Channel → Operations, Conversation → Bifrost/Supabase, Channel → Redis |
 | **Customer-Supplier** | Upstream adapta-se ao que downstream precisa | Downstream tem poder de negociacao | Conversation → Safety, Safety → Conversation, Conversation → Operations, Safety → Channel, Operations → Channel |
 | **Pub-Sub** | Publicacao de eventos sem acoplamento direto | Observabilidade passiva | Todos os modulos → Observability |

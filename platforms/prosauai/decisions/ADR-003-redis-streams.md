@@ -6,7 +6,7 @@ alternatives: RabbitMQ, BullMQ, Celery
 rationale: Sem infra adicional — aproveita Redis existente
 ---
 # ADR-003: Redis Streams + DLQ para mensageria
-**Status:** Accepted | **Data:** 2026-03-23 | **Atualizado:** 2026-03-25
+**Status:** Accepted (parcialmente implementado) | **Data:** 2026-03-23 | **Atualizado:** 2026-04-12
 
 ## Contexto
 O sistema precisa de uma fila de mensagens para comunicacao assincrona entre agentes, com suporte a retry, dead-letter queue (DLQ) e consumer groups. Redis ja faz parte do stack existente.
@@ -49,6 +49,20 @@ Motivos:
 - Footprint operacional dramaticamente menor que Kafka ou Redis Streams standalone
 
 Recomendacao: manter Redis Streams para Phase 1-4 (volume <10K msgs/min). Avaliar migracao para NATS JetStream no Phase 5+ quando escalar para multi-tenant de verdade. Redis continua no stack como state store e cache — apenas o papel de message broker principal seria migrado.
+
+## Status de implementacao (2026-04-12)
+
+A decisao de usar Redis como unica infra de mensageria foi mantida, mas a implementacao nos epics 001-004 adotou um pattern mais simples que Redis Streams:
+
+| Aspecto | Decisao original | Implementacao real |
+|---------|-----------------|-------------------|
+| **Debounce** | Redis Streams (XADD/XREADGROUP) | Redis Lists (RPUSH) + keyspace notifications (`__keyevent@0__:expired`) |
+| **Idempotency** | — | Redis SET NX EX (`seen:{tenant_id}:{message_id}`, TTL 24h) |
+| **Consumer groups** | XREADGROUP | PubSub (psubscribe em keyevent:expired) |
+| **DLQ** | XCLAIM + stream separada | Nao implementado (fail-open: em caso de erro Redis, processa mesmo assim) |
+| **Atomicidade** | Streams nativo | Lua scripts atomicos (LRANGE + DEL no flush) |
+
+**Justificativa da divergencia:** O volume atual (2 tenants internos, <100 msgs/min) nao justifica a complexidade de Redis Streams. O pattern de Lists + keyspace notifications e mais simples, debugavel e suficiente. Redis Streams sera adotado quando o worker (ARQ) for introduzido no epic 005+ e o volume justificar consumer groups reais.
 
 ---
 

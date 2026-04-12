@@ -1,12 +1,15 @@
 ---
 title: 'ADR-007: LangFuse v3 self-hosted para observabilidade'
-status: Accepted
+status: Superseded
+superseded_by: ADR-020-phoenix-observability
 decision: LangFuse v3 (self-hosted)
 alternatives: LangSmith, Phoenix (Arize), Helicone
 rationale: Visibilidade completa de traces, custo e latencia por agente/modelo
 ---
 # ADR-007: LangFuse v3 self-hosted para observabilidade
-**Status:** Accepted | **Data:** 2026-03-23 | **Atualizado:** 2026-03-25
+**Status:** ~~Accepted~~ **Superseded** por [ADR-020](ADR-020-phoenix-observability.md) (Phoenix/Arize) | **Data:** 2026-03-23 | **Atualizado:** 2026-04-12
+
+> **NOTA:** Esta ADR foi superseded no epic 002. A decisao de usar Phoenix (Arize) self-hosted em vez de LangFuse foi motivada por: single container (sem ClickHouse), Postgres backend (Supabase), API OTLP gRPC nativa, ops drasticamente mais simples. Ver [ADR-020](ADR-020-phoenix-observability.md).
 
 ## Contexto
 Precisamos de observabilidade completa para chamadas LLM: traces, custo, latencia, qualidade de respostas e prompt management. As opcoes incluem LangFuse (open-source), LangSmith (Langchain) e Phoenix (Arize).

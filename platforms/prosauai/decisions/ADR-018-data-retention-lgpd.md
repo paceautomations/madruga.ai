@@ -22,7 +22,7 @@ Dados pessoais no ProsaUAI aparecem em:
 1. Conversas (mensagens de texto, audio transcrito, imagens)
 2. Embeddings na knowledge base (pgvector)
 3. Redis (sessoes ativas, cache)
-4. Logs (LangFuse traces, application logs)
+4. Logs (Phoenix/OTel traces, application logs)
 5. Metadata (numero WhatsApp, timestamps, tenant association)
 
 ## Decisao
@@ -35,7 +35,7 @@ We will implementar data retention e compliance como parte core da plataforma, n
 | Conversas (mensagens) | 90 dias | Sim (30-365 dias) | Supabase |
 | Sessoes ativas | 24h | Nao | Redis (TTL) |
 | Knowledge base (embeddings) | Permanente (ate tenant deletar) | Sim | Supabase pgvector |
-| LangFuse traces | 90 dias | Sim | ClickHouse |
+| Phoenix traces | 90 dias | Sim | Postgres (Supabase) |
 | Application logs | 30 dias | Nao | Log rotation |
 | Audit trail (security) | 365 dias | Nao (compliance) | Supabase |
 
@@ -107,7 +107,7 @@ Pedido de exclusao
     ├── pgvector: DELETE knowledge_chunks WHERE metadata->>'source_user' = ?
     │   └── Embeddings associados ao usuario
     │
-    ├── LangFuse: Redact traces (substituir PII por [REDACTED])
+    ├── Phoenix: Redact traces (substituir PII por [REDACTED])
     │   └── Traces nao sao deletados (compliance), mas PII removido
     │
     └── Logs: PII redaction via log rotation

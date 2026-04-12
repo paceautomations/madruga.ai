@@ -41,7 +41,7 @@ async def check_rate_limit(tenant_id: str) -> bool:
 - Hard cap configuravel por tier (ex: Starter = $5/dia, Business = $50/dia)
 - Ao atingir cap: throttle (rate limit reduzido) antes de bloquear
 - Alerta ao admin do tenant quando atinge 80% do cap diario
-- Dashboard de custo no admin panel (real-time via LangFuse — ADR-007)
+- Dashboard de custo no admin panel (real-time via Phoenix — ADR-020)
 
 ### 3. Queue Priority (Redis Streams — ADR-003)
 
@@ -67,13 +67,13 @@ circuit_config = {
 - Triggers: loops de agente (agente chamando mesmo tool infinitamente), webhooks falhando repetidamente, LLM retornando erros em serie
 - Ao abrir circuito: mensagens do tenant vao para DLQ (ADR-003), admin recebe alerta
 - Half-open: libera 5 mensagens de teste. Se passam, fecha circuito. Se falham, abre de novo
-- Log detalhado no LangFuse para diagnostico
+- Log detalhado no Phoenix para diagnostico
 
 ### Monitoramento
 
 - Dashboard de saude por tenant no admin (mensagens/min, erros/min, LLM spend, queue depth)
 - Alertas automaticos: rate limit hit >10x em 1h, circuit breaker aberto, spend cap >80%
-- Metricas expostas via LangFuse (ADR-007) para correlacao com qualidade de respostas
+- Metricas expostas via Phoenix (ADR-020) para correlacao com qualidade de respostas
 
 ## Alternativas consideradas
 

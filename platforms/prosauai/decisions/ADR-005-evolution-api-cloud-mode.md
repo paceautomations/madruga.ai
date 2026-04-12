@@ -85,7 +85,7 @@ Evolution API v2.x tem instabilidades documentadas em producao:
 1. **Fixar versao especifica** — NUNCA usar tag `latest` em producao. Testar upgrades em staging
 2. **Health checks agressivos**: endpoint de status a cada 30s + auto-restart se unhealthy por >2min
 3. **Meta Cloud API como fallback**: tenants enterprise que podem fazer business verification devem ter opcao de usar API oficial direta (sem Evolution)
-4. **Webhook HMAC-SHA256**: validar signature de TODA webhook recebida — rejeitar requests sem signature valida (ADR-017)
+4. **Webhook validation**: validar `X-Webhook-Secret` de TODA webhook recebida — rejeitar requests sem secret valido (constant-time compare). NOTA: a implementacao real (epic 003) adotou X-Webhook-Secret per-tenant em vez de HMAC-SHA256, pois a Evolution API Cloud nao envia signature HMAC no payload
 
 ---
 

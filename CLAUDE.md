@@ -55,6 +55,10 @@ Node.js 20+ | Python 3.11+ | `copier` >= 9.4.0
   - `MADRUGA_CACHE_ORDERED=0` → restore legacy section order (task card at top, scoped gating active). Under the default `=1`, stable sections (plan/spec/data_model/contracts) are force-included at the START of the user prompt so Claude's 1h-TTL prefix cache hits on tasks 2..N within the same epic
   - `MADRUGA_QUEUE_PROMOTION=1` (opt-in) → enables auto-promotion of queued epics in easter.py hook. When a running epic ships and the platform slot frees, the oldest queued epic is promoted to `in_progress` automatically. Default **off** — must restart daemon to toggle.
   - `MADRUGA_STRICT_SETTINGS=1` (opt-in) → add `--setting-sources project` (requires audit of `settings.local.json` first)
+  - `MADRUGA_PHASE_DISPATCH=0` → disable phase-based dispatch, revert to task-by-task implement dispatch. Default **on** (`=1`). Phase dispatch groups implement tasks by `## Phase N:` headers in tasks.md into single dispatches with dynamic `--max-turns` (count×20+50, cap 400). Fallback to task-by-task if tasks.md has no phase headers.
+  - `MADRUGA_PHASE_MAX_TASKS=12` → max pending tasks per phase dispatch before splitting into sub-phases. Default 12.
+- **Same-error circuit breaker** — `dispatch_with_retry_async` classifies errors as deterministic/transient/unknown. Deterministic errors (unfilled template, exitcode) escalate after 2 identical failures. Transient errors (rate_limit, timeout) get full retry cycle. Unknown errors escalate after 3.
+- **`plan` depends on `clarify`** in pipeline.yaml — ensures plan reads the clarified spec, not the raw output from specify.
 - **`sync_memory.py` hook respects `MADRUGA_DISPATCH=1`** — the flag set by `dag_executor._dispatch_env()` now short-circuits the script to avoid PostToolUse subprocess storms + WAL contention inside dispatched sessions.
 
 ## Active hooks
@@ -106,6 +110,8 @@ Direct edits bypass validation (frontmatter, handoff chains, archetype complianc
 - Redis 7 (idempotência + debounce buffers), YAML file (tenant config) (epic/prosauai/003-multi-tenant-foundation)
 - Python 3.12 (match/case, StrEnum nativo) + FastAPI >=0.115, pydantic 2.x, redis[hiredis] >=5.0, httpx, structlog, opentelemetry-sdk, hypothesis (dev) (epic/prosauai/004-router-mece)
 - Redis 7 (state lookup: seen + handoff keys), YAML em disco (routing config) (epic/prosauai/004-router-mece)
+- Python 3.12 + FastAPI >=0.115, pydantic-ai >=1.70, asyncpg >=0.30, pydantic >=2.0, httpx, structlog, redis[hiredis] >=5.0 (main)
+- PostgreSQL 15 (Docker container) com RLS per-transaction (ADR-011), Redis 7 (existente — debounce + idempotency) (main)
 
 ## Recent Changes
 - epic/madruga-ai/017-observability-tracing-evals: Added Python 3.11+ (backend), TypeScript/React (portal) + sqlite3 (stdlib), structlog, FastAPI (easter), React + @xyflow/react (portal existente), Astro Starlight

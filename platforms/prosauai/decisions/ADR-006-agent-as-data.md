@@ -7,7 +7,7 @@ alternatives: Classes Python por agente, YAML/TOML config files, Plataforma low-
 rationale: Time-to-market de novo agente/tenant cai de horas para minutos
 ---
 # ADR-006: Agent-as-Data — multi-client, white-label e customizacao por tenant
-**Status:** Accepted | **Data:** 2026-03-23 | **Atualizado:** 2026-03-25
+**Status:** Accepted | **Data:** 2026-03-23 | **Atualizado:** 2026-04-12
 
 ## Contexto
 Cada novo caso de uso exige criar um agente com personalidade, tools e fluxo especificos. A abordagem tradicional e criar uma classe Python por agente. Precisamos escalar para dezenas de agentes sem deploy a cada novo caso.
@@ -27,9 +27,15 @@ We will representar agentes como configuracao JSONB no banco, nao como classes P
 - White-label: cada tenant controla branding, tone, welcome message, canal proprio (Evolution API — ADR-005)
 - Dados do cliente sao propriedade do cliente (principio inviolavel)
 
-### Routing configuravel por numero
+### Routing declarativo MECE per-tenant (atualizado epic 004)
 
-Cada numero WhatsApp do tenant pode ter regras de roteamento diferentes. Exemplo: mensagens individuais no numero principal vao para o agente de vendas; mensagens em grupo com @mention vao para o agente de suporte. Regras sao configuradas via admin panel (`routing_rules` table), sem deploy. Avaliacao por priority ASC, first-match wins. Sem regras = `tenants.settings.default_agent_id`.
+Cada tenant tem suas proprias regras de roteamento em arquivo YAML (`config/routing/{tenant}.yaml`). O Router MECE opera em duas camadas:
+- **Layer 1 — classify()**: funcao pura que deriva `MessageFacts` (channel, event_kind, content_kind, has_mention, from_me, etc.)
+- **Layer 2 — RoutingEngine.decide()**: avalia regras por prioridade, first-match wins. 5 acoes: RESPOND, LOG_ONLY, DROP, BYPASS_AI, EVENT_HOOK
+
+Agent resolution para acoes RESPOND: `rule.agent` > `tenant.default_agent_id` > `AgentResolutionError`.
+
+> **Nota:** A decisao original previa routing rules em tabela DB (`routing_rules`). A implementacao real (epic 004) adotou YAML per-tenant por simplicidade operacional na Fase 1. Migracao para DB-backed esta planejada no epic 006 (Configurable Routing).
 
 ### Config por agent (JSONB)
 Campos configuráveis por tenant/agent:
@@ -52,10 +58,10 @@ Campos configuráveis por tenant/agent:
 | **System prompt** | Personalidade e instrucoes | Texto livre editavel no admin |
 | **Guardrails** | Limites entrada/saida | JSONB: PII detection, forbidden topics, max length, disclaimers (colunas explicitas — anti-pattern #6) |
 | **Tools** | Capacidades do agente | Filtrado por template — support nao ve sales_tools (anti-pattern #5) |
-| **Routing Rules** | Qual agente atende cada tipo de mensagem por numero | `routing_rules` table: (phone_number, match_conditions) → agent_id. Priority ASC, first-match wins |
+| **Routing Rules** | Qual acao + agente por MessageFacts | YAML per-tenant (`config/routing/*.yaml`): when conditions → action + agent. Priority ASC, first-match wins. DB-backed planejado para epic 006 |
 | **Pipeline Steps** | Sequencia de processamento do agente | `agent_pipeline_steps` table: classifier → clarifier → resolver → specialist (configuravel por agent). Zero steps = single LLM call |
 | **Triggers** | Regras de escalacao | Phase 1: 4 hardcoded. v2: IF condition THEN action configuravel |
-| **Smart Router** | Classificacao de mensagem + resolucao de agente | 6 route types (classification) + routing_rules por numero (agent resolution). RouteDecision = path, routing_rules = qual agente |
+| **Router MECE** | Classificacao + decisao de roteamento | classify() → MessageFacts + RoutingEngine.decide() → 5 acoes (RESPOND, LOG_ONLY, DROP, BYPASS_AI, EVENT_HOOK). YAML per-tenant, MECE garantido em 4 camadas |
 
 ### Safety net para mudancas de config
 - A/B testing com golden dataset antes de mudar prompts (score novo > baseline + 0.05 — ADR-008)

@@ -36,3 +36,19 @@ We will implement a Circuit Breaker pattern with separate breakers per call cate
 - [+] Configuravel: failure_threshold=5, recovery_timeout=300s
 - [-] Complexidade adicional no ClaudeClient
 - [-] Pode ser over-cautious (abre breaker por 5min mesmo que problema dure 30s)
+
+## Addendum: Same-Error Escalation (2026-04-12)
+
+O circuit breaker generico (5 falhas → open) nao resolvia o caso de erros deterministicos que nunca se recuperam por retry (e.g., "unfilled template" repetido 5x no epic 023, "exitcode 1" repetido 29x no epic 021). Nesses casos, o retry e puro desperdicio — o problema nao e transiente.
+
+**Decisao adicional:** Classificar erros antes de retry em 3 categorias:
+
+| Categoria | Patterns | Threshold | Justificativa |
+|-----------|----------|-----------|---------------|
+| **Deterministic** | unfilled template, exitcode, output not found | 2 identicos → escalar | Retry nunca resolve bugs no template ou no skill |
+| **Transient** | rate_limit, timeout, context_length | Ciclo completo (4 tentativas) | APIs se recuperam; context_length pode melhorar com prompt trimming |
+| **Unknown** | Qualquer outro | 3 identicos → escalar | Conservador — pode ser transiente ou deterministico |
+
+**Ortogonalidade:** Same-error escalation opera por tentativa dentro de `dispatch_with_retry_async()`, independente do CircuitBreaker generico por plataforma. Ambos coexistem — same-error e um fast-path que evita chegar aos 5 failures do breaker generico.
+
+**Impacto medido:** -7h de wall-clock waste nos dados recentes (29 retries exitcode 1 → 2, 5 retries unfilled template → 2).

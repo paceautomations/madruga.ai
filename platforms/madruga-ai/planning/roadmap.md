@@ -79,6 +79,7 @@ gantt
 | 022 | Mermaid Migration | Removida infraestrutura LikeC4 (8 arquivos .likec4, VitePlugin, componentes React, 5 paginas .astro). Diagramas Mermaid inline nos .md. ADR-020 supersede ADR-001. ~50% reducao config portal. | **shipped** | 2026-04-06 |
 | 023 | Commit Traceability | Post-commit hook: detecta platform/epic por branch/file path, persiste em tabela `commits` (migration 014). Portal tab Changes com filtros. Backfill retroativo do historico completo. | **shipped** | 2026-04-08 |
 | 024 | Sequential Execution UX | Queue promotion: CLI queue/dequeue/queue-list. Easter auto-promote FIFO. Branch checkout direto (worktree removido). Cascade branch. DirtyTreeError. Pair-program companion. Migration 017. Flag MADRUGA_QUEUE_PROMOTION. | **shipped** | 2026-04-12 |
+| 025 | Phase Dispatch & Smart Retry | Phase-based implement dispatch (agrupa tasks por phase, 1 dispatch/phase vs 1/task, -45% custo implement). Same-error circuit breaker (classifica deterministic/transient/unknown, escalacao precoce). Dynamic --max-turns por phase. Fix: plan depende de clarify no pipeline.yaml. Flags: MADRUGA_PHASE_DISPATCH, MADRUGA_PHASE_MAX_TASKS. | **shipped** | 2026-04-12 |
 
 ---
 

@@ -68,7 +68,7 @@ graph LR
     %% Actor connections
     agent -- "HTTPS webhook" --> prosauai-api
     admin_user -- "HTTPS + JWT" --> prosauai-admin
-    evolution-api -- "webhook POST<br/>HMAC-SHA256" --> prosauai-api
+    evolution-api -- "webhook POST<br/>X-Webhook-Secret" --> prosauai-api
 
     %% Internal platform flows
     prosauai-api -- "XADD Redis Streams" --> redis

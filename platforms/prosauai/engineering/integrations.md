@@ -15,7 +15,7 @@ sidebar:
 <!-- AUTO:integrations -->
 | # | Sistema | Protocolo | Direcao | Frequencia | Dados | Fallback |
 |---|---------|-----------|---------|-----------|-------|----------|
-| 1 | **HTTPS webhook** | HTTPS | Agente WhatsApp → prosauai-api | per-message | Mensagens WhatsApp (texto, audio, imagem, video, documento) | — |
+| 1 | **HTTPS webhook** | HTTPS | Agente WhatsApp → prosauai-api | per-message | Mensagens WhatsApp (13 tipos: text, image, video, audio, document, sticker, contact, location, live_location, poll, reaction, event, group_metadata) | — |
 | 2 | **webhook POST** | HTTPS | Evolution API → prosauai-api | — | — | — |
 | 3 | **XADD stream:messages** | Redis protocol | prosauai-api → Redis | per-message | — | — |
 | 4 | **GET/SET cache** | Redis protocol | prosauai-api → Redis | per-request | Cache de sessao, debounce state, dedup message_id | — |
@@ -25,7 +25,7 @@ sidebar:
 | 9 | **POST sendText/{instance}** | HTTP POST | prosauai-worker → Evolution API | per-response | — | 3 retries com backoff exponencial |
 | 10 | **asyncpg SQL** | asyncpg | prosauai-worker → Supabase ProsaUAI | per-message | Mensagens, conversas, clientes, prompts, evals | — |
 | 11 | **asyncpg read-only** | asyncpg | prosauai-worker → Supabase ResenhAI | per-tool-call | Dados de jogos, estatisticas, ranking | — |
-| 12 | **HTTPS SDK traces** | HTTPS SDK | prosauai-worker → LangFuse | per-message | — | Fire-and-forget; buffer local em Redis |
+| 12 | **OTLP gRPC traces** | OTLP gRPC :4317 | prosauai-api → Phoenix (Arize) | per-message | OTel spans (webhook, classify, decide) | Fire-and-forget; BatchSpanProcessor com force_flush no shutdown |
 | 13 | **PG LISTEN/NOTIFY** | PostgreSQL | Supabase ProsaUAI → prosauai-worker | event-driven | — | Polling fallback a cada 5s se LISTEN desconectar |
 | 14 | **Socket.io WebSocket** | Socket.io | prosauai-api → prosauai-admin | per-event | Novas mensagens, status conversas, alertas handoff | Long-polling automatico (fallback nativo Socket.io) |
 | 15 | **HTTPS + JWT** | HTTPS | Admin / Operador → prosauai-admin | per-session | Autenticacao Supabase Auth, gerenciamento via dashboard | — |

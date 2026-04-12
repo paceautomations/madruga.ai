@@ -54,6 +54,11 @@ from log_utils import setup_logging as _setup_logging  # noqa: E402
 
 DEFAULT_TIMEOUT = int(os.environ.get("MADRUGA_EXECUTOR_TIMEOUT", "3000"))
 RETRY_BACKOFFS = [10, 30, 90]
+# Same-error circuit breaker: classify errors and escalate deterministic ones early.
+DETERMINISTIC_ERROR_PATTERNS = ("unfilled template", "exitcode", "output not found")
+TRANSIENT_ERROR_PATTERNS = ("rate_limit", "timeout", "context_length")
+SAME_ERROR_MAX_DETERMINISTIC = 2  # escalate after 2nd identical deterministic error
+SAME_ERROR_MAX_UNKNOWN = 3  # escalate after 3rd identical unknown error
 CB_MAX_FAILURES = 5
 CB_RECOVERY_SECONDS = 300
 HUMAN_GATES = frozenset({"human", "1-way-door"})
@@ -397,6 +402,21 @@ SESSION_RESUME_MAX_TOKENS = int(os.environ.get("MADRUGA_RESUME_MAX_TOKENS", "700
 # outage) affects all remaining tasks identically.
 IMPLEMENT_MAX_CONSECUTIVE_FAILURES = int(os.environ.get("MADRUGA_IMPLEMENT_MAX_FAILS", "3"))
 
+# Phase-based dispatch: group implement tasks by phase instead of dispatching one-by-one.
+PHASE_DISPATCH_MAX_TASKS = int(os.environ.get("MADRUGA_PHASE_MAX_TASKS", "12"))
+PHASE_DISPATCH_TURNS_PER_TASK = 20
+PHASE_DISPATCH_TURNS_BASE = 50
+PHASE_DISPATCH_TURNS_CAP = 400
+ENV_PHASE_DISPATCH = "MADRUGA_PHASE_DISPATCH"  # kill-switch, default "1" (enabled)
+
+
+def _phase_max_turns(task_count: int) -> int:
+    """Dynamic --max-turns for phase dispatch: count * 20 + 50, capped at 400."""
+    return min(
+        task_count * PHASE_DISPATCH_TURNS_PER_TASK + PHASE_DISPATCH_TURNS_BASE,
+        PHASE_DISPATCH_TURNS_CAP,
+    )
+
 
 @dataclass
 class TaskItem:
@@ -446,6 +466,58 @@ def parse_tasks(tasks_md_path: Path) -> list[TaskItem]:
     return _parse_tasks_from_text(tasks_md_path.read_text(encoding="utf-8"))
 
 
+def group_tasks_by_phase(
+    tasks: list[TaskItem],
+    max_per_phase: int = PHASE_DISPATCH_MAX_TASKS,
+) -> list[tuple[str, list[TaskItem]]]:
+    """Group pending tasks by phase, splitting large phases into sub-phases.
+
+    Returns list of (phase_label, tasks) tuples in original phase order.
+    Only includes unchecked tasks.  If no phase headers exist (all tasks have
+    phase=""), returns an empty list — the caller falls back to task-by-task.
+    """
+    from collections import OrderedDict
+
+    phases: OrderedDict[str, list[TaskItem]] = OrderedDict()
+    for t in tasks:
+        if t.checked:
+            continue
+        phases.setdefault(t.phase, []).append(t)
+
+    # Fallback: no phase headers → every task has phase=""
+    if not phases or list(phases.keys()) == [""]:
+        return []
+
+    result: list[tuple[str, list[TaskItem]]] = []
+    for phase_label, phase_tasks in phases.items():
+        if len(phase_tasks) <= max_per_phase:
+            result.append((phase_label, phase_tasks))
+        else:
+            for i in range(0, len(phase_tasks), max_per_phase):
+                chunk = phase_tasks[i : i + max_per_phase]
+                sub_label = f"{phase_label} (part {i // max_per_phase + 1})"
+                result.append((sub_label, chunk))
+    return result
+
+
+def _verify_phase_completion(
+    tasks_md_path: Path,
+    phase_tasks: list[TaskItem],
+) -> tuple[list[str], list[str]]:
+    """After phase dispatch, detect which tasks were completed.
+
+    Re-parses tasks.md for [X]/[x] marks set by the agent during execution.
+    Returns (completed_ids, still_pending_ids).
+    """
+    current = parse_tasks(tasks_md_path)
+    current_map = {t.id: t.checked for t in current}
+
+    completed = [t.id for t in phase_tasks if current_map.get(t.id, False)]
+    still_pending = [t.id for t in phase_tasks if not current_map.get(t.id, False)]
+
+    return completed, still_pending
+
+
 def mark_task_done(tasks_md_path: Path, task_id: str) -> bool:
     """Mark a task as [X] in tasks.md. Returns True if found and updated."""
     content = tasks_md_path.read_text(encoding="utf-8")
@@ -492,6 +564,21 @@ def _task_needs_contracts(task: TaskItem) -> bool:
     if any(API_PATH_RE.search(f) for f in task.files):
         return True
     return API_DESC_RE.search(task.description) is not None
+
+
+def _add_epic_docs(add, epic_dir: Path) -> None:
+    """Add plan, spec, data-model, and contracts to prompt sections.
+
+    Shared by compose_task_prompt (cache-ordered path) and compose_phase_prompt
+    to keep the stable prefix identical for Anthropic prompt-cache reuse.
+    """
+    add("plan", _read_context(epic_dir / "plan.md", "Implementation Plan"))
+    add("spec", _read_context(epic_dir / "spec.md", "Specification"))
+    add("data_model", _read_context(epic_dir / "data-model.md", "Data Model"))
+    contracts_dir = epic_dir / "contracts"
+    if contracts_dir.is_dir():
+        for cf in sorted(contracts_dir.glob("*.md")):
+            add(f"contract:{cf.name}", _read_context(cf, f"Contract: {cf.name}"))
 
 
 def _analyze_report_slice(path: Path, task_id: str) -> str | None:
@@ -595,22 +682,7 @@ def compose_task_prompt(
         # ─── STABLE PREFIX (cacheable across tasks in the same epic) ───
         add("cue", _CACHE_PREFIX_CUE)
         if not resume:
-            add("plan", _read_context(epic_dir / "plan.md", "Implementation Plan"))
-            add("spec", _read_context(epic_dir / "spec.md", "Specification"))
-            # Force-include data_model + contracts under CACHE_ORDERED: the
-            # ~20KB "waste" per non-touching task buys a uniform prefix across
-            # ALL tasks in the epic, unlocking 1h-TTL cache on tasks 2..N.
-            # Math: uniform 64KB prefix × 0.9 (cache_read cost) = 58KB saved
-            # vs fragmented 44KB prefix × 0.9 = 40KB. Net +18KB saved per
-            # cached task. See ADR-021 Phase 5 addendum for full derivation.
-            add("data_model", _read_context(epic_dir / "data-model.md", "Data Model"))
-            contracts_dir = epic_dir / "contracts"
-            if contracts_dir.is_dir():
-                for contract_file in sorted(contracts_dir.glob("*.md")):
-                    add(
-                        f"contract:{contract_file.name}",
-                        _read_context(contract_file, f"Contract: {contract_file.name}"),
-                    )
+            _add_epic_docs(add, epic_dir)
 
         # ─── VARIABLE SUFFIX (task-specific, not cached) ───
         # tasks.md goes in the suffix because mark_task_done flips [ ]→[X]
@@ -699,6 +771,116 @@ def compose_task_prompt(
     return "\n".join(content for _, content, _ in sections)
 
 
+def compose_phase_prompt(
+    phase_label: str,
+    phase_tasks: list[TaskItem],
+    epic_dir: Path,
+    platform_name: str,
+    epic_slug: str,
+) -> str:
+    """Compose a prompt for an entire phase of tasks.
+
+    Reuses the cache-ordered stable prefix (plan, spec, data-model, contracts)
+    from compose_task_prompt for Anthropic prefix cache hits, but replaces the
+    single-task header with a multi-task instruction block.
+    """
+    output_dir = _epic_output_dir(platform_name, epic_slug)
+    task_ids = ", ".join(t.id for t in phase_tasks)
+
+    task_list_lines = [f"{i}. **{t.id}**: {t.description}" for i, t in enumerate(phase_tasks, 1)]
+
+    header = "\n".join(
+        [
+            f"You are implementing {phase_label} for platform '{platform_name}', epic '{epic_slug}'.",
+            "",
+            f"## Phase Tasks ({len(phase_tasks)} tasks)",
+            "",
+            *task_list_lines,
+            "",
+            "## Execution Instructions",
+            "",
+            "Execute these tasks **sequentially in the order listed above**.",
+            "For EACH task:",
+            "1. Implement the task completely",
+            "2. Mark it done in tasks.md: change `- [ ] TXXX` to `- [x] TXXX`",
+            "3. Run relevant tests to verify correctness",
+            "4. Git commit: `feat(<epic-number>): TXXX <short description>`",
+            "5. Move to the next task",
+            "",
+            "After ALL tasks are complete, run the full test suite once.",
+            "",
+            "If you encounter a blocking error on one task after 2 attempts,",
+            "skip it and continue with the next. Report skipped tasks at the end.",
+            "",
+            "CRITICAL CONSTRAINTS:",
+            f"- ONLY implement tasks {task_ids}. Do NOT implement other tasks.",
+            f"- export SPECIFY_BASE_DIR={output_dir}/",
+            f"- You are on branch: epic/{platform_name}/{epic_slug}",
+            "- Do NOT create, switch, or checkout any branch.",
+            f"- Save ALL output to: {output_dir}/ or project root (for scripts/portal).",
+        ]
+    )
+
+    sections: list[tuple[str, str, int]] = []
+    total_size = 0
+
+    def add(name: str, content: str | None) -> None:
+        nonlocal total_size
+        if content is None:
+            return
+        size = len(content.encode())
+        sections.append((name, content, size))
+        total_size += size
+
+    tasks_md_path = epic_dir / "tasks.md"
+    try:
+        tasks_text: str | None = tasks_md_path.read_text(encoding="utf-8")
+    except OSError:
+        tasks_text = None
+
+    cache_ordered = _flag(ENV_CACHE_ORDERED)
+
+    if cache_ordered:
+        add("cue", _CACHE_PREFIX_CUE)
+        _add_epic_docs(add, epic_dir)
+        if tasks_text is not None:
+            add("tasks", _format_context(tasks_text, "All Tasks (current progress)"))
+        add("header", header)
+    else:
+        add("header", header)
+        if tasks_text is not None:
+            add("tasks", _format_context(tasks_text, "All Tasks (current progress)"))
+        _add_epic_docs(add, epic_dir)
+
+    # Include referenced files from ALL tasks in the phase (deduplicated).
+    seen: set[str] = set()
+    for t in phase_tasks:
+        for file_path in t.files:
+            if file_path in seen or total_size >= MAX_PROMPT_BYTES:
+                continue
+            seen.add(file_path)
+            full_path = Path(file_path)
+            if not full_path.is_absolute():
+                full_path = REPO_ROOT / file_path
+            if not (full_path.exists() and full_path.is_file()):
+                continue
+            try:
+                content = full_path.read_text(encoding="utf-8")[:MAX_FILE_CONTEXT_BYTES]
+            except (OSError, UnicodeDecodeError):
+                continue
+            add(f"file:{file_path}", f"\n---\n\n## Existing file: {file_path}\n\n```\n{content}\n```")
+
+    log.info(
+        "phase_prompt_composed phase=%r task_count=%d total_bytes=%d sections=%s",
+        phase_label,
+        len(phase_tasks),
+        total_size,
+        {name: size for name, _, size in sections},
+    )
+
+    return "\n".join(content for _, content, _ in sections)
+
+
 async def run_implement_tasks(
     platform_name: str,
     epic_slug: str,
@@ -726,15 +908,32 @@ async def run_implement_tasks(
         log.info("All %d tasks already checked — nothing to implement", len(tasks))
         return True, None, "all tasks already done"
 
-    log.info("Task-by-task implement: %d pending of %d total", len(pending), len(tasks))
     epic_dir = platform_dir / "epics" / epic_slug
 
     # Delete stale implement-context.md from previous run (legacy mode only).
-    # Under MADRUGA_KILL_IMPLEMENT_CONTEXT=1 (default) the file isn't written,
-    # but legacy leftovers may still exist — sweep them opportunistically.
     ctx_path = epic_dir / "implement-context.md"
     if ctx_path.exists():
         ctx_path.unlink()
+
+    # ── Phase dispatch path ──
+    if _flag(ENV_PHASE_DISPATCH):
+        phases = group_tasks_by_phase(tasks)
+        if phases:
+            return await _run_implement_phases(
+                phases,
+                tasks_path,
+                epic_dir,
+                platform_name,
+                epic_slug,
+                conn,
+                cwd,
+                trace_id,
+                guardrail,
+                timeout_per_task,
+            )
+
+    # ── Fallback: task-by-task ──
+    log.info("Task-by-task implement: %d pending of %d total", len(pending), len(tasks))
 
     breaker = CircuitBreaker(conn=conn, platform_id=platform_name, epic_id=epic_slug)
     completed = 0
@@ -889,6 +1088,160 @@ async def run_implement_tasks(
 
     all_done = len(failed) == 0
     log.info("Implement tasks done: %s", summary)
+    return all_done, None if all_done else summary, summary
+
+
+async def _run_implement_phases(
+    phases: list[tuple[str, list[TaskItem]]],
+    tasks_path: Path,
+    epic_dir: Path,
+    platform_name: str,
+    epic_slug: str,
+    conn,
+    cwd: Path,
+    trace_id: str | None,
+    guardrail: str | None,
+    timeout_per_task: int,
+) -> tuple[bool, str | None, str | None]:
+    """Dispatch implement tasks phase-by-phase instead of task-by-task.
+
+    Each phase is a single ``claude -p`` dispatch containing all tasks in
+    that phase.  The agent is instructed to commit after each task, so
+    partial progress is preserved even on timeout.
+    """
+    from db import complete_run, insert_run
+
+    breaker = CircuitBreaker(conn=conn, platform_id=platform_name, epic_id=epic_slug)
+    total_completed = 0
+    total_tasks = sum(len(pts) for _, pts in phases)
+    consecutive_phase_failures = 0
+
+    log.info("Phase dispatch: %d phases, %d total pending tasks", len(phases), total_tasks)
+
+    for phase_idx, (phase_label, phase_tasks) in enumerate(phases):
+        # Re-parse to skip tasks completed by a prior phase or retry
+        current_tasks = parse_tasks(tasks_path)
+        current_done = {t.id for t in current_tasks if t.checked}
+        still_pending = [t for t in phase_tasks if t.id not in current_done]
+
+        if not still_pending:
+            log.info("Phase '%s': all tasks already done, skipping", phase_label)
+            total_completed += len(phase_tasks)
+            continue
+
+        phase_id = f"implement:phase-{phase_idx + 1}"
+        max_turns = _phase_max_turns(len(still_pending))
+        timeout = min(timeout_per_task * len(still_pending), DEFAULT_TIMEOUT)
+
+        prompt = compose_phase_prompt(
+            phase_label,
+            still_pending,
+            epic_dir,
+            platform_name,
+            epic_slug,
+        )
+        phase_node = Node(
+            id=phase_id,
+            skill="speckit.implement",
+            outputs=[],
+            depends=[],
+            gate="auto",
+            layer="implementation",
+            optional=False,
+            skip_condition=None,
+        )
+
+        log.info(
+            "Dispatching phase '%s' (%d tasks, max_turns=%d, timeout=%ds): %s",
+            phase_label,
+            len(still_pending),
+            max_turns,
+            timeout,
+            [t.id for t in still_pending],
+        )
+
+        run_id = insert_run(
+            conn,
+            platform_name,
+            phase_id,
+            epic_id=epic_slug,
+            trace_id=trace_id,
+        )
+
+        success, error, stdout = await dispatch_with_retry_async(
+            phase_node,
+            cwd,
+            prompt,
+            timeout,
+            breaker,
+            guardrail,
+            platform_name=platform_name,
+            abort_check=_make_abort_check(conn, epic_slug),
+            max_turns_override=max_turns,
+        )
+
+        # Verify which tasks actually completed (regardless of dispatch result)
+        completed_ids, pending_ids = _verify_phase_completion(tasks_path, still_pending)
+        metrics = parse_claude_output(stdout) if stdout else {}
+        phase_completed = len(completed_ids)
+        total_completed += phase_completed
+
+        if success or phase_completed == len(still_pending):
+            consecutive_phase_failures = 0
+            # Defensively mark any tasks the agent might have missed
+            for tid in completed_ids:
+                mark_task_done(tasks_path, tid)
+            complete_run(
+                conn,
+                run_id,
+                status="completed",
+                tokens_in=metrics.get("tokens_in"),
+                tokens_out=metrics.get("tokens_out"),
+                cost_usd=metrics.get("cost_usd"),
+                duration_ms=metrics.get("duration_ms"),
+            )
+            log.info(
+                "Phase '%s' completed: %d/%d tasks done",
+                phase_label,
+                phase_completed,
+                len(still_pending),
+            )
+        elif phase_completed > 0:
+            # Partial completion — some tasks done, continue to next phase
+            consecutive_phase_failures = 0  # partial progress = not stuck
+            complete_run(
+                conn,
+                run_id,
+                status="completed",
+                error=f"partial: {phase_completed}/{len(still_pending)}",
+                tokens_in=metrics.get("tokens_in"),
+                tokens_out=metrics.get("tokens_out"),
+                cost_usd=metrics.get("cost_usd"),
+                duration_ms=metrics.get("duration_ms"),
+            )
+            log.warning(
+                "Phase '%s' partial: %d/%d tasks done, still pending: %s",
+                phase_label,
+                phase_completed,
+                len(still_pending),
+                pending_ids,
+            )
+        else:
+            # Zero progress
+            consecutive_phase_failures += 1
+            complete_run(conn, run_id, status="failed", error=error)
+            log.error("Phase '%s' failed with zero progress: %s", phase_label, error)
+
+            if consecutive_phase_failures >= IMPLEMENT_MAX_CONSECUTIVE_FAILURES:
+                log.error(
+                    "Aborting phase dispatch: %d consecutive failures. Fix root cause before re-dispatching.",
+                    consecutive_phase_failures,
+                )
+                break
+
+    summary = f"{total_completed}/{total_tasks} tasks completed (phase dispatch)"
+    all_done = total_completed >= total_tasks
+    log.info("Phase dispatch done: %s", summary)
     return all_done, None if all_done else summary, summary
 
 
@@ -1539,6 +1892,7 @@ async def dispatch_node_async(
     guardrail: str | None = None,
     resume_session_id: str | None = None,
     platform_name: str = "",
+    max_turns_override: int | None = None,
 ) -> tuple[bool, str | None, str | None]:
     """Async version of dispatch_node using asyncio.create_subprocess_exec.
 
@@ -1548,7 +1902,14 @@ async def dispatch_node_async(
     if not shutil.which("claude"):
         return False, "claude CLI not found in PATH", None
 
-    cmd = build_dispatch_cmd(node, prompt, platform_name, guardrail, resume_session_id)
+    cmd = build_dispatch_cmd(
+        node,
+        prompt,
+        platform_name,
+        guardrail,
+        resume_session_id,
+        max_turns_override=max_turns_override,
+    )
     log.info(
         "Dispatching node '%s' async (skill: %s, timeout: %ds%s)",
         node.id,
@@ -1667,6 +2028,18 @@ def _make_abort_check(conn, epic_slug: str | None):
     return check
 
 
+def _classify_error(error: str | None) -> str:
+    """Classify an error as deterministic, transient, or unknown."""
+    if not error:
+        return "unknown"
+    error_lower = error.lower()
+    if any(p in error_lower for p in DETERMINISTIC_ERROR_PATTERNS):
+        return "deterministic"
+    if any(p in error_lower for p in TRANSIENT_ERROR_PATTERNS):
+        return "transient"
+    return "unknown"
+
+
 async def dispatch_with_retry_async(
     node: Node,
     cwd: str | Path,
@@ -1677,8 +2050,13 @@ async def dispatch_with_retry_async(
     resume_session_id: str | None = None,
     platform_name: str = "",
     abort_check: "object | None" = None,
+    max_turns_override: int | None = None,
 ) -> tuple[bool, str | None, str | None]:
     """Async version of dispatch_with_retry using asyncio.sleep.
+
+    Includes same-error circuit breaker: deterministic errors escalate after
+    2 identical failures; unknown errors after 3.  Transient errors (rate
+    limit, timeout) use the full retry cycle.
 
     Returns (success, error_message, stdout_content).
     """
@@ -1687,6 +2065,7 @@ async def dispatch_with_retry_async(
 
     last_error = None
     last_stdout = None
+    same_error_count = 0
     for attempt, backoff in enumerate([0] + RETRY_BACKOFFS, 1):
         if backoff > 0:
             # F2: Check if epic was cancelled/blocked before retrying
@@ -1707,10 +2086,37 @@ async def dispatch_with_retry_async(
             guardrail,
             resume_session_id,
             platform_name,
+            max_turns_override=max_turns_override,
         )
         if success:
             breaker.record_success()
             return True, None, stdout
+
+        # Same-error escalation: stop retrying deterministic failures early.
+        error_class = _classify_error(error)
+        if error == last_error:
+            same_error_count += 1
+        else:
+            same_error_count = 1
+
+        threshold = (
+            SAME_ERROR_MAX_DETERMINISTIC
+            if error_class == "deterministic"
+            else SAME_ERROR_MAX_UNKNOWN
+            if error_class == "unknown"
+            else len(RETRY_BACKOFFS) + 1  # transient: never escalate early
+        )
+        if same_error_count >= threshold:
+            log.warning(
+                "same-error escalation node=%s class=%s count=%d error=%s",
+                node.id,
+                error_class,
+                same_error_count,
+                (error or "")[:200],
+            )
+            breaker.record_failure()
+            return False, error, stdout
+
         last_error = error
         last_stdout = stdout
 
@@ -2299,6 +2705,7 @@ def build_dispatch_cmd(
     guardrail: str | None = None,
     resume_session_id: str | None = None,
     quick_mode: bool = False,
+    max_turns_override: int | None = None,
 ) -> list[str]:
     """Build the claude -p command array with --system-prompt, --allowedTools, --effort.
 
@@ -2387,9 +2794,13 @@ def build_dispatch_cmd(
     # ``MADRUGA_MAX_TURNS=0`` / ``unlimited`` to disable. See
     # easter-tracking.md (prosauai/004-router-mece) for the motivating
     # incidents (T004, T006 silent-hang pattern).
-    max_turns = os.environ.get("MADRUGA_MAX_TURNS", "100")
-    if max_turns and max_turns not in ("0", "unlimited"):
-        cmd.extend(["--max-turns", max_turns])
+    # Phase dispatch passes max_turns_override (dynamic per phase size).
+    if max_turns_override is not None:
+        cmd.extend(["--max-turns", str(max_turns_override)])
+    else:
+        max_turns = os.environ.get("MADRUGA_MAX_TURNS", "100")
+        if max_turns and max_turns not in ("0", "unlimited"):
+            cmd.extend(["--max-turns", max_turns])
 
     log.info(
         "dispatch_cmd node=%s system_prompt_bytes=%d flags=%s",

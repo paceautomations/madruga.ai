@@ -67,7 +67,7 @@ graph LR
 | # | Container | BC(s) | Tecnologia | Responsabilidade | Protocol In | Protocol Out |
 |---|-----------|-------|------------|------------------|-------------|-------------|
 | 1 | **Easter** | Orchestration, Notifications | FastAPI + asyncio + aiogram | Runtime 24/7: DAG scheduler, gate poller, health check, API observability | — (easter autonomo) | subprocess, SQL, HTTPS |
-| 2 | **DAG Executor** | Orchestration | Python (modulo importado) | Topological sort, skill dispatch via claude -p, retry + circuit breaker | Chamado por Easter/CLI | subprocess (claude -p), SQL |
+| 2 | **DAG Executor** | Orchestration | Python (modulo importado) | Topological sort, phase-based dispatch (agrupa implement tasks por phase com --max-turns dinamico), same-error circuit breaker (classifica deterministic/transient/unknown), retry | Chamado por Easter/CLI | subprocess (claude -p), SQL |
 | 3 | **Platform CLI** | State (interface) | Python argparse | Scaffold, lint, status, seed, register — interface humana sobre Pipeline State | CLI commands | SQL |
 | 4 | **Portal** | Apresentacao | Astro 6 + Starlight + React | SSG: documentacao navegavel, dashboards, observability tabs | browser HTTP | read JSON (pre-build) |
 | 5 | **madruga.db** | State, Observability, Decision | SQLite WAL 3.35+ | Persistencia: 15 tabelas + 2 FTS5 (platforms, runs, traces, evals, decisions, memory, commits) | SQL | — |

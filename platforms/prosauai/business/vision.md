@@ -1,6 +1,6 @@
 ---
 title: "Vision"
-updated: 2026-04-10
+updated: 2026-04-12
 sidebar:
   order: 1
 ---
@@ -181,9 +181,9 @@ Desde novembro de 2024, **respostas a mensagens iniciadas pelo usuario sao grati
 
 A vision multi-tenant nao e implementada num unico salto — segue 3 fases que mapeiam a maturidade comercial da plataforma. Cada fase tem trigger explicito; nao se antecipa fase sem dor real para evita-la.
 
-### Fase 1 — Fundacao Multi-Tenant Estrutural (epic 003)
+### Fase 1 — Fundacao Multi-Tenant Estrutural (epic 003 — SHIPPED)
 
-**Quando:** agora. Pre-requisito de qualquer outro epic.
+**Status:** Entregue em 2026-04-10. Epics 001-004 concluidos.
 
 **O que entrega:**
 
@@ -248,7 +248,7 @@ A vision multi-tenant nao e implementada num unico salto — segue 3 fases que m
 
 | Fase | Epic | Trigger entrada | Output principal | Stakeholder |
 |------|------|----------------|------------------|-------------|
-| **1 — Fundacao** | 003 (now) | Bloqueio do servico em producao real | Codigo multi-tenant operando com 2 tenants internos | Time interno Pace |
+| **1 — Fundacao** | 003 (**shipped**) | Bloqueio do servico em producao real | Codigo multi-tenant operando com 2 tenants internos + router MECE + observabilidade | Time interno Pace |
 | **2 — Public API** | 012 (later) | Primeiro cliente externo | Caddy + Admin API + rate limit + onboarding externo | Clientes externos + Pace |
 | **3 — Operacao** | 013 (later) | >=5 tenants OU dor operacional | Postgres + circuit breaker + billing + alertas | Ops + finance |
 
@@ -256,4 +256,4 @@ Cada fase e independente — implementar Fase 2 sem cliente real seria overengin
 
 ---
 
-> **Proximo passo:** `/madruga:solution-overview prosauai` — gerar visao de solucao a partir desta visao validada.
+> **Proximo passo:** epic 005 (Conversation Core) — ultimo epic MVP. Apos 005, primeiro deploy de producao com IA generativa real.

@@ -81,7 +81,7 @@ madruga.ai/
 ├── .claude/rules/          # Plan review, hooks
 ├── .specify/scripts/       # Python backend (~12,800 LOC)
 │   ├── easter.py           # Easter (scheduler, API, bot)
-│   ├── dag_executor.py     # DAG engine (sort, dispatch, circuit breaker)
+│   ├── dag_executor.py     # DAG engine (sort, phase-based dispatch, same-error circuit breaker)
 │   ├── platform_cli.py     # CLI management (queue/dequeue/status)
 │   ├── db_core.py          # Connection lifecycle, migrations, FTS5
 │   ├── db_pipeline.py      # Platform/epic CRUD, run tracking
@@ -137,9 +137,16 @@ MadrugaError (base)
 │   └── GateError (gate evaluation)
 ```
 
-**Retry:** 3 tentativas com backoff `[5, 10, 20]s` + jitter aleatorio (async). Circuit breaker: 5 falhas → 300s recovery → half-open test.
+**Retry:** 4 tentativas com backoff `[10, 30, 90]s` + jitter 30% (async). Circuit breaker generico: 5 falhas → 300s recovery → half-open test.
 
-**Justificativa:** Python idiomatico. Exceptions com hierarchy permitem catch granular sem boilerplate de result types.
+**Same-error escalation:** Erros classificados em 3 categorias antes de retry:
+- **Deterministic** (unfilled template, exitcode, output not found): 2 falhas identicas → escalar imediatamente (retry nao resolve)
+- **Transient** (rate_limit, timeout, context_length): ciclo completo de retry (4 tentativas)
+- **Unknown**: 3 falhas identicas → escalar
+
+**Phase dispatch:** Implement tasks agrupados por phase (headers `## Phase N:` no tasks.md). Cada phase = 1 dispatch `claude -p` com `--max-turns` dinamico (`count * 20 + 50`, cap 400). Fallback task-by-task se tasks.md nao tem phases. Kill-switch: `MADRUGA_PHASE_DISPATCH=0`.
+
+**Justificativa:** Python idiomatico. Exceptions com hierarchy permitem catch granular sem boilerplate de result types. Phase dispatch reduz cold-starts de 50-76 para 5-8 por epic (-45% custo implement).
 
 ### 4.3 Configuracao
 
@@ -155,6 +162,8 @@ MadrugaError (base)
 | MADRUGA_SCOPED_CONTEXT | 1 (on) | Incluir docs scoped por task. 0 → inclui tudo |
 | MADRUGA_CACHE_ORDERED | 1 (on) | Reordenar prompt para cache-optimal prefix. 0 → legacy order |
 | MADRUGA_KILL_IMPLEMENT_CONTEXT | 1 (on) | Desabilitar implement-context.md append/read. 0 → legacy |
+| MADRUGA_PHASE_DISPATCH | 1 (on) | Phase-based dispatch: agrupa implement tasks por phase. 0 → task-by-task |
+| MADRUGA_PHASE_MAX_TASKS | 12 | Max tasks por phase antes de split em sub-phases |
 | MADRUGA_DISPATCH | 0 | Flag interno: dag_executor seta em dispatch sessions para prevenir hook storms |
 | ANTHROPIC_API_KEY | (keychain) | Claude API auth (opcional — keychain preferido) |
 | MADRUGA_TELEGRAM_BOT_TOKEN | — | Telegram bot auth |
@@ -165,7 +174,9 @@ MadrugaError (base)
 
 ### 4.4 Resiliencia
 
-**Circuit Breaker (ADR-011):** Breakers separados por categoria (epic pipeline vs standalone). 3 estados: closed → open (5 falhas) → half-open (apos 300s).
+**Circuit Breaker (ADR-011):** Duas camadas:
+1. **Generico (plataforma):** 3 estados: closed → open (5 falhas) → half-open (apos 300s). Separados por categoria (epic pipeline vs standalone).
+2. **Same-error (por tentativa):** Classifica erros em deterministic/transient/unknown. Erros deterministicos identicos escalam apos 2 repeticoes; unknown apos 3. Transient usa ciclo completo.
 
 **Retry com backoff:** Exponencial com jitter para dispatch async. Sem retry para gates (humano decide).
 
