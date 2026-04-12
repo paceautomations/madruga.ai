@@ -91,7 +91,7 @@
 
 **Independent Test**: docker inspect mostra json-file driver com max-size e max-file em todos os services.
 
-- [ ] T021 [P] [US4] Add YAML anchor x-logging with json-file driver, max-size 50m, max-file 5, and apply logging: *default-logging to ALL existing services (api, redis, postgres, phoenix) (file: docker-compose.yml)
+- [x] T021 [P] [US4] Add YAML anchor x-logging with json-file driver, max-size 50m, max-file 5, and apply logging: *default-logging to ALL existing services (api, redis, postgres, phoenix) (file: docker-compose.yml)
 
 **Checkpoint**: Log rotation active on all services. Max disk usage for logs: 1.25GB.
 
