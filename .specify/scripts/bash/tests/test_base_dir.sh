@@ -12,13 +12,21 @@ BRANCH_T006="999-test-basedir"
 BRANCH_T007="998-test-default"
 BRANCH_T008="999-test-basedir"
 
+# Save the caller's branch so cleanup can restore it.
+# Without this, the test leaves HEAD on a leaked test branch and the
+# caller's next git operation (commit, push) targets the wrong ref.
+ORIGINAL_BRANCH="$(git -C "$REPO_ROOT" branch --show-current 2>/dev/null)"
+[ -z "$ORIGINAL_BRANCH" ] && ORIGINAL_BRANCH="main"
+
 cleanup() {
     rm -rf /tmp/test-epic-basedir
     rm -rf /tmp/test-default-basedir
-    # Return to main before deleting branches
-    git -C "$REPO_ROOT" checkout main 2>/dev/null || true
+    # Detach HEAD first so we can delete any test branch (can't delete current)
+    git -C "$REPO_ROOT" checkout --detach 2>/dev/null || true
     git -C "$REPO_ROOT" branch -D "$BRANCH_T006" 2>/dev/null || true
     git -C "$REPO_ROOT" branch -D "$BRANCH_T007" 2>/dev/null || true
+    # Restore the caller's original branch
+    git -C "$REPO_ROOT" checkout "$ORIGINAL_BRANCH" 2>/dev/null || true
 }
 
 trap cleanup EXIT

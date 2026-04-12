@@ -49,6 +49,7 @@ Nenhum blocker externo. Depende de:
 | 7 | Failure handling | 3 retries com backoff (1s, 2s, 4s) → status `blocked` + ntfy alert. Idempotente: upsert de branch_name ocorre DEPOIS de criar a branch, prevenindo estado inconsistente | ADR-006 (resilience) |
 | 8 | Subprocess vs library | Manter raw `subprocess` para operações git — stdlib constraint (ADR-004), operações são simples, overhead de gitpython/pygit2 não justificado | ADR-004 (stdlib + pyyaml only) |
 | 9 | Merge automático | Fora do escopo. PRs de merge permanecem gate humano para revisão de código. O hook não faz `gh pr merge`. | ADR-013 (decision gates) |
+| 10 | Feature flag no hook de easter | Hook de promoção respeita env var `MADRUGA_QUEUE_PROMOTION` (default **off**). Mesmo com código commitado, em runtime o hook só ativa quando explicitamente habilitado — padrão já usado em `MADRUGA_BARE_LITE`, `MADRUGA_KILL_IMPLEMENT_CONTEXT`, etc | ADR-021 (dispatch kill-switches), ADR-006 (safe rollouts) |
 
 ## Resolved Gray Areas
 
@@ -78,6 +79,19 @@ Sim. Adicionar `"queued": "queued"` ao dicionário (linha ~30). Sem isso, `post_
 - **Sequential invariant (pipeline-dag-knowledge.md §8)**: O lock `_running_epics` permanece global. O hook de promoção respeita: só promove quando `_running_epics` está vazio. Não existem dois epics `in_progress` simultâneos.
 - **SQLite WAL + single-writer (ADR-004)**: Promoção usa `db_write_lock()` (fcntl, já em `db_core.py`) para proteger o upsert de status.
 - **Migration pattern (009_add_drafted_status.sql)**: Seguir exatamente o padrão de rec-tabela com `PRAGMA foreign_keys = OFF/ON` e índices recreados.
+
+### Auto-sabotage guardrails (self-ref platform)
+
+Epic 024 modifica arquivos que o próprio pipeline executa em runtime (`easter.py`, `db_pipeline.py`, migration no `.pipeline/madruga.db`). Para evitar que a implementação quebre o pipeline durante o próprio ciclo, o plan/tasks DEVE respeitar as 6 camadas abaixo:
+
+1. **Camada 0 — Quarentena do daemon**: `systemctl --user stop madruga-easter` ANTES de iniciar o `/speckit.implement`. Não restartar até `/madruga:qa` passar verde. Easter importa `easter.py` no boot — edits no módulo não afetam o daemon até restart, mas qualquer restart acidental no meio do epic carrega código meio-cozido.
+2. **Camada 1 — Backup do DB**: `cp .pipeline/madruga.db .pipeline/madruga.db.bak-pre-024` antes de aplicar migration 017. `.pipeline/madruga.db` não é tracked (A1) — `git checkout` não restaura. Se migration brickar: stop easter → restaurar do backup.
+3. **Camada 2 — Ordem aditiva das tasks**: Cada task deve manter o código base funcional isoladamente. Ordem obrigatória: (a) migration 017 primeiro, aditiva ao CHECK constraint; (b) `db_pipeline.py` — status map + guard, aditivo, não reescreve código existente; (c) `platform_cli.py queue` — comando novo sem reescrita; (d) `ensure_repo.py::get_repo_work_dir` — função nova que ainda NÃO é chamada por ninguém; (e) `implement_remote.py` — troca o ponto de chamada (agora `get_repo_work_dir` vira load-bearing); (f) `easter.py` hook — ÚLTIMO, porque é o daemon. Cada commit dessa sequência roda `make test` verde antes de avançar.
+4. **Camada 3 — Implementação interativa, nunca via dispatcher**: O ciclo L2 desse epic roda por chamada manual de skills no chat, NÃO via `python3 dag_executor.py --epic 024-...`. Dispatch autônomo em bare-lite + epic que reescreve o próprio `dag_executor` = cegueira garantida quando algo quebrar. Gates humanos de cada skill são inegociáveis aqui.
+5. **Camada 4 — Feature flag `MADRUGA_QUEUE_PROMOTION`**: O hook de promoção inserido em `easter.py::dag_scheduler` respeita env var (default **off**). Código commitado = inativo em runtime até export explícito. Precedente: `MADRUGA_BARE_LITE`, `MADRUGA_KILL_IMPLEMENT_CONTEXT`, `MADRUGA_SCOPED_CONTEXT`, `MADRUGA_CACHE_ORDERED` (todos já em CLAUDE.md). Ver decisão #10.
+6. **Camada 5 — `make test` verde entre commits**: Pre-commit hook já roda ruff/format. Pytest é manual. Convenção para 024: **nenhum commit sem `make test` verde**. Se um commit quebra testes, volta atrás antes de prosseguir — não acumula quebras.
+
+Essas camadas são APLICÁVEIS ao `/speckit.plan` e `/speckit.tasks` — o plano e a ordem de tasks devem refleti-las literalmente. Não são sugestões.
 
 ## Suggested Approach
 

@@ -1,7 +1,7 @@
 ---
 epic: 024-sequential-execution-ux
 created: 2026-04-10
-updated: 2026-04-10
+updated: 2026-04-11
 ---
 # Registro de Decisões — Epic 024
 
@@ -14,3 +14,7 @@ updated: 2026-04-10
 7. `[2026-04-10 epic-context]` Failure handling: 3 retries com backoff 1s/2s/4s → status `blocked` + ntfy alert; idempotente via upsert após branch criada (ref: ADR-006)
 8. `[2026-04-10 epic-context]` Manter raw subprocess para operações git — stdlib constraint, sem gitpython/pygit2 (ref: ADR-004)
 9. `[2026-04-10 epic-context]` Merge automático de PRs fora do escopo — permanece gate humano para revisão de código (ref: ADR-013)
+10. `[2026-04-11 planning-session]` Hook de promoção em easter.py respeita env var `MADRUGA_QUEUE_PROMOTION` (default off) — código commitado fica inativo até export explícito, permitindo merge seguro antes de ativação (ref: ADR-021 dispatch kill-switches, CLAUDE.md bare-lite precedents)
+11. `[2026-04-11 planning-session]` Ciclo L2 de 024 roda interativo no chat, nunca via dag_executor dispatch — epic reescreve o próprio dag_executor, autônomo = cegueira. Gates humanos inegociáveis (ref: auto-sabotage guardrail Camada 3)
+12. `[2026-04-11 planning-session]` Ordem aditiva das tasks: migration 017 → db_pipeline aditivo → platform_cli queue → ensure_repo (função isolada) → implement_remote (call-site swap) → easter.py hook por último. Cada commit com make test verde (ref: Camadas 2+5)
+13. `[2026-04-11 planning-session]` Pré-condição da fase de implementação: stop easter + backup .pipeline/madruga.db. Pós-condição: qa verde ANTES de restart easter (ref: Camadas 0+1)

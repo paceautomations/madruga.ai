@@ -19,7 +19,9 @@ venv/
 .pipeline/*.bak*
 .pipeline/backups/
 .pipeline/logs/
+.pipeline/timeout-diagnostics/
 platforms/*/model/output/
 .env
 htmlcov/
 .coverage
+.claude/scheduled_tasks.lock
