@@ -30,8 +30,7 @@ class PromotionResult:
     error_message: str | None = None
 
 
-class DirtyTreeError(Exception):
-    """Raised when a repo working tree has uncommitted changes."""
+from ensure_repo import DirtyTreeError  # noqa: F401 — canonical definition in ensure_repo.py
 
 
 def _checkout_epic_branch(

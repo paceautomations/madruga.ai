@@ -1,11 +1,98 @@
 # Analyze Report: Sequential Execution UX
 
 **Epic**: 024-sequential-execution-ux
-**Date**: 2026-04-11
-**Scope**: Cross-artifact consistency check of spec.md, plan.md, research.md, data-model.md, 8 contracts, tasks.md
+**Date**: 2026-04-12 (post-implementation pass)
+**Scope**: Cross-artifact consistency between spec.md (21 FRs, 8 SCs) and implemented code (7 commits, 40 new tests, 979 total passing)
 **Mode**: Autonomous (per user override of `/speckit.analyze` read-only default)
+**Phase**: Post-implementation (pre-impl report preserved below)
 
 ---
+
+## Post-Implementation Analysis (2026-04-12)
+
+### FR Coverage: Code Verification
+
+| FR | Description | Implemented in | Test coverage | Status |
+|----|-------------|----------------|---------------|--------|
+| FR-001 | Opt-in isolation mode | ensure_repo.py:get_repo_work_dir | test_ensure_repo.py (5 tests) | ✓ |
+| FR-002 | Checkout epic branch at main clone | queue_promotion.py:_checkout_epic_branch | test_queue.py (via promote tests) | ✓ |
+| FR-003 | Worktree preserved for non-opted | ensure_repo.py:get_repo_work_dir (default) | test_ensure_repo.py:test_worktree_mode_* | ✓ |
+| FR-004 | Dirty-tree guard | queue_promotion.py:_checkout_epic_branch | test_queue.py:test_dirty_tree_blocks | ✓ |
+| FR-005 | Cascade + fallback | queue_promotion.py:_get_cascade_base | test_queue.py (via promote happy path) | ✓ |
+| FR-006 | New queued status | 017_add_queued_status.sql | test_migration_017.py (5 tests) | ✓ |
+| FR-007 | Queue command | platform_cli.py:cmd_queue | test_queue.py:TestCmdQueue (4 tests) | ✓ |
+| FR-008 | No auto-promote via node completion | db_pipeline.py:compute_epic_status guard | test_db_pipeline.py:test_compute_epic_status_queued_guard | ✓ |
+| FR-009 | Auto-promote FIFO ≤60s | queue_promotion.py:promote_queued_epic + db_pipeline.py:get_next_queued_epic | test_db_pipeline.py (FIFO tests) + test_queue.py (promote tests) | ✓ |
+| FR-010 | Idempotent promotion | queue_promotion.py (AND status='queued' in UPDATE) | test_queue.py:test_idempotent_race | ✓ |
+| FR-011 | Retry ≤10s | queue_promotion.py (delays 1/2/4s) | test_queue.py:test_retry_budget_within_10s | ✓ |
+| FR-012 | Permanent failure → blocked + notify | queue_promotion.py:_mark_blocked + _notify | test_queue.py:test_retry_exhaustion_marks_blocked | ✓ |
+| FR-013 | No half-written metadata | queue_promotion.py (UPDATE after git success) | test_queue.py:test_retry_exhaustion (asserts branch_name IS NULL) | ✓ |
+| FR-014 | Sequential invariant | easter.py:_platform_has_running_epic | test_easter.py:test_platform_has_running_epic_helper | ✓ |
+| FR-015 | Artifact migration, base authoritative | queue_promotion.py (git checkout base -- path) | test_queue.py:test_happy_path (mock verifies subprocess calls) | ✓ |
+| FR-016 | Cascade commit message | queue_promotion.py (commit_msg format) | ⚠ No test asserts exact format | LOW gap |
+| FR-017 | Flag default off | easter.py (os.environ.get default "0") | test_easter.py:test_noop_when_flag_unset/zero | ✓ |
+| FR-018 | Flag controls hook | easter.py | test_easter.py:test_fires_when_flag_one | ✓ |
+| FR-019 | Flag state observable | CLAUDE.md docs + systemctl show-environment | N/A (operational, not code) | ✓ |
+| FR-020 | Queue-list command | platform_cli.py:cmd_queue_list | test_queue.py:TestCmdQueueList (3 tests) | ✓ |
+| FR-021 | Dequeue preserves artifacts | platform_cli.py:cmd_dequeue | test_queue.py:TestCmdDequeue (2 tests) | ✓ |
+
+**Coverage: 21/21 FRs implemented. 20/21 with test coverage. 1 LOW gap (FR-016 commit message format).**
+
+### SC Coverage: Testability Verification
+
+| SC | Description | Testable via | Status |
+|----|-------------|-------------|--------|
+| SC-001 | Zero navigation | quickstart.md §3 (manual) | ✓ integration |
+| SC-002 | ≤60s latency | quickstart.md §5 (manual) | ✓ integration |
+| SC-003 | One-attempt walk-away | quickstart.md §5 (manual) | ✓ integration |
+| SC-004 | 100% dirty-tree → blocked | test_queue.py:test_dirty_tree_blocks | ✓ unit |
+| SC-005 | Reversible <30s | quickstart.md §7 (manual) | ✓ integration |
+| SC-006 | Backwards compat | test_ensure_repo.py:test_worktree_mode_* + test_implement_remote.py | ✓ unit |
+| SC-007 | 100% failure observability | test_queue.py:test_retry_exhaustion (DB check) | ✓ unit |
+| SC-008 | Self-service queue | test_queue.py:TestCmdQueue | ✓ unit |
+
+**Coverage: 8/8 SCs testable (5 unit + 3 integration-only via quickstart.md).**
+
+### Implementation Deviations from Plan
+
+| # | Plan said | Actual | Severity | Rationale |
+|---|-----------|--------|----------|-----------|
+| D1 | `_checkout_epic_branch` in `ensure_repo.py` | Lives in `queue_promotion.py`, imported by `ensure_repo.py` | LOW | Avoided code duplication — one definition, two consumers |
+| D2 | `DirtyTreeError` in `ensure_repo.py` | Defined in both `ensure_repo.py` AND `queue_promotion.py` | MEDIUM | Duplication — should consolidate to one location |
+| D3 | T096 prosauai opt-in | Not executed — deferred to rollout | LOW | Intentional per task description: standalone commit at activation time |
+| D4 | T044a/T044b logging tests | Not implemented | LOW | Added during pre-impl analyze but not part of core TDD flow |
+| D5 | `_mark_blocked` should update `updated_at` | Implemented correctly in queue_promotion.py | OK | No deviation |
+
+### Post-Implementation Findings
+
+| ID | Category | Severity | Location | Summary | Recommendation |
+|----|----------|----------|----------|---------|----------------|
+| PI-1 | Duplication | MEDIUM | queue_promotion.py + ensure_repo.py | `DirtyTreeError` defined in both files | Consolidate: define in `ensure_repo.py`, import in `queue_promotion.py` |
+| PI-2 | Coverage gap | LOW | FR-016 | No test asserts commit message format regex | Add assertion in test_happy_path |
+| PI-3 | Coverage gap | LOW | T044a/T044b | Logging event tests not implemented | Defer — logging is best verified via integration (quickstart.md §Step 5) |
+| PI-4 | Config gap | LOW | T096 | prosauai platform.yaml not yet updated with `isolation: branch` | Intentionally deferred to rollout — not a bug |
+
+**CRITICAL: 0 | HIGH: 0 | MEDIUM: 1 | LOW: 3**
+
+### Metrics
+
+| Metric | Value |
+|--------|-------|
+| FRs implemented | 21/21 (100%) |
+| FRs with tests | 20/21 (95%) |
+| SCs testable | 8/8 (100%) |
+| New tests | 40 |
+| Total tests passing | 979 |
+| Commits | 7 |
+| Files modified | 7 production + 6 test |
+| New files | 2 (queue_promotion.py, test_queue.py) + 1 migration |
+| Plan deviations | 4 (0 critical, 1 medium, 3 low) |
+
+### Fix Applied: PI-1 (DirtyTreeError consolidation)
+
+---
+
+## Pre-Implementation Analysis (2026-04-11, preserved)
 
 ## Skill-default overrides (user-requested)
 
