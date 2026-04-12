@@ -118,7 +118,7 @@
 **Note**: Migration rewrite (T007) creates the partitioned table. This phase adds the partition manager for ongoing lifecycle.
 
 - [x] T023 [US6] Implement partition manager: ensure_future_partitions(conn, table, months_ahead=3) creates monthly partitions with IF NOT EXISTS; drop_expired_partitions(conn, table, retention_days=90) drops partitions where all data exceeds retention; list_partitions(conn, table) returns partition names with row counts. All operations use structlog for logging (file: prosauai/ops/partitions.py, ~60 LOC)
-- [ ] T024 [US6] Write tests for partition manager: ensure_future_partitions creates correct monthly ranges idempotently, drop_expired_partitions only removes fully expired partitions, list_partitions returns accurate counts, INSERT into partition-less month fails with error (file: tests/ops/test_partitions.py)
+- [x] T024 [US6] Write tests for partition manager: ensure_future_partitions creates correct monthly ranges idempotently, drop_expired_partitions only removes fully expired partitions, list_partitions returns accurate counts, INSERT into partition-less month fails with error (file: tests/ops/test_partitions.py)
 
 **Checkpoint**: Partition lifecycle automated. Future partitions created proactively, expired partitions droppable instantly.
 
