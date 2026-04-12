@@ -681,6 +681,19 @@ def _build_parser():  # -> argparse.ArgumentParser
     p.add_argument("name", help="Platform name")
     p.add_argument("epic_slug", help="Epic slug")
 
+    # queue / dequeue / queue-list (epic 024)
+    p = sub.add_parser("queue", help="Mark a drafted epic as queued for auto-promotion")
+    p.add_argument("name", help="Platform name")
+    p.add_argument("epic_id", help="Epic ID (e.g., 004-channel-webhook)")
+
+    p = sub.add_parser("dequeue", help="Remove an epic from the queue (revert to drafted)")
+    p.add_argument("name", help="Platform name")
+    p.add_argument("epic_id", help="Epic ID")
+
+    p = sub.add_parser("queue-list", help="Show queued epics for a platform")
+    p.add_argument("name", help="Platform name")
+    p.add_argument("--json", action="store_true", dest="queue_json", help="Output as JSON")
+
     # Gate management (epic 013)
     gate_p = sub.add_parser("gate", help="Manage human gates (approve/reject/list)")
     gate_sub = gate_p.add_subparsers(dest="gate_action", help="Gate action")
@@ -746,6 +759,12 @@ def main() -> None:
         cmd_worktree(args.name, args.epic_slug)
     elif args.command == "worktree-cleanup":
         cmd_worktree_cleanup(args.name, args.epic_slug)
+    elif args.command == "queue":
+        cmd_queue(args.name, args.epic_id)
+    elif args.command == "dequeue":
+        cmd_dequeue(args.name, args.epic_id)
+    elif args.command == "queue-list":
+        cmd_queue_list(args.name, getattr(args, "queue_json", False))
     elif args.command == "gate":
         if not args.gate_action:
             print("Usage: platform_cli.py gate {approve|reject|list}")
@@ -823,6 +842,105 @@ def cmd_gate_list(name: str) -> None:
         epic = g.get("epic_id") or "-"
         since = g.get("started_at") or "-"
         print(f"{g['run_id']:<12s} {g['node_id']:<25s} {epic:<30s} {since}")
+
+
+def cmd_queue(name: str, epic_id: str) -> None:
+    """Mark a drafted epic as queued for auto-promotion."""
+    from db_core import get_conn, migrate, _now
+
+    with get_conn() as conn:
+        migrate(conn)
+        row = conn.execute(
+            "SELECT status FROM epics WHERE platform_id=? AND epic_id=?",
+            (name, epic_id),
+        ).fetchone()
+        if row is None:
+            _error(f"Epic {epic_id} not found for platform {name}.")
+            sys.exit(2)
+        current = row[0] if isinstance(row, tuple) else row["status"]
+        if current != "drafted":
+            _error(f"Cannot queue epic {epic_id}: current status is '{current}', expected 'drafted'.")
+            sys.exit(3)
+        conn.execute(
+            "UPDATE epics SET status='queued', updated_at=? WHERE platform_id=? AND epic_id=?",
+            (_now(), name, epic_id),
+        )
+        conn.commit()
+        count = conn.execute(
+            "SELECT COUNT(*) FROM epics WHERE platform_id=? AND status='queued'",
+            (name,),
+        ).fetchone()[0]
+    _ok(f"Epic {epic_id} queued for platform {name}. Position in queue: {count}.")
+
+
+def cmd_dequeue(name: str, epic_id: str) -> None:
+    """Remove an epic from the queue, reverting to drafted."""
+    from db_core import get_conn, migrate, _now
+
+    with get_conn() as conn:
+        migrate(conn)
+        row = conn.execute(
+            "SELECT status FROM epics WHERE platform_id=? AND epic_id=?",
+            (name, epic_id),
+        ).fetchone()
+        if row is None:
+            _error(f"Epic {epic_id} not found for platform {name}.")
+            sys.exit(2)
+        current = row[0] if isinstance(row, tuple) else row["status"]
+        if current != "queued":
+            _error(f"Cannot dequeue epic {epic_id}: current status is '{current}', expected 'queued'.")
+            sys.exit(3)
+        conn.execute(
+            "UPDATE epics SET status='drafted', updated_at=? WHERE platform_id=? AND epic_id=?",
+            (_now(), name, epic_id),
+        )
+        conn.commit()
+    _ok(f"Epic {epic_id} dequeued. Status reverted to drafted.")
+
+
+def cmd_queue_list(name: str, as_json: bool = False) -> None:
+    """Show queued epics for a platform in FIFO order."""
+    from db_core import get_conn, migrate
+
+    with get_conn() as conn:
+        migrate(conn)
+        rows = conn.execute(
+            "SELECT epic_id, title, updated_at FROM epics"
+            " WHERE platform_id=? AND status='queued'"
+            " ORDER BY updated_at ASC, epic_id ASC",
+            (name,),
+        ).fetchall()
+
+    if not rows:
+        print(f"No epics queued for platform {name}.")
+        return
+
+    if as_json:
+        import json as _json
+
+        data = {
+            "platform": name,
+            "count": len(rows),
+            "queue": [
+                {
+                    "position": i + 1,
+                    "epic_id": r["epic_id"] if isinstance(r, dict) else r[0],
+                    "title": r["title"] if isinstance(r, dict) else r[1],
+                    "queued_at": r["updated_at"] if isinstance(r, dict) else r[2],
+                }
+                for i, r in enumerate(rows)
+            ],
+        }
+        print(_json.dumps(data, indent=2))
+        return
+
+    print(f"\nQueue for platform {name} ({len(rows)} epics):\n")
+    print(f"  {'#':<4s} {'Epic ID':<30s} {'Title':<35s} {'Queued at'}")
+    for i, r in enumerate(rows):
+        eid = r["epic_id"] if isinstance(r, dict) else r[0]
+        title = r["title"] if isinstance(r, dict) else r[1]
+        queued_at = r["updated_at"] if isinstance(r, dict) else r[2]
+        print(f"  {i + 1:<4d} {eid:<30s} {title:<35s} {queued_at}")
 
 
 if __name__ == "__main__":
