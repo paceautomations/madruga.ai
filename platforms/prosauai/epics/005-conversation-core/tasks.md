@@ -182,14 +182,14 @@
 
 ### Tests for User Story 5 (TDD)
 
-- [ ] T050 [P] [US5] Criar `tests/tools/test_resenhai.py` com testes: tool call bem-sucedido (API mockada), fallback quando API indisponível, ACL check (tenant_id injetado server-side), tool registrado no registry
-- [ ] T051 [P] [US5] Criar `tests/tools/test_registry.py` com testes: registro de tool, lookup por nome, whitelist enforcement (tool não habilitado não é acessível)
+- [x] T050 [P] [US5] Criar `tests/tools/test_resenhai.py` com testes: tool call bem-sucedido (API mockada), fallback quando API indisponível, ACL check (tenant_id injetado server-side), tool registrado no registry
+- [x] T051 [P] [US5] Criar `tests/tools/test_registry.py` com testes: registro de tool, lookup por nome, whitelist enforcement (tool não habilitado não é acessível)
 
 ### Implementation for User Story 5
 
-- [ ] T052 [US5] Criar `prosauai/tools/__init__.py` e `prosauai/tools/registry.py` — `TOOL_REGISTRY`, `register_tool()` decorator com category e required_params, função `get_enabled_tools()` que filtra por `prompt.tools_enabled` (whitelist enforcement ADR-014)
-- [ ] T053 [US5] Criar `prosauai/tools/resenhai.py` — `search_rankings()` tool com `@register_tool("resenhai_rankings")`, ACL via `ctx.deps.tenant_id` (server-side), HTTP call para API interna ResenhAI (stub com dados mock se API não exposta), fallback message se serviço indisponível
-- [ ] T054 [US5] Estender `prosauai/conversation/agent.py` — integrar tool registry: carregar tools habilitados do `prompt.tools_enabled`, registrar como pydantic-ai tools no Agent, injetar deps via `RunContext[ConversationDeps]`. Respeitar hard limit de 20 tool calls por conversa (ADR-016)
+- [x] T052 [US5] Criar `prosauai/tools/__init__.py` e `prosauai/tools/registry.py` — `TOOL_REGISTRY`, `register_tool()` decorator com category e required_params, função `get_enabled_tools()` que filtra por `prompt.tools_enabled` (whitelist enforcement ADR-014)
+- [x] T053 [US5] Criar `prosauai/tools/resenhai.py` — `search_rankings()` tool com `@register_tool("resenhai_rankings")`, ACL via `ctx.deps.tenant_id` (server-side), HTTP call para API interna ResenhAI (stub com dados mock se API não exposta), fallback message se serviço indisponível
+- [x] T054 [US5] Estender `prosauai/conversation/agent.py` — integrar tool registry: carregar tools habilitados do `prompt.tools_enabled`, registrar como pydantic-ai tools no Agent, injetar deps via `RunContext[ConversationDeps]`. Respeitar hard limit de 20 tool calls por conversa (ADR-016)
 
 **Checkpoint**: US5 funcional — agente ResenhAI consulta rankings via tool call, ACL enforced.
 
