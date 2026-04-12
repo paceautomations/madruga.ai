@@ -66,11 +66,45 @@ Substituir LangFuse por **Phoenix (Arize) self-hosted** como plataforma de obser
 ### Helicone
 - Rejeitado: proxy-based (nao self-hosted). Lock-in com API Gateway pattern
 
+## Ambientes: SQLite dev vs Postgres prod (epic 006)
+
+> Adicionado no epic 006-production-readiness.
+
+| Ambiente | Backend | Configuracao | Justificativa |
+|----------|---------|-------------|---------------|
+| Desenvolvimento | SQLite (padrao Phoenix) | `docker-compose.yml` — nenhuma config extra | Zero-config, setup rapido, sem dependencia de Postgres para dev |
+| Producao | Postgres (Supabase) | `docker-compose.prod.yml` — env vars dedicadas | Traces sobrevivem restarts, escala alem de 1M spans, multi-writer |
+
+### Configuracao de producao
+
+```yaml
+# docker-compose.prod.yml
+services:
+  phoenix:
+    environment:
+      PHOENIX_SQL_DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      PHOENIX_SQL_DATABASE_SCHEMA: observability
+    volumes: []  # Remove phoenix_data SQLite volume
+```
+
+**Schema isolation**: Phoenix cria suas tabelas no schema `observability` via env var `PHOENIX_SQL_DATABASE_SCHEMA` (disponivel desde Phoenix v4.33.0). Isso isola traces das tabelas de negocio em `prosauai` ([ADR-024](ADR-024-schema-isolation.md)).
+
+**Validacao pos-deploy**: Verificar que tabelas Phoenix existem no schema correto:
+
+```sql
+SELECT count(*) FROM information_schema.tables
+WHERE table_schema = 'observability';
+-- Esperado: > 0
+```
+
+**Fallback documentado**: Se Phoenix nao respeitar `PHOENIX_SQL_DATABASE_SCHEMA`, criar database separado `phoenix_db` no mesmo Postgres. Nao esperado — versao 8.22.1 e muito posterior a v4.33.0 quando a feature foi adicionada.
+
 ## Consequencias
 
 - `prosauai/observability/` reescrito com OTel SDK + Phoenix exporter
 - `structlog_bridge.py` criado para correlacao log↔trace
 - `ExporterHealthTracker` criado para monitorar status de exportacao
 - Health endpoint (`/health`) reflete estado do OTel exporter (ok/degraded)
-- docker-compose.yml inclui Phoenix container
+- docker-compose.yml inclui Phoenix container (SQLite dev)
+- docker-compose.prod.yml configura Phoenix com Postgres backend + schema `observability`
 - Todos os ADRs e docs que referenciavam LangFuse atualizados para Phoenix
