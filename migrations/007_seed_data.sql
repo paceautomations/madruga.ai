@@ -10,8 +10,7 @@
 -- Tenant UUIDs (deterministic for dev/test):
 --   Ariel (barbearia):  00000000-0000-4000-a000-000000000001
 --   ResenhAI (futebol): 00000000-0000-4000-a000-000000000002
-
-BEGIN;
+-- NOTE: No explicit BEGIN/COMMIT — the migration runner wraps each file in a transaction.
 
 -- ============================================================
 -- Ariel — Barbearia assistant
@@ -33,7 +32,7 @@ ON CONFLICT (id) DO UPDATE SET
 
 INSERT INTO prosauai.prompts (id, tenant_id, agent_id, version, system_prompt, safety_prefix, safety_suffix, tools_enabled, parameters)
 VALUES (
-    'p1000000-0000-0000-0000-000000000001',
+    'b1000000-0000-0000-0000-000000000001',
     '00000000-0000-4000-a000-000000000001'::uuid,
     'a1000000-0000-0000-0000-000000000001',
     '1.0',
@@ -51,7 +50,7 @@ ON CONFLICT ON CONSTRAINT uq_prompt_version DO UPDATE SET
     parameters    = EXCLUDED.parameters;
 
 UPDATE prosauai.agents
-SET active_prompt_id = 'p1000000-0000-0000-0000-000000000001',
+SET active_prompt_id = 'b1000000-0000-0000-0000-000000000001',
     updated_at = now()
 WHERE id = 'a1000000-0000-0000-0000-000000000001';
 
@@ -75,7 +74,7 @@ ON CONFLICT (id) DO UPDATE SET
 
 INSERT INTO prosauai.prompts (id, tenant_id, agent_id, version, system_prompt, safety_prefix, safety_suffix, tools_enabled, parameters)
 VALUES (
-    'p2000000-0000-0000-0000-000000000002',
+    'b2000000-0000-0000-0000-000000000002',
     '00000000-0000-4000-a000-000000000002'::uuid,
     'a2000000-0000-0000-0000-000000000002',
     '1.0',
@@ -93,8 +92,6 @@ ON CONFLICT ON CONSTRAINT uq_prompt_version DO UPDATE SET
     parameters    = EXCLUDED.parameters;
 
 UPDATE prosauai.agents
-SET active_prompt_id = 'p2000000-0000-0000-0000-000000000002',
+SET active_prompt_id = 'b2000000-0000-0000-0000-000000000002',
     updated_at = now()
 WHERE id = 'a2000000-0000-0000-0000-000000000002';
-
-COMMIT;
