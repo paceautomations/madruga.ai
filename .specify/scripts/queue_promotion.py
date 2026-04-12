@@ -174,13 +174,13 @@ def promote_queued_epic(platform_id: str) -> PromotionResult:
     else:
         repo_path = ensure_repo(platform_id)
 
-    # 4. Retry loop: 3 attempts, 1/2/4s backoff
-    delays = [0.0, 1.0, 2.0, 4.0]
+    # 4. Retry loop: 3 attempts, backoff 1/2/4s AFTER failure (first attempt immediate)
+    backoff_delays = [1.0, 2.0, 4.0]  # sleep AFTER attempt N fails, before N+1
     last_error: Exception | None = None
 
     for attempt in range(1, 4):
-        if delays[attempt] > 0:
-            time.sleep(delays[attempt])
+        if attempt > 1:
+            time.sleep(backoff_delays[attempt - 2])  # 1s after fail 1, 2s after fail 2
 
         log.info(
             "promotion_attempt_started",
@@ -191,14 +191,23 @@ def promote_queued_epic(platform_id: str) -> PromotionResult:
             # 4a. Branch creation + dirty-tree guard
             branch_name = _checkout_epic_branch(repo_path, epic_id, binding)
 
-            # 4b. Bring draft artifacts from base branch
+            # 4b. Bring draft artifacts from base branch (if they exist)
             epic_dir_rel = f"platforms/{platform_id}/epics/{epic_id}/"
-            subprocess.run(
+            artifact_result = subprocess.run(
                 ["git", "checkout", base_branch, "--", epic_dir_rel],
                 cwd=str(repo_path),
                 capture_output=True,
                 text=True,
             )
+            if artifact_result.returncode != 0:
+                log.warning(
+                    "promotion_no_draft_artifacts",
+                    extra={
+                        "platform": platform_id,
+                        "epic_id": epic_id,
+                        "stderr": artifact_result.stderr[:200],
+                    },
+                )
             # 4c. Commit artifact migration
             subprocess.run(["git", "add", epic_dir_rel], cwd=str(repo_path), check=True)
             commit_msg = f"feat: promote queued epic {epic_id} (cascade from {base_branch})"
@@ -299,7 +308,8 @@ def _mark_blocked(platform_id: str, epic_id: str, reason: str) -> None:
     try:
         with get_conn() as conn:
             conn.execute(
-                "UPDATE epics SET status='blocked', updated_at=? WHERE platform_id=? AND epic_id=?",
+                "UPDATE epics SET status='blocked', updated_at=? "
+                "WHERE platform_id=? AND epic_id=? AND status IN ('queued', 'blocked')",
                 (_now(), platform_id, epic_id),
             )
             conn.commit()

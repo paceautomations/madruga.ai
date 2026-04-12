@@ -41,6 +41,7 @@ def _load_repo_binding(name: str) -> dict:
         "name": repo_name,
         "base_branch": repo.get("base_branch", "main"),
         "epic_branch_prefix": repo.get("epic_branch_prefix", f"epic/{name}/"),
+        "isolation": repo.get("isolation", "worktree"),
     }
 
 
@@ -163,11 +164,7 @@ def get_repo_work_dir(platform_name: str, epic_slug: str) -> Path:
     if _is_self_ref(binding["name"]):
         return REPO_ROOT
 
-    # Read isolation mode from platform.yaml
-    manifest_path = REPO_ROOT / "platforms" / platform_name / "platform.yaml"
-    with open(manifest_path) as f:
-        manifest = yaml.safe_load(f)
-    isolation = manifest.get("repo", {}).get("isolation", "worktree")
+    isolation = binding.get("isolation", "worktree")
 
     if isolation == "branch":
         repo_path = ensure_repo(platform_name)

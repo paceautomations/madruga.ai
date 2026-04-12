@@ -171,11 +171,9 @@ async def sweep_zombies(conn) -> None:
 
 def _platform_has_running_epic(platform_id: str) -> bool:
     """Check if a platform has any epic currently in_progress (sync, for asyncio.to_thread)."""
-    import sqlite3
+    from db_core import get_conn
 
-    from db_core import DB_PATH
-
-    with sqlite3.connect(str(DB_PATH)) as conn:
+    with get_conn() as conn:
         row = conn.execute(
             "SELECT 1 FROM epics WHERE platform_id=? AND status='in_progress' LIMIT 1",
             (platform_id,),
