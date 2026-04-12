@@ -119,6 +119,8 @@ graph LR
 | 7 | Phoenix (Arize) | Observability | Docker (self-hosted) | Tracing fim-a-fim (OTel spans), waterfall UI, SpanQL queries. Postgres backend (Supabase) | OTLP gRPC :4317 | asyncpg SQL (Supabase) |
 | 8 | Infisical | — (infra) | Docker (self-hosted) | Secrets vault: envelope encryption, rotation | HTTPS REST SDK | — |
 | 9 | Evolution API | Channel | Cloud mode (managed) | WhatsApp gateway: send/receive messages | HTTP POST (sendText) | Webhook POST |
+| 10 | Netdata :19999 | — (infra) | Docker (self-hosted) | Host monitoring: CPU, RAM, disco, containers Docker. Dashboard web. Bind `127.0.0.1` only (acesso via SSH tunnel) | — | HTTP :19999 (dashboard) |
+| 11 | retention-cron | Operations | Python 3.12 (same image as API) | Purge diario de dados expirados: DROP PARTITION (messages), batch DELETE (conversations, eval_scores, traces). LGPD compliance | asyncpg SQL | Logs (structlog JSON) |
 
 ---
 
@@ -149,10 +151,12 @@ graph LR
 | prosauai-worker | Horizontal | Queue depth > 100 msgs | Redis consumer groups distribui carga. Cada instancia: `max_jobs=20` (ARQ), `llm_semaphore=10` (asyncio), backpressure se fila > 100. Jitter 0-1s no Lua TTL previne avalanche de flushes |
 | prosauai-admin | Horizontal | Usuarios concorrentes > 100 | Stateless Next.js |
 | Redis | Single + Sentinel | — | HA via Sentinel; vertical para throughput |
-| Supabase | Vertical (managed) | Conexoes > 80% pool | Managed pelo provider |
+| Supabase | Vertical (managed) | Conexoes > 80% pool | Managed pelo provider. Tabela `messages` particionada mensalmente — purge via DROP PARTITION (<100ms). Partition pruning em queries com filtro `created_at`. Crescimento sustentavel ~365K msgs/ano |
 | Bifrost | Horizontal | RPM > 1000 | Stateless Go proxy |
 | Phoenix (Arize) | Single instance | — | Tracing nao e critico para pipeline. Postgres backend (Supabase) |
 | Infisical | Single instance | — | Cache 5min no client reduz load |
+| Netdata | Single instance | — | Temporario (epic 013 substitui por Prometheus+Grafana). mem_limit 256m |
+| retention-cron | Single instance | — | Execucao diaria (sleep 86400). mem_limit 128m. Idempotente |
 
 > NFRs globais e targets mensuraveis → ver [blueprint.md](../blueprint/)
 
@@ -168,13 +172,15 @@ graph LR
 | prosauai-worker | ⏳ Planejado | — | LLM orchestration, delivery migram para ARQ worker em epic futuro (005+) |
 | prosauai-admin | ⏳ Planejado | — | — |
 | Redis 7 | ✅ Operacional | 001-004 | Debounce keys (buf:/tmr:) + keyspace notifications + idempotency (seen:tenant_id:msg_id SETNX 24h) |
-| Supabase ProsaUAI | ⏳ Planejado | — | — |
+| Supabase ProsaUAI | ✅ Schema isolation | 006 | Schema `prosauai` (7 tabelas de negocio) + `prosauai_ops` (tenant_id, schema_migrations). Messages particionada por mes. Migration runner automatizado no startup. [ADR-024](../decisions/ADR-024-schema-isolation.md) |
 | Bifrost | ⏳ Planejado | — | — |
-| Phoenix (Arize) | ✅ Operacional | 002 | Substitui LangFuse ([ADR-020](../decisions/ADR-020-phoenix-observability.md)). UI :6006 + gRPC :4317. Postgres backend (Supabase) |
+| Phoenix (Arize) | ✅ Operacional | 002, 006 | Substitui LangFuse ([ADR-020](../decisions/ADR-020-phoenix-observability.md)). UI :6006 + gRPC :4317. SQLite em dev, Postgres backend em prod (`PHOENIX_SQL_DATABASE_SCHEMA=observability`) |
 | Infisical | ⏳ Planejado | — | Config via .env nesta fase |
 | Evolution API | ✅ Integrado | 001 | Cloud mode, mock em testes |
 | TenantStore (file) | ✅ Operacional | 003 | YAML file-backed, lifespan loader, ${VAR} interpolation, 2 tenants reais (Ariel + ResenhAI). Migracao para Postgres em [ADR-023](../decisions/ADR-023-tenant-store-postgres-migration.md) |
 | Router MECE | ✅ Operacional | 004 | classify() pure + RoutingEngine declarativa + config YAML per-tenant (config/routing/*.yaml) + MECE verification (4 camadas) + MentionMatchers (3 estrategias) |
+| Netdata | ✅ Operacional (prod) | 006 | Host monitoring temporario (substitui por Prometheus+Grafana no epic 013). Bind `127.0.0.1:19999`, mem_limit 256m. Acesso via SSH tunnel |
+| retention-cron | ✅ Operacional (prod) | 006 | Purge diario LGPD: DROP PARTITION messages, batch DELETE conversations/eval_scores/traces. mem_limit 128m. `--dry-run` default |
 | Caddy 2 (edge proxy) | 📋 Planejado | 012 (Fase 2) | TLS automatico via Let's Encrypt; reverse proxy para prosauai-api; rate limit por IP. Ver [ADR-021](../decisions/ADR-021-caddy-edge-proxy.md) |
 | Admin API | 📋 Planejado | 012 (Fase 2) | Endpoints `POST/GET/PATCH/DELETE /admin/tenants`; auth via master token. Ver [ADR-022](../decisions/ADR-022-admin-api.md) |
 | TenantStore (Postgres) | 📋 Planejado | 013 (Fase 3) | Migracao YAML → Postgres; schema gerenciado em Supabase com RLS herdada de [ADR-011](../decisions/ADR-011-pool-rls-multi-tenant.md). Trigger: >=5 tenants reais |
