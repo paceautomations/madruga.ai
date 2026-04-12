@@ -203,13 +203,13 @@
 
 ### Tests for User Story 6 (TDD)
 
-- [ ] T055 [P] [US6] Criar `tests/safety/test_pii_e2e.py` com testes: mensagem com CPF passa pelo pipeline (não bloqueia), PII hasheado em logs (SHA-256), resposta do LLM contendo telefone é mascarada na saída, OTel spans não contêm PII em texto plano
-- [ ] T056 [P] [US6] Criar `tests/safety/test_patterns.py` com testes: regex CPF (com e sem pontuação), regex telefone BR (com e sem DDD/parênteses), regex email, false negatives e false positives comuns
+- [x] T055 [P] [US6] Criar `tests/safety/test_pii_e2e.py` com testes: mensagem com CPF passa pelo pipeline (não bloqueia), PII hasheado em logs (SHA-256), resposta do LLM contendo telefone é mascarada na saída, OTel spans não contêm PII em texto plano
+- [x] T056 [P] [US6] Criar `tests/safety/test_patterns.py` com testes: regex CPF (com e sem pontuação), regex telefone BR (com e sem DDD/parênteses), regex email, false negatives e false positives comuns
 
 ### Implementation for User Story 6
 
-- [ ] T057 [US6] Estender `prosauai/safety/input_guard.py` — integrar com structlog para log de PII hasheado (SHA-256), adicionar correlation_id no log, garantir que `sanitized_text` é usado em TODOS os logs e traces do pipeline
-- [ ] T058 [US6] Estender `prosauai/conversation/pipeline.py` — garantir que OTel spans usam `sanitized_text` (nunca raw text com PII) nos atributos. PII detection result logado como tipo apenas (ex: `pii_types=["cpf", "email"]`), nunca o valor
+- [x] T057 [US6] Estender `prosauai/safety/input_guard.py` — integrar com structlog para log de PII hasheado (SHA-256), adicionar correlation_id no log, garantir que `sanitized_text` é usado em TODOS os logs e traces do pipeline
+- [x] T058 [US6] Estender `prosauai/conversation/pipeline.py` — garantir que OTel spans usam `sanitized_text` (nunca raw text com PII) nos atributos. PII detection result logado como tipo apenas (ex: `pii_types=["cpf", "email"]`), nunca o valor
 
 **Checkpoint**: US6 funcional — PII nunca em texto plano em logs/traces, saída mascarada.
 
