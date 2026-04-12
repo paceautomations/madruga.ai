@@ -2251,3 +2251,89 @@ def test_quick_fix_no_skipped_nodes_in_dependencies(tmp_path):
     # No skipped node appears as a dependency or as a node
     assert all_deps.isdisjoint(skipped_nodes), f"Quick DAG references skipped nodes: {all_deps & skipped_nodes}"
     assert all_ids.isdisjoint(skipped_nodes), f"Quick DAG contains skipped nodes: {all_ids & skipped_nodes}"
+
+
+# ---------------------------------------------------------------------------
+# _resolve_code_dir / _epic_output_dir
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_code_dir_delegates_to_get_repo_work_dir():
+    """_resolve_code_dir delegates to get_repo_work_dir for L2 epics."""
+    from pathlib import Path
+
+    from dag_executor import _resolve_code_dir
+
+    fake_path = Path("/tmp/fake-worktree")
+    with patch("ensure_repo.get_repo_work_dir", return_value=fake_path) as mock_grwd:
+        result = _resolve_code_dir("prosauai", "004-router-mece")
+
+    mock_grwd.assert_called_once_with("prosauai", "004-router-mece")
+    assert result == fake_path
+
+
+def test_resolve_code_dir_returns_repo_root_without_epic():
+    """_resolve_code_dir returns REPO_ROOT when no epic is given (L1)."""
+    from dag_executor import REPO_ROOT, _resolve_code_dir
+
+    result = _resolve_code_dir("prosauai", None)
+    assert result == REPO_ROOT
+
+
+@pytest.mark.real_epic_output_dir
+def test_epic_output_dir_self_ref():
+    """_epic_output_dir returns relative path for self-ref platforms."""
+    from dag_executor import _epic_output_dir
+
+    with (
+        patch("ensure_repo._is_self_ref", return_value=True),
+        patch("ensure_repo._load_repo_binding", return_value={"name": "madruga.ai"}),
+    ):
+        result = _epic_output_dir("madruga-ai", "024-sequential")
+
+    assert result == "platforms/madruga-ai/epics/024-sequential"
+    assert not result.startswith("/")
+
+
+@pytest.mark.real_epic_output_dir
+def test_epic_output_dir_external_repo():
+    """_epic_output_dir returns absolute path for external repos."""
+    from dag_executor import REPO_ROOT, _epic_output_dir
+
+    with (
+        patch("ensure_repo._is_self_ref", return_value=False),
+        patch("ensure_repo._load_repo_binding", return_value={"name": "prosauai"}),
+    ):
+        result = _epic_output_dir("prosauai", "005-next")
+
+    expected = str(REPO_ROOT / "platforms" / "prosauai" / "epics" / "005-next")
+    assert result == expected
+    assert result.startswith("/")
+
+
+def test_compose_task_prompt_uses_epic_output_dir(tmp_path):
+    """compose_task_prompt output_dir comes from _epic_output_dir."""
+    from dag_executor import TaskItem, compose_task_prompt
+
+    epic_dir = tmp_path / "epics" / "001-test"
+    epic_dir.mkdir(parents=True)
+    (epic_dir / "plan.md").write_text("# Plan")
+    (epic_dir / "spec.md").write_text("# Spec")
+    (epic_dir / "tasks.md").write_text("# Tasks\n- [ ] T001 Do thing")
+
+    task = TaskItem(
+        id="T001",
+        description="Do thing",
+        checked=False,
+        phase="Phase 1",
+        parallel=False,
+        files=[],
+        line_number=2,
+    )
+
+    abs_dir = "/absolute/path/platforms/ext-plat/epics/001-test"
+    with patch("dag_executor._epic_output_dir", return_value=abs_dir):
+        prompt = compose_task_prompt(task, epic_dir, "ext-plat", "001-test")
+
+    assert f"SPECIFY_BASE_DIR={abs_dir}/" in prompt
+    assert f"Save ALL output to: {abs_dir}/" in prompt

@@ -30,6 +30,34 @@ def _gc_collect_after_test():
     gc.collect()
 
 
+@pytest.fixture(autouse=True)
+def _clear_repo_binding_cache():
+    """Clear _load_repo_binding lru_cache between tests."""
+    from ensure_repo import _load_repo_binding
+
+    _load_repo_binding.cache_clear()
+    yield
+    _load_repo_binding.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def _mock_epic_output_dir_self_ref(request):
+    """Default _epic_output_dir to self-ref (relative) for all tests.
+
+    Tests that need the real _epic_output_dir should use the marker:
+        @pytest.mark.real_epic_output_dir
+    """
+    if request.node.get_closest_marker("real_epic_output_dir"):
+        yield
+        return
+
+    def _self_ref_output_dir(platform_name, epic_slug):
+        return f"platforms/{platform_name}/epics/{epic_slug}"
+
+    with patch("dag_executor._epic_output_dir", side_effect=_self_ref_output_dir):
+        yield
+
+
 @pytest.fixture
 def tmp_db(tmp_path):
     """Create a temp DB with migrations applied."""
