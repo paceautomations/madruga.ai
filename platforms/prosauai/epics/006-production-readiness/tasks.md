@@ -157,7 +157,7 @@
 **Purpose**: Documentation updates to reflect infrastructure changes. ADRs, containers.md, blueprint.md.
 
 - [x] T029 [P] Create ADR-024 schema isolation in Nygard format: document decision to use prosauai + prosauai_ops schemas instead of public + auth, motivation (Supabase compatibility, namespace isolation), consequences (search_path required, migrations rewritten) (file: platforms/prosauai/decisions/ADR-024-schema-isolation.md)
-- [ ] T030 [P] Update ADR-011: replace all references to auth.tenant_id() with prosauai_ops.tenant_id(), add section on schema isolation and search_path configuration in pool.py (file: platforms/prosauai/decisions/ADR-011-pool-rls-multi-tenant.md)
+- [x] T030 [P] Update ADR-011: replace all references to auth.tenant_id() with prosauai_ops.tenant_id(), add section on schema isolation and search_path configuration in pool.py (file: platforms/prosauai/decisions/ADR-011-pool-rls-multi-tenant.md)
 - [ ] T031 [P] Update ADR-018: add Implementation section referencing prosauai/ops/retention.py, document partitioning as purge strategy (DROP PARTITION), document effective retention 90-120d due to monthly granularity (file: platforms/prosauai/decisions/ADR-018-data-retention-lgpd.md)
 - [ ] T032 [P] Update ADR-020: add note about PHOENIX_SQL_DATABASE_SCHEMA=observability for prod, document SQLite dev vs Postgres prod split via docker-compose.prod.yml (file: platforms/prosauai/decisions/ADR-020-phoenix-observability.md)
 - [ ] T033 Update containers.md: add Netdata to container matrix, add retention-cron container, update Phoenix status (Postgres backend in prod), update Postgres status (schema isolation), add scaling notes for partitioned messages (file: platforms/prosauai/engineering/containers.md)

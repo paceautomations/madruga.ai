@@ -64,18 +64,26 @@ Regras obrigatorias:
 ### 1. Wrapper function (CRITICO)
 ```sql
 -- Permite cache por statement (STABLE) e previne bypass (SECURITY DEFINER)
-CREATE OR REPLACE FUNCTION auth.tenant_id()
-RETURNS UUID AS $$
-  SELECT (auth.jwt() -> 'app_metadata' ->> 'tenant_id')::UUID;
-$$ LANGUAGE SQL STABLE SECURITY DEFINER;
+-- Namespace: prosauai_ops (isolado de schemas gerenciados pelo Supabase)
+-- Ver ADR-024 para motivacao da mudanca de auth → prosauai_ops
+CREATE OR REPLACE FUNCTION prosauai_ops.tenant_id()
+RETURNS uuid
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = ''
+AS $$
+  SELECT current_setting('app.current_tenant_id', true)::uuid
+$$;
 ```
+
+> **Nota (epic 006):** A funcao foi movida de `auth.tenant_id()` para `prosauai_ops.tenant_id()` como parte do schema isolation ([ADR-024](ADR-024-schema-isolation.md)). O schema `auth` e gerenciado pelo Supabase e nao deve conter objetos custom.
 
 ### 2. Policy padrao para TODA tabela
 ```sql
 -- Template obrigatorio — aplicar em toda tabela com tenant_id
-ALTER TABLE {tabela} ENABLE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON {tabela}
-  USING (tenant_id = auth.tenant_id());
+-- Tabelas no schema prosauai.*, funcao RLS em prosauai_ops
+ALTER TABLE prosauai.{tabela} ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON prosauai.{tabela}
+  USING (tenant_id = prosauai_ops.tenant_id());
 ```
 
 ### 3. Views SEMPRE com security_invoker
@@ -95,14 +103,46 @@ CREATE VIEW ... WITH (security_invoker = true);
 # Rodar em CI — cria 2 tenants e asserta zero leak
 async def test_rls_isolation():
     # Insert data as tenant_a
-    await db.execute("SET LOCAL app.tenant_id = 'tenant_a'")
-    await db.execute("INSERT INTO messages (tenant_id, content) VALUES ('tenant_a', 'secret')")
+    await db.execute("SET LOCAL app.current_tenant_id = 'tenant_a_uuid'")
+    await db.execute("INSERT INTO messages (tenant_id, content) VALUES ('tenant_a_uuid', 'secret')")
 
     # Query as tenant_b — DEVE retornar zero
-    await db.execute("SET LOCAL app.tenant_id = 'tenant_b'")
+    await db.execute("SET LOCAL app.current_tenant_id = 'tenant_b_uuid'")
     result = await db.fetch("SELECT * FROM messages")
     assert len(result) == 0, "RLS BREACH: tenant_b viu dados de tenant_a"
 ```
+
+---
+
+## Schema Isolation e search_path (epic 006)
+
+> Adicionado no epic 006-production-readiness. Ver [ADR-024](ADR-024-schema-isolation.md) para decisao completa.
+
+Todas as tabelas de negocio vivem no schema `prosauai`. Funcoes RLS e tabela de migrations vivem em `prosauai_ops`. Para que queries existentes (sem schema prefix) continuem funcionando, o connection pool configura `search_path`:
+
+```python
+# prosauai/db/pool.py
+pool = await asyncpg.create_pool(
+    dsn=settings.database_url,
+    server_settings={'search_path': 'prosauai,prosauai_ops,public'},
+)
+```
+
+**Implicacoes para RLS:**
+- `prosauai_ops.tenant_id()` e resolvido automaticamente via `search_path` — policies podem usar `tenant_id()` sem prefix
+- `SET LOCAL app.current_tenant_id` continua funcionando identico (transaction-scoped)
+- Migration runner e retention cron tambem configuram o mesmo `search_path`
+
+**Layout de schemas:**
+
+| Schema | Conteudo | Gerenciado por |
+|--------|----------|----------------|
+| `prosauai` | 7 tabelas de negocio + enums + indexes | Migrations da app |
+| `prosauai_ops` | `tenant_id()` + `schema_migrations` | Migrations da app |
+| `observability` | Tabelas Phoenix (traces, spans) | Phoenix auto-managed |
+| `admin` | Reservado (tenants, audit_log — epic 013) | Futuro |
+| `auth` | Supabase-managed — **NAO TOCAR** | Supabase GoTrue |
+| `public` | Extensions (uuid-ossp) — **NAO CRIAR OBJETOS** | Supabase |
 
 ---
 
