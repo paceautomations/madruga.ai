@@ -1,7 +1,7 @@
 ---
 epic: 024-sequential-execution-ux
 created: 2026-04-10
-updated: 2026-04-11
+updated: 2026-04-12
 ---
 # Registro de Decisões — Epic 024
 
@@ -18,3 +18,4 @@ updated: 2026-04-11
 11. `[2026-04-11 planning-session]` Ciclo L2 de 024 roda interativo no chat, nunca via dag_executor dispatch — epic reescreve o próprio dag_executor, autônomo = cegueira. Gates humanos inegociáveis (ref: auto-sabotage guardrail Camada 3)
 12. `[2026-04-11 planning-session]` Ordem aditiva das tasks: migration 017 → db_pipeline aditivo → platform_cli queue → ensure_repo (função isolada) → implement_remote (call-site swap) → easter.py hook por último. Cada commit com make test verde (ref: Camadas 2+5)
 13. `[2026-04-11 planning-session]` Pré-condição da fase de implementação: stop easter + backup .pipeline/madruga.db. Pós-condição: qa verde ANTES de restart easter (ref: Camadas 0+1)
+14. `[2026-04-12 implement]` Removido worktree.py — branch isolation é o único modo para plataformas externas. worktree.py + testes + CLI subcommands removidos. Rollback via git revert se necessário. (ref: user decision, supersedes decision #1 isolation opt-in)

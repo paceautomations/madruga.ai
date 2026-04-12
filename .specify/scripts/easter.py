@@ -169,6 +169,18 @@ async def sweep_zombies(conn) -> None:
         logger.debug("zombie_sweep_clean")
 
 
+def _platform_has_running_epic(platform_id: str) -> bool:
+    """Check if a platform has any epic currently in_progress (sync, for asyncio.to_thread)."""
+    from db_core import get_conn
+
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT 1 FROM epics WHERE platform_id=? AND status='in_progress' LIMIT 1",
+            (platform_id,),
+        ).fetchone()
+        return row is not None
+
+
 async def dag_scheduler(conn, semaphore, shutdown_event, poll_interval=15, platform_id=None):
     """Poll active epics and dispatch pipeline runs.
 
@@ -254,7 +266,7 @@ async def dag_scheduler(conn, semaphore, shutdown_event, poll_interval=15, platf
                     logger.info("dispatching_epic", epic_id=epic_id, platform=epic_platform_id)
 
                     # F3: Proactive branch checkout before dispatch
-                    # For external repos, worktree handles branching — skip checkout.
+                    # For external repos, get_repo_work_dir handles branch checkout.
                     branch = epic.get("branch_name")
                     if branch:
                         import subprocess as _sp
@@ -342,6 +354,32 @@ async def dag_scheduler(conn, semaphore, shutdown_event, poll_interval=15, platf
                     finally:
                         _running_epics.discard(epic_id)
                         unbind_contextvars("epic_id", "platform")
+
+                        # --- epic 024: auto-promotion hook ---
+                        if os.environ.get("MADRUGA_QUEUE_PROMOTION", "0") == "1":
+                            try:
+                                # Check if platform's slot is now empty (sequential invariant)
+                                has_running = await asyncio.to_thread(_platform_has_running_epic, epic_platform_id)
+                                if not has_running:
+                                    from queue_promotion import promote_queued_epic
+
+                                    result = await asyncio.to_thread(promote_queued_epic, epic_platform_id)
+                                    logger.info(
+                                        "auto_promotion_hook_result",
+                                        platform=epic_platform_id,
+                                        freed_epic=epic_id,
+                                        result_status=result.status,
+                                        promoted_epic=result.epic_id,
+                                        duration_ms=result.duration_ms,
+                                        attempts=result.attempts,
+                                    )
+                            except Exception:
+                                logger.exception(
+                                    "promotion_hook_unhandled_exception",
+                                    platform=epic_platform_id,
+                                    freed_epic=epic_id,
+                                )
+                        # --- end epic 024 ---
             finally:
                 try:
                     poll_conn.close()

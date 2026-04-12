@@ -540,7 +540,7 @@ def compose_task_prompt(
     Emits a structured `prompt_composed` log line with per-section byte counts
     so we can measure context bloat without relying on noisy API metrics.
     """
-    output_dir = f"platforms/{platform_name}/epics/{epic_slug}"
+    output_dir = _epic_output_dir(platform_name, epic_slug)
 
     header = "\n".join(
         [
@@ -905,23 +905,36 @@ def _resolve_code_dir(platform_name: str, epic_slug: str | None) -> Path:
     """Resolve working directory for nodes that read/write source code.
 
     For self-ref platforms: returns REPO_ROOT.
-    For external platforms with an epic: creates/reuses a worktree.
+    For external platforms with an epic: delegates to get_repo_work_dir()
+    which clones/fetches the repo and checks out the epic branch.
     For L1 (no epic): returns REPO_ROOT (L1 nodes don't touch code).
     """
     if not epic_slug:
         return REPO_ROOT
-    from ensure_repo import _is_self_ref, _load_repo_binding
-    from worktree import create_worktree
+    from ensure_repo import get_repo_work_dir
 
-    binding = _load_repo_binding(platform_name)
-    if _is_self_ref(binding["name"]):
-        return REPO_ROOT
-    return create_worktree(platform_name, epic_slug)
+    return get_repo_work_dir(platform_name, epic_slug)
 
 
 def _needs_code_cwd(node: Node) -> bool:
     """Return True if this node should run in the external code repo."""
     return node.id in CODE_CWD_NODES or node.id.startswith("implement:")
+
+
+def _epic_output_dir(platform_name: str, epic_slug: str) -> str:
+    """Return epic output dir — absolute for external repos, relative for self-ref.
+
+    External repos run with cwd inside the clone, so a relative
+    ``platforms/…`` path would create artefacts in the wrong repository.
+    Returning an absolute path ensures they always land in madruga.ai.
+    """
+    rel = f"platforms/{platform_name}/epics/{epic_slug}"
+    from ensure_repo import _is_self_ref, _load_repo_binding
+
+    binding = _load_repo_binding(platform_name)
+    if _is_self_ref(binding["name"]):
+        return rel
+    return str(REPO_ROOT / rel)
 
 
 def _auto_commit_epic(cwd: str | Path, platform_name: str, epic_slug: str) -> bool:
@@ -1901,7 +1914,7 @@ async def run_pipeline_async(
         # Task-by-task dispatch for speckit.implement — handles its own
         # run recording, verify, and checkpoint. Skip normal post-dispatch.
         if node.skill == "speckit.implement" and epic_slug:
-            output_dir = f"platforms/{platform_name}/epics/{epic_slug}"
+            output_dir = _epic_output_dir(platform_name, epic_slug)
             guardrail = (
                 f"MANDATORY: You are on branch epic/{platform_name}/{epic_slug}. "
                 f"Do NOT create or switch branches. "
@@ -2125,7 +2138,7 @@ def compose_skill_prompt(
     if skill == "speckit.implement" and epic_slug:
         from implement_remote import compose_prompt
 
-        output_dir = f"platforms/{platform_name}/epics/{epic_slug}"
+        output_dir = _epic_output_dir(platform_name, epic_slug)
         guardrail = (
             f"MANDATORY: You are on branch epic/{platform_name}/{epic_slug}. "
             f"Do NOT create or switch branches. "
@@ -2148,7 +2161,7 @@ def compose_skill_prompt(
     # L2 speckit.* or madruga:* epic skills — instruction + epic context + guardrail
     if epic_slug:
         epic_dir = platform_dir / "epics" / epic_slug
-        output_dir = f"platforms/{platform_name}/epics/{epic_slug}"
+        output_dir = _epic_output_dir(platform_name, epic_slug)
 
         parts = [
             f"Follow the skill instructions in the system prompt for platform '{platform_name}', epic '{epic_slug}'.",
@@ -2407,9 +2420,8 @@ def run_pipeline(
     Returns exit code: 0=success or paused at gate, 1=failure.
 
     ARCHITECTURAL INVARIANT: This function processes epics sequentially.
-    Parallel epic execution is ONLY safe for external repos (via worktree
-    isolation). Self-ref platforms share working dir, DB, and skills —
-    see pipeline-dag-knowledge.md "Parallel Epics Constraint".
+    All platforms execute one epic at a time. External repos use branch
+    checkout in the main clone — see pipeline-dag-knowledge.md.
     """
     _quick_mode_ctx.set(quick)
 

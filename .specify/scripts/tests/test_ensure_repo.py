@@ -203,3 +203,45 @@ class TestEnsureRepo:
             ensure_repo.ensure_repo("myplat")
 
         mock_rmtree.assert_called_once_with(repo_path)
+
+
+# ══════════════════════════════════════
+# Epic 024: get_repo_work_dir tests (T054–T063)
+# ══════════════════════════════════════
+
+
+class TestGetRepoWorkDir:
+    """get_repo_work_dir — branch-only mode (worktree removed)."""
+
+    def test_selfref_short_circuits(self, tmp_path):
+        """Self-ref platform → returns REPO_ROOT, no git ops."""
+        (tmp_path / "platforms" / "madruga-ai").mkdir(parents=True)
+        (tmp_path / "platforms" / "madruga-ai" / "platform.yaml").write_text(
+            "name: madruga-ai\nrepo:\n  org: paceautomations\n  name: madruga.ai\n"
+        )
+
+        with patch.object(ensure_repo, "REPO_ROOT", tmp_path):
+            result = ensure_repo.get_repo_work_dir("madruga-ai", "001-test")
+
+        assert result == tmp_path
+
+    def test_external_platform_uses_branch_checkout(self, tmp_path):
+        """External platform → ensure_repo + _checkout_epic_branch + returns clone path."""
+        (tmp_path / "platforms" / "ext").mkdir(parents=True)
+        (tmp_path / "platforms" / "ext" / "platform.yaml").write_text(
+            "name: ext\nrepo:\n  org: testorg\n  name: ext-repo\n"
+            "  base_branch: develop\n  epic_branch_prefix: 'epic/ext/'\n"
+        )
+        clone_path = tmp_path / "repos" / "ext-repo"
+        clone_path.mkdir(parents=True)
+
+        with (
+            patch.object(ensure_repo, "REPO_ROOT", tmp_path),
+            patch("ensure_repo.ensure_repo", return_value=clone_path) as mock_ensure,
+            patch("queue_promotion._checkout_epic_branch") as mock_checkout,
+        ):
+            result = ensure_repo.get_repo_work_dir("ext", "001-test")
+
+        assert result == clone_path
+        mock_ensure.assert_called_once_with("ext")
+        mock_checkout.assert_called_once()

@@ -8,4 +8,5 @@ repo:
   name: prosauai
   base_branch: develop
   epic_branch_prefix: "epic/prosauai/"
+  isolation: branch
 tags: [whatsapp, conversational-ai, multi-tenant]

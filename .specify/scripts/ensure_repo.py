@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import fcntl
+import functools
 import logging
 import shutil
 import subprocess
@@ -18,8 +19,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 # ── Helpers ──────────────────────────────────────────────────────────
 
 
+@functools.lru_cache(maxsize=16)
 def _load_repo_binding(name: str) -> dict:
-    """Read repo binding from platforms/<name>/platform.yaml."""
+    """Read repo binding from platforms/<name>/platform.yaml (cached)."""
     manifest_path = REPO_ROOT / "platforms" / name / "platform.yaml"
     if not manifest_path.exists():
         raise SystemExit(f"ERROR: platforms/{name}/platform.yaml not found")
@@ -142,6 +144,29 @@ def ensure_repo(platform_name: str) -> Path:
             lock_path.unlink()
         except OSError:
             pass
+
+
+class DirtyTreeError(Exception):
+    """Raised when a repo working tree has uncommitted changes."""
+
+
+def get_repo_work_dir(platform_name: str, epic_slug: str) -> Path:
+    """Resolve the working directory for an epic's L2 cycle.
+
+    For external platforms: clones/fetches the repo, checks out the epic branch
+    in the main clone, and returns the clone path.
+    For self-ref platforms: returns REPO_ROOT (no checkout needed).
+    """
+    binding = _load_repo_binding(platform_name)
+
+    if _is_self_ref(binding["name"]):
+        return REPO_ROOT
+
+    repo_path = ensure_repo(platform_name)
+    from queue_promotion import _checkout_epic_branch
+
+    _checkout_epic_branch(repo_path, epic_slug, binding)
+    return repo_path
 
 
 if __name__ == "__main__":

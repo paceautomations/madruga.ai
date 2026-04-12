@@ -142,20 +142,16 @@ def run_implement(
     dry_run: bool = False,
     create_pr_flag: bool = False,
 ) -> int:
-    """Orchestrate: ensure_repo → worktree → prompt → claude -p."""
+    """Orchestrate: get_repo_work_dir → prompt → claude -p."""
     import sys
 
     sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from ensure_repo import _is_self_ref, _load_repo_binding
-    from worktree import create_worktree
+    from ensure_repo import _is_self_ref, _load_repo_binding, get_repo_work_dir
 
     binding = _load_repo_binding(platform_name)
 
-    # Resolve working directory
-    if _is_self_ref(binding["name"]):
-        work_dir = REPO_ROOT
-    else:
-        work_dir = create_worktree(platform_name, epic_slug)
+    # Resolve working directory (self-ref → REPO_ROOT, external → clone + branch checkout)
+    work_dir = get_repo_work_dir(platform_name, epic_slug)
 
     # Compose prompt
     prompt = compose_prompt(platform_name, epic_slug)

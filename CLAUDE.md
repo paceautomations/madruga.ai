@@ -53,6 +53,7 @@ Node.js 20+ | Python 3.11+ | `copier` >= 9.4.0
   - `MADRUGA_KILL_IMPLEMENT_CONTEXT=0` → restore `implement-context.md` append/read
   - `MADRUGA_SCOPED_CONTEXT=0` → re-include all static docs unconditionally (legacy path only)
   - `MADRUGA_CACHE_ORDERED=0` → restore legacy section order (task card at top, scoped gating active). Under the default `=1`, stable sections (plan/spec/data_model/contracts) are force-included at the START of the user prompt so Claude's 1h-TTL prefix cache hits on tasks 2..N within the same epic
+  - `MADRUGA_QUEUE_PROMOTION=1` (opt-in) → enables auto-promotion of queued epics in easter.py hook. When a running epic ships and the platform slot frees, the oldest queued epic is promoted to `in_progress` automatically. Default **off** — must restart daemon to toggle.
   - `MADRUGA_STRICT_SETTINGS=1` (opt-in) → add `--setting-sources project` (requires audit of `settings.local.json` first)
 - **`sync_memory.py` hook respects `MADRUGA_DISPATCH=1`** — the flag set by `dag_executor._dispatch_env()` now short-circuits the script to avoid PostToolUse subprocess storms + WAL contention inside dispatched sessions.
 

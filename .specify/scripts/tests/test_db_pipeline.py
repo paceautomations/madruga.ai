@@ -1046,3 +1046,113 @@ def test_get_commit_stats_empty_db(tmp_db):
     assert stats["commits_per_epic"] == {}
     assert stats["adhoc_count"] == 0
     assert stats["adhoc_percentage"] == 0.0
+
+
+# ══════════════════════════════════════
+# Epic 024: queued status support
+# ══════════════════════════════════════
+
+
+def test_epic_status_map_contains_queued():
+    """T016: _EPIC_STATUS_MAP recognizes 'queued'."""
+    from db_pipeline import _EPIC_STATUS_MAP
+
+    assert _EPIC_STATUS_MAP["queued"] == "queued"
+
+
+def test_compute_epic_status_queued_guard(tmp_db):
+    """T017: compute_epic_status does NOT auto-promote queued epics."""
+    from db_pipeline import compute_epic_status, upsert_epic, upsert_platform
+
+    upsert_platform(tmp_db, "p1", name="P1", repo_path="platforms/p1")
+    upsert_epic(tmp_db, "p1", "001-q", title="Queued", status="queued")
+
+    status, delivered = compute_epic_status(
+        tmp_db, "p1", "001-q", required_node_ids={"specify", "plan"}, current_status="queued"
+    )
+    assert status == "queued"
+    assert delivered is None
+
+
+def test_get_next_queued_epic_returns_none_when_empty(tmp_db):
+    """T018: No queued epics → returns None."""
+    from db_pipeline import get_next_queued_epic, upsert_platform
+
+    upsert_platform(tmp_db, "p1", name="P1", repo_path="platforms/p1")
+    assert get_next_queued_epic(tmp_db, "p1") is None
+
+
+def test_get_next_queued_epic_returns_single(tmp_db):
+    """T019: One queued epic → returns it as a dict."""
+    from db_pipeline import get_next_queued_epic, upsert_epic, upsert_platform
+
+    upsert_platform(tmp_db, "p1", name="P1", repo_path="platforms/p1")
+    upsert_epic(tmp_db, "p1", "001-q", title="Queue Me", status="queued")
+
+    result = get_next_queued_epic(tmp_db, "p1")
+    assert result is not None
+    assert result["epic_id"] == "001-q"
+    assert result["platform_id"] == "p1"
+    assert result["title"] == "Queue Me"
+    assert "updated_at" in result
+
+
+def test_get_next_queued_epic_fifo_order(tmp_db):
+    """T020: Multiple queued epics → returns oldest by updated_at."""
+    from db_pipeline import get_next_queued_epic, upsert_platform
+
+    upsert_platform(tmp_db, "p1", name="P1", repo_path="platforms/p1")
+
+    # Use explicit staggered timestamps (second-precision) to guarantee FIFO.
+    for eid, ts in [
+        ("003-c", "2026-04-12T10:00:00Z"),  # oldest
+        ("001-a", "2026-04-12T10:00:01Z"),
+        ("002-b", "2026-04-12T10:00:02Z"),  # newest
+    ]:
+        tmp_db.execute(
+            "INSERT INTO epics (epic_id, platform_id, title, status, created_at, updated_at)"
+            " VALUES (?, 'p1', ?, 'queued', ?, ?)",
+            (eid, f"Epic {eid}", ts, ts),
+        )
+    tmp_db.commit()
+
+    result = get_next_queued_epic(tmp_db, "p1")
+    assert result is not None
+    # 003-c has oldest updated_at → FIFO returns it first
+    assert result["epic_id"] == "003-c"
+
+
+def test_get_next_queued_epic_scoped_by_platform(tmp_db):
+    """T021: Queue lookup is scoped per platform."""
+    from db_pipeline import get_next_queued_epic, upsert_epic, upsert_platform
+
+    upsert_platform(tmp_db, "p1", name="P1", repo_path="platforms/p1")
+    upsert_platform(tmp_db, "p2", name="P2", repo_path="platforms/p2")
+    upsert_epic(tmp_db, "p1", "001-p1", title="P1 Epic", status="queued")
+    upsert_epic(tmp_db, "p2", "001-p2", title="P2 Epic", status="queued")
+
+    result = get_next_queued_epic(tmp_db, "p1")
+    assert result["epic_id"] == "001-p1"
+
+    result2 = get_next_queued_epic(tmp_db, "p2")
+    assert result2["epic_id"] == "001-p2"
+
+
+def test_get_next_queued_epic_tiebreaker_epic_id(tmp_db):
+    """T022: Same updated_at → tiebreak by epic_id ASC."""
+    from db_pipeline import get_next_queued_epic, upsert_platform
+
+    upsert_platform(tmp_db, "p1", name="P1", repo_path="platforms/p1")
+
+    # Insert both with the same timestamp by writing directly
+    now = "2026-04-12T00:00:00Z"
+    for eid in ("002-beta", "001-alpha"):
+        tmp_db.execute(
+            "INSERT INTO epics (epic_id, platform_id, title, status, created_at, updated_at)"
+            " VALUES (?, 'p1', ?, 'queued', ?, ?)",
+            (eid, f"Epic {eid}", now, now),
+        )
+    tmp_db.commit()
+
+    result = get_next_queued_epic(tmp_db, "p1")
+    assert result["epic_id"] == "001-alpha"
