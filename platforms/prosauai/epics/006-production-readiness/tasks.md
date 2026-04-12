@@ -65,7 +65,7 @@
 
 - [x] T015 [US2] Write integration test: apply all migrations to clean Postgres, verify prosauai schema contains all 7 business tables, prosauai_ops contains tenant_id() and schema_migrations, auth and public have no custom objects (file: tests/ops/test_schema_isolation.py)
 - [x] T016 [US2] Write integration test: verify search_path resolves unqualified table names correctly — SELECT from messages, customers, conversations without schema prefix (file: tests/ops/test_schema_isolation.py)
-- [ ] T017 [US2] Write integration test: verify prosauai_ops.tenant_id() returns correct value when app.current_tenant_id is set via SET LOCAL (file: tests/ops/test_schema_isolation.py)
+- [x] T017 [US2] Write integration test: verify prosauai_ops.tenant_id() returns correct value when app.current_tenant_id is set via SET LOCAL (file: tests/ops/test_schema_isolation.py)
 
 **Checkpoint**: Schema isolation verified — all queries work transparently via search_path, RLS function in correct namespace.
 
