@@ -144,13 +144,13 @@
 
 ### Tests for User Story 3 (TDD)
 
-- [ ] T044 [P] [US3] Criar `tests/integration/test_rls_isolation.py` com testes: tenant A não vê customers de tenant B, tenant A não vê conversations de tenant B, tenant A não vê messages de tenant B, UPDATE em messages falha (append-only), DELETE em messages falha (append-only), cada tabela com tenant_id tem RLS funcional
-- [ ] T045 [P] [US3] Criar `tests/integration/test_multi_tenant.py` com testes: 2 tenants processando simultaneamente (asyncio.gather), dados não compartilhados, agents diferentes usados, system prompts distintos refletidos nas respostas (LLM mockado com responses condicionais)
+- [x] T044 [P] [US3] Criar `tests/integration/test_rls_isolation.py` com testes: tenant A não vê customers de tenant B, tenant A não vê conversations de tenant B, tenant A não vê messages de tenant B, UPDATE em messages falha (append-only), DELETE em messages falha (append-only), cada tabela com tenant_id tem RLS funcional
+- [x] T045 [P] [US3] Criar `tests/integration/test_multi_tenant.py` com testes: 2 tenants processando simultaneamente (asyncio.gather), dados não compartilhados, agents diferentes usados, system prompts distintos refletidos nas respostas (LLM mockado com responses condicionais)
 
 ### Implementation for User Story 3
 
-- [ ] T046 [US3] Verificar e ajustar `prosauai/conversation/pipeline.py` — garantir que `tenant_id` é passado consistentemente em TODAS as chamadas de repositório e que `with_tenant()` é usado para cada transação. Validar que `resolve_agent()` carrega agent do tenant correto via RLS
-- [ ] T047 [US3] Ajustar `migrations/007_seed_data.sql` — garantir seed data com UUIDs fixos para 2 tenants (Ariel + ResenhAI) com system prompts distintos, models configurados, tools_enabled corretos. Tenant IDs devem corresponder aos de `tenants.yaml`
+- [x] T046 [US3] Verificar e ajustar `prosauai/conversation/pipeline.py` — garantir que `tenant_id` é passado consistentemente em TODAS as chamadas de repositório e que `with_tenant()` é usado para cada transação. Validar que `resolve_agent()` carrega agent do tenant correto via RLS
+- [x] T047 [US3] Ajustar `migrations/007_seed_data.sql` — garantir seed data com UUIDs fixos para 2 tenants (Ariel + ResenhAI) com system prompts distintos, models configurados, tools_enabled corretos. Tenant IDs devem corresponder aos de `tenants.yaml`
 
 **Checkpoint**: US3 funcional — 2 tenants isolados, RLS verificado, agents independentes.
 
@@ -164,11 +164,11 @@
 
 ### Tests for User Story 4 (TDD)
 
-- [ ] T048 [P] [US4] Criar `tests/conversation/test_pipeline_group.py` com testes: pipeline processa mensagem de grupo com group_id preenchido, resposta entregue no grupo (group_id passado para EvolutionProvider.send_text), customer criado corretamente para contexto de grupo
+- [x] T048 [P] [US4] Criar `tests/conversation/test_pipeline_group.py` com testes: pipeline processa mensagem de grupo com group_id preenchido, resposta entregue no grupo (group_id passado para EvolutionProvider.send_text), customer criado corretamente para contexto de grupo
 
 ### Implementation for User Story 4
 
-- [ ] T049 [US4] Verificar e ajustar `prosauai/conversation/pipeline.py` — garantir que `group_id` flui corretamente do `ConversationRequest` até `EvolutionProvider.send_text()`. Ajustar `_make_flush_conversation` para passar `group_id` na chamada de delivery. Sem lógica adicional necessária — o router MECE (epic 004) já filtra mensagens sem @mention (`IgnoreDecision`)
+- [x] T049 [US4] Verificar e ajustar `prosauai/conversation/pipeline.py` — garantir que `group_id` flui corretamente do `ConversationRequest` até `EvolutionProvider.send_text()`. Ajustar `_make_flush_conversation` para passar `group_id` na chamada de delivery. Sem lógica adicional necessária — o router MECE (epic 004) já filtra mensagens sem @mention (`IgnoreDecision`)
 
 **Checkpoint**: US4 funcional — mensagens de grupo com @mention recebem resposta no grupo.
 
