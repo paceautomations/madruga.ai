@@ -44,7 +44,6 @@ export default function EasterStatusBanner({ sessions, connected, todayCompleted
 
   const stats: { label: string; value: string }[] = [
     { label: 'Active', value: String(sessions?.running_epics.length ?? 0) },
-    { label: 'Queued', value: String(sessions?.queued_epics.length ?? 0) },
     { label: 'Completed Today', value: String(todayCompletedCount) },
     { label: 'Poll Interval', value: isAlive ? `${sessions.poll_interval_seconds}s` : '\u2014' },
   ];

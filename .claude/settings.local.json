@@ -72,34 +72,11 @@
       "mcp__playwright__browser_press_key",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "mcp__playwright__browser_network_requests"
     ],
     "deny": [],
     "defaultMode": "dontAsk"
-  },
-  "hooks": {
-    "PostToolUse": [
-      {
-        "matcher": "Write|Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "timeout": 30,
-            "command": "python3 .specify/scripts/hook_post_save.py 2>/dev/null || true"
-          }
-        ]
-      },
-      {
-        "matcher": "Write|Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "timeout": 20,
-            "command": "python3 .specify/scripts/hook_skill_lint.py 2>/dev/null || true"
-          }
-        ]
-      }
-    ]
   },
   "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
@@ -110,5 +87,29 @@
     "perplexity",
     "firecrawl",
     "sequential-thinking"
-  ]
+  ],
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .specify/scripts/hook_post_save.py 2>/dev/null || true",
+            "timeout": 30
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .specify/scripts/hook_skill_lint.py 2>/dev/null || true",
+            "timeout": 20
+          }
+        ]
+      }
+    ]
+  }
 }

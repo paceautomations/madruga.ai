@@ -41,9 +41,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # type: ignore[type-ar
     logger.info("Running database migrations...")
     result = await run_migrations(dsn=dsn, migrations_dir=_MIGRATIONS_DIR)
     if result.failed:
-        raise RuntimeError(
-            f"Migration failed: {result.failed}. API cannot start."
-        )
+        raise RuntimeError(f"Migration failed: {result.failed}. API cannot start.")
     logger.info(
         "Migrations complete: %d applied, %d skipped",
         len(result.applied),

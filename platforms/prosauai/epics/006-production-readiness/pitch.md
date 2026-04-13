@@ -1,7 +1,7 @@
 ---
 id: "006"
 title: "Production Readiness — Schema isolation, log persistence, data retention, VPS deploy"
-status: drafted
+status: shipped
 phase: next
 features:
   - "Schema isolation: tabelas de negocio em schema proprio, resolver conflito auth com Supabase"
@@ -22,6 +22,7 @@ arch:
   modules: []
   contexts: [operations, observability]
   containers: [postgres, phoenix, prosauai-api]
+delivered_at: 2026-04-12
 ---
 
 # 006 — Production Readiness

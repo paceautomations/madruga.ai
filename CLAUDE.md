@@ -53,7 +53,7 @@ Node.js 20+ | Python 3.11+ | `copier` >= 9.4.0
   - `MADRUGA_KILL_IMPLEMENT_CONTEXT=0` → restore `implement-context.md` append/read
   - `MADRUGA_SCOPED_CONTEXT=0` → re-include all static docs unconditionally (legacy path only)
   - `MADRUGA_CACHE_ORDERED=0` → restore legacy section order (task card at top, scoped gating active). Under the default `=1`, stable sections (plan/spec/data_model/contracts) are force-included at the START of the user prompt so Claude's 1h-TTL prefix cache hits on tasks 2..N within the same epic
-  - Queue auto-promotion is **always-on** (since epic 025). When a running epic ships and the platform slot frees, the oldest queued epic is promoted to `in_progress` automatically. No env var needed — `MADRUGA_QUEUE_PROMOTION` flag was removed.
+  - Epics transition from `drafted` to `in_progress` via the portal Start button or `POST /api/epics/{platform}/{epic}/start`. Sequential invariant enforced: only 1 epic per platform can be `in_progress`.
   - `MADRUGA_STRICT_SETTINGS=1` (opt-in) → add `--setting-sources project` (requires audit of `settings.local.json` first)
   - `MADRUGA_PHASE_DISPATCH=0` → disable phase-based dispatch, revert to task-by-task implement dispatch. Default **on** (`=1`). Phase dispatch groups implement tasks by `## Phase N:` headers in tasks.md into single dispatches with dynamic `--max-turns` (count×20+50, cap 400). Fallback to task-by-task if tasks.md has no phase headers.
   - `MADRUGA_PHASE_MAX_TASKS=12` → max pending tasks per phase dispatch before splitting into sub-phases. Default 12.

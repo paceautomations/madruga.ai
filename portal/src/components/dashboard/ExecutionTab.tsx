@@ -64,7 +64,6 @@ const ALL_L2_STAGES = ['epic-context', 'specify', 'clarify', 'plan', 'tasks', 'a
 
 const STATUS_BADGE: Record<string, { bg: string; color: string }> = {
   drafted: { bg: 'var(--sl-color-gray-6, #222)', color: 'var(--sl-color-gray-3, #888)' },
-  queued: { bg: '#78350f', color: '#fbbf24' },
   blocked: { bg: '#450a0a', color: '#f87171' },
   proposed: { bg: 'var(--sl-color-gray-7, #111)', color: 'var(--sl-color-gray-4, #666)' },
 };
@@ -93,11 +92,11 @@ function findNextStep(nodes: NodeData[]) {
 
 function getEpicPhase(epic: EpicData): { phaseId: string; subStage: string } {
   if (epic.status === 'shipped') return { phaseId: 'shipped', subStage: '' };
-  if (epic.status === 'drafted' || epic.status === 'queued' || epic.status === 'proposed' || epic.status === 'blocked') return { phaseId: 'backlog', subStage: '' };
+  if (epic.status === 'drafted' || epic.status === 'proposed' || epic.status === 'blocked') return { phaseId: 'backlog', subStage: '' };
   if (!epic.nodes || epic.nodes.length === 0) return { phaseId: 'backlog', subStage: '' };
   const doneIds = new Set(epic.nodes.filter((n) => n.status === 'done' || n.status === 'skipped').map((n) => n.id));
   if (doneIds.size >= ALL_L2_STAGES.length) return { phaseId: 'shipped', subStage: '' };
-  if (doneIds.size === 0) return { phaseId: 'backlog', subStage: '' };
+  if (doneIds.size === 0) return epic.status === 'in_progress' ? { phaseId: 'specifying', subStage: 'epic-context' } : { phaseId: 'backlog', subStage: '' };
   let lastDoneIdx = -1;
   for (let i = ALL_L2_STAGES.length - 1; i >= 0; i--) {
     if (doneIds.has(ALL_L2_STAGES[i])) { lastDoneIdx = i; break; }
@@ -202,14 +201,14 @@ export default function ExecutionTab({ allPlatforms, initialPlatformId }: Execut
   // Track epics whose status was changed via the UI (optimistic updates)
   const [statusOverrides, setStatusOverrides] = useState<Record<string, string>>({});
 
-  const handleQueue = useCallback(async (epicId: string) => {
+  const handleStart = useCallback(async (epicId: string) => {
     try {
-      const res = await fetch(`${EASTER_BASE}/api/epics/${selectedId}/${epicId}/queue`, { method: 'POST' });
+      const res = await fetch(`${EASTER_BASE}/api/epics/${selectedId}/${epicId}/start`, { method: 'POST' });
       if (res.ok) {
-        setStatusOverrides((prev) => ({ ...prev, [epicId]: 'queued' }));
+        setStatusOverrides((prev) => ({ ...prev, [epicId]: 'in_progress' }));
       } else {
         const data = await res.json().catch(() => ({}));
-        alert(data.error || `Failed to queue epic ${epicId}`);
+        alert(data.error || `Failed to start epic ${epicId}`);
       }
     } catch {
       alert('Easter API not reachable. Start the daemon first.');
@@ -344,7 +343,7 @@ export default function ExecutionTab({ allPlatforms, initialPlatformId }: Execut
                       {cards.map((epic) => {
                         const effectiveStatus = statusOverrides[epic.id] || epic.status;
                         const badge = phase.id === 'backlog' ? STATUS_BADGE[effectiveStatus] : null;
-                        const showQueueBtn = phase.id === 'backlog' && effectiveStatus === 'drafted';
+                        const showStartBtn = phase.id === 'backlog' && effectiveStatus === 'drafted';
                         return (
                         <a key={epic.id} href={`/${selectedId}/epics/${epic.id}/pitch/`} style={{ ...S.epicCard, ...(phase.id === 'shipped' ? { borderLeft: '2px solid #22c55e', opacity: 0.65 } : {}) }}>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.1rem' }}>
@@ -355,16 +354,16 @@ export default function ExecutionTab({ allPlatforms, initialPlatformId }: Execut
                             </div>
                           </div>
                           <span style={{ display: 'block', fontSize: '0.72rem', lineHeight: 1.3, color: 'var(--sl-color-gray-2, #ccc)' }}>{epic.title}</span>
-                          {showQueueBtn && (
+                          {showStartBtn && (
                             <button
-                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleQueue(epic.id); }}
+                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleStart(epic.id); }}
                               style={{
                                 marginTop: '0.3rem', padding: '0.15rem 0.5rem', fontSize: '0.55rem', fontWeight: 700,
-                                background: '#78350f', color: '#fbbf24', border: '1px solid #92400e', borderRadius: 4,
+                                background: '#064e3b', color: '#34d399', border: '1px solid #065f46', borderRadius: 4,
                                 cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.05em',
                               }}
                             >
-                              ▶ Queue
+                              ▶ Start
                             </button>
                           )}
                           {epic.done > 0 && (

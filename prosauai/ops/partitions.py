@@ -12,6 +12,7 @@ Usage (library):
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass
 from datetime import date, timedelta
 
@@ -21,6 +22,15 @@ try:
     log = structlog.get_logger("prosauai.ops.partitions")
 except ImportError:  # pragma: no cover
     log = logging.getLogger("prosauai.ops.partitions")
+
+
+_VALID_IDENTIFIER = re.compile(r"^[a-z_][a-z0-9_.]*$")
+
+
+def _validate_table(table: str) -> None:
+    """Validate table name to prevent SQL injection in DDL statements."""
+    if not _VALID_IDENTIFIER.match(table):
+        raise ValueError(f"Invalid table identifier: {table!r}")
 
 
 @dataclass
@@ -68,6 +78,7 @@ async def ensure_future_partitions(
     Returns:
         List of partition names that were created (or already existed).
     """
+    _validate_table(table)
     today = today or date.today()
     created: list[str] = []
 
@@ -113,6 +124,7 @@ async def drop_expired_partitions(
     Returns:
         List of dropped partition names.
     """
+    _validate_table(table)
     today = today or date.today()
     threshold = today - timedelta(days=retention_days)
     partitions = await list_partitions(conn, table)
@@ -123,11 +135,13 @@ async def drop_expired_partitions(
         # e.g. "prosauai.messages_2026_01" → "2026_01"
         suffix = part.name.rsplit("_", 2)
         if len(suffix) < 3:
+            log.warning("partition.unparseable_name", partition=part.name, reason="insufficient segments")
             continue
         try:
             year = int(suffix[-2])
             month = int(suffix[-1])
         except ValueError:
+            log.warning("partition.unparseable_name", partition=part.name, reason="non-numeric year/month")
             continue
 
         # Upper bound of partition = first day of next month
@@ -161,6 +175,7 @@ async def list_partitions(
     Returns:
         List of PartitionInfo sorted by partition name.
     """
+    _validate_table(table)
     # Parse schema and table name
     parts = table.split(".", 1)
     if len(parts) == 2:

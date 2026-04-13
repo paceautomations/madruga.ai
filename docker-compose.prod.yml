@@ -21,7 +21,7 @@ services:
     environment:
       PHOENIX_SQL_DATABASE_URL: postgresql://${POSTGRES_USER:-prosauai}:${POSTGRES_PASSWORD:-prosauai}@postgres:5432/${POSTGRES_DB:-prosauai}
       PHOENIX_SQL_DATABASE_SCHEMA: observability
-    volumes: []  # Remove phoenix_data SQLite volume from dev
+    volumes: !reset []  # Remove phoenix_data SQLite volume from dev
     depends_on:
       postgres:
         condition: service_healthy

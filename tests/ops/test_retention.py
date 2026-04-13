@@ -53,9 +53,7 @@ class TestPurgeExpiredMessages:
             ]
         )
 
-        dropped, created = await purge_expired_messages(
-            conn, retention_days=90, dry_run=True, today=date(2026, 7, 1)
-        )
+        dropped, created = await purge_expired_messages(conn, retention_days=90, dry_run=True, today=date(2026, 7, 1))
 
         # 2025_12 (end=2026-01-01) and 2026_01 (end=2026-02-01) are eligible
         # threshold = 2026-07-01 - 90d = 2026-04-02
@@ -112,9 +110,7 @@ class TestPurgeExpiredConversations:
         """Batch DELETE stops when fewer than BATCH_SIZE rows deleted."""
         conn = _make_conn()
         # First batch: 1000 deleted, second: 200 deleted (< BATCH_SIZE → stop)
-        conn.execute = AsyncMock(
-            side_effect=[f"DELETE {BATCH_SIZE}", "DELETE 200"]
-        )
+        conn.execute = AsyncMock(side_effect=[f"DELETE {BATCH_SIZE}", "DELETE 200"])
 
         result = await purge_expired_conversations(conn, retention_days=90, dry_run=False)
 
@@ -158,9 +154,7 @@ class TestPurgeExpiredEvalScores:
     @pytest.mark.asyncio
     async def test_multiple_batches(self):
         conn = _make_conn()
-        conn.execute = AsyncMock(
-            side_effect=[f"DELETE {BATCH_SIZE}", f"DELETE {BATCH_SIZE}", "DELETE 50"]
-        )
+        conn.execute = AsyncMock(side_effect=[f"DELETE {BATCH_SIZE}", f"DELETE {BATCH_SIZE}", "DELETE 50"])
 
         result = await purge_expired_eval_scores(conn, retention_days=90, dry_run=False)
 
@@ -307,7 +301,6 @@ class TestAuditLogProtection:
         conn.fetchval = AsyncMock(return_value=False)
 
         executed_sql: list[str] = []
-        original_execute = conn.execute
 
         async def capture_execute(sql, *args, **kwargs):
             executed_sql.append(str(sql))

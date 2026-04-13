@@ -56,11 +56,6 @@ export interface ActiveSession {
   node_statuses: SessionNodeStatus[];
 }
 
-export interface QueuedEpic {
-  epic_id: string;
-  platform_id: string;
-}
-
 export interface SessionsData {
   easter_state: string;
   telegram_status: string;
@@ -68,7 +63,6 @@ export interface SessionsData {
   pid: number;
   poll_interval_seconds: number;
   running_epics: ActiveSession[];
-  queued_epics: QueuedEpic[];
 }
 
 // ── Constants ──
@@ -118,6 +112,7 @@ export default function ObservabilityDashboard({ platform, platformIds = [] }: O
   // Dedup refs — avoid re-rendering 170+ rows when polled data hasn't changed
   const prevRuns = useRef('');
   const prevStats = useRef('');
+  const prevSessions = useRef('');
 
   const platformParam = platform ? `platform_id=${encodeURIComponent(platform)}&` : '';
 
@@ -131,24 +126,50 @@ export default function ObservabilityDashboard({ platform, platformIds = [] }: O
     if (runsRes.data) setIfChanged(setRuns, runsRes.data.runs, prevRuns);
     if (statsRes.data) setIfChanged(setStats, statsRes.data, prevStats);
 
-    setLoading(false);
+    setLoading((prev) => prev ? false : prev);
   }, [platformParam]);
 
   const fetchStatus = useCallback(async () => {
     const res = await fetchJSON<SessionsData>(`${EASTER_BASE}/api/sessions?${platformParam.slice(0, -1)}`);
-    if (res.data) setSessions(res.data);
+    if (res.data) setIfChanged(setSessions, res.data, prevSessions);
   }, [platformParam]);
 
-  useEffect(() => {
-    setLoading(true);
-    fetchData();
-    fetchStatus();
+  // Track whether the observability tab is the active control-panel tab
+  const visibleRef = useRef(
+    typeof location !== 'undefined' && location.hash === '#observability',
+  );
 
-    intervalRef.current = setInterval(fetchData, POLL_INTERVAL);
-    statusIntervalRef.current = setInterval(fetchStatus, STATUS_POLL_INTERVAL);
+  useEffect(() => {
+    const stopPolling = () => {
+      if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
+      if (statusIntervalRef.current) { clearInterval(statusIntervalRef.current); statusIntervalRef.current = null; }
+    };
+    const startPolling = () => {
+      stopPolling();
+      fetchData();
+      fetchStatus();
+      intervalRef.current = setInterval(fetchData, POLL_INTERVAL);
+      statusIntervalRef.current = setInterval(fetchStatus, STATUS_POLL_INTERVAL);
+    };
+
+    const onVisibility = () => {
+      if (!document.hidden && visibleRef.current) startPolling();
+      else stopPolling();
+    };
+    const onTabChange = (e: Event) => {
+      visibleRef.current = (e as CustomEvent).detail?.tab === 'observability';
+      if (visibleRef.current && !document.hidden) startPolling();
+      else stopPolling();
+    };
+
+    if (visibleRef.current) startPolling();
+
+    document.addEventListener('visibilitychange', onVisibility);
+    document.addEventListener('cp-tab-change', onTabChange);
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      if (statusIntervalRef.current) clearInterval(statusIntervalRef.current);
+      stopPolling();
+      document.removeEventListener('visibilitychange', onVisibility);
+      document.removeEventListener('cp-tab-change', onTabChange);
     };
   }, [fetchData, fetchStatus]);
 

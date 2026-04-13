@@ -250,29 +250,24 @@ This enables planning multiple epics ahead while another epic is executing on it
 - **Promotion**: Running `/epic-context <platform> <epic>` on a drafted epic performs a delta review (what changed since draft?), revises decisions, creates the branch, and transitions status to `in_progress`
 - **Gate**: Draft mode uses auto gate (no human approval — approval happens at promotion)
 
-### Queue Mode (Auto-Promotion)
+### Starting Epics
 
-`/epic-context --queue <platform> <epic>` (or `platform_cli.py queue <platform> <epic>`) marks a drafted epic as `queued`.
-When the platform's running slot becomes free, the easter daemon auto-promotes the oldest queued epic to `in_progress` (FIFO).
+Epics transition from `drafted` to `in_progress` via the portal **Start** button or `POST /api/epics/{platform}/{epic}/start`.
+The endpoint enforces the sequential invariant: only 1 epic per platform can be `in_progress`. If a slot is occupied, the request returns 409.
 
-- **Status**: `queued` (DB status — easter auto-promotes when slot frees)
-- **Dequeue**: `platform_cli.py dequeue <platform> <epic>` reverts `queued` → `drafted` without losing artifacts
-- **Queue inspection**: `platform_cli.py queue-list <platform>` shows queued epics in FIFO order
-- **Always-on**: Queue promotion runs unconditionally — no feature flag needed (flag removed in epic 025).
 - **Branch isolation**: External platforms use the main clone directly (branch checkout). The developer sees the active epic branch in their editor without navigating to a worktree path. This is the only isolation mode — worktree support was removed in epic 024.
 
-Safety: drafted and queued epics cannot accidentally enter the L2 cycle because:
+Safety: drafted epics cannot accidentally enter the L2 cycle because:
 1. Easter only polls `status='in_progress'` (easter.py poll_active_epics)
 2. All other L2 skills check `current_branch starts with epic/` (pipeline-contract-base.md Step 0)
-3. `compute_epic_status()` in db.py does not auto-promote `drafted` or `queued` epics
-4. Auto-promotion hook only fires after an epic ships and platform slot is verified empty
+3. `compute_epic_status()` in db.py does not auto-promote `drafted` epics
 
 ### Parallel Epics Constraint (ARCHITECTURAL INVARIANT)
 
 **All platforms execute epics sequentially — one epic at a time per platform.**
 External platforms use branch checkout in the main clone (`ensure_repo.get_repo_work_dir`). Self-ref platforms (repo.name == own repo) use `REPO_ROOT` directly.
 
-Why sequential: the pipeline assumes one working directory per platform. Parallel epics would cause branch checkout conflicts and SQLite state desync. The auto-promotion queue (epic 024) enforces FIFO ordering within this constraint.
+Why sequential: the pipeline assumes one working directory per platform. Parallel epics would cause branch checkout conflicts and SQLite state desync. The `/start` endpoint enforces this constraint by rejecting requests when a platform already has an epic `in_progress`.
 
 ### Cycle Steps
 

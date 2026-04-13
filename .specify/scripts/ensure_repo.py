@@ -150,6 +150,87 @@ class DirtyTreeError(Exception):
     """Raised when a repo working tree has uncommitted changes."""
 
 
+def _get_cascade_base(repo_path: Path, binding: dict) -> str:
+    """Return the ref to branch from: prior epic tip or origin/base_branch."""
+    base_ref = f"origin/{binding['base_branch']}"
+    prefix = binding["epic_branch_prefix"].rstrip("/")
+
+    result = subprocess.run(
+        [
+            "git",
+            "for-each-ref",
+            "--sort=-committerdate",
+            f"refs/heads/{prefix}/*",
+            "--format=%(refname:short)",
+        ],
+        cwd=str(repo_path),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    for candidate in result.stdout.splitlines():
+        candidate = candidate.strip()
+        if not candidate:
+            continue
+        ahead = subprocess.run(
+            ["git", "rev-list", "--count", f"{base_ref}..{candidate}"],
+            cwd=str(repo_path),
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        if int(ahead.stdout.strip()) > 0:
+            return candidate
+    return base_ref
+
+
+def _checkout_epic_branch(repo_path: Path, epic_slug: str, binding: dict) -> str:
+    """Check out the epic branch in the clone. Returns the branch name.
+
+    Raises DirtyTreeError if working tree has uncommitted changes.
+    Raises subprocess.CalledProcessError on git failure.
+    """
+    branch_name = f"{binding['epic_branch_prefix']}{epic_slug}"
+
+    status = subprocess.run(
+        ["git", "status", "--porcelain"],
+        cwd=str(repo_path),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    if status.stdout.strip():
+        raise DirtyTreeError(
+            f"{repo_path} has uncommitted changes. "
+            f"Commit or stash before running epic {epic_slug}.\n"
+            f"Dirty files:\n{status.stdout}"
+        )
+
+    local = subprocess.run(
+        ["git", "branch", "--list", branch_name],
+        cwd=str(repo_path),
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    if local:
+        subprocess.run(["git", "checkout", branch_name], cwd=str(repo_path), check=True)
+        return branch_name
+
+    subprocess.run(
+        ["git", "fetch", "origin", binding["base_branch"]],
+        cwd=str(repo_path),
+        check=True,
+    )
+    cascade_base = _get_cascade_base(repo_path, binding)
+    subprocess.run(
+        ["git", "checkout", "-b", branch_name, cascade_base],
+        cwd=str(repo_path),
+        check=True,
+    )
+    return branch_name
+
+
 def get_repo_work_dir(platform_name: str, epic_slug: str) -> Path:
     """Resolve the working directory for an epic's L2 cycle.
 
@@ -163,8 +244,6 @@ def get_repo_work_dir(platform_name: str, epic_slug: str) -> Path:
         return REPO_ROOT
 
     repo_path = ensure_repo(platform_name)
-    from queue_promotion import _checkout_epic_branch
-
     _checkout_epic_branch(repo_path, epic_slug, binding)
     return repo_path
 

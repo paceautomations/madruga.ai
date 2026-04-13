@@ -169,18 +169,6 @@ async def sweep_zombies(conn) -> None:
         logger.debug("zombie_sweep_clean")
 
 
-def _platform_has_running_epic(platform_id: str) -> bool:
-    """Check if a platform has any epic currently in_progress (sync, for asyncio.to_thread)."""
-    from db_core import get_conn
-
-    with get_conn() as conn:
-        row = conn.execute(
-            "SELECT 1 FROM epics WHERE platform_id=? AND status='in_progress' LIMIT 1",
-            (platform_id,),
-        ).fetchone()
-        return row is not None
-
-
 async def dag_scheduler(conn, semaphore, shutdown_event, poll_interval=15, platform_id=None):
     """Poll active epics and dispatch pipeline runs.
 
@@ -354,29 +342,6 @@ async def dag_scheduler(conn, semaphore, shutdown_event, poll_interval=15, platf
                     finally:
                         _running_epics.discard(epic_id)
                         unbind_contextvars("epic_id", "platform")
-
-                        # --- auto-promotion hook (always-on since epic 025) ---
-                        try:
-                            has_running = await asyncio.to_thread(_platform_has_running_epic, epic_platform_id)
-                            if not has_running:
-                                from queue_promotion import promote_queued_epic
-
-                                result = await asyncio.to_thread(promote_queued_epic, epic_platform_id)
-                                logger.info(
-                                    "auto_promotion_hook_result",
-                                    platform=epic_platform_id,
-                                    freed_epic=epic_id,
-                                    result_status=result.status,
-                                    promoted_epic=result.epic_id,
-                                    duration_ms=result.duration_ms,
-                                    attempts=result.attempts,
-                                )
-                        except Exception:
-                            logger.exception(
-                                "promotion_hook_unhandled_exception",
-                                platform=epic_platform_id,
-                                freed_epic=epic_id,
-                            )
             finally:
                 try:
                     poll_conn.close()
@@ -853,7 +818,7 @@ def _aggregate_completed_nodes(rows: list[dict]) -> tuple[int, dict | None]:
 
 @app.get("/api/sessions")
 async def sessions(platform_id: str | None = Query(default=None), conn=Depends(get_fresh_conn)):
-    """Active and queued sessions with per-session detail.
+    """Active sessions with per-session detail.
 
     Opens a fresh DB connection per request (via ``get_fresh_conn``) so we never
     serve from a stale inode after a ``make seed`` / post-merge reseed — same
@@ -867,7 +832,6 @@ async def sessions(platform_id: str | None = Query(default=None), conn=Depends(g
         "pid": os.getpid(),
         "poll_interval_seconds": 15,
         "running_epics": [],
-        "queued_epics": [],
     }
 
     all_active = poll_active_epics(conn, platform_id=platform_id)
@@ -944,8 +908,6 @@ async def sessions(platform_id: str | None = Query(default=None), conn=Depends(g
                     }
                 )
             result["running_epics"].append(session)
-        else:
-            result["queued_epics"].append({"epic_id": eid, "platform_id": pid})
 
     return result
 
@@ -1119,33 +1081,43 @@ async def commits_stats(
     }
 
 
-# --- Epic Queue Management ---
+# --- Epic Lifecycle ---
 
 
-@app.post("/api/epics/{platform_id}/{epic_id}/queue")
-async def queue_epic(platform_id: str, epic_id: str):
-    """Transition a drafted epic to queued status."""
-    from db_core import _now, get_conn, migrate
+@app.post("/api/epics/{platform_id}/{epic_id}/start")
+async def start_epic(platform_id: str, epic_id: str, conn=Depends(get_fresh_conn)):
+    """Transition a drafted epic directly to in_progress."""
+    from db_core import _now
 
-    with get_conn() as conn:
-        migrate(conn)
-        row = conn.execute(
-            "SELECT status FROM epics WHERE platform_id=? AND epic_id=?",
-            (platform_id, epic_id),
-        ).fetchone()
-        if row is None:
-            return JSONResponse(status_code=404, content={"error": f"Epic {epic_id} not found"})
-        if row["status"] != "drafted":
-            return JSONResponse(
-                status_code=409,
-                content={"error": f"Cannot queue: status is '{row['status']}', expected 'drafted'"},
-            )
-        conn.execute(
-            "UPDATE epics SET status='queued', updated_at=? WHERE platform_id=? AND epic_id=?",
-            (_now(), platform_id, epic_id),
+    row = conn.execute(
+        "SELECT status FROM epics WHERE platform_id=? AND epic_id=?",
+        (platform_id, epic_id),
+    ).fetchone()
+    if row is None:
+        return JSONResponse(status_code=404, content={"error": f"Epic {epic_id} not found"})
+    if row["status"] != "drafted":
+        return JSONResponse(
+            status_code=409,
+            content={"error": f"Cannot start: status is '{row['status']}', expected 'drafted'"},
         )
-        conn.commit()
-    return {"status": "queued", "epic_id": epic_id, "platform_id": platform_id}
+    # Atomic: set in_progress only if no other epic is already running for this platform
+    cur = conn.execute(
+        "UPDATE epics SET status='in_progress', updated_at=?"
+        " WHERE platform_id=? AND epic_id=? AND status='drafted'"
+        " AND NOT EXISTS (SELECT 1 FROM epics WHERE platform_id=? AND status='in_progress')",
+        (_now(), platform_id, epic_id, platform_id),
+    )
+    conn.commit()
+    if cur.rowcount == 0:
+        running = conn.execute(
+            "SELECT epic_id FROM epics WHERE platform_id=? AND status='in_progress' LIMIT 1",
+            (platform_id,),
+        ).fetchone()
+        return JSONResponse(
+            status_code=409,
+            content={"error": f"Platform '{platform_id}' already has epic '{running['epic_id']}' in progress"},
+        )
+    return {"status": "in_progress", "epic_id": epic_id, "platform_id": platform_id}
 
 
 # --- CLI Entry Point ---

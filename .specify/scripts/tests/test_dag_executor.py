@@ -2693,3 +2693,33 @@ async def test_max_turns_override_threaded_to_dispatch():
         await dispatch_with_retry_async(node, "/tmp", "prompt", 60, breaker, max_turns_override=250)
 
     assert captured_kwargs.get("max_turns_override") == 250
+
+
+# ---------------------------------------------------------------------------
+# DISALLOWED_TOOLS expanded patterns
+# ---------------------------------------------------------------------------
+
+
+def test_disallowed_tools_blocks_git_reset_hard():
+    """DISALLOWED_TOOLS must block git reset --hard variants."""
+    from dag_executor import DISALLOWED_TOOLS
+
+    assert "Bash(git reset --hard:*)" in DISALLOWED_TOOLS
+    assert "Bash(git reset --hard)" in DISALLOWED_TOOLS
+
+
+def test_disallowed_tools_blocks_git_stash_pop_apply():
+    """DISALLOWED_TOOLS must block git stash pop and git stash apply."""
+    from dag_executor import DISALLOWED_TOOLS
+
+    assert "Bash(git stash pop:*)" in DISALLOWED_TOOLS
+    assert "Bash(git stash apply:*)" in DISALLOWED_TOOLS
+
+
+def test_disallowed_tools_preserves_original_patterns():
+    """DISALLOWED_TOOLS must still block original checkout/branch/switch patterns."""
+    from dag_executor import DISALLOWED_TOOLS
+
+    assert "Bash(git checkout:*)" in DISALLOWED_TOOLS
+    assert "Bash(git branch -:*)" in DISALLOWED_TOOLS
+    assert "Bash(git switch:*)" in DISALLOWED_TOOLS

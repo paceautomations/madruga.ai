@@ -12,7 +12,6 @@ Requires: Docker available (spins up a temporary Postgres container).
 from __future__ import annotations
 
 import asyncio
-import os
 import socket
 import subprocess
 import time
@@ -88,12 +87,19 @@ def pg_container(pg_port):
     # Start container
     subprocess.run(
         [
-            "docker", "run", "-d",
-            "--name", container_name,
-            "-e", f"POSTGRES_USER={PG_USER}",
-            "-e", f"POSTGRES_PASSWORD={PG_PASSWORD}",
-            "-e", f"POSTGRES_DB={PG_DB}",
-            "-p", f"127.0.0.1:{pg_port}:5432",
+            "docker",
+            "run",
+            "-d",
+            "--name",
+            container_name,
+            "-e",
+            f"POSTGRES_USER={PG_USER}",
+            "-e",
+            f"POSTGRES_PASSWORD={PG_PASSWORD}",
+            "-e",
+            f"POSTGRES_DB={PG_DB}",
+            "-p",
+            f"127.0.0.1:{pg_port}:5432",
             PG_IMAGE,
         ],
         check=True,
@@ -105,8 +111,14 @@ def pg_container(pg_port):
         try:
             result = subprocess.run(
                 [
-                    "docker", "exec", container_name,
-                    "pg_isready", "-U", PG_USER, "-d", PG_DB,
+                    "docker",
+                    "exec",
+                    container_name,
+                    "pg_isready",
+                    "-U",
+                    PG_USER,
+                    "-d",
+                    PG_DB,
                 ],
                 capture_output=True,
                 timeout=5,
@@ -131,9 +143,7 @@ def applied_migrations(pg_container):
     """Apply all migrations once for the module using the migration runner."""
     from prosauai.ops.migrate import run_migrations
 
-    result = asyncio.run(
-        run_migrations(dsn=pg_container, migrations_dir=MIGRATIONS_DIR)
-    )
+    result = asyncio.run(run_migrations(dsn=pg_container, migrations_dir=MIGRATIONS_DIR))
     assert result.failed is None, f"Migration failed: {result.failed}"
     return result
 
@@ -183,9 +193,7 @@ class TestSchemaContents:
             # and child partitions also appear. Filter to the 7 core tables.
             # Child partitions are named messages_YYYY_MM, so we check the
             # expected set is a subset.
-            assert expected.issubset(table_names), (
-                f"Missing tables in prosauai: {expected - table_names}"
-            )
+            assert expected.issubset(table_names), f"Missing tables in prosauai: {expected - table_names}"
         finally:
             await conn.close()
 
@@ -239,9 +247,7 @@ class TestSchemaContents:
                   AND table_type = 'BASE TABLE'
                 """
             )
-            assert len(tables) == 0, (
-                f"auth schema has custom tables: {[r['table_name'] for r in tables]}"
-            )
+            assert len(tables) == 0, f"auth schema has custom tables: {[r['table_name'] for r in tables]}"
 
             funcs = await conn.fetch(
                 """
@@ -250,9 +256,7 @@ class TestSchemaContents:
                 WHERE routine_schema = 'auth'
                 """
             )
-            assert len(funcs) == 0, (
-                f"auth schema has custom functions: {[r['routine_name'] for r in funcs]}"
-            )
+            assert len(funcs) == 0, f"auth schema has custom functions: {[r['routine_name'] for r in funcs]}"
         finally:
             await conn.close()
 
@@ -269,9 +273,7 @@ class TestSchemaContents:
                   AND table_type = 'BASE TABLE'
                 """
             )
-            assert len(tables) == 0, (
-                f"public schema has custom tables: {[r['table_name'] for r in tables]}"
-            )
+            assert len(tables) == 0, f"public schema has custom tables: {[r['table_name'] for r in tables]}"
         finally:
             await conn.close()
 
@@ -360,10 +362,7 @@ class TestSchemaContents:
                 ORDER BY c.relname
                 """
             )
-            assert len(rows) >= 3, (
-                f"Expected >=3 partitions, got {len(rows)}: "
-                f"{[r['relname'] for r in rows]}"
-            )
+            assert len(rows) >= 3, f"Expected >=3 partitions, got {len(rows)}: {[r['relname'] for r in rows]}"
         finally:
             await conn.close()
 
@@ -372,9 +371,7 @@ class TestSchemaContents:
         """All 8 migration files should be recorded in schema_migrations."""
         conn = await asyncpg.connect(dsn)
         try:
-            rows = await conn.fetch(
-                "SELECT version FROM prosauai_ops.schema_migrations ORDER BY version"
-            )
+            rows = await conn.fetch("SELECT version FROM prosauai_ops.schema_migrations ORDER BY version")
             versions = [r["version"] for r in rows]
             expected_prefixes = [
                 "001_create_schema",
@@ -386,9 +383,7 @@ class TestSchemaContents:
                 "006_eval_scores",
                 "007_seed_data",
             ]
-            assert versions == expected_prefixes, (
-                f"Expected migrations {expected_prefixes}, got {versions}"
-            )
+            assert versions == expected_prefixes, f"Expected migrations {expected_prefixes}, got {versions}"
         finally:
             await conn.close()
 
@@ -511,9 +506,7 @@ class TestTenantIdFunction:
         try:
             tenant_uuid = "00000000-0000-4000-a000-000000000001"
             async with conn.transaction():
-                await conn.execute(
-                    f"SET LOCAL app.current_tenant_id = '{tenant_uuid}'"
-                )
+                await conn.execute(f"SET LOCAL app.current_tenant_id = '{tenant_uuid}'")
                 row = await conn.fetchrow("SELECT prosauai_ops.tenant_id() AS tid")
                 assert row is not None
                 assert str(row["tid"]) == tenant_uuid
@@ -542,18 +535,14 @@ class TestTenantIdFunction:
 
             # Set tenant A in a transaction
             async with conn.transaction():
-                await conn.execute(
-                    f"SET LOCAL app.current_tenant_id = '{tenant_a}'"
-                )
+                await conn.execute(f"SET LOCAL app.current_tenant_id = '{tenant_a}'")
                 row = await conn.fetchrow("SELECT prosauai_ops.tenant_id() AS tid")
                 assert str(row["tid"]) == tenant_a
 
             # After transaction ends, SET LOCAL is reverted
             # New transaction with tenant B
             async with conn.transaction():
-                await conn.execute(
-                    f"SET LOCAL app.current_tenant_id = '{tenant_b}'"
-                )
+                await conn.execute(f"SET LOCAL app.current_tenant_id = '{tenant_b}'")
                 row = await conn.fetchrow("SELECT prosauai_ops.tenant_id() AS tid")
                 assert str(row["tid"]) == tenant_b
         finally:
@@ -569,9 +558,7 @@ class TestTenantIdFunction:
         try:
             tenant_uuid = "00000000-0000-4000-a000-000000000001"
             async with conn.transaction():
-                await conn.execute(
-                    f"SET LOCAL app.current_tenant_id = '{tenant_uuid}'"
-                )
+                await conn.execute(f"SET LOCAL app.current_tenant_id = '{tenant_uuid}'")
                 row = await conn.fetchrow("SELECT tenant_id() AS tid")
                 assert str(row["tid"]) == tenant_uuid
         finally:
@@ -595,9 +582,7 @@ class TestTenantIdFunction:
             # the owner, so RLS may not apply by default (owner bypasses RLS).
             # We test the function return value instead, which is what RLS uses.
             async with conn.transaction():
-                await conn.execute(
-                    f"SET LOCAL app.current_tenant_id = '{tenant_ariel}'"
-                )
+                await conn.execute(f"SET LOCAL app.current_tenant_id = '{tenant_ariel}'")
                 row = await conn.fetchrow("SELECT prosauai_ops.tenant_id() AS tid")
                 assert str(row["tid"]) == tenant_ariel
 

@@ -87,15 +87,20 @@ async def run_migrations(
     result = MigrationResult()
     t0 = monotonic()
 
-    conn = await asyncpg.connect(dsn)
+    conn = await asyncpg.connect(
+        dsn,
+        server_settings={"search_path": "prosauai,prosauai_ops,public"},
+        command_timeout=300.0,
+    )
     try:
+        # Acquire advisory lock to prevent concurrent migration runs
+        await conn.execute("SELECT pg_advisory_lock(hashtext('prosauai_migrations'))")
+
         # Bootstrap: ensure schema_migrations exists
         await conn.execute(BOOTSTRAP_SQL)
 
         # Fetch already-applied migrations
-        rows = await conn.fetch(
-            "SELECT version, checksum FROM prosauai_ops.schema_migrations"
-        )
+        rows = await conn.fetch("SELECT version, checksum FROM prosauai_ops.schema_migrations")
         applied_map = {r["version"]: r["checksum"] for r in rows}
 
         # List migration files
@@ -133,8 +138,7 @@ async def run_migrations(
                 async with conn.transaction():
                     await conn.execute(content)
                     await conn.execute(
-                        "INSERT INTO prosauai_ops.schema_migrations (version, checksum) "
-                        "VALUES ($1, $2)",
+                        "INSERT INTO prosauai_ops.schema_migrations (version, checksum) VALUES ($1, $2)",
                         version,
                         cs,
                     )
@@ -145,6 +149,11 @@ async def run_migrations(
                 result.failed = version
                 break
     finally:
+        # Release advisory lock (also released on disconnect)
+        try:
+            await conn.execute("SELECT pg_advisory_unlock(hashtext('prosauai_migrations'))")
+        except Exception:
+            pass  # Connection might already be closed
         await conn.close()
 
     result.total_time_ms = (monotonic() - t0) * 1000

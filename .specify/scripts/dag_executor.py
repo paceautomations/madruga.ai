@@ -64,7 +64,11 @@ CB_RECOVERY_SECONDS = 300
 HUMAN_GATES = frozenset({"human", "1-way-door"})
 VALID_GATE_MODES = frozenset({"manual", "interactive", "auto"})
 DEFAULT_GATE_MODE = os.environ.get("MADRUGA_MODE", "manual")
-DISALLOWED_TOOLS = "Bash(git checkout:*) Bash(git branch -:*) Bash(git switch:*)"
+DISALLOWED_TOOLS = (
+    "Bash(git checkout:*) Bash(git branch -:*) Bash(git switch:*) "
+    "Bash(git reset --hard:*) Bash(git reset --hard) "
+    "Bash(git stash pop:*) Bash(git stash apply:*)"
+)
 # Nodes that need to run in the external code repo (not in REPO_ROOT).
 CODE_CWD_NODES = frozenset({"implement", "judge", "qa"})
 # Quick mode flag — set by run_pipeline/run_pipeline_async when --quick is active.
@@ -1200,6 +1204,7 @@ async def _run_implement_phases(
                 cost_usd=metrics.get("cost_usd"),
                 duration_ms=metrics.get("duration_ms"),
             )
+            _run_eval_scoring(conn, platform_name, phase_id, run_id, trace_id, epic_slug, None, metrics)
             log.info(
                 "Phase '%s' completed: %d/%d tasks done",
                 phase_label,
@@ -1219,6 +1224,7 @@ async def _run_implement_phases(
                 cost_usd=metrics.get("cost_usd"),
                 duration_ms=metrics.get("duration_ms"),
             )
+            _run_eval_scoring(conn, platform_name, phase_id, run_id, trace_id, epic_slug, None, metrics)
             log.warning(
                 "Phase '%s' partial: %d/%d tasks done, still pending: %s",
                 phase_label,
@@ -1230,6 +1236,7 @@ async def _run_implement_phases(
             # Zero progress
             consecutive_phase_failures += 1
             complete_run(conn, run_id, status="failed", error=error)
+            _run_eval_scoring(conn, platform_name, phase_id, run_id, trace_id, epic_slug, None, metrics)
             log.error("Phase '%s' failed with zero progress: %s", phase_label, error)
 
         # Auto-commit after each phase with progress to avoid DirtyTreeError on restart
@@ -2364,6 +2371,16 @@ async def run_pipeline_async(
         else:
             prompt, guardrail = compose_skill_prompt(platform_name, node, platform_dir, epic_slug)
             abort_fn = _make_abort_check(conn, epic_slug)
+            # Record HEAD before dispatch for drift detection
+            pre_head = ""
+            if epic_slug:
+                _ph = subprocess.run(
+                    ["git", "rev-parse", "HEAD"],
+                    capture_output=True,
+                    text=True,
+                    cwd=str(code_dir if _needs_code_cwd(node) else cwd),
+                )
+                pre_head = _ph.stdout.strip()
             # Insert "running" record before dispatch so it appears in real-time
             run_id = insert_run(conn, platform_name, node.id, epic_id=epic_slug, trace_id=trace_id)
             node_cwd = code_dir if _needs_code_cwd(node) else cwd
@@ -2406,7 +2423,7 @@ async def run_pipeline_async(
                 conn.close()
             return 1
 
-        # Layer 4: verify branch didn't change
+        # Layer 4: verify branch + HEAD didn't change
         if epic_slug:
             branch_check = subprocess.run(
                 ["git", "branch", "--show-current"], capture_output=True, text=True, cwd=str(node_cwd)
@@ -2416,6 +2433,17 @@ async def run_pipeline_async(
             if actual_branch != expected_branch:
                 subprocess.run(["git", "checkout", expected_branch], cwd=str(node_cwd), capture_output=True)
                 log.error("claude -p changed branch to '%s', reverted to '%s'", actual_branch, expected_branch)
+            post_head_check = subprocess.run(
+                ["git", "rev-parse", "HEAD"], capture_output=True, text=True, cwd=str(node_cwd)
+            )
+            post_head = post_head_check.stdout.strip()
+            if pre_head and post_head and pre_head != post_head:
+                log.warning(
+                    "HEAD changed during dispatch of '%s': %s -> %s",
+                    node.id,
+                    pre_head,
+                    post_head,
+                )
 
         # Layer 5: save stdout as missing output for read-only skills
         # Extract actual content from claude JSON (not raw metadata)
@@ -2966,6 +2994,17 @@ def run_pipeline(
         # Compose prompt
         prompt, guardrail = compose_skill_prompt(platform_name, node, platform_dir, epic_slug)
 
+        # Record HEAD before dispatch for drift detection
+        pre_head = ""
+        if epic_slug:
+            _ph = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                capture_output=True,
+                text=True,
+                cwd=str(code_dir if _needs_code_cwd(node) else cwd),
+            )
+            pre_head = _ph.stdout.strip()
+
         # Dispatch with retry + circuit breaker
         node_cwd = code_dir if _needs_code_cwd(node) else cwd
         success, error, stdout = dispatch_with_retry(
@@ -2984,7 +3023,7 @@ def run_pipeline(
             conn.close()
             return 1
 
-        # Layer 4: verify branch didn't change
+        # Layer 4: verify branch + HEAD didn't change
         if epic_slug:
             branch_check = subprocess.run(
                 ["git", "branch", "--show-current"], capture_output=True, text=True, cwd=str(node_cwd)
@@ -2994,6 +3033,17 @@ def run_pipeline(
             if actual_branch != expected_branch:
                 subprocess.run(["git", "checkout", expected_branch], cwd=str(node_cwd), capture_output=True)
                 log.error("claude -p changed branch to '%s', reverted to '%s'", actual_branch, expected_branch)
+            post_head_check = subprocess.run(
+                ["git", "rev-parse", "HEAD"], capture_output=True, text=True, cwd=str(node_cwd)
+            )
+            post_head = post_head_check.stdout.strip()
+            if pre_head and post_head and pre_head != post_head:
+                log.warning(
+                    "HEAD changed during dispatch of '%s': %s -> %s",
+                    node.id,
+                    pre_head,
+                    post_head,
+                )
 
         # Layer 5: save stdout as missing output for read-only skills
         # Extract actual content from claude JSON (not raw metadata)

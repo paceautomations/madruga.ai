@@ -238,7 +238,7 @@ class TestGetRepoWorkDir:
         with (
             patch.object(ensure_repo, "REPO_ROOT", tmp_path),
             patch("ensure_repo.ensure_repo", return_value=clone_path) as mock_ensure,
-            patch("queue_promotion._checkout_epic_branch") as mock_checkout,
+            patch("ensure_repo._checkout_epic_branch") as mock_checkout,
         ):
             result = ensure_repo.get_repo_work_dir("ext", "001-test")
 

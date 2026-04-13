@@ -39,7 +39,13 @@ async def _run(dsn: str, dry_run: bool) -> int:
         return 1
 
     try:
-        conn = await asyncpg.connect(dsn)
+        conn = await asyncpg.connect(
+            dsn,
+            server_settings={
+                "search_path": "prosauai,prosauai_ops,public",
+                "statement_timeout": "300000",  # 5 min per statement
+            },
+        )
     except Exception:
         log.exception("connection_failed", dsn=dsn.split("@")[-1])
         return 1
@@ -75,9 +81,7 @@ def _parse_dry_run(value: str) -> bool:
 
 def main() -> None:
     """CLI entry point."""
-    parser = argparse.ArgumentParser(
-        description="ProsauAI data retention cron — LGPD compliance"
-    )
+    parser = argparse.ArgumentParser(description="ProsauAI data retention cron — LGPD compliance")
     parser.add_argument(
         "--dry-run",
         type=_parse_dry_run,

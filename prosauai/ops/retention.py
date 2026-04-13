@@ -97,12 +97,8 @@ async def purge_expired_messages(
         )
         return eligible, []
 
-    dropped = await drop_expired_partitions(
-        conn, "prosauai.messages", retention_days, today=today
-    )
-    created = await ensure_future_partitions(
-        conn, "prosauai.messages", months_ahead=3, today=today
-    )
+    dropped = await drop_expired_partitions(conn, "prosauai.messages", retention_days, today=today)
+    created = await ensure_future_partitions(conn, "prosauai.messages", months_ahead=3, today=today)
     return dropped, created
 
 
@@ -260,8 +256,11 @@ async def purge_expired_traces(
     while True:
         result = await conn.execute(
             "DELETE FROM observability.spans "
-            "WHERE start_time < (now() AT TIME ZONE 'UTC') - $1 * INTERVAL '1 day' "
-            "LIMIT $2",
+            "WHERE ctid IN ("
+            "  SELECT ctid FROM observability.spans "
+            "  WHERE start_time < (now() AT TIME ZONE 'UTC') - $1 * INTERVAL '1 day' "
+            "  LIMIT $2"
+            ")",
             retention_days,
             BATCH_SIZE,
         )
@@ -301,32 +300,49 @@ async def run_retention(
 
     log.info("retention_run_start", run_id=result.run_id, dry_run=dry_run)
 
+    errors: list[str] = []
+
     # 1. Messages (partitions)
-    dropped, created = await purge_expired_messages(
-        conn, dry_run=dry_run, today=today
-    )
-    result.partitions_dropped = dropped
-    result.partitions_created = created
+    try:
+        dropped, created = await purge_expired_messages(conn, dry_run=dry_run, today=today)
+        result.partitions_dropped = dropped
+        result.partitions_created = created
+    except Exception:
+        log.exception("retention_error", table="messages")
+        errors.append("messages")
 
     # 2. Conversations (batch DELETE)
-    conv_purged = await purge_expired_conversations(conn, dry_run=dry_run)
-    if conv_purged > 0:
-        result.rows_purged["conversations"] = conv_purged
+    try:
+        conv_purged = await purge_expired_conversations(conn, dry_run=dry_run)
+        if conv_purged > 0:
+            result.rows_purged["conversations"] = conv_purged
+    except Exception:
+        log.exception("retention_error", table="conversations")
+        errors.append("conversations")
 
     # 3. Eval scores (batch DELETE)
-    eval_purged = await purge_expired_eval_scores(conn, dry_run=dry_run)
-    if eval_purged > 0:
-        result.rows_purged["eval_scores"] = eval_purged
+    try:
+        eval_purged = await purge_expired_eval_scores(conn, dry_run=dry_run)
+        if eval_purged > 0:
+            result.rows_purged["eval_scores"] = eval_purged
+    except Exception:
+        log.exception("retention_error", table="eval_scores")
+        errors.append("eval_scores")
 
     # 4. Phoenix traces (batch DELETE)
-    traces_purged = await purge_expired_traces(conn, dry_run=dry_run)
-    if traces_purged > 0:
-        result.rows_purged["traces"] = traces_purged
+    try:
+        traces_purged = await purge_expired_traces(conn, dry_run=dry_run)
+        if traces_purged > 0:
+            result.rows_purged["traces"] = traces_purged
+    except Exception:
+        log.exception("retention_error", table="traces")
+        errors.append("traces")
 
     result.duration_ms = (monotonic() - t0) * 1000
 
     total_rows = sum(result.rows_purged.values())
-    log.info(
+    log_fn = log.warning if errors else log.info
+    log_fn(
         "retention_run_complete",
         run_id=result.run_id,
         duration_ms=round(result.duration_ms, 1),
@@ -334,6 +350,10 @@ async def run_retention(
         partitions_dropped=len(result.partitions_dropped),
         partitions_created=len(result.partitions_created),
         dry_run=dry_run,
+        errors=errors or None,
     )
+
+    if errors and not dry_run:
+        raise RuntimeError(f"Retention errors in: {', '.join(errors)}")
 
     return result

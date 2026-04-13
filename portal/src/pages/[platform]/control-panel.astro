@@ -75,15 +75,17 @@ const repoUrl = repoOrg && repoName ? `https://github.com/${repoOrg}/${repoName}
         p.style.display = p.id === `tab-${tabId}` ? '' : 'none';
       });
       history.replaceState(null, '', `#${tabId}`);
+      document.dispatchEvent(new CustomEvent('cp-tab-change', { detail: { tab: tabId } }));
     }
 
     tabs.forEach(t => {
       t.addEventListener('click', () => activate(t.dataset.tab!));
     });
 
-    // Read initial hash
+    // Activate initial tab from hash (defaults to execution)
     const hash = location.hash.replace('#', '');
-    if (['dashboard', 'observability', 'changes'].includes(hash)) activate(hash);
+    const validTabs = ['execution', 'dashboard', 'observability', 'changes'];
+    activate(validTabs.includes(hash) ? hash : 'execution');
   }
 
   initTabs();

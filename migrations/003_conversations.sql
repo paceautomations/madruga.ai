@@ -1,8 +1,11 @@
 -- 003_conversations.sql
 -- Conversations table in prosauai schema with RLS via prosauai_ops.tenant_id()
 
-CREATE TYPE conversation_status AS ENUM ('active', 'closed');
-CREATE TYPE close_reason AS ENUM ('inactivity_timeout', 'user_closed', 'escalated', 'agent_closed');
+CREATE TYPE prosauai.conversation_status AS ENUM ('active', 'closed');
+CREATE TYPE prosauai.close_reason AS ENUM ('inactivity_timeout', 'user_closed', 'escalated', 'agent_closed');
+
+-- Set search_path so unqualified enum references resolve to prosauai schema
+SET search_path TO prosauai, prosauai_ops, public;
 
 CREATE TABLE prosauai.conversations (
     id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

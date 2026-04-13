@@ -107,9 +107,7 @@ class TestRunMigrations:
         _write_sql(tmp_path, "001_schema.sql", content)
 
         # Simulate: 001_schema already applied
-        mock_conn.fetch = AsyncMock(return_value=[
-            {"version": "001_schema", "checksum": _sha(content)}
-        ])
+        mock_conn.fetch = AsyncMock(return_value=[{"version": "001_schema", "checksum": _sha(content)}])
 
         with patch("prosauai.ops.migrate.asyncpg") as mock_asyncpg:
             mock_asyncpg.connect = AsyncMock(return_value=mock_conn)
@@ -161,13 +159,12 @@ class TestRunMigrations:
         _write_sql(tmp_path, "001_schema.sql", content)
 
         # Applied with different checksum
-        mock_conn.fetch = AsyncMock(return_value=[
-            {"version": "001_schema", "checksum": "wrong_checksum_abc123"}
-        ])
+        mock_conn.fetch = AsyncMock(return_value=[{"version": "001_schema", "checksum": "wrong_checksum_abc123"}])
 
         with patch("prosauai.ops.migrate.asyncpg") as mock_asyncpg:
             mock_asyncpg.connect = AsyncMock(return_value=mock_conn)
             import logging
+
             with caplog.at_level(logging.WARNING):
                 result = await run_migrations(dsn="postgresql://test", migrations_dir=tmp_path)
 
@@ -182,9 +179,7 @@ class TestRunMigrations:
 
         with patch("prosauai.ops.migrate.asyncpg") as mock_asyncpg:
             mock_asyncpg.connect = AsyncMock(return_value=mock_conn)
-            result = await run_migrations(
-                dsn="postgresql://test", migrations_dir=tmp_path, dry_run=True
-            )
+            result = await run_migrations(dsn="postgresql://test", migrations_dir=tmp_path, dry_run=True)
 
         assert result.applied == ["001_schema"]
         assert result.failed is None

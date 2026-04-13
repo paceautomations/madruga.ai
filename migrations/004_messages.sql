@@ -6,7 +6,10 @@
 -- FK from eval_scores.message_id is REMOVED — PG does not support FK
 -- referencing a non-unique column in a partitioned table.
 
-CREATE TYPE message_direction AS ENUM ('inbound', 'outbound');
+CREATE TYPE prosauai.message_direction AS ENUM ('inbound', 'outbound');
+
+-- Set search_path so unqualified enum references resolve to prosauai schema
+SET search_path TO prosauai, prosauai_ops, public;
 
 CREATE TABLE prosauai.messages (
     id              UUID NOT NULL DEFAULT uuid_generate_v4(),
