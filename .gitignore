@@ -25,3 +25,8 @@ platforms/*/model/output/
 htmlcov/
 .coverage
 .claude/scheduled_tasks.lock
+# Defensive: external platform code must never exist at madruga.ai root.
+# Pipeline migrations live at .pipeline/migrations/, not /migrations/.
+# madruga.ai is a documentation system, not a Docker app.
+/migrations/
+/docker-compose*.yml
