@@ -21,6 +21,16 @@ current_branch=$(git branch --show-current)
 
 **This is a hard stop. Do NOT proceed with any epic cycle work on main.**
 
+### CWD Guard (external platforms)
+
+For any epic cycle skill on a platform where `platform.yaml` → `repo.name` is NOT `madruga.ai`:
+
+1. Run: `python3 .specify/scripts/ensure_repo.py <platform>` to get expected repo path
+2. Compare with current working directory (`pwd`)
+3. If CWD is the madruga.ai repo root but the platform is external → **ERROR**: "Platform '<name>' maps to external repo '<repo_name>'. Change directory to the external repo or use the DAG executor which handles this automatically."
+
+**This is a hard stop. Do NOT write external platform code into madruga.ai.**
+
 ### Dependency Check
 
 Run the prerequisites check from the repo root:

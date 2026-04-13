@@ -9,6 +9,16 @@
             "command": "python3 .specify/scripts/sync_memory.py --import-only 2>/dev/null || true"
           }
         ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .specify/scripts/hook_validate_placement.py 2>/dev/null || true",
+            "timeout": 5
+          }
+        ]
       }
     ]
   }
