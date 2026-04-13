@@ -64,9 +64,9 @@ Regras obrigatorias:
 ### 1. Wrapper function (CRITICO)
 ```sql
 -- Permite cache por statement (STABLE) e previne bypass (SECURITY DEFINER)
--- Namespace: prosauai_ops (isolado de schemas gerenciados pelo Supabase)
--- Ver ADR-024 para motivacao da mudanca de auth → prosauai_ops
-CREATE OR REPLACE FUNCTION prosauai_ops.tenant_id()
+-- Namespace: public (compatibilidade Supabase — auth e prosauai_ops sao gerenciados)
+-- Ver ADR-024 para motivacao. Movido de auth → prosauai_ops (epic 006) → public (hardening Supabase)
+CREATE OR REPLACE FUNCTION public.tenant_id()
 RETURNS uuid
 LANGUAGE sql STABLE SECURITY DEFINER
 SET search_path = ''
@@ -75,15 +75,15 @@ AS $$
 $$;
 ```
 
-> **Nota (epic 006):** A funcao foi movida de `auth.tenant_id()` para `prosauai_ops.tenant_id()` como parte do schema isolation ([ADR-024](ADR-024-schema-isolation.md)). O schema `auth` e gerenciado pelo Supabase e nao deve conter objetos custom.
+> **Nota (epic 006 + hardening):** A funcao foi movida de `auth.tenant_id()` → `prosauai_ops.tenant_id()` (epic 006) → `public.tenant_id()` (hardening Supabase). O schema `auth` e gerenciado pelo Supabase (GoTrue) e nao deve conter objetos custom. A funcao vive em `public` para garantir resolucao via `search_path` sem depender de schemas da app.
 
 ### 2. Policy padrao para TODA tabela
 ```sql
 -- Template obrigatorio — aplicar em toda tabela com tenant_id
--- Tabelas no schema prosauai.*, funcao RLS em prosauai_ops
+-- Tabelas no schema prosauai.*, funcao RLS em public
 ALTER TABLE prosauai.{tabela} ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON prosauai.{tabela}
-  USING (tenant_id = prosauai_ops.tenant_id());
+  USING (tenant_id = public.tenant_id());
 ```
 
 ### 3. Views SEMPRE com security_invoker
@@ -129,7 +129,7 @@ pool = await asyncpg.create_pool(
 ```
 
 **Implicacoes para RLS:**
-- `prosauai_ops.tenant_id()` e resolvido automaticamente via `search_path` — policies podem usar `tenant_id()` sem prefix
+- `public.tenant_id()` e resolvido automaticamente via `search_path` — policies podem usar `tenant_id()` sem prefix
 - `SET LOCAL app.current_tenant_id` continua funcionando identico (transaction-scoped)
 - Migration runner e retention cron tambem configuram o mesmo `search_path`
 
@@ -142,7 +142,7 @@ pool = await asyncpg.create_pool(
 | `observability` | Tabelas Phoenix (traces, spans) | Phoenix auto-managed |
 | `admin` | Reservado (tenants, audit_log — epic 013) | Futuro |
 | `auth` | Supabase-managed — **NAO TOCAR** | Supabase GoTrue |
-| `public` | Extensions (uuid-ossp) — **NAO CRIAR OBJETOS** | Supabase |
+| `public` | `tenant_id()` SECURITY DEFINER (funcao RLS helper). Usa `gen_random_uuid()` built-in — **sem extensions adicionais** | Migrations da app (funcao) + Supabase (schema) |
 
 ---
 

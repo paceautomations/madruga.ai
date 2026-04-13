@@ -1,20 +1,20 @@
 ---
 title: "Roadmap"
-updated: 2026-04-12
+updated: 2026-04-13
 ---
 # ProsaUAI — Delivery Roadmap
 
-> Sequenciamento de epics, milestones e definicao de MVP. Atualizado: 2026-04-12 (epics 001-004 shipped; proximo: epic 005 Conversation Core).
+> Sequenciamento de epics, milestones e definicao de MVP. Atualizado: 2026-04-13 (MVP completo — todos 6 epics shipped).
 
 ---
 
 ## Status
 
-**Lifecycle:** building — epics 001-004 entregues, MVP a 80%.
+**Lifecycle:** building — **MVP completo** (6/6 epics shipped). Proximo: primeiro deploy de producao VPS.
 **L1 Pipeline:** 12/13 nodes completos. Revisao completa realizada em 2026-04-07.
 **L1 Pendente:** codebase-map (opcional — plataforma greenfield, sem valor agregado).
-**L2 Status:** Epic 001 shipped (52 tasks, 122 testes, judge 92%, QA 97%). Epic 002 shipped (Phoenix + OTel). Epic 003 shipped (multi-tenant auth + parser reality + deploy). Epic 004 shipped (MECE routing engine + agent resolution).
-**Proximo marco:** epic 005 (Conversation Core) em andamento — ultimo epic MVP funcional. Epic 006 (Production Readiness) fecha os gaps de infra antes do deploy VPS.
+**L2 Status:** Epic 001 shipped (52 tasks, 122 testes, judge 92%, QA 97%). Epic 002 shipped (Phoenix + OTel). Epic 003 shipped (multi-tenant auth + parser reality + deploy). Epic 004 shipped (MECE routing engine + agent resolution). Epic 005 shipped (conversation pipeline 12-step, LLM agent pydantic-ai, safety guards, tool registry, 52 test files). Epic 006 shipped (schema isolation, migration runner, data retention, log persistence, host monitoring — 34 tasks, 67 testes, judge 88%, QA 100%).
+**Proximo marco:** primeiro deploy de producao VPS (2 vCPU, 4GB RAM, 40GB SSD). Post-MVP: epic 007 (Configurable Routing DB + Groups).
 
 ---
 
@@ -22,8 +22,8 @@ updated: 2026-04-12
 
 **MVP Epics:** 001-channel-pipeline + 002-observability + 003-multi-tenant-foundation + 004-router-mece + 005-conversation-core + 006-production-readiness
 **MVP Criterion:** Agente recebe mensagem WhatsApp **multi-tenant** (>=2 instancias Evolution reais), parseia 100% dos payloads reais, responde com IA, persiste em BD, **com observabilidade total da jornada**, **router MECE provado em CI**, e **infra production-ready** (schema isolation, log persistence, data retention, host monitoring).
-**Total MVP Estimate:** ~7-8 semanas (4w done + 2w 005 + 1w 006)
-**Progresso MVP:** 80% (001, 002, 003, 004 shipped; 005 em andamento; 006 drafted)
+**Total MVP Estimate:** ~7-8 semanas (realizado)
+**Progresso MVP:** **100%** (todos 6 epics shipped)
 
 ---
 
@@ -38,8 +38,8 @@ gantt
     002 Observability (DONE)       :done, a2, after a1, 1w
     003 Multi-Tenant Foundation (DONE) :done, a3, after a2, 1w
     004 Router MECE (DONE)         :done, a4, after a3, 1w
-    005 Conversation Core          :a5, after a4, 2w
-    006 Production Readiness       :a6, after a5, 1w
+    005 Conversation Core (DONE)    :done, a5, after a4, 2w
+    006 Production Readiness (DONE) :done, a6, after a5, 1w
     section Post-MVP
     007 Configurable Routing (DB) + Groups :a7, after a6, 1w
     008 Agent Tools         :a8, after a6, 2w
@@ -68,8 +68,8 @@ gantt
 | 2 | 002: Observability (Phoenix + OTel) | 001 | medio | MVP | **shipped** (Phoenix + OTel SDK + structlog bridge) |
 | 3 | 003: Multi-Tenant Foundation (auth + parser reality + deploy) | 002 | medio | MVP | **shipped** (TenantStore YAML, X-Webhook-Secret auth, 26 fixtures, idempotency Redis) |
 | 4 | 004: Router MECE | 003 | medio | MVP | **shipped** (classify() + RoutingEngine declarativa, MECE 4 camadas, config YAML per-tenant) |
-| 5 | 005: Conversation Core | 004 | medio | MVP | em andamento |
-| 6 | 006: Production Readiness | 005 | baixo | MVP | **drafted** — schema isolation, log persistence, data retention, particionamento, host monitoring, migration runner |
+| 5 | 005: Conversation Core | 004 | medio | MVP | **shipped** (conversation pipeline 12-step, LLM agent pydantic-ai, safety guards 3-layer, tool registry, 52 test files) |
+| 6 | 006: Production Readiness | 005 | baixo | MVP | **shipped** (schema isolation, migration runner, data retention LGPD, log persistence, host monitoring Netdata — 34 tasks, 67 testes, judge 88%, QA 100%) |
 | 7 | 007: Configurable Routing (DB) + Groups | 004, 006 | baixo | Post-MVP | sugerido — escopo reduzido pelo 004 |
 | 8 | 008: Agent Tools | 006 | medio | Post-MVP | sugerido |
 | 9 | 009: Handoff Engine | 006 | medio | Post-MVP | sugerido |
@@ -123,7 +123,7 @@ graph LR
 
 | Milestone | Epics | Criterio de Sucesso | Estimativa |
 |-----------|-------|---------------------|------------|
-| **MVP** | 001, 002, 003, 004, 005, 006 | Agente responde mensagens WhatsApp **multi-tenant** com IA, parseia 100% dos payloads reais, persiste conversas, funciona em grupo, **com observabilidade total + router MECE provado em CI + infra production-ready** (schema isolation, logs, retention, monitoring) | ~7-8 semanas |
+| **MVP** | 001, 002, 003, 004, 005, 006 | ✅ **COMPLETO.** Agente responde mensagens WhatsApp **multi-tenant** com IA, parseia 100% dos payloads reais, persiste conversas, funciona em grupo, **com observabilidade total + router MECE provado em CI + infra production-ready** (schema isolation, logs, retention, monitoring) | realizado |
 | **Post-MVP** | 007-010 | Routing configuravel via DB + grupos, tools, handoff humano, triggers proativos | ~6 semanas |
 | **Admin** | 011-012 | Dashboard + fila de atendimento humano funcionais | ~3 semanas |
 | **Public API (Fase 2)** | 013 | Caddy + Admin API + onboarding de cliente externo. Trigger: primeiro cliente pagante. | ~2 semanas |
@@ -136,7 +136,7 @@ graph LR
 | Risco | Status | Impacto | Probabilidade | Mitigacao |
 |-------|--------|---------|---------------|-----------|
 | Evolution API payload muda entre versoes | **Mitigado (epic 001)** | Baixo | Baixa | Adapter pattern + 122 testes com fixtures reais |
-| Custo LLM acima do esperado no MVP | Pendente (epic 005) | Alto | Baixa | Bifrost com fallback Sonnet → Haiku |
+| Custo LLM acima do esperado no MVP | **Parcialmente mitigado (epic 005)** | Medio | Baixa | pydantic-ai com modelo configuravel por agente + semaforo concorrencia (10). Bifrost (rate limit + spend cap) planejado para Fase 3 |
 | Complexidade de grupo subestimada | **Eliminado (epic 001)** | — | — | Smart Router 6 rotas funcional |
 | Observability ops complexity | **Mitigado (epic 002)** | Baixo | Baixa | Phoenix (Arize) substitui LangFuse — single container, Postgres backend, sem ClickHouse ([ADR-020](../decisions/ADR-020-phoenix-observability.md)) |
 | OTel overhead em hot path do webhook | **Mitigado (epic 002)** | Baixo | Baixa | Sampling configuravel + BatchSpanProcessor fire-and-forget |
@@ -146,14 +146,14 @@ graph LR
 | **Parser falha em 50% das mensagens reais (messageType errados)** | **Eliminado (epic 003)** | — | — | 12 correcoes contra 26 fixtures capturadas reais; 13 tipos de mensagem suportados |
 | Refactor multi-tenant posterior seria doloroso | **Eliminado (epic 003)** | — | — | Multi-tenant estrutural desde dia 1; 2 tenants reais (Ariel + ResenhAI) operando em paralelo |
 | Merge conflict entre 003 (router T7) e 004 (router rip-and-replace) | **Eliminado** | — | — | Sequencia back-to-back executada sem conflitos |
-| **Schema collision com Supabase (auth + public)** | Pendente (epic 006) | Alto | Alta | Epic 006 reescreve migrations com schemas dedicados (`prosauai` + `prosauai_ops`) antes do primeiro deploy |
-| **Disco VPS cheio (logs + Phoenix SQLite + pgdata)** | Pendente (epic 006) | Alto | Media | Epic 006 adiciona log rotation, Phoenix Postgres backend, host monitoring |
-| **LGPD non-compliance (sem purge de dados)** | Pendente (epic 006) | Alto | Alta | Epic 006 implementa cron job de retention (ADR-018) |
+| **Schema collision com Supabase (auth + public)** | **Mitigado (epic 006)** | — | — | Schemas dedicados `prosauai` + `prosauai_ops`. `public.tenant_id()` SECURITY DEFINER. Migrations idempotentes com `gen_random_uuid()` (sem `uuid-ossp`). [ADR-024](../decisions/ADR-024-schema-isolation.md) |
+| **Disco VPS cheio (logs + Phoenix SQLite + pgdata)** | **Mitigado (epic 006)** | — | — | Log rotation Docker json-file (max 1.25GB stack). Phoenix Postgres backend em prod. Netdata host monitoring (:19999) |
+| **LGPD non-compliance (sem purge de dados)** | **Mitigado (epic 006)** | — | — | retention-cron diario: DROP PARTITION messages, batch DELETE conversations/eval_scores/traces. `--dry-run` default. 17 testes. [ADR-018](../decisions/ADR-018-data-retention-lgpd.md) |
 
 ---
 
-*Proximos passos: epic 005 (Conversation Core) em andamento. Epic 006 (Production Readiness) drafted — fecha gaps de infra antes do deploy VPS. Apos 005+006, primeiro deploy de producao com IA generativa real.*
+*MVP completo: todos 6 epics shipped (001-006). Proximo: primeiro deploy de producao VPS.*
 
 ---
 
-> **Proximo passo:** Finalizar epic 005, depois iniciar epic 006 (`epic/prosauai/006-production-readiness`). Apos ambos mergearem em develop, deploy VPS.
+> **Proximo passo:** Primeiro deploy de producao VPS (2 vCPU, 4GB RAM, 40GB SSD) com `docker compose -f docker-compose.yml -f docker-compose.prod.yml up`. Post-MVP: epic 007 (Configurable Routing DB + Groups) ou epic 008 (Agent Tools) conforme prioridade.

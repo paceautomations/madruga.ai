@@ -1,6 +1,6 @@
 ---
 title: "Containers"
-updated: 2026-04-12
+updated: 2026-04-13
 sidebar:
   order: 4
 ---
@@ -168,11 +168,11 @@ graph LR
 
 | Container | Status | Epic | Notas |
 |-----------|--------|------|-------|
-| prosauai-api | ✅ Operacional | 001-004 | Webhook + health + debounce + multi-tenant auth (X-Webhook-Secret) + MECE router + idempotency. OTel SDK + structlog bridge. Usa Redis keys diretamente (sem Streams). Port 8050 |
-| prosauai-worker | ⏳ Planejado | — | LLM orchestration, delivery migram para ARQ worker em epic futuro (005+) |
+| prosauai-api | ✅ Operacional | 001-006 | Webhook + health + debounce + multi-tenant auth (X-Webhook-Secret) + MECE router + idempotency + **conversation pipeline 12-step** (customer lifecycle, context window, intent classifier, LLM agent pydantic-ai, safety guards 3-layer, tool registry, evaluator) + **DB migrations** (7 files, asyncpg pool, RLS on all tables) + **schema isolation** (`prosauai` + `prosauai_ops`). OTel SDK + structlog bridge. Port 8050. **Nota:** LLM orchestration atualmente roda inline na API (sem worker separado) |
+| prosauai-worker | ⏳ Planejado (arquitetura target) | — | Arquitetura target: LLM orchestration, delivery, eval batch e triggers migram para ARQ worker com Redis Streams consumer groups. **Atualmente:** toda logica de conversacao roda inline no prosauai-api. Migracao para worker planejada quando throughput exigir scaling independente |
 | prosauai-admin | ⏳ Planejado | — | — |
 | Redis 7 | ✅ Operacional | 001-004 | Debounce keys (buf:/tmr:) + keyspace notifications + idempotency (seen:tenant_id:msg_id SETNX 24h) |
-| Supabase ProsaUAI | ✅ Schema isolation | 006 | Schema `prosauai` (7 tabelas de negocio) + `prosauai_ops` (tenant_id, schema_migrations). Messages particionada por mes. Migration runner automatizado no startup. [ADR-024](../decisions/ADR-024-schema-isolation.md) |
+| Supabase ProsaUAI | ✅ Schema isolation | 005-006 | Schema `prosauai` (7 tabelas de negocio) + `prosauai_ops` (schema_migrations). `public.tenant_id()` SECURITY DEFINER (Supabase compat — movido de `prosauai_ops`). `gen_random_uuid()` built-in (sem `uuid-ossp`). Messages particionada por mes. Migrations idempotentes com `DROP POLICY IF EXISTS`. Migration runner asyncpg automatizado no startup (advisory lock + checksum). Pool: `statement_cache_size=0` (Supavisor compat), JSONB codec auto. [ADR-024](../decisions/ADR-024-schema-isolation.md) |
 | Bifrost | ⏳ Planejado | — | — |
 | Phoenix (Arize) | ✅ Operacional | 002, 006 | Substitui LangFuse ([ADR-020](../decisions/ADR-020-phoenix-observability.md)). UI :6006 + gRPC :4317. SQLite em dev, Postgres backend em prod (`PHOENIX_SQL_DATABASE_SCHEMA=observability`) |
 | Infisical | ⏳ Planejado | — | Config via .env nesta fase |

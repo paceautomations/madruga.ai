@@ -1,6 +1,6 @@
 ---
 title: "Engineering Blueprint"
-updated: 2026-04-12
+updated: 2026-04-13
 sidebar:
   order: 1
 ---
@@ -127,7 +127,7 @@ prosauai/
 │   ├── main.py               # FastAPI app, lifespan (tenants + routing engines + Redis + debounce)
 │   ├── config.py              # pydantic-settings + .env
 │   ├── core/                  # Core domain logic
-│   │   ├── tenant.py          # Tenant frozen dataclass (9 fields)
+│   │   ├── tenant.py          # Tenant frozen dataclass (10 fields, incl default_agent_id)
 │   │   ├── tenant_store.py    # YAML loader + ${VAR} interpolation
 │   │   ├── formatter.py       # Evolution v2.3.0 payload → ParsedMessage (13 tipos)
 │   │   ├── idempotency.py     # Redis SETNX deduplication (24h TTL per-tenant)
@@ -140,6 +140,21 @@ prosauai/
 │   │       ├── matchers.py    # MentionMatchers (3-strategy: @lid, phone, keywords)
 │   │       ├── errors.py      # Custom exceptions
 │   │       └── verify.py      # MECE overlap verification CLI
+│   ├── conversation/          # Epic 005: Conversation Core (LLM pipeline)
+│   │   ├── pipeline.py        # 12-step orchestrated conversation flow
+│   │   ├── agent.py           # pydantic-ai agent generation + response
+│   │   ├── classifier.py      # Intent classification (LLM structured output, 0.7 threshold)
+│   │   ├── context.py         # Sliding context window (N=10 msgs, 8K token budget)
+│   │   ├── customer.py        # Customer lookup/create (phone → SHA-256 hash)
+│   │   ├── evaluator.py       # Response evaluation (heuristic 0-1, APPROVE/RETRY/ESCALATE)
+│   │   └── state.py           # Conversation state management (active → closed lifecycle)
+│   ├── safety/                # Epic 005: Safety guards (3-layer)
+│   │   ├── input_guard.py     # PII detection (7 regex), length check, injection patterns
+│   │   ├── output_guard.py    # PII masking before delivery
+│   │   └── patterns.py        # Shared PII + injection regex patterns
+│   ├── tools/                 # Epic 005: Tool registry
+│   │   ├── registry.py        # @register_tool decorator + TOOL_REGISTRY + whitelist
+│   │   └── resenhai.py        # ResenhAI rankings tool (HTTP stub)
 │   ├── channels/              # Channel adapters (ACL boundary)
 │   │   ├── base.py            # MessagingProvider ABC
 │   │   └── evolution.py       # EvolutionProvider (httpx async)
@@ -147,6 +162,13 @@ prosauai/
 │   │   ├── webhooks.py        # POST /webhook/whatsapp/{instance_name}
 │   │   ├── health.py          # GET /health (status + Redis + OTel)
 │   │   └── dependencies.py    # resolve_tenant_and_authenticate() (X-Webhook-Secret)
+│   ├── db/                    # Epic 005: Database layer
+│   │   └── pool.py            # asyncpg pool (min=2, max=10, JSONB codec, search_path)
+│   ├── ops/                   # Epic 006: Operations tooling
+│   │   ├── migrate.py         # Migration runner (asyncpg, advisory lock, checksum)
+│   │   ├── retention.py       # LGPD retention logic (partition drop + batch delete)
+│   │   ├── retention_cli.py   # CLI: --dry-run, --database-url, --log-level
+│   │   └── partitions.py      # Partition manager (ensure future + drop expired)
 │   └── observability/         # OTel SDK + Phoenix integration (epic 002)
 │       ├── __init__.py
 │       ├── setup.py           # configure_observability() — SDK + exporter
@@ -173,11 +195,11 @@ prosauai/
 └── .env.example               # Environment template (40+ vars)
 ```
 
-> **Nota**: A estrutura `src/domain/` com BCs separados e `src/infra/` sera evolucao natural quando epics futuros adicionarem Supabase e ARQ worker. A estrutura atual (packages por concern) e adequada para o escopo atual (channel pipeline + multi-tenant + observability + MECE router).
+> **Nota**: A estrutura atual (packages por concern) evoluiu organicamente com os epics 001-006. Packages de dominio (`conversation/`, `safety/`, `tools/`) ja refletem bounded contexts do domain model. Evolucao para `src/domain/` com BCs explicitamente separados e `src/infra/` pode ser considerada quando ARQ worker for introduzido e a separacao API/worker exigir shared domain layer.
 
 | Convencao | Regra |
 |-----------|-------|
-| Packages por concern | `core/` (dominio), `api/` (endpoints), `channels/` (adapters), `observability/` (cross-cutting), `core/router/` (routing engine) |
+| Packages por concern | `core/` (dominio base), `conversation/` (LLM pipeline), `safety/` (guardrails), `tools/` (registry), `api/` (endpoints), `channels/` (adapters), `db/` (pool), `ops/` (migrations, retention), `observability/` (cross-cutting), `core/router/` (routing engine) |
 | Config per-tenant | `config/tenants.yaml` (identidade) + `config/routing/*.yaml` (regras de roteamento) |
 | RLS tests | Obrigatorios para toda nova tabela com tenant_id |
 | Secrets | Nunca em codigo; sempre via env vars (.env) — Infisical SDK em fase futura |
@@ -191,11 +213,11 @@ prosauai/
 | Schema | Conteudo | Gerenciado por |
 |--------|----------|----------------|
 | `prosauai` | 7 tabelas de negocio: customers, conversations, conversation_states, messages (particionada), agents, prompts, eval_scores | Migrations da app (`migrations/*.sql`) |
-| `prosauai_ops` | `tenant_id()` (funcao RLS helper), `schema_migrations` (tracking) | Migrations da app |
+| `prosauai_ops` | `schema_migrations` (tracking de migrations aplicadas) | Migrations da app |
+| `public` | `tenant_id()` SECURITY DEFINER STABLE (funcao RLS helper). Usa `gen_random_uuid()` built-in — **sem extensoes adicionais** | Migrations da app (funcao) + Supabase (schema) |
 | `observability` | Tabelas Phoenix (traces, spans) | Phoenix auto-managed (`PHOENIX_SQL_DATABASE_SCHEMA`) |
 | `admin` | Reservado — tenants, audit_log (epic 013) | Futuro |
 | `auth` | Supabase-managed (GoTrue) — **NAO TOCAR** | Supabase |
-| `public` | Extensions (`uuid-ossp`) — **NAO CRIAR OBJETOS** | Supabase |
 
 **Particionamento**: Tabela `messages` usa `PARTITION BY RANGE (created_at)` com particoes mensais. Purge via `DROP TABLE partition` (<100ms). Particoes futuras criadas 3 meses a frente pelo cron de retention.
 
@@ -245,7 +267,7 @@ x-logging: &default-logging
 |---------|-----------|-----|
 | Autenticacao tenant admin | Supabase Auth (JWT) — login email/password | — |
 | Isolamento de dados | Pool + RLS com `SET LOCAL` por transacao | [ADR-011](../decisions/ADR-011-pool-rls-multi-tenant/) |
-| Wrapper RLS | `prosauai_ops.tenant_id()` STABLE SECURITY DEFINER — todas as policies usam | [ADR-011](../decisions/ADR-011-pool-rls-multi-tenant/), [ADR-024](../decisions/ADR-024-schema-isolation/) |
+| Wrapper RLS | `public.tenant_id()` STABLE SECURITY DEFINER — todas as policies usam. Em `public` para compatibilidade Supabase (schema `auth` e gerenciado pelo provider) | [ADR-011](../decisions/ADR-011-pool-rls-multi-tenant/), [ADR-024](../decisions/ADR-024-schema-isolation/) |
 | Indexes obrigatorios | `tenant_id` em toda tabela de dados, sem excecao | [ADR-011](../decisions/ADR-011-pool-rls-multi-tenant/) |
 | Service role key | Nunca exposta no frontend; apenas server-side | [ADR-011](../decisions/ADR-011-pool-rls-multi-tenant/) |
 | Tenant context | Sempre `SET LOCAL` (transaction-scoped), nunca `SET` global | [ADR-011](../decisions/ADR-011-pool-rls-multi-tenant/) |

@@ -1,6 +1,6 @@
 ---
 title: "Domain Model"
-updated: 2026-04-07
+updated: 2026-04-13
 sidebar:
   order: 2
 ---
@@ -163,10 +163,11 @@ class IncomingMessage(BaseModel):
 > **Obrigatorio**: TODA tabela de dados DEVE ter `tenant_id UUID NOT NULL REFERENCES tenants(id)` + index + RLS policy. Ver [ADR-011](../decisions/ADR-011-pool-rls-multi-tenant/) para hardening completo.
 
 ```sql
--- Wrapper function para RLS (ADR-011 hardening)
-CREATE OR REPLACE FUNCTION auth.tenant_id()
+-- Wrapper function para RLS (ADR-011 hardening, Supabase compat)
+-- Em public schema porque auth schema e gerenciado pelo Supabase (GoTrue)
+CREATE OR REPLACE FUNCTION public.tenant_id()
 RETURNS UUID AS $$
-  SELECT (auth.jwt() -> 'app_metadata' ->> 'tenant_id')::UUID;
+  SELECT current_setting('app.current_tenant_id', true)::UUID;
 $$ LANGUAGE SQL STABLE SECURITY DEFINER;
 
 -- Tenants (ADR-006, ADR-011)
@@ -203,7 +204,7 @@ CREATE TABLE agents (
 );
 
 ALTER TABLE agents ENABLE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON agents USING (tenant_id = auth.tenant_id());
+CREATE POLICY tenant_isolation ON agents USING (tenant_id = public.tenant_id());
 CREATE INDEX idx_agents_tenant ON agents (tenant_id);
 
 -- Agent Config Versions — Canary Rollout (ADR-019)
@@ -228,7 +229,7 @@ CREATE TABLE agent_config_versions (
 );
 
 ALTER TABLE agent_config_versions ENABLE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON agent_config_versions USING (tenant_id = auth.tenant_id());
+CREATE POLICY tenant_isolation ON agent_config_versions USING (tenant_id = public.tenant_id());
 CREATE INDEX idx_acv_agent ON agent_config_versions (agent_id, status);
 CREATE INDEX idx_acv_tenant ON agent_config_versions (tenant_id);
 
@@ -256,7 +257,7 @@ CREATE TABLE agent_pipeline_steps (
 );
 
 ALTER TABLE agent_pipeline_steps ENABLE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON agent_pipeline_steps USING (tenant_id = auth.tenant_id());
+CREATE POLICY tenant_isolation ON agent_pipeline_steps USING (tenant_id = public.tenant_id());
 CREATE INDEX idx_pipeline_agent ON agent_pipeline_steps (agent_id, step_order);
 CREATE INDEX idx_pipeline_tenant ON agent_pipeline_steps (tenant_id);
 
@@ -272,7 +273,7 @@ CREATE TABLE user_consents (
 );
 
 ALTER TABLE user_consents ENABLE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON user_consents USING (tenant_id = auth.tenant_id());
+CREATE POLICY tenant_isolation ON user_consents USING (tenant_id = public.tenant_id());
 CREATE INDEX idx_consents_tenant ON user_consents (tenant_id);
 CREATE INDEX idx_consents_user ON user_consents (user_phone_hash, tenant_id);
 ```
@@ -298,7 +299,7 @@ CREATE TABLE inbound_messages (
 );
 
 ALTER TABLE inbound_messages ENABLE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON inbound_messages USING (tenant_id = auth.tenant_id());
+CREATE POLICY tenant_isolation ON inbound_messages USING (tenant_id = public.tenant_id());
 CREATE INDEX idx_inbound_tenant ON inbound_messages (tenant_id);
 CREATE INDEX idx_inbound_remote_jid ON inbound_messages (tenant_id, remote_jid, received_at DESC);
 CREATE INDEX idx_inbound_unprocessed ON inbound_messages (processed_at) WHERE processed_at IS NULL;
@@ -316,7 +317,7 @@ CREATE TABLE debounce_buffers (
 );
 
 ALTER TABLE debounce_buffers ENABLE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON debounce_buffers USING (tenant_id = auth.tenant_id());
+CREATE POLICY tenant_isolation ON debounce_buffers USING (tenant_id = public.tenant_id());
 CREATE INDEX idx_debounce_tenant ON debounce_buffers (tenant_id);
 
 -- M3: Decisoes de roteamento
@@ -334,7 +335,7 @@ CREATE TABLE route_decisions (
 );
 
 ALTER TABLE route_decisions ENABLE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON route_decisions USING (tenant_id = auth.tenant_id());
+CREATE POLICY tenant_isolation ON route_decisions USING (tenant_id = public.tenant_id());
 CREATE INDEX idx_route_tenant ON route_decisions (tenant_id);
 CREATE INDEX idx_route_decision ON route_decisions (tenant_id, decision, decided_at DESC);
 
@@ -361,7 +362,7 @@ CREATE TABLE routing_rules (
 );
 
 ALTER TABLE routing_rules ENABLE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON routing_rules USING (tenant_id = auth.tenant_id());
+CREATE POLICY tenant_isolation ON routing_rules USING (tenant_id = public.tenant_id());
 CREATE INDEX idx_routing_tenant_priority ON routing_rules (tenant_id, priority);
 CREATE INDEX idx_routing_tenant ON routing_rules (tenant_id);
 
@@ -572,7 +573,7 @@ CREATE TABLE customers (
 );
 
 ALTER TABLE customers ENABLE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON customers USING (tenant_id = auth.tenant_id());
+CREATE POLICY tenant_isolation ON customers USING (tenant_id = public.tenant_id());
 CREATE INDEX idx_customer_tenant ON customers (tenant_id);
 CREATE INDEX idx_customer_phone ON customers (tenant_id, phone);
 CREATE INDEX idx_customer_resenhai ON customers (resenhai_user_id) WHERE resenhai_user_id IS NOT NULL;
@@ -596,7 +597,7 @@ CREATE TABLE conversations (
 );
 
 ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON conversations USING (tenant_id = auth.tenant_id());
+CREATE POLICY tenant_isolation ON conversations USING (tenant_id = public.tenant_id());
 CREATE INDEX idx_conv_tenant ON conversations (tenant_id);
 CREATE INDEX idx_conv_customer ON conversations (tenant_id, customer_id, started_at DESC);
 CREATE INDEX idx_conv_active ON conversations (tenant_id, status) WHERE status = 'active';
@@ -617,7 +618,7 @@ CREATE TABLE messages (
 );
 
 ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON messages USING (tenant_id = auth.tenant_id());
+CREATE POLICY tenant_isolation ON messages USING (tenant_id = public.tenant_id());
 CREATE INDEX idx_msg_tenant ON messages (tenant_id);
 CREATE INDEX idx_msg_conversation ON messages (tenant_id, conversation_id, created_at);
 
@@ -648,7 +649,7 @@ CREATE TABLE conversation_states (
 );
 
 ALTER TABLE conversation_states ENABLE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON conversation_states USING (tenant_id = auth.tenant_id());
+CREATE POLICY tenant_isolation ON conversation_states USING (tenant_id = public.tenant_id());
 CREATE INDEX idx_state_tenant ON conversation_states (tenant_id);
 CREATE INDEX idx_state_conversation ON conversation_states (conversation_id);
 
@@ -686,7 +687,7 @@ CREATE TABLE eval_scores (
 );
 
 ALTER TABLE eval_scores ENABLE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON eval_scores USING (tenant_id = auth.tenant_id());
+CREATE POLICY tenant_isolation ON eval_scores USING (tenant_id = public.tenant_id());
 CREATE INDEX idx_eval_tenant ON eval_scores (tenant_id);
 CREATE INDEX idx_eval_message ON eval_scores (message_id);
 CREATE INDEX idx_eval_conversation ON eval_scores (tenant_id, conversation_id, metric);
@@ -999,7 +1000,7 @@ CREATE TABLE handoff_requests (
 );
 
 ALTER TABLE handoff_requests ENABLE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON handoff_requests USING (tenant_id = auth.tenant_id());
+CREATE POLICY tenant_isolation ON handoff_requests USING (tenant_id = public.tenant_id());
 CREATE INDEX idx_handoff_tenant ON handoff_requests (tenant_id);
 CREATE INDEX idx_handoff_conversation ON handoff_requests (tenant_id, conversation_id, requested_at DESC);
 CREATE INDEX idx_handoff_pending ON handoff_requests (tenant_id, status) WHERE status = 'PENDING';
@@ -1027,7 +1028,7 @@ CREATE TABLE trigger_rules (
 );
 
 ALTER TABLE trigger_rules ENABLE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON trigger_rules USING (tenant_id = auth.tenant_id());
+CREATE POLICY tenant_isolation ON trigger_rules USING (tenant_id = public.tenant_id());
 CREATE INDEX idx_trigger_tenant ON trigger_rules (tenant_id);
 CREATE INDEX idx_trigger_active ON trigger_rules (tenant_id, event_type, is_active) WHERE is_active = TRUE;
 
@@ -1045,7 +1046,7 @@ CREATE TABLE trigger_logs (
 );
 
 ALTER TABLE trigger_logs ENABLE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON trigger_logs USING (tenant_id = auth.tenant_id());
+CREATE POLICY tenant_isolation ON trigger_logs USING (tenant_id = public.tenant_id());
 CREATE INDEX idx_trigger_log_tenant ON trigger_logs (tenant_id);
 CREATE INDEX idx_trigger_log_rule ON trigger_logs (tenant_id, rule_id, triggered_at DESC);
 CREATE INDEX idx_trigger_log_conversation ON trigger_logs (conversation_id) WHERE conversation_id IS NOT NULL;
@@ -1106,7 +1107,7 @@ CREATE TABLE usage_events (
 );
 
 ALTER TABLE usage_events ENABLE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON usage_events USING (tenant_id = auth.tenant_id());
+CREATE POLICY tenant_isolation ON usage_events USING (tenant_id = public.tenant_id());
 CREATE INDEX idx_usage_tenant ON usage_events (tenant_id);
 CREATE INDEX idx_usage_type ON usage_events (tenant_id, event_type, created_at DESC);
 CREATE INDEX idx_usage_conversation ON usage_events (conversation_id) WHERE conversation_id IS NOT NULL;

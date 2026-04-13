@@ -1,7 +1,7 @@
 ---
 title: "Business Process"
 description: 'Fluxo de negocio da plataforma ProsaUAI: mensagem individual (1:1), grupo (@mention), handoff humano, triggers proativos, multi-tenant.'
-updated: 2026-04-12
+updated: 2026-04-13
 sidebar:
   order: 3
 ---
@@ -149,9 +149,9 @@ sequenceDiagram
     participant M6 as M6 Guardrails Entrada
     participant M7 as M7 Classificador
     participant M8 as M8 Agente IA
-    participant Bifrost
     participant GPTmini as OpenAI GPT mini
     participant ResenhAI as Supabase ResenhAI
+    Note right of GPTmini: Atualmente via pydantic-ai direto.<br/>Bifrost proxy planejado (Fase 3)
 
     M4->>DB: Busca/cria customer
     DB-->>M4: Perfil + preferencias + historico
@@ -175,16 +175,15 @@ sequenceDiagram
 
     M7->>M8: IntentClassification
 
-    alt Agent SEM pipeline steps (default)
-        M8->>Bifrost: POST /v1/chat/completions (single LLM call)
-        Bifrost->>GPTmini: OpenAI API
-        GPTmini-->>Bifrost: Resposta + tool calls
-        Bifrost-->>M8: AgentResponse
-    else Agent COM pipeline steps (configuravel)
+    alt Agent SEM pipeline steps (default — implementado epic 005)
+        M8->>GPTmini: pydantic-ai agent.run() (single LLM call)
+        GPTmini-->>M8: Resposta + tool calls
+        Note over M8: pydantic-ai v1.70+ com OpenAI SDK direto.<br/>Semaforo concorrencia=10, timeout=60s, 1 retry.<br/>Bifrost proxy planejado para rate limit + spend cap (Fase 3).
+    else Agent COM pipeline steps (configuravel — planejado epic 022)
         Note over M8: Pipeline: classifier → clarifier → resolver → specialist<br/>Cada step configurado em agent_pipeline_steps<br/>(model, prompt, tools, conditions por step)
         loop Para cada step em agent_pipeline_steps (step_order ASC)
-            M8->>Bifrost: POST /v1/chat/completions (step N)
-            Bifrost-->>M8: StepOutput
+            M8->>GPTmini: pydantic-ai agent.run() (step N)
+            GPTmini-->>M8: StepOutput
             Note over M8: Proximo step recebe output do anterior.<br/>Step com condition so executa se match.
         end
     end
@@ -425,7 +424,7 @@ sequenceDiagram
 - Vendas/admin Pace cria tenant via API
 - Cliente faz a integracao do lado dele (sem acesso ao codigo Pace)
 - Caddy + Let's Encrypt fornece TLS publico
-- Rate limit per-tenant aplicado (Bifrost spend cap + Redis sliding window)
+- Rate limit per-tenant aplicado (Redis sliding window). Bifrost spend cap planejado (Fase 3)
 - Hot reload do TenantStore (sem restart) ou reload via admin API
 
 ### Fase 3 — Self-service onboarding + ops (epic 013)

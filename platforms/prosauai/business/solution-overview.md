@@ -1,6 +1,6 @@
 ---
 title: "Solution Overview"
-updated: 2026-04-12
+updated: 2026-04-13
 sidebar:
   order: 2
 ---
@@ -57,6 +57,33 @@ Em grupos WhatsApp, o agente participa quando mencionado — publica ranking, re
 | **Agent resolution** | Resolucao de agente: rule.agent > tenant.default_agent_id > AgentResolutionError. Validacao fail-fast no startup | 004 |
 | **MECE 4 camadas** | Garantias de exaustividade: (1) tipo (enums), (2) schema (pydantic validates overlaps), (3) runtime (discriminated union), (4) CI (property-based testing) | 004 |
 | **CLI verification** | `prosauai router verify` e `prosauai router explain` para validar regras de roteamento | 004 |
+
+### Epic 005 — Conversation Core
+
+| Feature | Descricao | Epic |
+|---------|-----------|------|
+| **Customer lifecycle** | Lookup/create customer por phone hash (SHA-256, ADR-018). Persistencia em Supabase com RLS per-tenant | 005 |
+| **Conversation management** | Ciclo active → closed com timeout por inatividade (24h default). Unique index garante 1 conversa ativa por customer/channel | 005 |
+| **Sliding context window** | Ultimas N=10 mensagens, budget 8000 tokens (chars/4 heuristic). Truncamento automatico de mensagens antigas | 005 |
+| **Intent classification** | LLM structured output com confidence 0-1. Fallback para "general" se <0.7. Modelo configuravel por agente | 005 |
+| **LLM agent (pydantic-ai)** | Geracao de resposta via pydantic-ai v1.70+ com OpenAI (gpt-4o-mini default). Semaforo de concorrencia (10), timeout 60s, 1 retry | 005 |
+| **Input safety guard** | Deteccao PII (CPF, telefone, email — 7 regex patterns), length check (4K chars), deteccao de prompt injection (7 patterns). PII hasheado em logs | 005 |
+| **Output safety guard** | Mascaramento de PII antes da entrega. Texto sanitizado em traces e logs | 005 |
+| **Tool registry** | Catalogo central de tools com `@register_tool` decorator. Whitelist enforcement via `PromptConfig.tools_enabled`. Max 20 tool calls/conversa. ResenhAI rankings tool implementado | 005 |
+| **Response evaluation** | Score heuristico 0-1 (length, coherence, safety). APPROVE (>0.8) / RETRY (0.5-0.8, max 1x) / ESCALATE (<0.5). Persistencia async em eval_scores | 005 |
+| **DB migrations** | 7 arquivos SQL, 6 tabelas core (customers, conversations, conversation_states, messages, agents, prompts) + eval_scores. RLS em todas as tabelas. Migration runner automatico no startup | 005 |
+
+### Epic 006 — Production Readiness
+
+| Feature | Descricao | Epic |
+|---------|-----------|------|
+| **Schema isolation** | 4 schemas Supabase: `prosauai` (negocio), `prosauai_ops` (infra), `observability` (Phoenix), `admin` (reservado). Zero conflito com `auth`/`public`. [ADR-024](../decisions/ADR-024-schema-isolation.md) | 006 |
+| **Migration runner** | Python asyncpg com advisory lock, checksum SHA-256, fail-fast no startup. Forward-only, idempotente. CLI: `python -m prosauai.ops.migrate` | 006 |
+| **Data retention LGPD** | Cron diario: DROP PARTITION messages (expirados), batch DELETE conversations/eval_scores/traces >90d. `--dry-run` default. audit_log nunca tocado. [ADR-018](../decisions/ADR-018-data-retention-lgpd.md) | 006 |
+| **Log persistence** | Docker json-file driver com rotation (max-size 50m, max-file 5). Max 1.25GB total stack | 006 |
+| **Host monitoring** | Netdata :19999 (bind 127.0.0.1, acesso via SSH tunnel). CPU, RAM, disco, containers Docker. Temporario ate Prometheus+Grafana (epic 013) | 006 |
+| **Message partitioning** | Tabela `messages` particionada por mes (PARTITION BY RANGE created_at). Purge via DROP PARTITION (<100ms). Particoes futuras criadas 3 meses a frente | 006 |
+| **Phoenix Postgres backend** | SQLite em dev, Postgres em prod (`PHOENIX_SQL_DATABASE_SCHEMA=observability`). [ADR-020](../decisions/ADR-020-phoenix-observability.md) | 006 |
 
 ---
 

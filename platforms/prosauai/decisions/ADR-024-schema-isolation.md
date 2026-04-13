@@ -49,8 +49,8 @@ Queries como `SELECT * FROM messages` resolvem como `prosauai.messages` transpar
 -- Antes (ADR-011 original):
 CREATE OR REPLACE FUNCTION auth.tenant_id() ...
 
--- Depois (epic 006):
-CREATE OR REPLACE FUNCTION prosauai_ops.tenant_id()
+-- Depois (epic 006 + hardening Supabase):
+CREATE OR REPLACE FUNCTION public.tenant_id()
 RETURNS uuid
 LANGUAGE sql STABLE SECURITY DEFINER
 SET search_path = ''
@@ -59,7 +59,7 @@ AS $$
 $$;
 ```
 
-Todas as RLS policies foram atualizadas para referenciar `prosauai_ops.tenant_id()`.
+A funcao vive em `public` (nao `prosauai_ops`) para garantir resolucao via `search_path` sem depender de schemas da app. Supabase nao cria objetos em `public` com nome `tenant_id`, eliminando risco de colisao. Todas as RLS policies referenciam `public.tenant_id()` (resolvido sem prefix via `search_path`).
 
 ## Alternativas consideradas
 
@@ -80,7 +80,7 @@ Todas as RLS policies foram atualizadas para referenciar `prosauai_ops.tenant_id
 
 ## Consequencias
 
-- [+] Zero conflito com Supabase — schemas `auth` e `public` intocados (exceto extension `uuid-ossp` em `public`)
+- [+] Zero conflito com Supabase — schemas `auth` intocado. `public` contem apenas `tenant_id()` SECURITY DEFINER (sem extensions — usa `gen_random_uuid()` built-in)
 - [+] Separacao clara entre dados de negocio (`prosauai`) e infraestrutura (`prosauai_ops`)
 - [+] Phoenix isolado em `observability` — tabelas de traces nao misturam com dados de negocio
 - [+] Schema `admin` reservado — epic 013 nao precisa reorganizar nada
