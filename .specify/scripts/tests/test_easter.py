@@ -14,6 +14,27 @@ from httpx import ASGITransport, AsyncClient
 _SELF_REF_BINDING = {"name": "madruga.ai", "org": "p", "base_branch": "main", "epic_branch_prefix": "epic/test/"}
 
 
+from contextlib import contextmanager
+
+
+@contextmanager
+def _mock_scheduler_db(mock_conn=None):
+    """Mock DB internals used by dag_scheduler (get_conn, sweep_zombies, get_pending_gates).
+
+    dag_scheduler imports get_conn and get_pending_gates locally from db,
+    and calls sweep_zombies (defined in easter). Without these mocks, tests
+    fail in CI where no SQLite DB exists.
+    """
+    if mock_conn is None:
+        mock_conn = MagicMock()
+    with (
+        patch("db.get_conn", return_value=mock_conn),
+        patch("easter.sweep_zombies", new_callable=AsyncMock),
+        patch("db.get_pending_gates", return_value=[]),
+    ):
+        yield mock_conn
+
+
 def _make_app():
     """Import and return the FastAPI app."""
     from easter import app
@@ -83,6 +104,7 @@ async def test_dag_scheduler_detects_active_epic():
     mock_conn = MagicMock()
 
     with (
+        _mock_scheduler_db(mock_conn),
         patch(
             "easter.poll_active_epics",
             return_value=[{"epic_id": "016", "platform_id": "test", "branch_name": "epic/test/016"}],
@@ -124,6 +146,7 @@ async def test_dag_scheduler_respects_sequential_constraint():
         return True
 
     with (
+        _mock_scheduler_db(mock_conn),
         patch(
             "easter.poll_active_epics",
             return_value=[
@@ -154,6 +177,7 @@ async def test_dag_scheduler_skips_already_running_epic():
         return True
 
     with (
+        _mock_scheduler_db(mock_conn),
         patch(
             "easter.poll_active_epics",
             return_value=[
@@ -194,6 +218,7 @@ async def test_dag_scheduler_poll_interval():
         return shutdown.is_set()
 
     with (
+        _mock_scheduler_db(mock_conn),
         patch("easter.poll_active_epics", side_effect=_count_and_stop),
         patch("easter._interruptible_sleep", new=_fake_sleep),
     ):
@@ -254,6 +279,7 @@ async def test_gate_approval_resumes_pipeline():
         return []
 
     with (
+        _mock_scheduler_db(mock_conn),
         patch("easter.poll_active_epics", side_effect=mock_poll),
         patch("easter.run_pipeline_async", new_callable=AsyncMock, return_value=0) as mock_run,
         patch("easter._running_epics", set()),
@@ -394,6 +420,7 @@ async def test_auto_gates_continue_in_degraded_mode():
     mock_conn = MagicMock()
 
     with (
+        _mock_scheduler_db(mock_conn),
         patch(
             "easter.poll_active_epics",
             return_value=[
@@ -583,6 +610,7 @@ async def test_dag_scheduler_ntfy_on_pipeline_failure():
     mock_conn = MagicMock()
 
     with (
+        _mock_scheduler_db(mock_conn),
         patch(
             "easter.poll_active_epics",
             return_value=[{"epic_id": "016", "platform_id": "test", "branch_name": "epic/test/016"}],
@@ -700,6 +728,7 @@ async def test_dag_scheduler_proactive_branch_checkout():
         return result
 
     with (
+        _mock_scheduler_db(mock_conn),
         patch(
             "easter.poll_active_epics",
             return_value=[{"epic_id": "020", "platform_id": "test", "branch_name": "epic/test/020"}],
@@ -738,7 +767,10 @@ async def test_dag_scheduler_platform_filter():
         shutdown.set()
         return []
 
-    with patch("easter.poll_active_epics", side_effect=mock_poll):
+    with (
+        _mock_scheduler_db(mock_conn),
+        patch("easter.poll_active_epics", side_effect=mock_poll),
+    ):
         await dag_scheduler(mock_conn, asyncio.Semaphore(3), shutdown, poll_interval=0.01, platform_id="madruga-ai")
 
     assert poll_calls == ["madruga-ai"]
@@ -920,6 +952,8 @@ async def test_dag_scheduler_skips_epic_with_pending_gate():
     mock_epic = {"epic_id": "021-test", "platform_id": "madruga-ai", "priority": 1, "branch_name": None}
 
     with (
+        patch("db.get_conn", return_value=mock_conn),
+        patch("easter.sweep_zombies", new_callable=AsyncMock),
         patch("easter.poll_active_epics", return_value=[mock_epic]),
         patch(
             "db.get_pending_gates",
