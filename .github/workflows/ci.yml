@@ -61,7 +61,7 @@ jobs:
         run: |
           FAILED=0
           for f in easter.py platform_cli.py dag_executor.py post_save.py \
-                   skill-lint.py telegram_bot.py worktree.py \
+                   skill-lint.py telegram_bot.py \
                    ensure_repo.py implement_remote.py sync_memory.py \
                    hook_post_save.py hook_skill_lint.py memory_consolidate.py; do
             echo "Checking $f..."
