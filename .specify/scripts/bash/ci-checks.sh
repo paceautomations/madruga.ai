@@ -94,7 +94,7 @@ run_lint() {
 }
 
 run_db_tests() {
-    python3 -m pytest "$REPO_ROOT/.specify/scripts/tests/" -v --tb=short --cov --cov-report=term-missing
+    python3 -m pytest "$REPO_ROOT/.specify/scripts/tests/" -v --tb=short --timeout=60 --timeout-method=thread --cov --cov-report=term-missing
 }
 
 run_bash_tests() {
