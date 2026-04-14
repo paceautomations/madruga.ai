@@ -30,7 +30,7 @@ jobs:
           cache-dependency-path: requirements-dev.txt
       - run: pip install -r requirements-dev.txt
       - name: Run tests
-        run: python3 -m pytest .specify/scripts/tests/ -v --tb=short --timeout=60 --timeout-method=thread --cov --cov-report=term-missing
+        run: python3 -m pytest .specify/scripts/tests/ -v --tb=short --timeout=60 --timeout-method=thread --cov=.specify/scripts --cov-report=term-missing
 
   smoke-test:
     runs-on: ubuntu-latest
