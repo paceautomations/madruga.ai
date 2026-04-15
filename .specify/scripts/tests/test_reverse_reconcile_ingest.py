@@ -225,6 +225,44 @@ def test_ingest_cli_branch_override(tmp_path, fresh_db, monkeypatch):
     assert result["inserted"] == 4
 
 
+def test_ingest_uses_composite_sha_when_other_platform_owns_raw(fake_repo, fresh_db, monkeypatch):
+    """If a SHA exists in DB under platform X, ingesting same SHA for Y uses <sha>:Y form.
+
+    Required for the self-ref case: madruga-ai main commits may already be tracked under
+    prosauai/fulano via the hook's platform detection from file paths.
+    """
+    import sqlite3
+
+    import reverse_reconcile_ingest as mod
+
+    monkeypatch.setattr(mod.ensure_repo_mod, "ensure_repo", lambda _p: fake_repo)
+    monkeypatch.setattr(mod.ensure_repo_mod, "load_repo_binding", lambda _p: {"base_branch": "main"})
+
+    commits = mod._list_remote_shas(fake_repo, "main")
+    target_sha = commits[0]["sha"]
+
+    conn = sqlite3.connect(str(fresh_db))
+    conn.execute(
+        "INSERT INTO commits (sha, message, author, platform_id, source, committed_at) "
+        "VALUES (?, 'x', 'x', 'other-platform', 'hook', '2026-01-01T00:00:00Z')",
+        (target_sha,),
+    )
+    conn.commit()
+    conn.close()
+
+    # Should NOT raise UNIQUE constraint error
+    result = mod.ingest("testplat", db_path=fresh_db)
+    assert result["inserted"] == 3  # all 3 commits stored, composite where needed
+
+    conn = sqlite3.connect(str(fresh_db))
+    rows = conn.execute("SELECT sha, platform_id FROM commits WHERE sha LIKE ?", (f"{target_sha}%",)).fetchall()
+    conn.close()
+    shas = {r[0]: r[1] for r in rows}
+    # Raw SHA still owned by other-platform; composite form owned by testplat
+    assert shas[target_sha] == "other-platform"
+    assert shas[f"{target_sha}:testplat"] == "testplat"
+
+
 def test_ingest_missing_branch_raises(fake_repo, fresh_db, monkeypatch):
     import pytest as _pytest
 

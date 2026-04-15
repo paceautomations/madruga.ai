@@ -104,7 +104,10 @@ def _list_remote_shas(repo_path: Path, branch: str, since: str | None = None) ->
 
 
 def _existing_shas(conn, platform_id: str) -> set[str]:
-    """Return SHAs already recorded for this platform (including composite form)."""
+    """Return raw SHAs already tracked for THIS platform (raw or composite form).
+
+    Used for dedup: if a commit is already recorded for this platform, skip it.
+    """
     rows = conn.execute(
         "SELECT sha FROM commits WHERE platform_id = ?",
         (platform_id,),
@@ -112,9 +115,22 @@ def _existing_shas(conn, platform_id: str) -> set[str]:
     out: set[str] = set()
     for (sha,) in rows:
         out.add(sha)
-        # Composite form `<sha>:<platform>` → also index the raw sha prefix
         if ":" in sha:
             out.add(sha.split(":", 1)[0])
+    return out
+
+
+def _globally_tracked_shas(conn) -> set[str]:
+    """Return raw SHAs tracked under ANY platform. Used to decide composite-form storage.
+
+    The `commits.sha` column has a UNIQUE constraint (global). If we try to INSERT
+    a raw SHA that already exists for another platform, SQLite raises IntegrityError.
+    Mirrors `hook_post_commit.py` behavior: store as `<sha>:<platform>` in that case.
+    """
+    rows = conn.execute("SELECT sha FROM commits").fetchall()
+    out: set[str] = set()
+    for (sha,) in rows:
+        out.add(sha.split(":", 1)[0] if ":" in sha else sha)
     return out
 
 
@@ -136,13 +152,16 @@ def ingest(
 
     with db_core.get_conn(db_path) as conn:
         existing = _existing_shas(conn, platform_id)
+        globally_tracked = _globally_tracked_shas(conn)
         remote_commits = _list_remote_shas(repo_path, branch, since=since)
 
         to_insert: list[dict] = []
         for c in remote_commits:
             if c["sha"] in existing:
                 continue
-            to_insert.append(c)
+            # If SHA exists under another platform, use composite form to bypass UNIQUE
+            stored_sha = f"{c['sha']}:{platform_id}" if c["sha"] in globally_tracked else c["sha"]
+            to_insert.append({**c, "stored_sha": stored_sha})
 
         if dry_run:
             return {
@@ -161,7 +180,7 @@ def ingest(
                 "(sha, message, author, platform_id, epic_id, source, committed_at, files_json, reconciled_at) "
                 "VALUES (?, ?, ?, ?, NULL, 'external-fetch', ?, ?, NULL)",
                 (
-                    c["sha"],
+                    c["stored_sha"],
                     c["message"],
                     c["author"],
                     platform_id,

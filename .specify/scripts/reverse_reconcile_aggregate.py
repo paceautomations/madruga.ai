@@ -50,23 +50,51 @@ def _is_platform_owned(path: str) -> bool:
 # Path → doc candidates heuristic. Ordered by precedence (first match wins).
 # Each rule: (regex, [top_candidate, secondary, ...])
 _DOC_CANDIDATE_RULES: list[tuple[re.Pattern, list[str]]] = [
-    # Domain / entities — match at any depth, so prosauai/models/user.py hits
+    # Domain / entities — match at any depth
     (re.compile(r"(^|/)(models|entities|domain|schemas?)/"), ["domain-model.md", "blueprint.md"]),
     # Migrations / schema DDL
     (re.compile(r"^(migrations|alembic)/|(^|/)schema/"), ["data-model.md", "domain-model.md"]),
-    # API / routing / controllers / webhooks / handlers — any depth
+    # Database modules (sqlite/postgres helpers in any script dir)
+    (re.compile(r"(^|/)db[_/]|(^|/)database[_/]"), ["data-model.md", "domain-model.md"]),
+    # API / routing / controllers / webhooks / handlers
     (
         re.compile(r"(^|/)(api|routers?|controllers?|endpoints?|webhooks?|handlers?)(/|\.[a-z]+$)"),
         ["context-map.md", "containers.md"],
     ),
-    # Container / infra files
+    # Orchestrators / daemons / background workers (key container concern)
     (
-        re.compile(r"(^|/)(docker|k8s|kubernetes|deploy|infra)/|^(Dockerfile|docker-compose)"),
+        re.compile(r"(easter|daemon|scheduler|worker|executor|orchestrator|dispatcher)\.(py|ts|js)$"),
         ["containers.md", "blueprint.md"],
     ),
+    # Container / infra files
+    (
+        re.compile(r"(^|/)(docker|k8s|kubernetes|deploy|infra)/|^(Dockerfile|docker-compose)|^\.github/workflows/"),
+        ["containers.md", "blueprint.md"],
+    ),
+    # Build / packaging manifests
+    (
+        re.compile(r"^(Makefile|pyproject\.toml|package\.json|go\.mod|Cargo\.toml|tsconfig\.json)"),
+        ["containers.md", "blueprint.md"],
+    ),
+    # Portal / frontend layout
+    (re.compile(r"^portal/src/components/"), ["containers.md", "context-map.md"]),
+    (re.compile(r"^portal/src/pages/"), ["context-map.md", "containers.md"]),
+    (re.compile(r"^portal/src/"), ["containers.md", "blueprint.md"]),
+    # Generic script/tooling dirs (madruga-ai style)
+    (re.compile(r"^\.specify/scripts/|^scripts/"), ["blueprint.md", "containers.md"]),
     # Generic app code fallback
     (re.compile(r"^(src|app|apps|services|lib)/"), ["blueprint.md", "containers.md"]),
 ]
+
+# Repo-level authored docs (for self-ref platforms these are the docs themselves, not targets)
+_SELF_REF_DOC_RE = re.compile(
+    r"^(CLAUDE\.md|README\.md|\.claude/commands/.+\.md|\.claude/knowledge/.+\.md|\.claude/rules/.+\.md)$"
+)
+
+
+def _is_self_ref_doc(path: str) -> bool:
+    """True if path is authored documentation at the repo root or under .claude/."""
+    return bool(_SELF_REF_DOC_RE.match(path))
 
 
 def _run_git(args: list[str], cwd: Path) -> subprocess.CompletedProcess:
@@ -98,12 +126,19 @@ def _head_tip_sha(repo_path: Path, ref: str) -> str:
 
 
 def _head_content_snippet(repo_path: Path, ref: str, path: str) -> str:
-    """Return truncated content of <ref>:<path>. Binary-safe via try/except."""
-    result = _run_git(["show", f"{ref}:{path}"], repo_path)
+    """Return truncated content of <ref>:<path>. Binary-safe."""
+    # Run with bytes to avoid UnicodeDecodeError on binary blobs (PNGs, etc.)
+    result = subprocess.run(
+        ["git", "show", f"{ref}:{path}"],
+        cwd=str(repo_path),
+        capture_output=True,
+    )
     if result.returncode != 0:
         return "<not present>"
-    content = result.stdout
-    # Heuristic binary check: non-UTF-8 or many null bytes
+    try:
+        content = result.stdout.decode("utf-8")
+    except UnicodeDecodeError:
+        return "<binary>"
     if "\x00" in content:
         return "<binary>"
     lines = content.splitlines()
@@ -143,7 +178,8 @@ def _collect_file_work(
     file_to_commits: dict[str, list[dict]] = {}
     extra_self_edits: list[str] = []
     for commit in relevant:
-        code_files = [f for f in commit.get("files", []) if not _is_platform_owned(f)]
+        # Exclude both platform-owned files and repo-level authored docs (for self-ref)
+        code_files = [f for f in commit.get("files", []) if not _is_platform_owned(f) and not _is_self_ref_doc(f)]
         if not code_files:
             extra_self_edits.append(commit["sha"])
             continue
