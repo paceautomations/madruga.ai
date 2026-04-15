@@ -42,7 +42,7 @@ ON CONFLICT (id) DO UPDATE SET
 
 INSERT INTO prompts (id, tenant_id, agent_id, version, system_prompt, safety_prefix, safety_suffix, tools_enabled, parameters)
 VALUES (
-    'p1000000-0000-0000-0000-000000000001',
+    'e1000000-0000-0000-0000-000000000001',
     :'ariel_tid'::uuid,
     'a1000000-0000-0000-0000-000000000001',
     '1.0',
@@ -60,7 +60,7 @@ ON CONFLICT ON CONSTRAINT uq_prompt_version DO UPDATE SET
     parameters    = EXCLUDED.parameters;
 
 UPDATE agents
-SET active_prompt_id = 'p1000000-0000-0000-0000-000000000001',
+SET active_prompt_id = 'e1000000-0000-0000-0000-000000000001',
     updated_at = now()
 WHERE id = 'a1000000-0000-0000-0000-000000000001';
 
@@ -84,7 +84,7 @@ ON CONFLICT (id) DO UPDATE SET
 
 INSERT INTO prompts (id, tenant_id, agent_id, version, system_prompt, safety_prefix, safety_suffix, tools_enabled, parameters)
 VALUES (
-    'p2000000-0000-0000-0000-000000000002',
+    'e2000000-0000-0000-0000-000000000002',
     :'resenhai_tid'::uuid,
     'a2000000-0000-0000-0000-000000000002',
     '1.0',
@@ -102,7 +102,7 @@ ON CONFLICT ON CONSTRAINT uq_prompt_version DO UPDATE SET
     parameters    = EXCLUDED.parameters;
 
 UPDATE agents
-SET active_prompt_id = 'p2000000-0000-0000-0000-000000000002',
+SET active_prompt_id = 'e2000000-0000-0000-0000-000000000002',
     updated_at = now()
 WHERE id = 'a2000000-0000-0000-0000-000000000002';
 

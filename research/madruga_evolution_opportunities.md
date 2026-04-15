@@ -1,0 +1,340 @@
+# madruga.ai — Evolution Opportunities
+
+> **Date**: 2026-04-14
+> **Sources**: AgentScope architecture analysis, everything-claude-code (ECC) analysis, codebase deep-dives
+> **Method**: Per-opportunity sub-agent deep-dive — problem validation, current state, best practices, recommendation
+
+---
+
+## Executive Summary
+
+Cross-referencing AgentScope (multi-agent framework, Alibaba) and everything-claude-code (155k-star Claude Code plugin ecosystem) against madruga.ai revealed **10 improvement opportunities**. After deep-dive validation against the actual codebase, **7 are confirmed actionable** and **3 are deferred or downgraded**.
+
+madruga.ai's strengths remain unchallenged: DAG orchestration, declarative pipeline, prefix cache ordering, retry/circuit-breaker, skill contracts. The opportunities below fill gaps in **developer experience**, **cost efficiency**, **security**, and **pipeline learning** — without compromising those strengths.
+
+### Priority Matrix
+
+| Priority | Opportunity | Effort | Impact | Source |
+|----------|-----------|--------|--------|--------|
+| **Infra** | Model routing by pipeline node (infra only) | S | Future flexibility | ECC |
+| **P0** | Judge score persistence + regression alerts | S | Quality visibility | ECC + AgentScope |
+| **P1** | Fact-forcing PreToolUse hook | S | Implementation quality | ECC GateGuard |
+| **P1** | Security hardening (secrets + config protection) | M | Risk reduction | ECC |
+| **P2** | Hook lifecycle expansion (SessionStart, PreCompact) | M | Developer experience | ECC |
+| **P2** | Structured compression for dispatch context | M-L | Longer sessions, fewer resets | AgentScope |
+| **P3** | Self-learning / instinct system (Tier 1 only) | M | Cross-epic learning | ECC + AgentScope |
+| **Defer** | Santa Loop for Judge | — | Not needed yet | ECC |
+| **Defer** | RAG over documentation corpus | — | Premature | AgentScope |
+| **Defer** | Inter-skill messaging / A2A | — | Over-engineering | AgentScope |
+
+---
+
+## Infrastructure — Model Routing (Build, Don't Use Yet)
+
+### 1. Model Routing by Pipeline Node
+
+**Problem validated: PARTIALLY — cost savings are real, but quality loss is unacceptable**
+
+Deep-dive into actual skill complexity revealed that NO L2 node is "mechanical enough" for Haiku:
+- **analyze** requires detecting subtle cross-artifact inconsistencies (duplicated rules, underspecification gaps). Haiku would miss 40-60% of issues.
+- **reconcile** traces code changes through 5 documentation layers and infers impact on future epics. Strong reasoning required.
+- **judge** filters 4-persona findings with nuanced severity reclassification. Weak models produce noisy results.
+
+Even "balanced" nodes (implement, clarify, tasks, qa) lose 20-30% quality with weaker models.
+
+**Revised recommendation**: Build the infrastructure (~80 LOC) but keep all nodes on Opus 4.6. The value of the pipeline depends on quality gates catching issues early — a missed bug in analyze costs more than the model price difference.
+
+**Implementation (3 changes, ~80 LOC — future-proofing only)**:
+1. Add optional `model:` field to each node in `pipeline.yaml`
+2. Add `model: str | None` to `Node` namedtuple; update `parse_dag()` to extract it
+3. In `build_dispatch_cmd()`: `if node.model: cmd.extend(["--model", node.model])`
+
+**When to actually use it**: When new models launch with better cost/performance ratios, or for L1 nodes (vision, solution-overview) where reasoning requirements differ.
+
+**Effort**: S (2-4 hours). Backward compatible — `model` defaults to `None` (inherits system default).
+
+---
+
+### 2. Judge Score Persistence + Regression Alerts
+
+**Problem validated: YES**
+14 epics judged across 2 platforms. Scores exist only in markdown reports — never stored in DB. Score range observed: 59-92%. No way to detect quality regression. `eval_scores` table exists (migration 010) but is unused for Judge output.
+
+**Current gaps**:
+- Can't answer: "Did quality regress after epic 015?"
+- Can't set quality gates: "shipping requires Judge score >= 80"
+- Fix rate varies wildly (0-56%) with no tracking
+
+**Recommendation (phased)**:
+
+**Phase 1 — `judge_scores` table (2-3 hours)**:
+```sql
+CREATE TABLE judge_scores (
+    score_id TEXT PRIMARY KEY,
+    platform_id TEXT NOT NULL,
+    epic_id TEXT NOT NULL,
+    score INTEGER NOT NULL,
+    initial_score INTEGER,
+    verdict TEXT CHECK (verdict IN ('pass', 'fail')),
+    findings_total INTEGER,
+    findings_fixed INTEGER,
+    blockers_count INTEGER,
+    warnings_count INTEGER,
+    nits_count INTEGER,
+    evaluated_at TEXT NOT NULL,
+    FOREIGN KEY (platform_id) REFERENCES platforms(platform_id)
+);
+```
+- Parse `judge-report.md` frontmatter at end of Judge skill
+- Insert score + finding counts
+
+**Phase 2 — Regression alert (4-6 hours)**:
+```sql
+SELECT platform_id, epic_id, score,
+       LAG(score) OVER (PARTITION BY platform_id ORDER BY evaluated_at) as prev_score
+FROM judge_scores
+WHERE score < prev_score - 10;  -- Alert on 10+ point drop
+```
+
+**Phase 3 — Map to eval_scores dimensions (1-2 hours)**:
+- Insert 4 rows per Judge pass: `judge_architecture`, `judge_bugs`, `judge_simplicity`, `judge_resilience`
+
+**Effort**: S (total ~8 hours across 3 phases).
+
+**Expected impact**: High. Catches quality regressions within 1 epic. Enables data-driven quality gates.
+
+---
+
+## P1 — Do Next (High Impact, Small-Medium Effort)
+
+### 3. Fact-Forcing PreToolUse Hook (GateGuard Pattern)
+
+**Problem validated: YES**
+`compose_task_prompt()` injects spec/plan/data-model into the prompt, but nothing forces the agent to actually process it before editing. The research comparison documents explicitly flag this: "Before the first Edit/Write in a task, require the agent to have Read the spec section."
+
+**Current mitigations**: Context injection via prompt, scoped filtering (`MADRUGA_SCOPED_CONTEXT`), prefix cache ordering. All address *what's in the prompt* — none address *whether the agent reads it before acting*.
+
+**Best practice**: ECC's GateGuard — DENY first edit, FORCE investigation, ALLOW after facts. A/B tested: +2.25 improvement score.
+
+**Recommendation**: Add a PreToolUse hook (`hook_pre_tool_gate.py`, ~150 LOC) for `implement` dispatches:
+- On first Edit/Write in session: check if agent has Read spec, plan, and data-model sections
+- If not: DENY with error message pointing to required reads
+- Track session state via temp file (which files have been Read)
+- Kill-switch: `MADRUGA_GATE_FORCE_READ=0`
+
+**Effort**: S (4-6 hours). Reuses existing hook infrastructure.
+
+**Expected impact**: High. Directly reduces hallucinated implementations. ECC's +2.25 A/B result suggests measurable improvement.
+
+---
+
+### 4. Security Hardening (Secrets Scanning + Config Protection)
+
+**Problem validated: YES (preventive)**
+No incidents found in git history, but the attack surface is real:
+- `.env.example` shows `OPENAI_API_KEY`, `POSTGRES_PASSWORD`, `MADRUGA_TELEGRAM_BOT_TOKEN` — dispatch agents could leak these
+- No file is protected from Write/Edit during dispatch (pipeline.yaml, settings.json, platform.yaml)
+- skill-lint validates structure but NOT content for prompt injection patterns
+
+**Current mitigations**: `hook_validate_placement.py` (cross-repo writes), per-node `--tools` restrictions, `DISALLOWED_TOOLS` blocks dangerous git ops, path security tests prevent traversal.
+
+**Recommendation (2 tiers)**:
+
+**Tier 1 — Config protection hook (8 hours)**:
+- `hook_config_protection.py`: Block Write/Edit to protected files during dispatch
+- Protected list: `pipeline.yaml`, `.claude/settings.json`, `.claude/settings.local.json`, `.env`, `platform.yaml`, `pyproject.toml`
+- Alternatively: add to `DISALLOWED_TOOLS` at dispatch level (stronger, simpler)
+
+**Tier 2 — Secrets scanning hook (12 hours)**:
+- `hook_secrets_scan.py`: Regex patterns for credential formats
+- Patterns: `AKIA[0-9A-Z]{16}`, `-----BEGIN.*KEY-----`, `sk_live_`, `ghp_`, `glpat-`, DB passwords in URLs
+- Non-blocking warning unless CRITICAL (private key blocks)
+
+**Tier 3 — Prompt injection scanning in skill-lint (10 hours)**:
+- Extend `skill-lint.py` to scan for `{{`, `{%`, `[SYSTEM]`, `<|assistant|>` in skill bodies
+- WARNING severity on suspicious patterns outside fenced code blocks
+
+**Effort**: M (total ~30 hours across 3 tiers). Tier 1 standalone is S.
+
+**Expected impact**: High risk reduction. Credential leak probability drops from ~70% (estimated) to ~15% with Tier 1+2.
+
+---
+
+## P2 — Follow-Up (Medium Impact, Medium Effort)
+
+### 5. Hook Lifecycle Expansion
+
+**Problem validated: YES**
+Only 4 PostToolUse hooks active. Claude Code supports 7+ event types. Key gaps: no SessionStart (users re-brief manually), no PreCompact (context lost on compaction), no Stop (no auto-summary).
+
+**Current architecture**: All hooks read JSON from stdin, Python scripts with shell wrappers, `2>/dev/null || true` to never block. `sync_memory.py` already skips under `MADRUGA_DISPATCH=1`. Orphaned `hook_post_commit.py` (~233 LOC) exists but is NOT configured.
+
+**Recommended new hooks (priority order)**:
+
+| Hook | Event | Purpose | Effort |
+|------|-------|---------|--------|
+| `hook_session_start.py` | SessionStart | Load STATE.md checkpoint + epic context on session begin | M (2-4h) |
+| `hook_precompact_snapshot.py` | PreCompact | Auto-save STATE.md + memory snapshot before context trim | M (2-4h) |
+| Enable `hook_post_commit.py` | git post-commit | Register commits to DB (already written, unused) | S (1h) |
+| `hook_pretooluse_guard.py` | PreToolUse | Validate file paths before Write (shift-left from PostToolUse) | S (1-2h) |
+| `hook_stop_summarize.py` | Stop | Parse transcript, update STATE.md with decisions | L (4-8h) |
+
+**Effort**: M (total ~12-20 hours).
+
+**Expected impact**: Medium. Reduces session re-briefing friction, protects context from compaction loss, enables commit-level traceability.
+
+---
+
+### 6. Structured Compression for Dispatch Context
+
+**Problem validated: YES (with real incidents)**
+prosauai/003 T031 hit Anthropic's 1M context window limit on session resume. Max tokens observed: 9.5M on `implement:phase-6`. Average implement phase: 2.3-3.2M tokens. QA: 6.1M, Judge: 5.4M.
+
+**Current mitigations (working but hitting ceiling)**:
+- `SESSION_RESUME_MAX_TOKENS = 700K` — hard reset after 700K
+- `SESSION_RESUME_MAX_TASKS = 8` — fresh session after 8 tasks
+- `MAX_PROMPT_BYTES = 200KB` — safety net
+- `MADRUGA_KILL_IMPLEMENT_CONTEXT=1` — 5-task recent progress (4-12KB savings/task)
+- Phase dispatch with stdin (removes ARG_MAX limit)
+
+**Recommendation (phased)**:
+
+**Phase 1 — Resume chain compression (2-3 weeks)**:
+- When `tokens_in >= 600K`, compress previous task outputs via LLM before resuming
+- Summary schema: `task_id`, `outcome`, `key_files_modified`, `test_results`, `blockers_encountered`
+- Optional: cheaper model (Haiku) for summarization
+
+**Phase 2 — Mid-phase compression (1-2 weeks)**:
+- After each task completes in a phase, summarize before moving to next
+- Keeps all tasks in one session without fragmentation
+
+**Effort**: M-L (3-5 weeks total).
+
+**Expected impact**: High for large phases. Enables 2-3x longer resume chains (12-16 tasks vs current 8), eliminates "session forced reset" pauses, 20-30% context savings on late tasks.
+
+---
+
+## P3 — Later (Medium Impact, Requires Design)
+
+### 7. Self-Learning / Instinct System (Tier 1 Only)
+
+**Problem validated: YES**
+123 completed L2 cycles across 6 epics and 3 platforms. Zero institutional memory of behavioral patterns. `plan` node fails 5x on "unfilled template" — same error, never learned. 1,712 eval scores exist but no pattern extraction.
+
+**What's worth extracting** (specific patterns):
+
+1. **Error taxonomy** — Classify `pipeline_runs.error` by regex: `template`, `rate_limit`, `timeout`, `sql`, `anthropic_api`. Track repeat rates. Auto-detect deterministic vs transient.
+2. **Judge findings patterns** — Parse judge-report.md: severity distribution per persona, finding categories that recur across epics.
+3. **Cost/duration regression** — Track (platform, epic_size, node) -> actual duration. Flag outliers (3x average = likely stuck).
+4. **Eval score trends** — Rolling avg quality/adherence/completeness per node. Correlate low adherence with specific causes.
+
+**Recommendation: Simple extraction, NOT semantic memory**
+
+Skip Mem0/ReMe-style vector memory — overkill for a deterministic pipeline. No ML, no embeddings, no knowledge graphs.
+
+**Tier 1 MVP (~500 LOC, 2-3 weeks)**:
+- 3-4 new tables: `error_patterns`, `finding_patterns`, `eval_trends`
+- Post-run hooks extract & store structured patterns
+- Require min 5 occurrences before surfacing a pattern
+- Query API for skills to read relevant patterns
+
+**Tier 2 (defer)**:
+- Add confidence scoring (0-1.0) to patterns
+- Decay unused patterns (not seen in 5 epics -> -20% confidence)
+- Promote at 80%+ to "instinct" (inject into future dispatches)
+
+**Effort**: M (Tier 1 only: 2-3 weeks).
+
+**Expected impact**: Medium. Reduces failure repeat rate by ~40-50% (catches deterministic errors early). Improves estimate accuracy. Reduces Judge surprises.
+
+**Risk**: Over-engineering is real if pattern frequency is too low. Mitigate with the 5-occurrence minimum threshold.
+
+---
+
+## Deferred — Not Now
+
+### 8. Santa Loop for Judge
+
+**Verdict: SKIP (for now)**
+
+The current 4-persona consensus + Judge filtering already handles bias effectively. Evidence from epic 005: 3-persona agreement escalated to BLOCKER, 1-persona findings evaluated individually, 8 duplicates deduplicated to best version. Model diversity adds cost (2x Judge passes) with marginal gain over persona diversity.
+
+**Revisit when**: Production incident data correlates low Judge scores with bugs, or a specific model blind spot is identified.
+
+---
+
+### 9. RAG Over Documentation Corpus
+
+**Verdict: PREMATURE**
+
+The pipeline already uses scoped context filtering (`MADRUGA_SCOPED_CONTEXT`) and prefix cache ordering. Adding vector search over ADRs/specs/blueprints requires embedding infrastructure (Qdrant/Chroma, embedding model, indexing pipeline) for marginal improvement over current keyword-based context injection.
+
+**Revisit when**: Documentation corpus exceeds what scoped context can handle (>50 ADRs, >20 epics per platform).
+
+---
+
+### 10. Inter-Skill Messaging / A2A Protocol
+
+**Verdict: OVER-ENGINEERING**
+
+Skills run as isolated `claude -p` subprocesses by design — this isolation is a feature (reproducibility, retry, checkpointing). Adding pub/sub or A2A messaging would break isolation guarantees and add complexity without clear benefit. Phase dispatch already groups related tasks.
+
+**Revisit when**: The pipeline needs real-time collaboration between concurrent skills (not currently in roadmap).
+
+---
+
+## Implementation Roadmap
+
+```
+Sprint 1 (P0):
+  [1] Model routing infra (build, don't activate) ..... 4h
+  [2] Judge score persistence (Phase 1) ............... 3h
+
+Sprint 2 (P1):
+  [3] Fact-forcing PreToolUse hook .................... 6h
+  [4a] Config protection hook (Security Tier 1) ....... 8h
+
+Sprint 3 (P1 continued + P2 start):
+  [4b] Secrets scanning hook (Security Tier 2) ........ 12h
+  [5a] SessionStart hook .............................. 4h
+  [5b] PreCompact snapshot hook ....................... 4h
+
+Sprint 4 (P2):
+  [6] Structured compression Phase 1 .................. 20h
+  [2b] Judge regression alerts (Phase 2) .............. 6h
+
+Sprint 5+ (P3):
+  [7] Self-learning Tier 1 (error taxonomy + findings). 20h
+  [4c] Prompt injection scanning in skill-lint ........ 10h
+```
+
+**Total estimated effort**: ~97 hours across 5 sprints.
+
+---
+
+## Cross-Reference: What NOT to Import
+
+| Aspect | Source | Why Skip |
+|--------|--------|----------|
+| Code-first-only config | AgentScope | Declarative YAML is a strength |
+| 181 skills without contract | ECC | Quality > quantity; 6-section contract is superior |
+| tmux-based parallelism | ECC | Phase dispatch + DAG executor is more robust |
+| Cross-harness portability | ECC | Purpose-built for Claude Code; supporting 7 platforms dilutes focus |
+| No retry at framework level | AgentScope + ECC | Circuit breaker is a strength; never regress |
+| Heavy dependency footprint | AgentScope | stdlib + pyyaml philosophy is better for reliability |
+| Session .tmp files | ECC | SQLite WAL with proper schema > ad-hoc temp files |
+| Vector/semantic memory | AgentScope | Premature for deterministic pipeline |
+
+---
+
+## Conclusion
+
+madruga.ai's core architecture (DAG orchestration, declarative pipeline, prefix caching, retry resilience, skill contracts) is strong and validated by comparison with both AgentScope and ECC. Neither system matches madruga.ai's orchestration depth.
+
+The highest-ROI improvements are:
+1. **Model routing infra** — build the plumbing now, activate when better cost/performance models exist
+2. **Judge persistence** — unlocks quality visibility with minimal effort
+3. **Fact-forcing hooks** — proven +2.25 improvement in ECC, addresses real hallucination risk
+4. **Security hardening** — preventive, no incidents yet but attack surface is real
+
+The self-learning system (P3) is the most ambitious but should wait until P0-P2 deliver the data infrastructure it needs (judge scores in DB, error patterns, eval trends).

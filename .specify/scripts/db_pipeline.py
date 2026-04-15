@@ -767,6 +767,7 @@ def get_commits_paginated(
     commit_type: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
+    reconciled: str | None = None,
 ) -> tuple[list[dict], int]:
     """List commits with pagination and filters. Returns (commits, total_count).
 
@@ -779,6 +780,7 @@ def get_commits_paginated(
         commit_type: 'epic' (has epic_id) or 'adhoc' (epic_id IS NULL).
         date_from: Inclusive lower bound (ISO date or datetime).
         date_to: Inclusive upper bound (ISO date or datetime).
+        reconciled: 'true' (reconciled_at IS NOT NULL), 'false' (IS NULL), None for all.
 
     Returns:
         Tuple of (list of commit dicts with files parsed, total matching count).
@@ -796,6 +798,10 @@ def get_commits_paginated(
         where_parts.append("epic_id IS NOT NULL")
     elif commit_type == "adhoc":
         where_parts.append("epic_id IS NULL")
+    if reconciled == "true":
+        where_parts.append("reconciled_at IS NOT NULL")
+    elif reconciled == "false":
+        where_parts.append("reconciled_at IS NULL")
     if date_from is not None:
         where_parts.append("committed_at >= ?")
         params.append(date_from)

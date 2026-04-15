@@ -41,6 +41,7 @@
 ### Migrations SQL
 
 - [x] T005 Criar `migrations/001_create_schema.sql` com extensão uuid-ossp e função `auth.tenant_id()` (SECURITY DEFINER) conforme data-model.md
+  > **Note:** Superseded by epic 006 — function moved from `auth.tenant_id()` to `public.tenant_id()` for Supabase compatibility.
 - [x] T006 [P] Criar `migrations/002_customers.sql` com tabela `customers`, unique constraint `(tenant_id, phone_hash)`, RLS policy conforme data-model.md
 - [x] T007 [P] Criar `migrations/003_conversations.sql` com tabela `conversations`, enum types, unique partial index `idx_one_active_per_customer`, RLS policy conforme data-model.md
 - [x] T008 [P] Criar `migrations/003b_conversation_states.sql` com tabela `conversation_states`, unique constraint `(conversation_id)`, RLS policy conforme data-model.md

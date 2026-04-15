@@ -19,7 +19,7 @@
 | `business/process.md` | D1 | ✅ CURRENT | 0 — zero mudanca em logica de negocio |
 | `engineering/blueprint.md` | D2 | ✅ CURRENT | 0 — atualizado no T034 (schema layout, migration runner, log persistence) |
 | `engineering/containers.md` | D3 | ✅ CURRENT | 0 — atualizado no T033 (Netdata, retention-cron, schema isolation) |
-| `engineering/domain-model.md` | D4 | ❌ OUTDATED | 2 — SQL schemas usam `auth.tenant_id()` e tabelas sem schema prefix |
+| `engineering/domain-model.md` | D4 | ⚠️ PARTIAL | 1 — tabelas sem schema prefix (auth.tenant_id → public.tenant_id migration COMPLETE) |
 | `engineering/context-map.md` | D8 | ✅ CURRENT | 0 — zero mudanca em APIs ou integracoes |
 | `decisions/ADR-011-pool-rls-multi-tenant.md` | D5 | ✅ CURRENT | 0 — atualizado no T030 |
 | `decisions/ADR-018-data-retention-lgpd.md` | D5 | ✅ CURRENT | 0 — atualizado no T031 |
@@ -63,21 +63,12 @@ Epic 006 nao adiciona features visiveis ao usuario final. Escopo puramente infra
 
 | ID | Drift | Estado Atual (doc) | Estado Real (codigo) | Severidade |
 |----|-------|-------------------|---------------------|------------|
-| D4.1 | SQL schemas em domain-model.md referenciam `auth.tenant_id()` em TODAS as RLS policies (25+ ocorrencias) | `USING (tenant_id = auth.tenant_id())` | `USING (tenant_id = prosauai_ops.tenant_id())` — migrations reescritas, ADR-011 atualizado, pool.py configurado | **HIGH** |
+| D4.1 | ~~SQL schemas em domain-model.md referenciam `auth.tenant_id()`~~ | ~~`USING (tenant_id = auth.tenant_id())`~~ | `USING (tenant_id = public.tenant_id())` — migration COMPLETE (auth → prosauai_ops → public). Docs updated: data-model.md, ADR-011, ADR-019, ADR-024 | ✅ **RESOLVED** |
 | D4.2 | SQL schemas em domain-model.md mostram tabelas sem schema prefix | `CREATE TABLE customers (...)`, `CREATE TABLE messages (...)` | `CREATE TABLE prosauai.customers (...)`, `CREATE TABLE prosauai.messages (...) PARTITION BY RANGE (created_at)` | **MEDIUM** |
 
 **Proposta D4.1 — Atualizar domain-model.md (RLS policies):**
 
-Trocar TODAS as ocorrencias de `auth.tenant_id()` por `prosauai_ops.tenant_id()` em domain-model.md. Sao ~25 ocorrencias em 11 tabelas across 5 bounded contexts.
-
-Exemplo (uma de ~25 ocorrencias):
-```sql
--- ANTES (domain-model.md linha ~206):
-CREATE POLICY tenant_isolation ON agents USING (tenant_id = auth.tenant_id());
-
--- DEPOIS:
-CREATE POLICY tenant_isolation ON prosauai.agents USING (tenant_id = prosauai_ops.tenant_id());
-```
+~~Trocar TODAS as ocorrencias de `auth.tenant_id()` por `prosauai_ops.tenant_id()` em domain-model.md.~~ **COMPLETE** — migration landed as `public.tenant_id()` (final destination per ADR-011 hardening). All doc files updated: data-model.md, ADR-011, ADR-019, ADR-024.
 
 **Proposta D4.2 — Adicionar schema prefix nas tabelas do domain-model.md:**
 
@@ -92,14 +83,7 @@ CREATE TABLE customers (...);
 CREATE TABLE prosauai.customers (...);
 ```
 
-Tambem atualizar a funcao `tenant_id()` no inicio do domain-model (linha ~167):
-```sql
--- ANTES:
-CREATE OR REPLACE FUNCTION auth.tenant_id()
-
--- DEPOIS:
-CREATE OR REPLACE FUNCTION prosauai_ops.tenant_id()
-```
+~~Tambem atualizar a funcao `tenant_id()` no inicio do domain-model~~ — **COMPLETE**: data-model.md already uses `prosauai_ops.tenant_id()`. ADR-011 and ADR-024 reference `public.tenant_id()` as the final production location.
 
 **Nota:** domain-model.md tambem mostra tabela `messages` sem `PARTITION BY RANGE`. Como domain-model e um documento de dominio (nao de implementacao fisica), o particionamento pode ser omitido ou mencionado como nota. Nao e drift critico — particionamento e detalhe de storage, nao de dominio.
 
@@ -111,7 +95,7 @@ Todos os ADRs afetados foram atualizados nas tasks T029-T032:
 
 | ADR | Mudanca | Status |
 |-----|---------|--------|
-| ADR-011 (Pool + RLS) | `auth.tenant_id()` → `prosauai_ops.tenant_id()`, secao schema isolation | ✅ Atualizado |
+| ADR-011 (Pool + RLS) | `auth.tenant_id()` → `public.tenant_id()`, secao schema isolation | ✅ Atualizado |
 | ADR-018 (Data Retention) | Secao Implementation com retention.py, particionamento, cron | ✅ Atualizado |
 | ADR-020 (Phoenix) | `PHOENIX_SQL_DATABASE_SCHEMA=observability`, SQLite dev vs Postgres prod | ✅ Atualizado |
 | ADR-024 (Schema Isolation) | Novo ADR criado documentando decisao | ✅ Criado |
@@ -216,7 +200,7 @@ Epic 006 nao altera APIs, contratos ou integracoes. Todas as mudancas sao intern
 
 | Area Alterada | Docs Diretamente Afetados | Docs Transitivamente Afetados | Esforco |
 |--------------|--------------------------|------------------------------|---------|
-| Schema isolation (migrations/) | ADR-011 ✅, ADR-024 ✅, blueprint.md ✅, containers.md ✅ | domain-model.md ❌ | **M** (domain-model tem ~25 RLS policies + tabelas para atualizar) |
+| Schema isolation (migrations/) | ADR-011 ✅, ADR-024 ✅, blueprint.md ✅, containers.md ✅ | domain-model.md ⚠️ (RLS refs ✅ DONE, schema prefix pending) | **S** (RLS tenant_id migration complete; schema prefix remains) |
 | Docker config (compose files) | blueprint.md ✅, containers.md ✅ | — | **S** (ja atualizado) |
 | Retention cron (ops/) | ADR-018 ✅ | — | **S** (ja atualizado) |
 | Phoenix Postgres (compose) | ADR-020 ✅, blueprint.md ✅ | — | **S** (ja atualizado) |
@@ -342,7 +326,7 @@ Nenhum epic futuro e **negativamente impactado** pelo epic 006. Todos sao benefi
 
 | # | ID | Categoria | Doc Afetado | Severidade | Proposta |
 |---|-----|----------|-------------|------------|---------|
-| 1 | D4.1 | Domain | domain-model.md | HIGH | Trocar ~25 ocorrencias de `auth.tenant_id()` por `prosauai_ops.tenant_id()` |
+| 1 | D4.1 | Domain | domain-model.md | ~~HIGH~~ | ✅ COMPLETE — `auth.tenant_id()` → `public.tenant_id()` in all doc files |
 | 2 | D4.2 | Domain | domain-model.md | MEDIUM | Prefixar tabelas de negocio com `prosauai.` nos SQL schemas |
 | 3 | D6.1 | Roadmap | roadmap.md | HIGH | Atualizar status epic 006: drafted → shipped |
 | 4 | D6.2 | Roadmap | roadmap.md | MEDIUM | Atualizar risco "Schema collision": Pendente → Mitigado |
@@ -415,7 +399,7 @@ Nenhum epic futuro e **negativamente impactado** pelo epic 006. Todos sao benefi
 handoff:
   from: madruga:reconcile
   to: madruga:roadmap
-  context: "Reconcile completo para epic 006 production readiness. Drift score 82% (9/11 docs current). 7 propostas de atualizacao: 2 em domain-model.md (auth.tenant_id → prosauai_ops.tenant_id, schema prefix), 5 em roadmap.md (status, riscos, progresso). Zero drift em ADRs (todos atualizados), blueprint, containers, context-map, solution-overview. Zero impacto negativo em epics futuros. Proximo passo: reassess roadmap (atualizar status e riscos)."
+  context: "Reconcile completo para epic 006 production readiness. Drift score 82% (9/11 docs current). 7 propostas de atualizacao: D4.1 COMPLETE (auth.tenant_id → public.tenant_id migration done in all docs), D4.2 pending (schema prefix), 5 em roadmap.md (status, riscos, progresso). Zero drift em ADRs (todos atualizados), blueprint, containers, context-map, solution-overview. Zero impacto negativo em epics futuros. Proximo passo: reassess roadmap (atualizar status e riscos)."
   blockers: []
   confidence: Alta
   kill_criteria: "Se o merge de epic 006 for feito sem atualizar domain-model.md e roadmap.md, o drift persiste e contamina epics futuros que usam domain-model como referencia para SQL schemas."

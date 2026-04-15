@@ -94,6 +94,7 @@ async def with_tenant(pool: asyncpg.Pool, tenant_id: str):
 ### Migrations
 SQL scripts manuais em `migrations/` (sem Alembic — 6 tabelas, time-boxed 2 semanas). Ordem:
 1. `001_create_schema.sql` — function `auth.tenant_id()`, extensions
+> **Atualizado (epic 006):** Migration 001 reescrita — schema `auth` removido, extensão `uuid-ossp` removida, função movida para `public.tenant_id()`.
 2. `002_customers.sql` — customers + RLS policy
 3. `003_conversations.sql` — conversations + conversation_states + RLS
 4. `004_messages.sql` — messages (append-only) + RLS

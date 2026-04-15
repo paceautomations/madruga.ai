@@ -10,7 +10,7 @@
 
 ### 1.1 Tenant
 
-Configuração imutável de um inquilino. Carregada do YAML no startup, indexada por `id` e `instance_name`.
+Configuração imutável de um inquilino. Carregada do YAML no startup, indexada por `slug`, `id` (UUID) e `instance_name`.
 
 ```python
 @dataclass(frozen=True, slots=True)
@@ -21,7 +21,8 @@ class Tenant:
     Phase 1 operates with 2 (Ariel + ResenhAI).
 
     Fields:
-        id: Unique tenant identifier (e.g. "pace-internal").
+        slug: Human-readable identifier (e.g. "pace-internal").
+        id: Database tenant UUID for RLS isolation.
         instance_name: Evolution API instance name (e.g. "Ariel").
         evolution_api_url: Base URL for the Evolution API instance.
         evolution_api_key: API key for the Evolution API instance.
@@ -32,7 +33,8 @@ class Tenant:
         enabled: Whether the tenant is active (inactive = treated as nonexistent).
     """
 
-    id: str
+    slug: str       # Human-readable identifier (e.g. "pace-internal")
+    id: UUID        # Database tenant UUID for RLS isolation
     instance_name: str
     evolution_api_url: str
     evolution_api_key: str
@@ -44,7 +46,8 @@ class Tenant:
 ```
 
 **Validações no loader (TenantStore)**:
-- `id` não pode ser vazio ou duplicado.
+- `slug` não pode ser vazio ou duplicado.
+- `id` (UUID) não pode ser vazio ou duplicado.
 - `instance_name` não pode ser vazio ou duplicado.
 - `webhook_secret` não pode ser vazio.
 - `mention_phone` deve ter pelo menos 10 caracteres.
@@ -63,14 +66,15 @@ Coleção indexada de Tenants com lookup O(1).
 
 ```python
 class TenantStore:
-    """File-backed tenant registry with O(1) lookup by id and instance_name.
+    """File-backed tenant registry with O(1) lookup by slug, id (UUID), and instance_name.
 
     Loads tenants.yaml at startup, interpolating ${ENV_VAR} references.
     Migration path to DB-backed store (Phase 3, ADR-023) swaps only
     the loader — interface is stable.
     """
 
-    _by_id: dict[str, Tenant]            # tenant_id → Tenant
+    _by_slug: dict[str, Tenant]          # slug → Tenant (e.g. "pace-internal" → Tenant)
+    _by_id: dict[UUID, Tenant]           # database UUID → Tenant
     _by_instance: dict[str, Tenant]      # instance_name → Tenant
 
     def __init__(self, tenants: list[Tenant]) -> None: ...
@@ -87,8 +91,11 @@ class TenantStore:
     def find_by_instance(self, instance_name: str) -> Tenant | None:
         """O(1) lookup by Evolution instance name. Returns None if not found."""
 
-    def get(self, tenant_id: str) -> Tenant | None:
-        """O(1) lookup by tenant id. Returns None if not found."""
+    def get(self, slug: str) -> Tenant | None:
+        """O(1) lookup by tenant slug. Returns None if not found."""
+
+    def get_by_id(self, tenant_id: UUID) -> Tenant | None:
+        """O(1) lookup by database tenant UUID. Returns None if not found."""
 
     def all_active(self) -> list[Tenant]:
         """Return list of all tenants with enabled=True."""
@@ -272,6 +279,7 @@ class Settings(BaseSettings):
 # config/tenants.yaml (gitignored; template em config/tenants.example.yaml)
 tenants:
   - id: pace-internal
+    db_tenant_id: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"  # UUID from tenants table
     instance_name: Ariel
     evolution_api_url: https://evolutionapi.pace-ia.com
     evolution_api_key: ${PACE_EVOLUTION_API_KEY}
@@ -283,6 +291,7 @@ tenants:
     enabled: true
 
   - id: resenha-internal
+    db_tenant_id: "yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy"  # UUID from tenants table
     instance_name: ResenhAI
     evolution_api_url: https://evolutionapi.pace-ia.com
     evolution_api_key: ${RESENHA_EVOLUTION_API_KEY}
@@ -308,7 +317,8 @@ erDiagram
     PARSED_MESSAGE ||--o| ROUTE_RESULT : classified_into
 
     TENANT {
-        string id PK
+        string slug PK
+        UUID id UK
         string instance_name UK
         string evolution_api_url
         string evolution_api_key

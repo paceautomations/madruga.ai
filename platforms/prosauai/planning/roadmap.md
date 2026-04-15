@@ -157,3 +157,5 @@ graph LR
 ---
 
 > **Proximo passo:** Primeiro deploy de producao VPS (2 vCPU, 4GB RAM, 40GB SSD) com `docker compose -f docker-compose.yml -f docker-compose.prod.yml up`. Post-MVP: epic 007 (Configurable Routing DB + Groups) ou epic 008 (Agent Tools) conforme prioridade.
+>
+> **Supabase deployment readiness (epic 006):** Migrations hardened (idempotent, `gen_random_uuid()`, sem `uuid-ossp`), tenants table (008) created, dual slug/UUID tenant identity implemented. Schema isolation (`prosauai` + `prosauai_ops`) pronto para Supabase managed.

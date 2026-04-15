@@ -8,7 +8,8 @@ Paper Clip - https://github.com/paperclipai/paperclip
 
 GasTown - https://github.com/gastownhall/gastown
 
-
+everything claude - https://github.com/affaan-m/everything-claude-code
+agent scope - https://github.com/agentscope-ai/agentscope
 
 Bench tech
 Arquitetura e Engenharia

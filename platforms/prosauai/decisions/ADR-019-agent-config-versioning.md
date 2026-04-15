@@ -46,7 +46,7 @@ CREATE TABLE agent_config_versions (
 );
 
 ALTER TABLE agent_config_versions ENABLE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON agent_config_versions USING (tenant_id = auth.tenant_id());
+CREATE POLICY tenant_isolation ON agent_config_versions USING (tenant_id = public.tenant_id());
 CREATE INDEX idx_acv_agent ON agent_config_versions (agent_id, status);
 CREATE INDEX idx_acv_tenant ON agent_config_versions (tenant_id);
 

@@ -156,6 +156,7 @@ prosauai/
 
 **RLS Hardening (ADR-011)**:
 1. `auth.tenant_id()` function com `SECURITY DEFINER` + `SET search_path = ''`
+> **Nota (epic 006):** A função foi movida para `public.tenant_id()` e o schema `auth` removido para compatibilidade com Supabase. Ver ADR-024.
 2. Policy `tenant_isolation` em TODA tabela com `tenant_id`
 3. Index em CADA coluna `tenant_id`
 4. Messages: policies adicionais bloqueiam UPDATE e DELETE (append-only)

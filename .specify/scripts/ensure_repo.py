@@ -46,6 +46,10 @@ def _load_repo_binding(name: str) -> dict:
     }
 
 
+# Public alias — prefer this over the leading-underscore name.
+load_repo_binding = _load_repo_binding
+
+
 def _is_self_ref(repo_name: str) -> bool:
     """Return True if the repo is the madruga.ai repo itself."""
     return repo_name == "madruga.ai"

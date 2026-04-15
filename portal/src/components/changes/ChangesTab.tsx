@@ -11,6 +11,7 @@ interface Commit {
   epic_id: string | null;
   source: string;
   committed_at: string;
+  reconciled_at: string | null;
   files: string[];
 }
 
@@ -144,6 +145,12 @@ const S = {
     background: 'color-mix(in srgb, var(--d-green) 12%, var(--d-card))',
     color: 'var(--d-green)',
   } as const,
+  reconcilePendingBadge: {
+    background: 'color-mix(in srgb, var(--d-red, #e66) 15%, var(--d-card))',
+    color: 'var(--d-red, #e66)',
+    fontSize: '0.58rem', padding: '0.06rem 0.28rem', borderRadius: '3px',
+    fontWeight: 700, whiteSpace: 'nowrap' as const, marginLeft: '0.3rem',
+  } as const,
   msgCell: {
     maxWidth: '320px', overflow: 'hidden',
     textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const,
@@ -184,6 +191,7 @@ export default function ChangesTab({ repoUrl }: ChangesTabProps) {
   const [platformFilter, setPlatformFilter] = useState('all');
   const [epicFilter, setEpicFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState<'all' | 'epic' | 'adhoc'>('all');
+  const [reconciledFilter, setReconciledFilter] = useState<'all' | 'true' | 'false'>('all');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
 
@@ -217,6 +225,7 @@ export default function ChangesTab({ repoUrl }: ChangesTabProps) {
     }
     if (dateFrom) params.set('date_from', dateFrom);
     if (dateTo) params.set('date_to', dateTo);
+    if (reconciledFilter !== 'all') params.set('reconciled', reconciledFilter);
     params.set('limit', String(PAGE_SIZE));
     params.set('offset', String(offset));
 
@@ -232,7 +241,7 @@ export default function ChangesTab({ repoUrl }: ChangesTabProps) {
         setTotal(0);
       })
       .finally(() => setLoading(false));
-  }, [platformFilter, epicFilter, typeFilter, dateFrom, dateTo, offset]);
+  }, [platformFilter, epicFilter, typeFilter, reconciledFilter, dateFrom, dateTo, offset]);
 
   useEffect(() => { fetchCommits(); }, [fetchCommits]);
 
@@ -353,6 +362,13 @@ export default function ChangesTab({ repoUrl }: ChangesTabProps) {
             <option value="adhoc">Ad-hoc</option>
           </select>
 
+          <span style={S.filterLabel}>Reconciled</span>
+          <select style={S.select} value={reconciledFilter} onChange={(e) => updateFilter(setReconciledFilter)(e.target.value as 'all' | 'true' | 'false')}>
+            <option value="all">All</option>
+            <option value="false">Needs reconcile</option>
+            <option value="true">Reconciled</option>
+          </select>
+
           <span style={S.filterLabel}>From</span>
           <input type="date" style={S.input} value={dateFrom} onChange={(e) => updateFilter(setDateFrom)(e.target.value)} />
 
@@ -414,6 +430,9 @@ export default function ChangesTab({ repoUrl }: ChangesTabProps) {
                       <span style={{ ...S.epicBadge, ...S.epicTagBadge }}>{c.epic_id}</span>
                     ) : (
                       <span style={{ ...S.epicBadge, ...S.adhocBadge }}>ad-hoc</span>
+                    )}
+                    {!c.reconciled_at && (
+                      <span style={S.reconcilePendingBadge} title="Not yet reconciled into docs">drift</span>
                     )}
                   </td>
                   <td style={{ ...S.td, fontSize: '0.72rem', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>

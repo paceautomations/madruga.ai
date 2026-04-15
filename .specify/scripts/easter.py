@@ -1045,6 +1045,7 @@ async def list_commits(
     commit_type: str | None = Query(default=None),
     date_from: str | None = Query(default=None),
     date_to: str | None = Query(default=None),
+    reconciled: str | None = Query(default=None, pattern="^(true|false)$"),
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     conn=Depends(get_fresh_conn),
@@ -1060,6 +1061,7 @@ async def list_commits(
         commit_type=commit_type,
         date_from=date_from,
         date_to=date_to,
+        reconciled=reconciled,
     )
     return {"commits": commits, "total": total, "limit": limit, "offset": offset}
 

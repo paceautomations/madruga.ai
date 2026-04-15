@@ -47,6 +47,26 @@ Then read `.specify/memory/constitution.md`.
 
 For epic cycle skills, add `--epic <NNN>` to check epic-level prerequisites.
 
+### Unreconciled Commits Warn (epic-context ONLY, non-blocking)
+
+For `epic-context` when starting a new epic (not `--draft`, not promotion of an existing draft), check for drift that the previous epic left behind:
+
+```bash
+python3 .specify/scripts/reverse_reconcile_mark.py --platform <name> --count-unreconciled --json
+```
+
+If `unreconciled > 0`, **warn** (do NOT block):
+
+```
+⚠️  <N> unreconciled commits detected for platform '<name>'.
+    These include direct pushes to the bound repo and ad-hoc commits
+    that escaped the normal reconcile flow. Consider running
+    /madruga:reverse-reconcile <name> before starting this epic,
+    or continue if the drift is intentional.
+```
+
+Proceed with epic-context regardless of the user's choice — the warn is informational. Other skills (specify/plan/tasks/implement/qa/reconcile) do NOT run this check; it belongs at the start of the cycle.
+
 ---
 
 ## Step 1: Collect Context + Ask Questions

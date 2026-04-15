@@ -35,7 +35,8 @@ graph LR
         end
 
         subgraph "Schema: public"
-            uuid_ossp["uuid-ossp extension"]
+            tenant_id_public["tenant_id() SECURITY DEFINER"]
+            gen_random["gen_random_uuid() built-in"]
         end
 
         subgraph "Schema: auth (Supabase-managed)"
@@ -90,7 +91,7 @@ A tabela `messages` é reescrita como particionada por `RANGE (created_at)` com 
 
 ```sql
 CREATE TABLE prosauai.messages (
-    id              UUID NOT NULL DEFAULT uuid_generate_v4(),
+    id              UUID NOT NULL DEFAULT gen_random_uuid(),
     tenant_id       UUID NOT NULL,
     conversation_id UUID NOT NULL REFERENCES prosauai.conversations(id),
     direction       message_direction NOT NULL,
@@ -137,12 +138,17 @@ Todas as 8 tabelas migram de `public.*` para `prosauai.*`:
 | prompts | public | prosauai | RLS → `prosauai_ops.tenant_id()` |
 | eval_scores | public | prosauai | message_id sem FK (limitação PG particionamento) — validação app-level |
 
-### prosauai_ops.tenant_id() — Função RLS Helper
+### public.tenant_id() — Função RLS Helper
 
-Substitui `auth.tenant_id()`. Semântica idêntica, namespace diferente.
+> **Nota:** O plano original (epic 006) colocava a função em `prosauai_ops.tenant_id()`.
+> Na implementação final, foi movida para `public.tenant_id()` por compatibilidade
+> com Supabase (que restringe criação de schemas customizados em managed Postgres).
+> Ver ADR-024 para o racional completo.
+
+Substitui `auth.tenant_id()`. Semântica idêntica, namespace `public` por compatibilidade Supabase.
 
 ```sql
-CREATE OR REPLACE FUNCTION prosauai_ops.tenant_id()
+CREATE OR REPLACE FUNCTION public.tenant_id()
 RETURNS uuid
 LANGUAGE sql
 STABLE
@@ -262,7 +268,7 @@ erDiagram
 
 5. **Partição obrigatória**: INSERTs em `messages` requerem partição existente para o mês do `created_at`. Partições criadas 3 meses à frente pelo cron.
 6. **Migration tracking**: Toda migration aplicada é registrada em `prosauai_ops.schema_migrations`. Re-execução é no-op.
-7. **Schema isolation**: Nenhum objeto custom em `auth` ou `public` (exceto extension `uuid-ossp`).
+7. **Schema isolation**: Nenhum objeto custom em `auth`. `public` contem apenas `tenant_id()` SECURITY DEFINER e usa `gen_random_uuid()` built-in (sem extensions adicionais).
 
 ## Transições de Estado
 

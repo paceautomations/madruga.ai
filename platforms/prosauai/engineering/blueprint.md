@@ -60,7 +60,7 @@ graph LR
     subgraph external ["External"]
         evolution-api["Evolution API<br/><small>WhatsApp Gateway</small>"]
         supabase-resenhai[("Supabase ResenhAI<br/><small>PG 15 read-only</small>")]
-        openai-gpt-mini["OpenAI GPT mini"]
+        openai-gpt-mini["OpenAI gpt-5.4-mini<br/><small>default model (ADR-025)</small>"]
         phoenix-ext["Phoenix (Arize)<br/><small>OTel traces</small>"]
         infisical["Infisical"]
     end

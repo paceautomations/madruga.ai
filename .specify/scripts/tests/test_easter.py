@@ -1077,6 +1077,38 @@ async def test_commits_endpoint_filters():
 
 
 @pytest.mark.asyncio
+async def test_commits_endpoint_reconciled_filter():
+    """GET /api/commits with reconciled=true|false filters by reconciled_at."""
+    from easter import get_fresh_conn
+
+    app = _make_app()
+    conn = _setup_commits_db()
+    # Mark 2 commits reconciled
+    conn.execute("UPDATE commits SET reconciled_at='2026-04-05T00:00:00Z' WHERE sha IN ('aaa1111','bbb2222')")
+    conn.commit()
+    app.state.db_conn = conn
+    _override_conn(app, conn)
+
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.get("/api/commits", params={"reconciled": "false"})
+            assert resp.json()["total"] == 3
+
+            resp = await client.get("/api/commits", params={"reconciled": "true"})
+            assert resp.json()["total"] == 2
+
+            resp = await client.get("/api/commits")
+            assert resp.json()["total"] == 5
+
+            # Invalid value → 422 (pattern rejects)
+            resp = await client.get("/api/commits", params={"reconciled": "maybe"})
+            assert resp.status_code == 422
+    finally:
+        app.dependency_overrides.pop(get_fresh_conn, None)
+        conn.close()
+
+
+@pytest.mark.asyncio
 async def test_commits_stats_endpoint():
     """GET /api/commits/stats returns aggregate stats."""
     from easter import get_fresh_conn

@@ -230,6 +230,20 @@ Present the full reconcile report (drift score, health table, impact radius, pro
 
 ---
 
+### Phase 8b. Mark Epic Commits as Reconciled
+
+After the human gate approves (Phase 8), mark **all commits of this epic** as reconciled so they do not appear in the `reverse-reconcile` backlog. This is what keeps `madruga:reverse-reconcile` focused on drift that escaped the normal flow (ad-hoc commits, direct pushes to bound repos, pre-hook backfill).
+
+```bash
+python3 .specify/scripts/reverse_reconcile_mark.py --platform <name> --epic <NNN-slug> --json
+```
+
+If `marked == 0`: the commits were already reconciled (re-run of reconcile on the same epic) — not an error. Log and continue.
+
+Never run this before Phase 8 approval: if the user rejects the drift proposals, the commits should keep `reconciled_at IS NULL` so the next run catches them.
+
+---
+
 ### Phase 9. Auto-Commit (Cascade Branch Seal)
 
 After user approval, stage, commit, and push all epic work so the next epic's worktree can cascade from a clean remote base:

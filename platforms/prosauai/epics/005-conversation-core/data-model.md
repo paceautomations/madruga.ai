@@ -10,12 +10,27 @@
 
 ```mermaid
 erDiagram
+    TENANTS ||--o{ CUSTOMERS : "owns"
+    TENANTS ||--o{ CONVERSATIONS : "owns"
+    TENANTS ||--o{ MESSAGES : "owns"
+    TENANTS ||--o{ AGENTS : "owns"
+    TENANTS ||--o{ PROMPTS : "owns"
+    TENANTS ||--o{ EVAL_SCORES : "owns"
     CUSTOMERS ||--o{ CONVERSATIONS : "tem"
     CONVERSATIONS ||--o{ MESSAGES : "contém"
     CONVERSATIONS ||--|| CONVERSATION_STATES : "possui"
     AGENTS ||--o{ CONVERSATIONS : "atende"
     AGENTS ||--|| PROMPTS : "usa"
     CONVERSATIONS ||--o{ EVAL_SCORES : "avaliada por"
+
+    TENANTS {
+        uuid id PK
+        string slug UK
+        string name
+        boolean enabled
+        timestamp created_at
+        timestamp updated_at
+    }
 
     CUSTOMERS {
         uuid id PK
@@ -106,10 +121,10 @@ erDiagram
 
 ```sql
 -- 001_create_schema.sql
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+-- gen_random_uuid() is built-in on PG14+ — no uuid-ossp extension needed.
 
 -- RLS helper function (ADR-011 hardening)
-CREATE OR REPLACE FUNCTION auth.tenant_id()
+CREATE OR REPLACE FUNCTION public.tenant_id()
 RETURNS uuid
 LANGUAGE sql
 STABLE
@@ -125,7 +140,7 @@ $$;
 ```sql
 -- 002_customers.sql
 CREATE TABLE customers (
-    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id   UUID NOT NULL,
     phone_hash  VARCHAR(64) NOT NULL,  -- SHA-256 hash, never raw phone
     display_name VARCHAR(255),
@@ -140,7 +155,8 @@ CREATE INDEX idx_customers_tenant ON customers(tenant_id);
 
 ALTER TABLE customers ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON customers
-    USING (tenant_id = auth.tenant_id());
+    USING (tenant_id = public.tenant_id())
+    WITH CHECK (tenant_id = public.tenant_id());
 ```
 
 ### conversations
@@ -151,7 +167,7 @@ CREATE TYPE conversation_status AS ENUM ('active', 'closed');
 CREATE TYPE close_reason AS ENUM ('inactivity_timeout', 'user_closed', 'escalated', 'agent_closed');
 
 CREATE TABLE conversations (
-    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id       UUID NOT NULL,
     customer_id     UUID NOT NULL REFERENCES customers(id),
     agent_id        UUID NOT NULL,
@@ -181,7 +197,8 @@ CREATE INDEX idx_conversations_last_activity ON conversations(last_activity_at)
 
 ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON conversations
-    USING (tenant_id = auth.tenant_id());
+    USING (tenant_id = public.tenant_id())
+    WITH CHECK (tenant_id = public.tenant_id());
 ```
 
 ### conversation_states
@@ -189,7 +206,7 @@ CREATE POLICY tenant_isolation ON conversations
 ```sql
 -- 003b_conversation_states.sql
 CREATE TABLE conversation_states (
-    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id       UUID NOT NULL,
     conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
     context_window  JSONB NOT NULL DEFAULT '[]',  -- Array of last N message summaries
@@ -206,7 +223,8 @@ CREATE INDEX idx_conv_states_tenant ON conversation_states(tenant_id);
 
 ALTER TABLE conversation_states ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON conversation_states
-    USING (tenant_id = auth.tenant_id());
+    USING (tenant_id = public.tenant_id())
+    WITH CHECK (tenant_id = public.tenant_id());
 ```
 
 ### messages
@@ -216,7 +234,7 @@ CREATE POLICY tenant_isolation ON conversation_states
 CREATE TYPE message_direction AS ENUM ('inbound', 'outbound');
 
 CREATE TABLE messages (
-    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id       UUID NOT NULL,
     conversation_id UUID NOT NULL REFERENCES conversations(id),
     direction       message_direction NOT NULL,
@@ -233,7 +251,8 @@ CREATE INDEX idx_messages_conversation ON messages(conversation_id, created_at);
 
 ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON messages
-    USING (tenant_id = auth.tenant_id());
+    USING (tenant_id = public.tenant_id())
+    WITH CHECK (tenant_id = public.tenant_id());
 
 -- Append-only enforcement: DENY UPDATE/DELETE via policy
 CREATE POLICY messages_append_only ON messages
@@ -247,7 +266,7 @@ CREATE POLICY messages_no_delete ON messages
 ```sql
 -- 005_agents_prompts.sql
 CREATE TABLE agents (
-    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id       UUID NOT NULL,
     name            VARCHAR(255) NOT NULL,
     config          JSONB NOT NULL DEFAULT '{}',  -- {"model": "openai:gpt-4o-mini", "temperature": 0.7, ...}
@@ -261,10 +280,11 @@ CREATE INDEX idx_agents_tenant ON agents(tenant_id);
 
 ALTER TABLE agents ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON agents
-    USING (tenant_id = auth.tenant_id());
+    USING (tenant_id = public.tenant_id())
+    WITH CHECK (tenant_id = public.tenant_id());
 
 CREATE TABLE prompts (
-    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id       UUID NOT NULL,
     agent_id        UUID NOT NULL REFERENCES agents(id),
     version         VARCHAR(50) NOT NULL DEFAULT '1.0',
@@ -283,7 +303,8 @@ CREATE INDEX idx_prompts_agent ON prompts(agent_id);
 
 ALTER TABLE prompts ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON prompts
-    USING (tenant_id = auth.tenant_id());
+    USING (tenant_id = public.tenant_id())
+    WITH CHECK (tenant_id = public.tenant_id());
 
 -- Add FK from agents to prompts
 ALTER TABLE agents ADD CONSTRAINT fk_agents_active_prompt 
@@ -295,7 +316,7 @@ ALTER TABLE agents ADD CONSTRAINT fk_agents_active_prompt
 ```sql
 -- 006_eval_scores.sql
 CREATE TABLE eval_scores (
-    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id       UUID NOT NULL,
     conversation_id UUID NOT NULL REFERENCES conversations(id),
     message_id      UUID REFERENCES messages(id),
@@ -310,7 +331,8 @@ CREATE INDEX idx_eval_scores_conversation ON eval_scores(conversation_id);
 
 ALTER TABLE eval_scores ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON eval_scores
-    USING (tenant_id = auth.tenant_id());
+    USING (tenant_id = public.tenant_id())
+    WITH CHECK (tenant_id = public.tenant_id());
 ```
 
 ### Seed Data
@@ -328,7 +350,7 @@ INSERT INTO agents (id, tenant_id, name, config) VALUES (
 );
 
 INSERT INTO prompts (id, tenant_id, agent_id, version, system_prompt, safety_prefix, safety_suffix, tools_enabled) VALUES (
-    'p1000000-0000-0000-0000-000000000001',
+    'e1000000-0000-0000-0000-000000000001',
     '${ARIEL_TENANT_ID}',
     'a1000000-0000-0000-0000-000000000001',
     '1.0',
@@ -338,7 +360,7 @@ INSERT INTO prompts (id, tenant_id, agent_id, version, system_prompt, safety_pre
     '[]'
 );
 
-UPDATE agents SET active_prompt_id = 'p1000000-0000-0000-0000-000000000001' 
+UPDATE agents SET active_prompt_id = 'e1000000-0000-0000-0000-000000000001' 
 WHERE id = 'a1000000-0000-0000-0000-000000000001';
 
 -- ResenhAI (futebol)
@@ -350,7 +372,7 @@ INSERT INTO agents (id, tenant_id, name, config) VALUES (
 );
 
 INSERT INTO prompts (id, tenant_id, agent_id, version, system_prompt, safety_prefix, safety_suffix, tools_enabled) VALUES (
-    'p2000000-0000-0000-0000-000000000002',
+    'e2000000-0000-0000-0000-000000000002',
     '${RESENHAI_TENANT_ID}',
     'a2000000-0000-0000-0000-000000000002',
     '1.0',
@@ -360,7 +382,7 @@ INSERT INTO prompts (id, tenant_id, agent_id, version, system_prompt, safety_pre
     '["resenhai_rankings"]'
 );
 
-UPDATE agents SET active_prompt_id = 'p2000000-0000-0000-0000-000000000002' 
+UPDATE agents SET active_prompt_id = 'e2000000-0000-0000-0000-000000000002' 
 WHERE id = 'a2000000-0000-0000-0000-000000000002';
 ```
 

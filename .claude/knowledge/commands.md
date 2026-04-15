@@ -38,6 +38,24 @@ python3 .specify/scripts/platform_cli.py gate list <name>                     # 
 python3 .specify/scripts/platform_cli.py gate approve <run-id>                # aprovar gate
 ```
 
+## Reverse-Reconcile (drift detection from external commits)
+
+```bash
+python3 .specify/scripts/reverse_reconcile_ingest.py --platform <name>                    # walks origin/<base_branch> from platform.yaml
+python3 .specify/scripts/reverse_reconcile_ingest.py --platform <name> --dry-run --json   # preview without insert
+python3 .specify/scripts/reverse_reconcile_ingest.py --platform <name> --branch <name>    # override base branch (debug only)
+python3 .specify/scripts/reverse_reconcile_ingest.py --platform <name> --assume-reconciled-before <sha>  # backlog cutter
+
+python3 .specify/scripts/reverse_reconcile_classify.py --platform <name> --out triage.json  # deterministic triage (noise/doc-self-edit/code)
+python3 .specify/scripts/reverse_reconcile_aggregate.py --platform <name> --triage triage.json --out work.json  # per-file collapse, HEAD snippets
+python3 .specify/scripts/reverse_reconcile_apply.py --patches patches.json                  # dry-run → .proposed files
+python3 .specify/scripts/reverse_reconcile_apply.py --patches patches.json --commit         # write to target files
+
+python3 .specify/scripts/reverse_reconcile_mark.py --platform <name> --shas sha1,sha2          # mark specific SHAs reconciled
+python3 .specify/scripts/reverse_reconcile_mark.py --platform <name> --epic <epic-id>          # mark all commits of an epic
+python3 .specify/scripts/reverse_reconcile_mark.py --platform <name> --count-unreconciled --json  # count drift
+```
+
 ## DB State (post-save)
 
 ```bash
