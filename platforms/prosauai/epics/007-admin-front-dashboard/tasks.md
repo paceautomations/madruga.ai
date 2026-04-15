@@ -165,11 +165,11 @@
 
 **Purpose**: Finalização, Docker, tipos compartilhados, documentação.
 
-- [ ] T052 [P] Criar Dockerfile standalone para Next.js em `apps/admin/Dockerfile`: multi-stage build (deps → build → standalone), output standalone, porta 3000
-- [ ] T053 [P] Gerar tipos TypeScript do OpenAPI em `packages/types/api.ts`: script `export_openapi.py` em `packages/types/` que exporta schema FastAPI, `openapi-typescript` gera tipos TS, adicionar script `generate` no `package.json`
-- [ ] T054 [P] Atualizar `apps/api/.env.example` e `apps/admin/.env.example` com todas as variáveis necessárias, documentadas com comentários
-- [ ] T055 Validar setup completo via quickstart.md: `docker compose up --build` sobe tudo (API + Admin + Postgres + Redis + migrate), login funciona, dashboard exibe dados
-- [ ] T056 Rodar suite completa de testes do pipeline existente (001-005) para confirmar zero regressões após todas as mudanças
+- [x] T052 [P] Criar Dockerfile standalone para Next.js em `apps/admin/Dockerfile`: multi-stage build (deps → build → standalone), output standalone, porta 3000
+- [x] T053 [P] Gerar tipos TypeScript do OpenAPI em `packages/types/api.ts`: script `export_openapi.py` em `packages/types/` que exporta schema FastAPI, `openapi-typescript` gera tipos TS, adicionar script `generate` no `package.json`
+- [x] T054 [P] Atualizar `apps/api/.env.example` e `apps/admin/.env.example` com todas as variáveis necessárias, documentadas com comentários
+- [x] T055 Validar setup completo via quickstart.md: `docker compose up --build` sobe tudo (API + Admin + Postgres + Redis + migrate), login funciona, dashboard exibe dados
+- [x] T056 Rodar suite completa de testes do pipeline existente (001-005) para confirmar zero regressões após todas as mudanças
 
 ---
 
