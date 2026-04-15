@@ -127,35 +127,35 @@
 
 ### Tests for User Story 2
 
-- [ ] T035 [P] [US2] Escrever teste de integração metrics em `apps/api/tests/integration/test_metrics_routes.py`: GET /admin/metrics/messages-per-day retorna 200 com 30 dias; retorna gap-fill (dias sem mensagens = 0); retorna total correto; requer auth (401 sem cookie); parâmetro days funciona (max 90)
+- [x] T035 [P] [US2] Escrever teste de integração metrics em `apps/api/tests/integration/test_metrics_routes.py`: GET /admin/metrics/messages-per-day retorna 200 com 30 dias; retorna gap-fill (dias sem mensagens = 0); retorna total correto; requer auth (401 sem cookie); parâmetro days funciona (max 90)
 
 ### Implementation for User Story 2 — Backend
 
-- [ ] T036 [US2] Implementar endpoint metrics em `apps/api/prosauai/admin/metrics_routes.py`: `GET /admin/metrics/messages-per-day` com query param `days` (default 30, max 90), query SQL com `generate_series` gap-fill + `GROUP BY date AT TIME ZONE 'America/Sao_Paulo'` via `pool_admin`, retorna JSON conforme contrato (`period`, `total`, `daily[]`)
+- [x] T036 [US2] Implementar endpoint metrics em `apps/api/prosauai/admin/metrics_routes.py`: `GET /admin/metrics/messages-per-day` com query param `days` (default 30, max 90), query SQL com `generate_series` gap-fill + `GROUP BY date AT TIME ZONE 'America/Sao_Paulo'` via `pool_admin`, retorna JSON conforme contrato (`period`, `total`, `daily[]`)
 
 ### Implementation for User Story 2 — Frontend Base
 
-- [ ] T037 [US2] Inicializar shadcn/ui em `apps/admin/`: rodar `pnpm dlx shadcn@latest init`, configurar tailwind.config.ts com tokens, instalar componentes: Button, Input, Card, Skeleton, Alert
-- [ ] T038 [US2] Instalar componente shadcn Chart em `apps/admin/`: `pnpm dlx shadcn@latest add chart` (wrapper recharts), configurar tokens `--chart-1..5` em `globals.css`
-- [ ] T039 [US2] Implementar API client em `apps/admin/src/lib/api-client.ts`: fetch wrapper com `credentials: 'include'` (enviar cookie), base URL via `NEXT_PUBLIC_API_URL` (default `http://localhost:8050`), error handling genérico
-- [ ] T040 [US2] Implementar AuthProvider em `apps/admin/src/lib/auth.tsx`: React context com `useAuth()` hook (login, logout, user, isAuthenticated), chama `/admin/auth/login`, `/admin/auth/logout`, `/admin/auth/me`
-- [ ] T041 [US2] Implementar Edge middleware em `apps/admin/middleware.ts`: validar presença + não-expiração do cookie `admin_token`, redirecionar para `/admin/login` se ausente/expirado, matcher exclui `/admin/login`
+- [x] T037 [US2] Inicializar shadcn/ui em `apps/admin/`: rodar `pnpm dlx shadcn@latest init`, configurar tailwind.config.ts com tokens, instalar componentes: Button, Input, Card, Skeleton, Alert
+- [x] T038 [US2] Instalar componente shadcn Chart em `apps/admin/`: `pnpm dlx shadcn@latest add chart` (wrapper recharts), configurar tokens `--chart-1..5` em `globals.css`
+- [x] T039 [US2] Implementar API client em `apps/admin/src/lib/api-client.ts`: fetch wrapper com `credentials: 'include'` (enviar cookie), base URL via `NEXT_PUBLIC_API_URL` (default `http://localhost:8050`), error handling genérico
+- [x] T040 [US2] Implementar AuthProvider em `apps/admin/src/lib/auth.tsx`: React context com `useAuth()` hook (login, logout, user, isAuthenticated), chama `/admin/auth/login`, `/admin/auth/logout`, `/admin/auth/me`
+- [x] T041 [US2] Implementar Edge middleware em `apps/admin/middleware.ts`: validar presença + não-expiração do cookie `admin_token`, redirecionar para `/admin/login` se ausente/expirado, matcher exclui `/admin/login`
 
 ### Implementation for User Story 2 — Login Page
 
-- [ ] T042 [US2] Implementar página de login em `apps/admin/src/app/admin/login/page.tsx`: formulário email + senha com react-hook-form + zod validation, chama `useAuth().login()`, redireciona para `/admin` após sucesso, exibe mensagem de erro genérica ("Credenciais inválidas") em caso de falha, exibe mensagem de rate limit (429)
-- [ ] T043 [US2] Implementar componente LoginForm em `apps/admin/src/components/auth/login-form.tsx`: inputs email/senha com shadcn Input, botão submit com shadcn Button, loading state durante request, error state com shadcn Alert
+- [x] T042 [US2] Implementar página de login em `apps/admin/src/app/admin/login/page.tsx`: formulário email + senha com react-hook-form + zod validation, chama `useAuth().login()`, redireciona para `/admin` após sucesso, exibe mensagem de erro genérica ("Credenciais inválidas") em caso de falha, exibe mensagem de rate limit (429)
+- [x] T043 [US2] Implementar componente LoginForm em `apps/admin/src/components/auth/login-form.tsx`: inputs email/senha com shadcn Input, botão submit com shadcn Button, loading state durante request, error state com shadcn Alert
 
 ### Implementation for User Story 2 — Dashboard Page
 
-- [ ] T044 [US2] Implementar layout admin em `apps/admin/src/app/admin/layout.tsx`: sidebar (navegação futura — links placeholder) + header (email do admin via `useAuth()`, botão logout)
-- [ ] T045 [P] [US2] Implementar componente Sidebar em `apps/admin/src/components/layout/sidebar.tsx`: navegação lateral com link ativo para Dashboard, placeholder para telas futuras (Tenants, Conversas)
-- [ ] T046 [P] [US2] Implementar componente Header em `apps/admin/src/components/layout/header.tsx`: exibe email do admin, botão logout que chama `useAuth().logout()`
-- [ ] T047 [US2] Implementar hook `useMessagesPerDay` em `apps/admin/src/hooks/use-messages-per-day.ts`: TanStack Query hook que chama `GET /admin/metrics/messages-per-day`, retorna `{data, isLoading, isError, refetch}`
-- [ ] T048 [P] [US2] Implementar componente KPI Card em `apps/admin/src/components/dashboard/kpi-card.tsx`: shadcn Card exibindo total de mensagens no período, loading state com Skeleton, formatar número com separador de milhar
-- [ ] T049 [P] [US2] Implementar componente MessageVolumeChart em `apps/admin/src/components/dashboard/message-volume-chart.tsx`: shadcn Chart (BarChart recharts) com dados diários, XAxis com datas formatadas, YAxis com contagem, tooltip com detalhes, cor via `--chart-1` token
-- [ ] T050 [US2] Implementar página dashboard em `apps/admin/src/app/admin/page.tsx`: usar `useMessagesPerDay` hook, renderizar KPI Card + MessageVolumeChart, loading state (Skeletons) enquanto carrega, error state com Alert + botão retry
-- [ ] T051 [US2] Implementar root layout em `apps/admin/src/app/layout.tsx`: providers (AuthProvider, QueryClientProvider do TanStack Query), Tailwind globals, metadata
+- [x] T044 [US2] Implementar layout admin em `apps/admin/src/app/admin/layout.tsx`: sidebar (navegação futura — links placeholder) + header (email do admin via `useAuth()`, botão logout)
+- [x] T045 [P] [US2] Implementar componente Sidebar em `apps/admin/src/components/layout/sidebar.tsx`: navegação lateral com link ativo para Dashboard, placeholder para telas futuras (Tenants, Conversas)
+- [x] T046 [P] [US2] Implementar componente Header em `apps/admin/src/components/layout/header.tsx`: exibe email do admin, botão logout que chama `useAuth().logout()`
+- [x] T047 [US2] Implementar hook `useMessagesPerDay` em `apps/admin/src/hooks/use-messages-per-day.ts`: TanStack Query hook que chama `GET /admin/metrics/messages-per-day`, retorna `{data, isLoading, isError, refetch}`
+- [x] T048 [P] [US2] Implementar componente KPI Card em `apps/admin/src/components/dashboard/kpi-card.tsx`: shadcn Card exibindo total de mensagens no período, loading state com Skeleton, formatar número com separador de milhar
+- [x] T049 [P] [US2] Implementar componente MessageVolumeChart em `apps/admin/src/components/dashboard/message-volume-chart.tsx`: shadcn Chart (BarChart recharts) com dados diários, XAxis com datas formatadas, YAxis com contagem, tooltip com detalhes, cor via `--chart-1` token
+- [x] T050 [US2] Implementar página dashboard em `apps/admin/src/app/admin/page.tsx`: usar `useMessagesPerDay` hook, renderizar KPI Card + MessageVolumeChart, loading state (Skeletons) enquanto carrega, error state com Alert + botão retry
+- [x] T051 [US2] Implementar root layout em `apps/admin/src/app/layout.tsx`: providers (AuthProvider, QueryClientProvider do TanStack Query), Tailwind globals, metadata
 
 **Checkpoint**: Login end-to-end funcional. Dashboard exibe gráfico + KPI com dados reais. Gap-fill visual. Loading/error states. Testes integração backend passam.
 
