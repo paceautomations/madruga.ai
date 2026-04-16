@@ -201,6 +201,16 @@ def _lint_platform(name: str) -> bool:
         if manifest.get("name") != name:
             _warn(f"platform.yaml name '{manifest.get('name')}' != directory name '{name}'")
         _ok("platform.yaml valid")
+
+        # Validate testing: block if present
+        if "testing" in manifest:
+            testing_errors = _lint_testing_block(manifest["testing"], name)
+            if testing_errors:
+                for err in testing_errors:
+                    _error(err)
+                ok = False
+            else:
+                _ok("testing: block valid")
     else:
         _error("platform.yaml not found")
         ok = False
@@ -270,6 +280,91 @@ def _check_frontmatter(filepath: Path, required_fields: list[str], label: str) -
         _warn(f"{label} {filepath.name}: missing fields: {', '.join(missing)}")
     else:
         _ok(f"{label} {filepath.name} frontmatter valid")
+
+
+_VALID_STARTUP_TYPES = {"docker", "npm", "make", "venv", "script", "none"}
+_STARTUP_COMMAND_REQUIRED = {"venv", "script"}
+_VALID_URL_TYPES = {"api", "frontend"}
+
+
+def _lint_testing_block(testing_data: dict, platform_name: str) -> list[str]:
+    """Validate the optional testing: block in platform.yaml.
+
+    Returns a list of error strings. Empty list means no errors.
+    """
+    errors: list[str] = []
+
+    if not isinstance(testing_data, dict):
+        errors.append(f"{platform_name}: testing: must be a mapping, got {type(testing_data).__name__}")
+        return errors
+
+    # --- startup ---
+    startup = testing_data.get("startup")
+    if not isinstance(startup, dict):
+        errors.append(f"{platform_name}: testing.startup must be a mapping")
+    else:
+        startup_type = startup.get("type")
+        if not startup_type:
+            errors.append(f"{platform_name}: testing.startup.type is required")
+        elif startup_type not in _VALID_STARTUP_TYPES:
+            errors.append(
+                f"{platform_name}: testing.startup.type '{startup_type}' is invalid "
+                f"(valid: {', '.join(sorted(_VALID_STARTUP_TYPES))})"
+            )
+        elif startup_type in _STARTUP_COMMAND_REQUIRED:
+            if not startup.get("command"):
+                errors.append(
+                    f"{platform_name}: testing.startup.command is required when startup.type is '{startup_type}'"
+                )
+
+    # --- health_checks ---
+    health_checks = testing_data.get("health_checks", [])
+    if not isinstance(health_checks, list):
+        errors.append(f"{platform_name}: testing.health_checks must be a list")
+    else:
+        for i, hc in enumerate(health_checks):
+            if not isinstance(hc, dict):
+                errors.append(f"{platform_name}: testing.health_checks[{i}] must be a mapping")
+                continue
+            if not hc.get("url"):
+                errors.append(f"{platform_name}: testing.health_checks[{i}] missing required field 'url'")
+            if not hc.get("label"):
+                errors.append(f"{platform_name}: testing.health_checks[{i}] missing required field 'label'")
+
+    # --- urls ---
+    urls = testing_data.get("urls", [])
+    if not isinstance(urls, list):
+        errors.append(f"{platform_name}: testing.urls must be a list")
+    else:
+        for i, u in enumerate(urls):
+            if not isinstance(u, dict):
+                errors.append(f"{platform_name}: testing.urls[{i}] must be a mapping")
+                continue
+            if not u.get("url"):
+                errors.append(f"{platform_name}: testing.urls[{i}] missing required field 'url'")
+            url_type = u.get("type")
+            if not url_type:
+                errors.append(f"{platform_name}: testing.urls[{i}] missing required field 'type'")
+            elif url_type not in _VALID_URL_TYPES:
+                errors.append(
+                    f"{platform_name}: testing.urls[{i}] type '{url_type}' is invalid "
+                    f"(valid: {', '.join(sorted(_VALID_URL_TYPES))})"
+                )
+            if not u.get("label"):
+                errors.append(f"{platform_name}: testing.urls[{i}] missing required field 'label'")
+
+    # --- required_env ---
+    required_env = testing_data.get("required_env", [])
+    if not isinstance(required_env, list):
+        errors.append(f"{platform_name}: testing.required_env must be a list")
+    else:
+        for i, var in enumerate(required_env):
+            if not isinstance(var, str):
+                errors.append(
+                    f"{platform_name}: testing.required_env[{i}] must be a string, got {type(var).__name__}"
+                )
+
+    return errors
 
 
 def cmd_sync(name: str | None) -> None:
