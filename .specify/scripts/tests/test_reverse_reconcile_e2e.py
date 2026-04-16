@@ -91,54 +91,66 @@ def test_full_pipeline_with_aggregate(tmp_path, fresh_db, monkeypatch):
     )
     _bind(monkeypatch, repo, "develop")
 
-    # Ingest
-    result = ingest_mod.ingest("testplat", db_path=fresh_db)
-    assert result["inserted"] == 4
-    assert result["branch"] == "develop"
+    # Seed candidate docs in the real REPO_ROOT so _candidate_docs (which now
+    # filters by Path.exists) does not fall back to blueprint.md.
+    real_engineering = agg_mod.REPO_ROOT / "platforms" / "testplat" / "engineering"
+    real_engineering.mkdir(parents=True, exist_ok=True)
+    (real_engineering / "context-map.md").write_text("# context map\n")
+    (real_engineering / "containers.md").write_text("# containers\n")
 
-    # Classify
-    triage = classify_mod.triage("testplat", db_path=fresh_db)
-    noise_shas = [n["sha"] for n in triage["triage"]["none"]]
-    doc_shas = [e["sha"] for e in triage["triage"]["doc_self_edits"]]
-    assert len(noise_shas) == 2
-    assert len(doc_shas) == 1
-    assert len(triage["triage"]["clusters"]["code"]) == 1
+    try:
+        # Ingest
+        result = ingest_mod.ingest("testplat", db_path=fresh_db)
+        assert result["inserted"] == 4
+        assert result["branch"] == "develop"
 
-    # Aggregate
-    work = agg_mod.aggregate("testplat", triage)
-    assert work["doc_self_edits"]["count"] == 1
-    assert len(work["code_items"]) == 1
-    assert work["code_items"][0]["target_file"] == "src/router.py"
-    # src/router.py → routers rule → context-map.md first
-    assert work["code_items"][0]["candidate_docs"][0].endswith("context-map.md")
+        # Classify
+        triage = classify_mod.triage("testplat", db_path=fresh_db)
+        noise_shas = [n["sha"] for n in triage["triage"]["none"]]
+        doc_shas = [e["sha"] for e in triage["triage"]["doc_self_edits"]]
+        assert len(noise_shas) == 2
+        assert len(doc_shas) == 1
+        assert len(triage["triage"]["clusters"]["code"]) == 1
 
-    # Auto-mark: noise + doc-self-edits
-    n1 = mark_mod.mark_shas("testplat", noise_shas, db_path=fresh_db)
-    n2 = mark_mod.mark_shas("testplat", work["doc_self_edits"]["shas_to_auto_reconcile"], db_path=fresh_db)
-    assert n1 + n2 == 3
+        # Aggregate
+        work = agg_mod.aggregate("testplat", triage, db_path=fresh_db)
+        assert work["doc_self_edits"]["count"] == 1
+        assert len(work["code_items"]) == 1
+        assert work["code_items"][0]["target_file"] == "src/router.py"
+        # src/router.py → routers rule → context-map.md first
+        assert work["code_items"][0]["candidate_docs"][0].endswith("context-map.md")
 
-    # Apply a fake LLM patch for the code_item
-    docdir = tmp_path / "wd" / "platforms" / "testplat" / "engineering"
-    docdir.mkdir(parents=True)
-    (docdir / "context-map.md").write_text("# Context Map\n\n## Routing\n\nOld.\n", encoding="utf-8")
-    patches = [
-        {
-            "file": "platforms/testplat/engineering/context-map.md",
-            "operation": "replace",
-            "anchor_before": "## Routing\n\n",
-            "anchor_after": "",
-            "new_content": "## Routing\n\nNew router added (commit sha_ref).\n",
-            "reason": "router code added at HEAD",
-            "sha_refs": work["code_items"][0]["touched_by_shas"],
-            "layer": "engineering",
-        }
-    ]
-    apply_mod.apply_patches(patches, tmp_path / "wd", commit=True)
-    assert "New router added" in (docdir / "context-map.md").read_text()
+        # Auto-mark: noise + doc-self-edits
+        n1 = mark_mod.mark_shas("testplat", noise_shas, db_path=fresh_db)
+        n2 = mark_mod.mark_shas("testplat", work["doc_self_edits"]["shas_to_auto_reconcile"], db_path=fresh_db)
+        assert n1 + n2 == 3
 
-    # Mark applied
-    mark_mod.mark_shas("testplat", patches[0]["sha_refs"], db_path=fresh_db)
-    assert mark_mod.count_unreconciled("testplat", db_path=fresh_db) == 0
+        # Apply a fake LLM patch for the code_item
+        docdir = tmp_path / "wd" / "platforms" / "testplat" / "engineering"
+        docdir.mkdir(parents=True)
+        (docdir / "context-map.md").write_text("# Context Map\n\n## Routing\n\nOld.\n", encoding="utf-8")
+        patches = [
+            {
+                "file": "platforms/testplat/engineering/context-map.md",
+                "operation": "replace",
+                "anchor_before": "## Routing\n\n",
+                "anchor_after": "",
+                "new_content": "## Routing\n\nNew router added (commit sha_ref).\n",
+                "reason": "router code added at HEAD",
+                "sha_refs": work["code_items"][0]["touched_by_shas"],
+                "layer": "engineering",
+            }
+        ]
+        apply_mod.apply_patches(patches, tmp_path / "wd", commit=True)
+        assert "New router added" in (docdir / "context-map.md").read_text()
+
+        # Mark applied
+        mark_mod.mark_shas("testplat", patches[0]["sha_refs"], db_path=fresh_db)
+        assert mark_mod.count_unreconciled("testplat", db_path=fresh_db) == 0
+    finally:
+        import shutil
+
+        shutil.rmtree(agg_mod.REPO_ROOT / "platforms" / "testplat", ignore_errors=True)
 
 
 def test_chronological_collapse(tmp_path, fresh_db, monkeypatch):

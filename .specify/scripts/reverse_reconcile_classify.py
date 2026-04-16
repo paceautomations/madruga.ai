@@ -61,6 +61,12 @@ _NOISE_BASENAMES = {
     "Cargo.lock",
     "go.sum",
 }
+# Cache/build dirs: any file under these is noise (tool caches, build output).
+_NOISE_DIR_RE = re.compile(
+    r"^(\.hypothesis|__pycache__|\.pytest_cache|\.mypy_cache|\.ruff_cache|"
+    r"node_modules|dist|build|coverage|\.coverage|\.next|\.turbo|\.nuxt|\.svelte-kit|"
+    r"target|\.tox|\.venv|venv)/"
+)
 # Keywords that flag trivial commits in the subject line
 _TRIVIAL_SUBJECT = re.compile(
     r"^(chore|style|docs|fix)\s*(\([^)]+\))?\s*:\s*("
@@ -75,6 +81,8 @@ _LAYER_RE = re.compile(r"^platforms/[^/]+/(business|engineering|decisions|planni
 
 
 def _is_noise_file(path: str) -> bool:
+    if _NOISE_DIR_RE.match(path):
+        return True
     name = Path(path).name
     if name in _NOISE_BASENAMES:
         return True

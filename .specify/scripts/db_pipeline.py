@@ -610,6 +610,7 @@ def insert_commit(
     source: str,
     committed_at: str,
     files_json: str,
+    host_repo: str | None = None,
 ) -> None:
     """Insert a commit record. Uses INSERT OR IGNORE for idempotency on SHA.
 
@@ -618,18 +619,20 @@ def insert_commit(
         sha: Git commit SHA (or sha:platform_id composite for multi-platform).
         message: Commit message.
         author: Commit author name.
-        platform_id: Platform this commit belongs to.
+        platform_id: Platform OWNS the work (epic owner). Decoupled from physical repo.
         epic_id: Epic slug (e.g. '023-commit-traceability') or None for ad-hoc.
-        source: How the commit was captured ('hook', 'backfill', 'manual', 'reseed').
+        source: How the commit was captured ('hook', 'backfill', 'manual', 'reseed', 'external-fetch').
         committed_at: ISO 8601 timestamp of the commit.
         files_json: JSON string of affected file paths (e.g. '["src/main.py"]').
+        host_repo: '<org>/<name>' of the repo where the SHA physically lives.
+            Set explicitly by every caller; nullable only for legacy rows.
     """
     conn.execute(
         """INSERT OR IGNORE INTO commits
-           (sha, message, author, platform_id, epic_id, source, committed_at, files_json)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+           (sha, message, author, platform_id, epic_id, source, committed_at, files_json, host_repo)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        (sha, message, author, platform_id, epic_id, source, committed_at, files_json),
+        (sha, message, author, platform_id, epic_id, source, committed_at, files_json, host_repo),
     )
     # NOTE: caller owns transaction boundary — call conn.commit() after batch inserts
 

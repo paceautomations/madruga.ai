@@ -321,8 +321,8 @@ def run_backfill(conn) -> dict:
         """Insert a single commit row. Tracks per-epic counts."""
         conn.execute(
             """INSERT OR IGNORE INTO commits
-               (sha, message, author, platform_id, epic_id, source, committed_at, files_json)
-               VALUES (?, ?, ?, ?, ?, 'backfill', ?, ?)""",
+               (sha, message, author, platform_id, epic_id, source, committed_at, files_json, host_repo)
+               VALUES (?, ?, ?, ?, ?, 'backfill', ?, ?, 'paceautomations/madruga.ai')""",
             (
                 commit["sha"],
                 commit["message"],

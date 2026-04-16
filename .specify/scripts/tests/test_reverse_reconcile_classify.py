@@ -112,6 +112,28 @@ def test_classify_empty_files_is_noise():
     assert layer == "none"
 
 
+def test_classify_cache_dirs_are_noise():
+    from reverse_reconcile_classify import _classify_commit
+
+    for path in (
+        ".hypothesis/constants/abc",
+        "__pycache__/foo.pyc",
+        ".pytest_cache/v/cache/lastfailed",
+        "node_modules/foo/bar.js",
+        "dist/bundle.js",
+        ".ruff_cache/0.1.0/foo",
+    ):
+        layer, _ = _classify_commit({"message": "chore: cleanup", "files": [path]})
+        assert layer == "none", f"{path} should be noise"
+
+
+def test_classify_mixed_cache_and_code_is_code():
+    from reverse_reconcile_classify import _classify_commit
+
+    layer, _ = _classify_commit({"message": "feat: x", "files": ["src/x.py", ".hypothesis/constants/abc"]})
+    assert layer == "code"
+
+
 def test_triage_groups_correctly(fresh_db):
     from reverse_reconcile_classify import triage
 

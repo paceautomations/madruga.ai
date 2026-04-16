@@ -238,7 +238,15 @@ After the human gate approves (Phase 8), mark **all commits of this epic** as re
 python3 .specify/scripts/reverse_reconcile_mark.py --platform <name> --epic <NNN-slug> --json
 ```
 
-If `marked == 0`: the commits were already reconciled (re-run of reconcile on the same epic) — not an error. Log and continue.
+If `marked == 0`: there are two valid cases:
+1. **Internal platform** (self-ref, e.g. madruga-ai): commits were already reconciled (re-run of reconcile on the same epic) — not an error. Log and continue.
+2. **External platform** (bound repo, e.g. prosauai): expected. Epic commits live in the bound repo's `epic/<platform>/<NNN-slug>` branch and have not yet been merged to `origin/<base_branch>`. They will be auto-marked as reconciled by the next `madruga:reverse-reconcile <name>` run after the merge — `reverse_reconcile_ingest.py` detects the presence of `platforms/<name>/epics/<NNN-slug>/reconcile-report.md` and writes `reconciled_at` at INSERT time (Invariant 3, see CLAUDE.md). For this auto-mark to work, every commit on the epic branch must be tagged with `[epic:<NNN-slug>]` in the subject or `Epic: <NNN-slug>` trailer in the body, OR the merge to `<base_branch>` must preserve the branch name (no squash-merge without tags). Inform the user explicitly:
+
+```
+External platform <name>: 0 commits marked now (expected). They will be auto-marked
+on next `/madruga:reverse-reconcile <name>` after the epic merges to <base_branch>,
+provided commits carry `[epic:<NNN-slug>]` tags or the merge preserves the branch name.
+```
 
 Never run this before Phase 8 approval: if the user rejects the drift proposals, the commits should keep `reconciled_at IS NULL` so the next run catches them.
 

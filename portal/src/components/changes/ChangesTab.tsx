@@ -13,6 +13,7 @@ interface Commit {
   committed_at: string;
   reconciled_at: string | null;
   files: string[];
+  host_repo: string | null;
 }
 
 interface CommitsResponse {
@@ -397,22 +398,31 @@ export default function ChangesTab({ repoUrl }: ChangesTabProps) {
                   </td>
                 </tr>
               )}
-              {commits.map((c) => (
+              {commits.map((c) => {
+                // Per-commit URL: prefer host_repo (where SHA physically lives,
+                // set by the inserter) over the page-derived repoUrl. This handles
+                // cross-repo work where platform_id (work owner) differs from the
+                // repo containing the SHA — e.g. prosauai work committed in madruga.ai.
+                const commitRepo = c.host_repo
+                  ? `https://github.com/${c.host_repo}`
+                  : repoUrl;
+                const rawSha = c.sha.includes(':') ? c.sha.split(':', 1)[0] : c.sha;
+                return (
                 <tr key={`${c.sha}-${c.platform_id}`}>
                   <td style={S.td}>
-                    {repoUrl ? (
+                    {commitRepo ? (
                       <a
-                        href={`${repoUrl}/commit/${c.sha}`}
+                        href={`${commitRepo}/commit/${rawSha}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         style={S.shaLink}
                         title={c.sha}
                       >
-                        {shortSha(c.sha)}
+                        {shortSha(rawSha)}
                       </a>
                     ) : (
                       <code style={{ fontSize: '0.72rem', color: 'var(--d-text2)' }} title={c.sha}>
-                        {shortSha(c.sha)}
+                        {shortSha(rawSha)}
                       </code>
                     )}
                   </td>
@@ -439,7 +449,8 @@ export default function ChangesTab({ repoUrl }: ChangesTabProps) {
                     {formatDate(c.committed_at)}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

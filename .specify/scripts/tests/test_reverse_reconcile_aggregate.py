@@ -219,6 +219,51 @@ def test_candidate_docs_for_api_path(tmp_path, mock_binding):
     assert cand[0].endswith("context-map.md")
 
 
+def test_candidate_docs_filters_missing_files(tmp_path, mock_binding):
+    """Candidate docs pointing to files that don't exist get filtered out.
+
+    Prosauai's engineering/ has no data-model.md but has domain-model.md.
+    Heuristic for migrations returns [data-model, domain-model] — we want
+    the non-existent one dropped so apply_patch never fails FileNotFound.
+    """
+    import reverse_reconcile_aggregate as mod
+
+    repo = _init_repo(tmp_path, [("feat", {"migrations/001_init.sql": "create table\n"})])
+    mock_binding(repo)
+    shas = _list_shas(repo, "develop")
+    triage = {
+        "triage": {
+            "doc_self_edits": [],
+            "clusters": {"code": [{"sha": shas[0], "message": "feat", "files": ["migrations/001_init.sql"]}]},
+        }
+    }
+    result = mod.aggregate("prosauai", triage)
+    cand = result["code_items"][0]["candidate_docs"]
+    # data-model.md doesn't exist in prosauai, domain-model.md does → only the second survives
+    assert all("data-model.md" not in c for c in cand)
+    assert any("domain-model.md" in c for c in cand)
+
+
+def test_candidate_docs_fallback_when_all_missing(tmp_path, mock_binding):
+    """If no candidate exists on disk, fall back to blueprint.md unconditionally."""
+    import reverse_reconcile_aggregate as mod
+
+    repo = _init_repo(tmp_path, [("feat", {"migrations/002.sql": "x\n"})])
+    mock_binding(repo)
+    shas = _list_shas(repo, "develop")
+    triage = {
+        "triage": {
+            "doc_self_edits": [],
+            "clusters": {"code": [{"sha": shas[0], "message": "feat", "files": ["migrations/002.sql"]}]},
+        }
+    }
+    # Use a platform name that has no docs in the real filesystem
+    result = mod.aggregate("nonexistent-platform-xyz", triage)
+    cand = result["code_items"][0]["candidate_docs"]
+    assert len(cand) == 1
+    assert cand[0].endswith("blueprint.md")
+
+
 def test_head_snippet_truncates_large_file(tmp_path, mock_binding):
     import reverse_reconcile_aggregate as mod
 
@@ -256,4 +301,74 @@ def test_binding_branch_override(tmp_path, monkeypatch):
     # Explicit branch="develop" overrides binding's "main"
     result = mod.aggregate("testplat", triage, branch="develop")
     assert result["branch"] == "develop"
+    assert len(result["code_items"]) == 1
+
+
+def test_aggregate_raises_on_reconciled_leak(tmp_path, mock_binding):
+    """Invariant 6: a reconciled commit appearing in triage MUST raise AssertionError."""
+    import sqlite3
+
+    import db_core
+    import reverse_reconcile_aggregate as mod
+
+    repo = _init_repo(tmp_path, [("feat: x", {"src/x.py": "x\n"})])
+    mock_binding(repo)
+    shas = _list_shas(repo, "develop")
+    sha = shas[0]
+
+    db_file = tmp_path / "leak.db"
+    conn = sqlite3.connect(str(db_file))
+    migrations_dir = Path(__file__).resolve().parents[3] / ".pipeline" / "migrations"
+    db_core.migrate(conn, migrations_dir)
+    # Seed a reconciled commit for this platform
+    conn.execute(
+        "INSERT INTO commits (sha, message, author, platform_id, source, committed_at, reconciled_at) "
+        "VALUES (?, 'feat: x', 'a', 'testplat', 'external-fetch', '2026-01-01T00:00:00Z', "
+        "'2026-01-02T00:00:00Z')",
+        (sha,),
+    )
+    conn.commit()
+    conn.close()
+
+    triage = {
+        "triage": {
+            "doc_self_edits": [],
+            "clusters": {"code": [{"sha": sha, "message": "feat: x", "files": ["src/x.py"]}]},
+        }
+    }
+    with pytest.raises(AssertionError, match="Aggregate invariant violated"):
+        mod.aggregate("testplat", triage, db_path=db_file)
+
+
+def test_aggregate_passes_when_no_leak(tmp_path, mock_binding):
+    """Empty triage or all-unreconciled SHAs must pass the invariant."""
+    import sqlite3
+
+    import db_core
+    import reverse_reconcile_aggregate as mod
+
+    repo = _init_repo(tmp_path, [("feat: x", {"src/x.py": "x\n"})])
+    mock_binding(repo)
+    shas = _list_shas(repo, "develop")
+
+    db_file = tmp_path / "ok.db"
+    conn = sqlite3.connect(str(db_file))
+    migrations_dir = Path(__file__).resolve().parents[3] / ".pipeline" / "migrations"
+    db_core.migrate(conn, migrations_dir)
+    conn.execute(
+        "INSERT INTO commits (sha, message, author, platform_id, source, committed_at) "
+        "VALUES (?, 'feat: x', 'a', 'testplat', 'external-fetch', '2026-01-01T00:00:00Z')",
+        (shas[0],),
+    )
+    conn.commit()
+    conn.close()
+
+    triage = {
+        "triage": {
+            "doc_self_edits": [],
+            "clusters": {"code": [{"sha": shas[0], "message": "feat: x", "files": ["src/x.py"]}]},
+        }
+    }
+    # Should not raise
+    result = mod.aggregate("testplat", triage, db_path=db_file)
     assert len(result["code_items"]) == 1

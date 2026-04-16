@@ -445,7 +445,7 @@ class TestClassifyPre006:
 
 
 def _create_commits_table(conn: sqlite3.Connection) -> None:
-    """Create the commits table matching migration 014_commits.sql."""
+    """Create the commits table matching the latest migrations (014 + 018 + 019)."""
     conn.execute("""
         CREATE TABLE IF NOT EXISTS commits (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -455,14 +455,17 @@ def _create_commits_table(conn: sqlite3.Connection) -> None:
             platform_id TEXT NOT NULL,
             epic_id TEXT,
             source TEXT NOT NULL DEFAULT 'hook'
-                CHECK (source IN ('hook', 'backfill', 'manual', 'reseed')),
+                CHECK (source IN ('hook', 'backfill', 'manual', 'reseed', 'external-fetch')),
             committed_at TEXT NOT NULL,
             files_json TEXT DEFAULT '[]',
+            reconciled_at TEXT,
+            host_repo TEXT,
             created_at TEXT DEFAULT (datetime('now'))
         )
     """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_commits_platform ON commits(platform_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_commits_epic ON commits(epic_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_commits_host_repo ON commits(host_repo)")
     conn.commit()
 
 

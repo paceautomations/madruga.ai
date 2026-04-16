@@ -50,6 +50,24 @@ Node.js 20+ | Python 3.11+ | `copier` >= 9.4.0
 - **`.pipeline/madruga.db` is NOT tracked** (A1): fresh clones run `make seed` to reproduce it from `platforms/*/platform.yaml` + pitches + ADRs. Tracking a live WAL DB caused `row missing from index` corruption on `git checkout`/`stash`.
 - **Reverse-reconcile drift tracking** (migration 018): `commits.reconciled_at` watermark closes the loop on commits made directly in bound external repos (e.g., `paceautomations/prosauai`) that never hit the local hook. Forward `madruga:reconcile` marks epic commits as reconciled at the end (Phase 8b). `madruga:reverse-reconcile <platform>` ingests external commits with `source='external-fetch'`, deterministically triages noise (typos/lockfiles → auto-marked), and proposes JSON semantic patches (anchor-based) to docs across business/engineering/decisions/planning. Backlog cutter: `reverse_reconcile_ingest.py --assume-reconciled-before <sha>`. Portal Changes tab gets a `Reconciled` filter + "drift" badge for unreconciled commits.
 - **Reverse-reconcile V2: branch scope + chronological priority** — ingest walks ONLY `origin/<base_branch>` (from `platform.yaml:repo.base_branch`; prosauai=develop, default=main), excluding feature/epic/abandoned branches. `reverse_reconcile_aggregate.py` collapses per-commit triage into per-file work items grounded in HEAD state — a file touched by N commits becomes 1 `code_item` with `touched_by_shas: [all N]` and `head_content_snippet` from `origin/<base>:<path>`. LLM is instructed: HEAD is truth, `touched_by_shas` is audit trail only, never describe intermediate states. Commits where 100% of files are under `platforms/<p>/(business|engineering|decisions|planning)/` get classified as `doc-self-edit` → auto-reconciled without LLM (avoids circular "patch containers.md based on commit that edited containers.md" loop). Files deleted at HEAD go to `deleted_files` bucket for reference-cleanup patches. Heuristic path→doc mapping in `_DOC_CANDIDATE_RULES` provides 2-3 candidate docs per code file.
+- **Reverse-reconcile loop closure for external platforms** — six invariants govern the reconcile ↔ reverse-reconcile contract:
+  1. **Report-as-marker**: `platforms/<p>/epics/<slug>/reconcile-report.md` is authoritative — its presence means "epic was approved at Phase 8". Never edit/delete manually outside `madruga:reconcile`.
+  2. **Ingest-fills-epic**: `reverse_reconcile_ingest.py` ALWAYS tries to resolve `epic_id` via order: subject/body tag → merge-commit map → NULL.
+  3. **Auto-mark-on-ingest**: commits whose resolved `epic_id` matches an approved epic enter the DB already with `reconciled_at=now`. A retroactive UPDATE pass at the end of ingest covers commits inserted before the report existed.
+  4. **Phase 8b never pre-inserts**: never create rows for SHAs not yet in `origin/<base>` (squash-merge re-hashes; pre-inserting pollutes the DB).
+  5. **Slug strict match**: resolved `epic_id` must exactly match a directory in `platforms/<p>/epics/`. Mismatch → log warning, keep `NULL`. Digits-only tags (`[epic:042]`) require unique prefix-match (`042-*`) to resolve.
+  6. **Aggregate invariant**: `reverse_reconcile_aggregate` raises `AssertionError` if it ever sees `reconciled_at IS NOT NULL` in its triage input.
+
+  **Commit message convention for external platforms**: `[epic:NNN-slug]` in subject (e.g. `feat: add router [epic:042-channel-pipeline]`) OR `Epic: NNN-slug` trailer in body. Squash-merge subjects without either form result in `epic_id=NULL` (legitimate drift) — recover via `reverse_reconcile_mark.py --shas <sha>` after the fact.
+
+  **Loop flow**:
+  - Internal (madruga-ai self-ref): hook fills `epic_id` from branch; Phase 8b's `mark_epic` resolves immediately.
+  - External (prosauai et al.): Phase 8b's `mark_epic` returns 0 (commits live in epic branch, not in `origin/<base>` yet) — advisory only. After merge, next `madruga:reverse-reconcile <p>` ingest auto-marks via `_load_approved_epics` + `_upgrade_pending_reconciled` (Invariant 3).
+
+  **Debug `reconciled_at IS NULL` checklist**:
+  - `epic_id IS NULL`: dev omitted tag → `reverse_reconcile_mark.py --platform <p> --shas <sha>`.
+  - `epic_id` set, no report: epic was never reconciled → run `/madruga:reconcile`.
+  - Warning in ingest log about mismatched slug: tag points to non-existent or ambiguous dir → fix tag or rename dir.
 - **Bare-lite dispatch env vars** (ADR-021): `dag_executor.build_dispatch_cmd` adds `--strict-mcp-config`, `--disable-slash-commands`, `--tools`, `--no-session-persistence` to every `claude -p` invocation under OAuth. `compose_task_prompt` gates `data-model.md`/`contracts/`/`analyze-report.md` on task metadata (legacy mode) and reorders sections for cache-optimal prefix (Phase 5). Rollback kill-switches (default all on):
   - `MADRUGA_BARE_LITE=0` → restore legacy dispatch flags
   - `MADRUGA_KILL_IMPLEMENT_CONTEXT=0` → restore `implement-context.md` append/read

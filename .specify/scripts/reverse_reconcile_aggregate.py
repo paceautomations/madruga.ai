@@ -29,6 +29,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT / ".specify" / "scripts"))
 
+import db_core  # noqa: E402,F401  (used inside _assert_no_reconciled_leak)
 import ensure_repo as ensure_repo_mod  # noqa: E402
 
 log = logging.getLogger("reverse_reconcile_aggregate")
@@ -151,15 +152,27 @@ def _head_content_snippet(repo_path: Path, ref: str, path: str) -> str:
 
 
 def _candidate_docs(file_path: str, platform_id: str) -> list[str]:
-    """Return ordered list of platform doc candidates for a given code file path."""
+    """Return ordered list of platform doc candidates, filtered to those that exist.
+
+    Heuristic picks 2-3 names; we drop any that don't exist in the madruga-ai
+    filesystem (the platform's doc tree). LLM downstream never receives paths
+    that would make `reverse_reconcile_apply.py` fail with FileNotFound.
+    If all candidates are missing, fall back to blueprint.md unconditionally —
+    the skill instructs LLM to `operation: append` a new section there.
+    """
     for regex, candidates in _DOC_CANDIDATE_RULES:
         if regex.search(file_path):
-            return [f"platforms/{platform_id}/engineering/{c}" for c in candidates]
-    # Generic fallback
-    return [
-        f"platforms/{platform_id}/engineering/blueprint.md",
-        f"platforms/{platform_id}/engineering/containers.md",
-    ]
+            raw = [f"platforms/{platform_id}/engineering/{c}" for c in candidates]
+            break
+    else:
+        raw = [
+            f"platforms/{platform_id}/engineering/blueprint.md",
+            f"platforms/{platform_id}/engineering/containers.md",
+        ]
+    existing = [p for p in raw if (REPO_ROOT / p).exists()]
+    if existing:
+        return existing
+    return [f"platforms/{platform_id}/engineering/blueprint.md"]
 
 
 def _collect_file_work(
@@ -221,8 +234,47 @@ def _build_entry(
     }
 
 
-def aggregate(platform_id: str, triage: dict, branch: str | None = None) -> dict:
+def _assert_no_reconciled_leak(platform_id: str, triage: dict, db_path: Path | None = None) -> None:
+    """Invariant 6: aggregate MUST NOT see any commit whose ``reconciled_at IS NOT NULL``.
+
+    A leak means ingest/classify skipped the ``WHERE reconciled_at IS NULL`` filter
+    (regression). Failing loud here prevents silently re-proposing patches for
+    already-reconciled work. Cost: one indexed SELECT, <1ms.
+    """
+    all_shas: set[str] = set()
+    for e in triage.get("triage", {}).get("none", []):
+        all_shas.add(e.get("sha", ""))
+    for e in triage.get("triage", {}).get("doc_self_edits", []):
+        all_shas.add(e.get("sha", ""))
+    for commits in triage.get("triage", {}).get("clusters", {}).values():
+        for c in commits:
+            all_shas.add(c.get("sha", ""))
+    all_shas.discard("")
+    if not all_shas:
+        return
+    try:
+        with db_core.get_conn(db_path) as conn:
+            placeholders = ",".join("?" for _ in all_shas)
+            row = conn.execute(
+                f"SELECT COUNT(*) FROM commits "
+                f"WHERE platform_id = ? AND reconciled_at IS NOT NULL "
+                f"AND (sha IN ({placeholders}) OR sha IN ({placeholders}))",
+                [platform_id, *all_shas, *(f"{s}:{platform_id}" for s in all_shas)],
+            ).fetchone()
+        leaked = row[0] if row else 0
+    except Exception as exc:
+        log.warning("aggregate invariant check skipped: %s", exc)
+        return
+    if leaked > 0:
+        raise AssertionError(
+            f"Aggregate invariant violated: {leaked} reconciled commits in input "
+            f"for platform={platform_id}. Triage/classify must filter reconciled_at IS NULL."
+        )
+
+
+def aggregate(platform_id: str, triage: dict, branch: str | None = None, db_path: Path | None = None) -> dict:
     """Collapse triage clusters into per-file work items. Returns JSON-ready dict."""
+    _assert_no_reconciled_leak(platform_id, triage, db_path=db_path)
     repo_path = ensure_repo_mod.ensure_repo(platform_id)
     if branch is None:
         branch = ensure_repo_mod.load_repo_binding(platform_id)["base_branch"]

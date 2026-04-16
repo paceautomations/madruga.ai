@@ -39,6 +39,14 @@ _PLATFORM_FILE_RE = re.compile(r"^platforms/([^/]+)/")
 # Commit message tag: [epic:NNN] where NNN is one or more digits
 _EPIC_TAG_RE = re.compile(r"\[epic:(\d+)\]")
 
+# Epic tag accepting either NNN or NNN-slug. Used by reverse_reconcile_ingest
+# to attribute external commits to epics. Kept separate from _EPIC_TAG_RE to
+# avoid changing the local hook contract (which expects digits-only).
+_EPIC_TAG_SLUG_RE = re.compile(r"\[epic:(\d{3}(?:-[a-z0-9][a-z0-9-]*)?)\]")
+
+# Body trailer: line of the form "Epic: NNN-slug" or "Epic: NNN".
+_EPIC_TRAILER_RE = re.compile(r"^Epic:\s+(\d{3}(?:-[a-z0-9][a-z0-9-]*)?)\s*$", re.MULTILINE)
+
 
 def parse_branch(branch_name: str) -> tuple[str | None, str | None]:
     """Extract (platform_id, epic_id) from branch name.
@@ -111,6 +119,31 @@ def parse_epic_tag(message: str) -> str | None:
     return m.group(1) if m else None
 
 
+def parse_epic_tag_slug(message: str) -> str | None:
+    """Extract epic slug from ``[epic:NNN-slug]`` tag or ``Epic: NNN-slug`` trailer.
+
+    Used by reverse_reconcile_ingest to attribute external commits. Accepts
+    both full slug (``042-bar``) and digits-only (``042``); caller must
+    normalize digits-only against the platform's epic directory listing.
+
+    Resolution order: subject/body tag first, then trailer in body.
+
+    Examples:
+        >>> parse_epic_tag_slug("feat: x [epic:042-bar]")
+        '042-bar'
+        >>> parse_epic_tag_slug("feat: x [epic:042]")
+        '042'
+        >>> parse_epic_tag_slug("feat: x\\n\\nEpic: 042-bar\\n")
+        '042-bar'
+        >>> parse_epic_tag_slug("feat: nothing here")
+    """
+    m = _EPIC_TAG_SLUG_RE.search(message)
+    if m:
+        return m.group(1)
+    m = _EPIC_TRAILER_RE.search(message)
+    return m.group(1) if m else None
+
+
 def _get_current_branch() -> str:
     """Return the current git branch name.
 
@@ -127,6 +160,29 @@ def _get_current_branch() -> str:
         check=True,
     )
     return result.stdout.strip()
+
+
+_GITHUB_URL_RE = re.compile(r"github\.com[:/]([^/]+)/([^/.\s]+)")
+
+
+def get_host_repo() -> str | None:
+    """Return ``<org>/<name>`` of the local checkout's origin remote.
+
+    Parsed from ``git config remote.origin.url`` — handles both SSH
+    (``git@github.com:org/name.git``) and HTTPS (``https://github.com/org/name``)
+    forms. Returns None if no GitHub remote is configured (best-effort).
+    """
+    try:
+        result = subprocess.run(
+            ["git", "config", "--get", "remote.origin.url"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except subprocess.CalledProcessError:
+        return None
+    m = _GITHUB_URL_RE.search(result.stdout.strip())
+    return f"{m.group(1)}/{m.group(2)}" if m else None
 
 
 def get_head_info() -> dict:
@@ -190,10 +246,17 @@ def main() -> None:
         branch = _get_current_branch()
 
         # Detect platform and epic from branch
-        _branch_platform, branch_epic = parse_branch(branch)
+        branch_platform, branch_epic = parse_branch(branch)
 
-        # Detect platforms from changed files (may be multiple)
-        platforms = detect_platforms_from_files(info["files"])
+        # Branch is authoritative on epic branches: a commit on
+        # `epic/<X>/<NNN-slug>` belongs to platform X regardless of which
+        # files it touches. File-path detection is the fallback for non-epic
+        # branches (e.g., main/hotfix). Prevents prosauai work committed in
+        # the madruga.ai checkout from being mis-tagged as madruga-ai.
+        if branch_platform:
+            platforms = {branch_platform}
+        else:
+            platforms = detect_platforms_from_files(info["files"])
 
         # Epic tag in message overrides branch epic (FR-005)
         tag_epic = parse_epic_tag(info["message"])
@@ -201,6 +264,7 @@ def main() -> None:
 
         # Serialize file list
         files_json = json.dumps(info["files"])
+        host_repo = get_host_repo()
 
         # Connect to DB (WAL mode, busy_timeout per ADR-012) and insert one row per platform
         conn = get_conn(DB_PATH)
@@ -218,6 +282,7 @@ def main() -> None:
                     source="hook",
                     committed_at=info["date"],
                     files_json=files_json,
+                    host_repo=host_repo,
                 )
             conn.commit()
         finally:

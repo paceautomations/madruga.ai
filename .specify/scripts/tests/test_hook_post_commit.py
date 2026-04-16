@@ -436,3 +436,196 @@ class TestHookErrorHandling:
             result = hook_post_commit.main()
             # main() should return None (implicit) — no sys.exit(1)
             assert result is None
+
+
+class TestParseEpicTagSlug:
+    """parse_epic_tag_slug() accepts both [epic:NNN-slug] and Epic: trailer."""
+
+    def test_full_slug_in_subject(self):
+        from hook_post_commit import parse_epic_tag_slug
+
+        assert parse_epic_tag_slug("feat: x [epic:042-channel-pipeline]") == "042-channel-pipeline"
+
+    def test_digits_only_in_subject(self):
+        from hook_post_commit import parse_epic_tag_slug
+
+        assert parse_epic_tag_slug("feat: x [epic:042]") == "042"
+
+    def test_trailer_in_body(self):
+        from hook_post_commit import parse_epic_tag_slug
+
+        msg = "feat: do x\n\nLong body explanation\n\nEpic: 042-bar\n"
+        assert parse_epic_tag_slug(msg) == "042-bar"
+
+    def test_trailer_digits_only(self):
+        from hook_post_commit import parse_epic_tag_slug
+
+        assert parse_epic_tag_slug("feat\n\nEpic: 042\n") == "042"
+
+    def test_subject_tag_beats_trailer(self):
+        from hook_post_commit import parse_epic_tag_slug
+
+        msg = "feat: x [epic:050-other]\n\nEpic: 042-bar\n"
+        assert parse_epic_tag_slug(msg) == "050-other"
+
+    def test_no_match_returns_none(self):
+        from hook_post_commit import parse_epic_tag_slug
+
+        assert parse_epic_tag_slug("feat: regular commit (#123)") is None
+
+    def test_invalid_slug_format_rejected(self):
+        from hook_post_commit import parse_epic_tag_slug
+
+        # Slug must start with digit-then-hyphen
+        assert parse_epic_tag_slug("feat: x [epic:foo-bar]") is None
+
+    def test_uppercase_in_slug_rejected(self):
+        from hook_post_commit import parse_epic_tag_slug
+
+        assert parse_epic_tag_slug("feat: x [epic:042-FOO]") is None
+
+    def test_existing_parse_epic_tag_unchanged(self):
+        """Backward compat: parse_epic_tag matches only [epic:NNN] (no slug)."""
+        from hook_post_commit import parse_epic_tag
+
+        # Existing regex requires `]` immediately after digits — slug form doesn't match.
+        assert parse_epic_tag("feat: x [epic:042-bar]") is None
+        assert parse_epic_tag("feat: x [epic:015]") == "015"
+
+
+class TestGetHostRepo:
+    """get_host_repo() parses git remote.origin.url into <org>/<name>."""
+
+    def test_https_url(self):
+        from unittest.mock import MagicMock, patch
+
+        import hook_post_commit
+
+        result = MagicMock(returncode=0, stdout="https://github.com/foo/bar.git\n")
+        with patch.object(hook_post_commit.subprocess, "run", return_value=result):
+            assert hook_post_commit.get_host_repo() == "foo/bar"
+
+    def test_ssh_url(self):
+        from unittest.mock import MagicMock, patch
+
+        import hook_post_commit
+
+        result = MagicMock(returncode=0, stdout="git@github.com:foo/bar.git\n")
+        with patch.object(hook_post_commit.subprocess, "run", return_value=result):
+            assert hook_post_commit.get_host_repo() == "foo/bar"
+
+    def test_url_without_git_suffix(self):
+        from unittest.mock import MagicMock, patch
+
+        import hook_post_commit
+
+        result = MagicMock(returncode=0, stdout="https://github.com/foo/bar\n")
+        with patch.object(hook_post_commit.subprocess, "run", return_value=result):
+            assert hook_post_commit.get_host_repo() == "foo/bar"
+
+    def test_non_github_url_returns_none(self):
+        from unittest.mock import MagicMock, patch
+
+        import hook_post_commit
+
+        result = MagicMock(returncode=0, stdout="https://gitlab.com/foo/bar.git\n")
+        with patch.object(hook_post_commit.subprocess, "run", return_value=result):
+            assert hook_post_commit.get_host_repo() is None
+
+    def test_subprocess_failure_returns_none(self):
+        from subprocess import CalledProcessError
+        from unittest.mock import patch
+
+        import hook_post_commit
+
+        with patch.object(hook_post_commit.subprocess, "run", side_effect=CalledProcessError(1, "git")):
+            assert hook_post_commit.get_host_repo() is None
+
+
+def _create_hook_test_db(path):
+    import sqlite3
+
+    conn = sqlite3.connect(str(path))
+    conn.execute("""
+        CREATE TABLE commits (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sha TEXT NOT NULL UNIQUE,
+            message TEXT NOT NULL,
+            author TEXT NOT NULL,
+            platform_id TEXT NOT NULL,
+            epic_id TEXT,
+            source TEXT NOT NULL DEFAULT 'hook',
+            committed_at TEXT NOT NULL,
+            files_json TEXT DEFAULT '[]',
+            reconciled_at TEXT,
+            host_repo TEXT,
+            created_at TEXT DEFAULT (datetime('now'))
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+
+class TestBranchPrecedenceOverFiles:
+    """Branch on `epic/<X>/<slug>` is authoritative for platform_id; prevents
+    cross-repo work being mis-tagged via file-path fallback."""
+
+    def test_epic_branch_with_unrelated_files_uses_branch_platform(self, tmp_path, monkeypatch):
+        import sqlite3
+        from unittest.mock import patch
+
+        import hook_post_commit
+
+        db = tmp_path / "h.db"
+        _create_hook_test_db(db)
+        monkeypatch.setattr(hook_post_commit, "DB_PATH", db)
+
+        head_info = {
+            "sha": "abc123",
+            "message": "feat: cross-repo work",
+            "author": "dev",
+            "date": "2026-04-15T10:00:00Z",
+            "files": ["src/some_file.py"],  # NO platforms/<X>/ prefix
+        }
+        with (
+            patch.object(hook_post_commit, "get_head_info", return_value=head_info),
+            patch.object(hook_post_commit, "_get_current_branch", return_value="epic/prosauai/006-foo"),
+            patch.object(hook_post_commit, "get_host_repo", return_value="paceautomations/madruga.ai"),
+        ):
+            hook_post_commit.main()
+
+        conn = sqlite3.connect(str(db))
+        row = conn.execute("SELECT platform_id, epic_id, host_repo FROM commits WHERE sha='abc123'").fetchone()
+        conn.close()
+        assert row[0] == "prosauai"  # branch wins over file-path fallback
+        assert row[1] == "006-foo"
+        assert row[2] == "paceautomations/madruga.ai"
+
+    def test_non_epic_branch_falls_back_to_files(self, tmp_path, monkeypatch):
+        import sqlite3
+        from unittest.mock import patch
+
+        import hook_post_commit
+
+        db = tmp_path / "h2.db"
+        _create_hook_test_db(db)
+        monkeypatch.setattr(hook_post_commit, "DB_PATH", db)
+
+        head_info = {
+            "sha": "def456",
+            "message": "feat: prosauai docs",
+            "author": "dev",
+            "date": "2026-04-15T10:00:00Z",
+            "files": ["platforms/prosauai/business/vision.md"],
+        }
+        with (
+            patch.object(hook_post_commit, "get_head_info", return_value=head_info),
+            patch.object(hook_post_commit, "_get_current_branch", return_value="main"),
+            patch.object(hook_post_commit, "get_host_repo", return_value="paceautomations/madruga.ai"),
+        ):
+            hook_post_commit.main()
+
+        conn = sqlite3.connect(str(db))
+        row = conn.execute("SELECT platform_id FROM commits WHERE sha='def456'").fetchone()
+        conn.close()
+        assert row[0] == "prosauai"  # file-path detection
