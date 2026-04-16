@@ -100,7 +100,22 @@ QA runs up to 6 layers in order. Each layer is independent — if one is unavail
    - If file(s) found: read the most relevant one (match by current directory/repo name)
    - Extract: `base_url`, credentials, P0-P2 journeys, screens, business rules, known issues
 
-5. **Display capability matrix:**
+#### Env Diff (quando testing: block declarado)
+
+5. **Verificar variáveis de ambiente obrigatórias** (quando `testing:` block existe e `testing.env_file` está declarado):
+   ```bash
+   python3 $REPO_ROOT/.specify/scripts/qa_startup.py \
+     --platform $PLATFORM --cwd $(pwd) --validate-env --json
+   ```
+   - Parsear o JSON output do script
+   - Variável listada em `required_env` ausente no `.env` → **BLOCKER imediato** antes de qualquer layer de runtime:
+     `❌ ENV: <VAR_NAME> ausente — variável obrigatória declarada em testing.required_env`
+   - Variável presente em `.env.example` mas ausente no `.env` real e **não** em `required_env` → **WARN**:
+     `⚠️ ENV: <VAR_NAME> ausente em .env (opcional — declarado em .env.example mas não em required_env)`
+   - Se `env_file` for `null` ou não declarado → skip silencioso, sem erro
+   - Todas as variáveis `required_env` presentes → INFO: listar variáveis presentes e continuar
+
+6. **Display capability matrix:**
    ```
    🔍 Environment Detection
    | Layer | Status | Details |
@@ -353,7 +368,11 @@ If no tooling is detected at all: `⏭️ L1: No static analysis tools configure
    | /api/users | GET | no auth | ✅ 401 |
    ```
 
-If no server running or no API endpoints in diff: `⏭️ L5: No API endpoints to test — skipping`
+**Skip/BLOCKER logic (GAP-01/03):**
+- Se `testing:` block **não** declarado em `platform.yaml` e não há server rodando: `⏭️ L5: No API endpoints to test — skipping`
+- Se `testing:` block **declarado** com `testing.urls` e server não acessível:
+  `❌ L5: BLOCKER — testing.urls declarado mas serviços inacessíveis. Execute: python3 $REPO_ROOT/.specify/scripts/qa_startup.py --start --platform $PLATFORM --cwd <platform_cwd>`
+  Nunca skip silencioso quando `testing:` block declarado.
 
 ---
 
@@ -362,6 +381,28 @@ If no server running or no API endpoints in diff: `⏭️ L5: No API endpoints t
 **Activates when:** Playwright MCP available AND web features in diff AND app running.
 
 If this layer is not activated, skip entirely — the other layers provide coverage.
+
+#### 6.0 Frontend URL Screenshots — GAP-10 (quando testing.urls declarado)
+
+**Aplica quando:** Playwright MCP disponível E bloco `testing:` declarado com `testing.urls`.
+
+Para cada URL declarada como `type: frontend` em `testing.urls`:
+
+1. Navegar para a URL:
+   ```
+   mcp__playwright__browser_navigate -> <url>
+   ```
+2. Capturar screenshot **obrigatório**:
+   ```
+   mcp__playwright__browser_take_screenshot -> fullPage: true
+   ```
+3. Validar com vision:
+   - Título da página não vazio → OK
+   - Título vazio ou ausente → `⚠️ GAP-10 WARN: <url> — título da página vazio`
+   - Conteúdo parece placeholder HTML (body < 500 bytes após strip, ou contém "You need to enable JavaScript"/"React App"/"Vite + React"/"Welcome to nginx"/"It works!", ou `<body>` apenas com whitespace, ou Content-Type não é text/html para URL frontend) → `⚠️ GAP-10 WARN: <url> — conteúdo parece placeholder`
+4. Screenshot ausente por qualquer falha → `⚠️ GAP-10 WARN: <url> — screenshot não capturado`
+
+Esta verificação é **obrigatória** para todas as URLs `type: frontend` declaradas — não é opcional.
 
 #### 6.1 Scenario Planning (automatic)
 
