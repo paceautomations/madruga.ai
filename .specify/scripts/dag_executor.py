@@ -822,6 +822,8 @@ def compose_phase_prompt(
             f"- You are on branch: epic/{platform_name}/{epic_slug}",
             "- Do NOT create, switch, or checkout any branch.",
             f"- Save ALL output to: {output_dir}/ or project root (for scripts/portal).",
+            "- Do NOT run `post_save.py` for any `--node` tracking (implement, analyze, etc.).",
+            "  The phase orchestrator manages node completion. Calling it will corrupt resume state.",
         ]
     )
 
