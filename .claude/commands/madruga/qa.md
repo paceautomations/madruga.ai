@@ -64,6 +64,55 @@ QA runs up to 6 layers in order. Each layer is independent — if one is unavail
 
 ## Instructions
 
+### Phase 0: Testing Manifest
+
+**Pré-condição**: Esta seção executa ANTES do Environment Detection. Se o bloco `testing:` estiver ausente, a fase termina silenciosamente e o pipeline continua para `### Phase 0: Environment Detection` com comportamento atual (retrocompatibilidade total — SC-007). Se presente, utiliza o manifest como contexto autoritativo para L4/L5/L6.
+
+1. **Detectar plataforma ativa:**
+   ```bash
+   python3 $REPO_ROOT/.specify/scripts/platform_cli.py current
+   ```
+   Exportar resultado como `$PLATFORM` para uso nos passos seguintes.
+
+2. **Ler testing: block:**
+   ```bash
+   python3 $REPO_ROOT/.specify/scripts/qa_startup.py \
+     --platform $PLATFORM --cwd $(pwd) --parse-config --json
+   ```
+   - **Exit code 2** (testing: ausente ou platform.yaml sem bloco `testing:`) → continuar para `### Phase 0: Environment Detection` com comportamento atual (retrocompatibilidade total — SC-007)
+   - **Exit code 0** (testing: presente) → parsear JSON output e usar `TestingManifest` como contexto autoritativo para L4/L5/L6; `$TESTING_MANIFEST` disponível nos passos seguintes
+
+3. **Iniciar serviços** (quando testing: presente e `startup.type != none`):
+   ```bash
+   python3 $REPO_ROOT/.specify/scripts/qa_startup.py \
+     --platform $PLATFORM --cwd $(pwd) --start --json
+   ```
+   Parsear `StartupResult` do JSON output:
+   - `status: blocker` → **BLOCKER** imediato: exibir lista de health checks falhados com conteúdo do campo `detail` de cada `Finding` (inclui últimas linhas de logs de container para `type: docker`); interromper execução — não prosseguir para L1–L6
+   - `skipped_startup: true` → INFO: "Serviços já rodando e saudáveis — startup pulado"
+   - `status: warn` → registrar WARN e continuar para validação de URLs
+   - `status: ok` → continuar para validação de URLs
+
+4. **Validar reachability de URLs** (após startup bem-sucedido):
+   ```bash
+   python3 $REPO_ROOT/.specify/scripts/qa_startup.py \
+     --platform $PLATFORM --cwd $(pwd) --validate-urls --json
+   ```
+   Parsear lista `urls` e `findings` do `StartupResult`:
+   - **Connection refused / timeout** em qualquer URL → **BLOCKER**:
+     `❌ <label>: <URL> inacessível — <detail>`
+     Hint por `startup.type`:
+     - `docker`: "verifique `docker compose ps` e port bindings em `docker-compose.override.yml`"
+     - `npm`: "verifique se `npm run dev` está rodando"
+     - `make` / `script` / `venv`: "verifique se o processo de startup está em execução"
+   - **Status code fora do esperado** → **BLOCKER**:
+     `❌ <label>: <URL> retornou HTTP <actual>, esperado <expected>`
+   - **Placeholder HTML detectado** (finding `level: WARN`) → **WARN**:
+     `⚠️ <label>: <URL> responde mas conteúdo parece placeholder`
+   - Todas as URLs OK → continuar para `### Phase 0: Environment Detection`
+
+---
+
 ### Phase 0: Environment Detection
 
 1. **Parse arguments:**
