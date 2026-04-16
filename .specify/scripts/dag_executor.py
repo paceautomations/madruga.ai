@@ -1135,7 +1135,7 @@ async def _run_implement_phases(
 
         phase_id = f"implement:phase-{phase_idx + 1}"
         max_turns = _phase_max_turns(len(still_pending))
-        timeout = min(timeout_per_task * len(still_pending), DEFAULT_TIMEOUT)
+        timeout = max(DEFAULT_TIMEOUT, 300 * len(still_pending) + 600)
 
         prompt = compose_phase_prompt(
             phase_label,
@@ -1172,6 +1172,7 @@ async def _run_implement_phases(
             trace_id=trace_id,
         )
 
+        _pending_snapshot = still_pending  # capture for closure
         success, error, stdout = await dispatch_with_retry_async(
             phase_node,
             cwd,
@@ -1182,6 +1183,9 @@ async def _run_implement_phases(
             platform_name=platform_name,
             abort_check=_make_abort_check(conn, epic_slug),
             max_turns_override=max_turns,
+            success_check=lambda: (
+                len(_verify_phase_completion(tasks_path, _pending_snapshot)[0]) == len(_pending_snapshot)
+            ),
         )
 
         # Verify which tasks actually completed (regardless of dispatch result)
@@ -2062,6 +2066,7 @@ async def dispatch_with_retry_async(
     platform_name: str = "",
     abort_check: "object | None" = None,
     max_turns_override: int | None = None,
+    success_check: "object | None" = None,
 ) -> tuple[bool, str | None, str | None]:
     """Async version of dispatch_with_retry using asyncio.sleep.
 
@@ -2079,6 +2084,11 @@ async def dispatch_with_retry_async(
     same_error_count = 0
     for attempt, backoff in enumerate([0] + RETRY_BACKOFFS, 1):
         if backoff > 0:
+            # Pre-retry: check if work already completed externally (e.g. tasks all done)
+            if success_check and success_check():
+                log.info("Pre-retry success_check passed for '%s' — skipping remaining retries", node.id)
+                breaker.record_success()
+                return True, None, None
             # F2: Check if epic was cancelled/blocked before retrying
             if abort_check and abort_check():
                 log.info("Aborting retries for '%s' — epic status changed", node.id)

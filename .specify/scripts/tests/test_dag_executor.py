@@ -394,6 +394,43 @@ async def test_circuit_breaker_open_blocks_dispatch():
     assert "circuit breaker OPEN" in error
 
 
+@pytest.mark.asyncio
+async def test_success_check_skips_retry():
+    """dispatch_with_retry_async skips remaining retries when success_check returns True."""
+    from dag_executor import dispatch_with_retry_async
+
+    breaker = CircuitBreaker()
+    call_count = 0
+
+    async def mock_dispatch(
+        node, cwd, prompt, timeout=3000, guardrail=None, resume_session_id=None, platform_name="", **kwargs
+    ):
+        nonlocal call_count
+        call_count += 1
+        return False, "timeout", None  # always fails
+
+    # success_check returns True on second check (i.e., before retry 1)
+    check_count = 0
+
+    def success_check():
+        nonlocal check_count
+        check_count += 1
+        return check_count >= 1  # True on first call (before retry 1)
+
+    with (
+        patch("dag_executor.dispatch_node_async", side_effect=mock_dispatch),
+        patch("dag_executor.asyncio.sleep", new_callable=AsyncMock),
+    ):
+        success, error, _stdout = await dispatch_with_retry_async(
+            _make_node(), "/tmp", "test", 600, breaker, success_check=success_check
+        )
+
+    assert success is True
+    assert error is None
+    assert call_count == 1  # only the first attempt ran, no retries
+    assert check_count == 1  # success_check called once (before retry 1)
+
+
 # --- Tests for gate dispatch and resume fixes ---
 
 
