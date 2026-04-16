@@ -120,11 +120,11 @@
 
 **Purpose**: Validar de ponta a ponta que a infraestrutura criada neste epic funciona corretamente. Confirmar que critérios de sucesso SC-001 a SC-007 são atendíveis.
 
-- [ ] T035 Executar `python3 .specify/scripts/qa_startup.py --platform madruga-ai --cwd . --validate-env --json` — confirmar: exit code 0, `status: "ok"`, `env_missing: []`, `env_present: []` (madruga-ai não tem required_env, resultado esperado OK vazio)
-- [ ] T036 Executar `python3 .specify/scripts/qa_startup.py --platform prosauai --cwd . --parse-config --json` — confirmar: exit code 0, manifest contém `startup.type: docker`, `required_env` com exatamente 4 variáveis [JWT_SECRET, ADMIN_BOOTSTRAP_EMAIL, ADMIN_BOOTSTRAP_PASSWORD, DATABASE_URL]
-- [ ] T037 Executar `python3 .specify/scripts/skill-lint.py` — confirmar exit code 0 e zero erros para todos os skills modificados: `madruga/qa.md`, `speckit.tasks.md`, `speckit.analyze.md`, `madruga/blueprint.md`
-- [ ] T038 Executar `python3 .specify/scripts/platform_cli.py lint --all` — confirmar que o bloco `testing:` de madruga-ai e prosauai valida sem erros; confirmar que plataformas existentes sem `testing:` block (todas as demais) também passam sem alteração (SC-007)
-- [ ] T039 Executar `make test` — confirmar 0 failures; confirmar que `test_qa_startup.py` está na suite e todos os testes passam; confirmar que testes existentes (test_platform.py, etc.) continuam verdes após mudanças desta phase
+- [x] T035 Executar `python3 .specify/scripts/qa_startup.py --platform madruga-ai --cwd . --validate-env --json` — confirmar: exit code 0, `status: "ok"`, `env_missing: []`, `env_present: []` (madruga-ai não tem required_env, resultado esperado OK vazio)
+- [x] T036 Executar `python3 .specify/scripts/qa_startup.py --platform prosauai --cwd . --parse-config --json` — confirmar: exit code 0, manifest contém `startup.type: docker`, `required_env` com exatamente 4 variáveis [JWT_SECRET, ADMIN_BOOTSTRAP_EMAIL, ADMIN_BOOTSTRAP_PASSWORD, DATABASE_URL]
+- [x] T037 Executar `python3 .specify/scripts/skill-lint.py` — confirmar exit code 0 e zero erros para todos os skills modificados: `madruga/qa.md`, `speckit.tasks.md`, `speckit.analyze.md`, `madruga/blueprint.md`
+- [x] T038 Executar `python3 .specify/scripts/platform_cli.py lint --all` — confirmar que o bloco `testing:` de madruga-ai e prosauai valida sem erros; confirmar que plataformas existentes sem `testing:` block (todas as demais) também passam sem alteração (SC-007)
+- [x] T039 Executar `make test` — confirmar 0 failures; confirmar que `test_qa_startup.py` está na suite e todos os testes passam; confirmar que testes existentes (test_platform.py, etc.) continuam verdes após mudanças desta phase
 
 ---
 

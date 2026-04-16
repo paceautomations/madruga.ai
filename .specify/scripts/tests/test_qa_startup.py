@@ -152,11 +152,14 @@ class TestLoadManifest:
         assert manifest is not None
         assert manifest.urls[0].expect_status == [200, 401]
 
-    def test_invalid_yaml_returns_none(self, tmp_path):
+    def test_invalid_yaml_raises_value_error(self, tmp_path):
+        """Invalid YAML raises ValueError (not None) so callers can produce useful diagnostics."""
         platform_dir = tmp_path / "platforms" / "bad-platform"
         platform_dir.mkdir(parents=True)
         (platform_dir / "platform.yaml").write_text("key: [unclosed")
-        assert load_manifest("bad-platform", tmp_path) is None
+        import pytest as _pytest
+        with _pytest.raises(ValueError, match="not valid YAML"):
+            load_manifest("bad-platform", tmp_path)
 
     def test_health_check_with_expect_body_contains(self, tmp_path):
         testing = {
