@@ -10,3 +10,42 @@ repo:
   epic_branch_prefix: "epic/prosauai/"
   isolation: branch
 tags: [whatsapp, conversational-ai, multi-tenant]
+testing:
+  startup:
+    type: docker
+    command: null
+    ready_timeout: 120
+  health_checks:
+    - url: http://localhost:8050/health
+      method: GET
+      expect_status: 200
+      expect_body_contains: '"status"'
+      label: API Backend
+    - url: http://localhost:3000
+      method: GET
+      expect_status: 200
+      label: Admin Frontend
+  urls:
+    - url: http://localhost:8050/health
+      type: api
+      label: Health Check
+      expect_status: 200
+    - url: http://localhost:8050/api/auth/login
+      type: api
+      label: Login endpoint
+      expect_status: [200, 401]
+    - url: http://localhost:3000
+      type: frontend
+      label: "Root (deve redirecionar para /login)"
+      expect_redirect: /login
+    - url: http://localhost:3000/login
+      type: frontend
+      label: Login page
+      expect_contains: ["email", "password"]
+  required_env:
+    - JWT_SECRET
+    - ADMIN_BOOTSTRAP_EMAIL
+    - ADMIN_BOOTSTRAP_PASSWORD
+    - DATABASE_URL
+  env_file: .env.example
+  journeys_file: testing/journeys.md
