@@ -254,12 +254,13 @@ def _assert_no_reconciled_leak(platform_id: str, triage: dict, db_path: Path | N
         return
     try:
         with db_core.get_conn(db_path) as conn:
-            placeholders = ",".join("?" for _ in all_shas)
+            all_forms = list(all_shas) + [f"{s}:{platform_id}" for s in all_shas]
+            placeholders = ",".join("?" for _ in all_forms)
             row = conn.execute(
                 f"SELECT COUNT(*) FROM commits "
                 f"WHERE platform_id = ? AND reconciled_at IS NOT NULL "
-                f"AND (sha IN ({placeholders}) OR sha IN ({placeholders}))",
-                [platform_id, *all_shas, *(f"{s}:{platform_id}" for s in all_shas)],
+                f"AND sha IN ({placeholders})",
+                [platform_id, *all_forms],
             ).fetchone()
         leaked = row[0] if row else 0
     except Exception as exc:
