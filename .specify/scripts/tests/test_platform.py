@@ -439,3 +439,226 @@ def test_lint_platform_with_auto_markers(tmp_path, caplog):
         assert "AUTO:domains" in caplog.text
     finally:
         plat.PLATFORMS_DIR = old
+
+
+# ══════════════════════════════════════
+# _lint_testing_block tests
+# ══════════════════════════════════════
+
+
+def _make_valid_testing_block() -> dict:
+    """Build a minimal valid testing: block for reuse in tests."""
+    return {
+        "startup": {"type": "docker", "command": None, "ready_timeout": 60},
+        "health_checks": [{"url": "http://localhost:8050/health", "label": "API"}],
+        "urls": [{"url": "http://localhost:3000", "type": "frontend", "label": "Home"}],
+        "required_env": ["JWT_SECRET"],
+        "env_file": ".env.example",
+        "journeys_file": "testing/journeys.md",
+    }
+
+
+def test_lint_testing_block_valid():
+    """A fully valid testing: block returns no errors."""
+    data = _make_valid_testing_block()
+    errors = plat._lint_testing_block(data, "my-plat")
+    assert errors == []
+
+
+def test_lint_testing_block_startup_type_absent():
+    """Missing startup.type produces an error."""
+    data = _make_valid_testing_block()
+    del data["startup"]["type"]
+    errors = plat._lint_testing_block(data, "my-plat")
+    assert any("startup.type" in e and "required" in e for e in errors)
+
+
+def test_lint_testing_block_startup_type_invalid():
+    """An unrecognised startup.type produces an error."""
+    data = _make_valid_testing_block()
+    data["startup"]["type"] = "kubernetes"
+    errors = plat._lint_testing_block(data, "my-plat")
+    assert any("kubernetes" in e and "invalid" in e for e in errors)
+
+
+def test_lint_testing_block_script_type_requires_command():
+    """type=script without command is an error."""
+    data = _make_valid_testing_block()
+    data["startup"]["type"] = "script"
+    data["startup"]["command"] = None  # missing
+    errors = plat._lint_testing_block(data, "my-plat")
+    assert any("command" in e and "script" in e for e in errors)
+
+
+def test_lint_testing_block_venv_type_requires_command():
+    """type=venv without command is an error."""
+    data = _make_valid_testing_block()
+    data["startup"]["type"] = "venv"
+    data["startup"]["command"] = ""  # empty → falsy
+    errors = plat._lint_testing_block(data, "my-plat")
+    assert any("command" in e and "venv" in e for e in errors)
+
+
+def test_lint_testing_block_script_type_with_command_ok():
+    """type=script with a command set produces no error."""
+    data = _make_valid_testing_block()
+    data["startup"]["type"] = "script"
+    data["startup"]["command"] = "./run.sh"
+    errors = plat._lint_testing_block(data, "my-plat")
+    assert errors == []
+
+
+def test_lint_testing_block_empty_health_checks_ok():
+    """health_checks: [] is valid (may be empty)."""
+    data = _make_valid_testing_block()
+    data["health_checks"] = []
+    errors = plat._lint_testing_block(data, "my-plat")
+    assert errors == []
+
+
+def test_lint_testing_block_health_check_missing_url():
+    """A health_check without 'url' produces an error."""
+    data = _make_valid_testing_block()
+    data["health_checks"] = [{"label": "API"}]  # no url
+    errors = plat._lint_testing_block(data, "my-plat")
+    assert any("health_checks[0]" in e and "'url'" in e for e in errors)
+
+
+def test_lint_testing_block_health_check_missing_label():
+    """A health_check without 'label' produces an error."""
+    data = _make_valid_testing_block()
+    data["health_checks"] = [{"url": "http://localhost:8050/health"}]  # no label
+    errors = plat._lint_testing_block(data, "my-plat")
+    assert any("health_checks[0]" in e and "'label'" in e for e in errors)
+
+
+def test_lint_testing_block_empty_urls_ok():
+    """urls: [] is valid (may be empty)."""
+    data = _make_valid_testing_block()
+    data["urls"] = []
+    errors = plat._lint_testing_block(data, "my-plat")
+    assert errors == []
+
+
+def test_lint_testing_block_url_invalid_type():
+    """A url with an invalid 'type' produces an error."""
+    data = _make_valid_testing_block()
+    data["urls"] = [{"url": "http://localhost:3000", "type": "websocket", "label": "WS"}]
+    errors = plat._lint_testing_block(data, "my-plat")
+    assert any("urls[0]" in e and "websocket" in e and "invalid" in e for e in errors)
+
+
+def test_lint_testing_block_url_valid_types():
+    """Both 'api' and 'frontend' url types are valid."""
+    data = _make_valid_testing_block()
+    data["urls"] = [
+        {"url": "http://localhost:8050/health", "type": "api", "label": "API"},
+        {"url": "http://localhost:3000", "type": "frontend", "label": "FE"},
+    ]
+    errors = plat._lint_testing_block(data, "my-plat")
+    assert errors == []
+
+
+def test_lint_testing_block_url_missing_label():
+    """A url without 'label' produces an error."""
+    data = _make_valid_testing_block()
+    data["urls"] = [{"url": "http://localhost:3000", "type": "frontend"}]
+    errors = plat._lint_testing_block(data, "my-plat")
+    assert any("urls[0]" in e and "'label'" in e for e in errors)
+
+
+def test_lint_testing_block_required_env_non_string():
+    """required_env with a non-string entry produces an error."""
+    data = _make_valid_testing_block()
+    data["required_env"] = ["JWT_SECRET", 42]  # 42 is not a string
+    errors = plat._lint_testing_block(data, "my-plat")
+    assert any("required_env[1]" in e and "string" in e for e in errors)
+
+
+def test_lint_testing_block_required_env_empty_ok():
+    """required_env: [] is valid."""
+    data = _make_valid_testing_block()
+    data["required_env"] = []
+    errors = plat._lint_testing_block(data, "my-plat")
+    assert errors == []
+
+
+def test_lint_testing_block_not_a_dict():
+    """testing: block that is not a dict produces an error immediately."""
+    errors = plat._lint_testing_block("not-a-dict", "my-plat")
+    assert len(errors) == 1
+    assert "mapping" in errors[0]
+
+
+def test_lint_platform_testing_block_absent_not_called(tmp_path):
+    """_lint_platform does NOT error when testing: block is absent (retrocompat)."""
+    old = plat.PLATFORMS_DIR
+    plat.PLATFORMS_DIR = tmp_path
+
+    pdir = _create_platform(tmp_path, "no-testing")
+    for d in ["business", "engineering", "decisions", "epics"]:
+        (pdir / d).mkdir()
+
+    try:
+        result = plat._lint_platform("no-testing")
+        assert result is True  # no testing: → should not fail
+    finally:
+        plat.PLATFORMS_DIR = old
+
+
+def test_lint_platform_testing_block_valid_passes(tmp_path):
+    """_lint_platform passes when testing: block is present and valid."""
+    old = plat.PLATFORMS_DIR
+    plat.PLATFORMS_DIR = tmp_path
+
+    yaml_content = (
+        "name: plat-with-testing\n"
+        "title: Test\n"
+        "lifecycle: design\n"
+        "testing:\n"
+        "  startup:\n"
+        "    type: npm\n"
+        "    command: null\n"
+        "    ready_timeout: 30\n"
+        "  health_checks: []\n"
+        "  urls: []\n"
+        "  required_env: []\n"
+        "  env_file: null\n"
+        "  journeys_file: testing/journeys.md\n"
+    )
+    pdir = _create_platform(tmp_path, "plat-with-testing", yaml_content)
+    for d in ["business", "engineering", "decisions", "epics"]:
+        (pdir / d).mkdir()
+
+    try:
+        result = plat._lint_platform("plat-with-testing")
+        assert result is True
+    finally:
+        plat.PLATFORMS_DIR = old
+
+
+def test_lint_platform_testing_block_invalid_fails(tmp_path):
+    """_lint_platform returns False when testing: block has errors."""
+    old = plat.PLATFORMS_DIR
+    plat.PLATFORMS_DIR = tmp_path
+
+    yaml_content = (
+        "name: plat-bad-testing\n"
+        "title: Test\n"
+        "lifecycle: design\n"
+        "testing:\n"
+        "  startup:\n"
+        "    type: invalid-type\n"
+        "  health_checks: []\n"
+        "  urls: []\n"
+        "  required_env: []\n"
+    )
+    pdir = _create_platform(tmp_path, "plat-bad-testing", yaml_content)
+    for d in ["business", "engineering", "decisions", "epics"]:
+        (pdir / d).mkdir()
+
+    try:
+        result = plat._lint_platform("plat-bad-testing")
+        assert result is False
+    finally:
+        plat.PLATFORMS_DIR = old
