@@ -336,6 +336,13 @@ class TestReadEnvKeys:
         keys = _read_env_keys(env_file)
         assert "EMPTY_KEY" in keys
 
+    def test_export_prefix_stripped(self, tmp_path):
+        """Shell-compatible .env files may use 'export KEY=value' format."""
+        env_file = tmp_path / ".env"
+        env_file.write_text("export JWT_SECRET=abc\nexport DB_URL=postgresql://...\n")
+        keys = _read_env_keys(env_file)
+        assert keys == {"JWT_SECRET", "DB_URL"}, f"Got: {keys}"
+
 
 # ---------------------------------------------------------------------------
 # validate_env
@@ -540,7 +547,8 @@ class TestExecuteStartup:
         assert code == 0
         mock_run.assert_called_once()
         cmd_arg = mock_run.call_args[0][0]
-        assert "docker compose up -d" in cmd_arg
+        # Default commands use list form (shell=False) for security
+        assert cmd_arg == ["docker", "compose", "up", "-d"]
 
     def test_npm_type(self, tmp_path):
         manifest = minimal_manifest("npm")
@@ -549,7 +557,7 @@ class TestExecuteStartup:
             code, _ = execute_startup(manifest, tmp_path)
         assert code == 0
         cmd_arg = mock_run.call_args[0][0]
-        assert "npm run dev" in cmd_arg
+        assert cmd_arg == ["npm", "run", "dev"]
 
     def test_make_type(self, tmp_path):
         manifest = minimal_manifest("make")
@@ -558,7 +566,7 @@ class TestExecuteStartup:
             code, _ = execute_startup(manifest, tmp_path)
         assert code == 0
         cmd_arg = mock_run.call_args[0][0]
-        assert "make run" in cmd_arg
+        assert cmd_arg == ["make", "run"]
 
     def test_none_type_noop(self, tmp_path):
         manifest = minimal_manifest("none")
@@ -594,6 +602,26 @@ class TestExecuteStartup:
             code, stderr = execute_startup(manifest, tmp_path)
         assert code == 1
         assert "no such service" in stderr
+
+    def test_shell_metachar_command_uses_shell_true(self, tmp_path):
+        """Commands with && must use shell=True to work correctly."""
+        manifest = minimal_manifest("npm")
+        manifest.startup.command = "cd portal && npm run dev"
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stderr="")
+            execute_startup(manifest, tmp_path)
+        _, kwargs = mock_run.call_args
+        assert kwargs.get("shell") is True
+
+    def test_simple_custom_command_uses_shell_false(self, tmp_path):
+        """Simple commands without metacharacters use shell=False (more secure)."""
+        manifest = minimal_manifest("docker")
+        manifest.startup.command = "docker compose -f docker-compose.test.yml up -d"
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stderr="")
+            execute_startup(manifest, tmp_path)
+        _, kwargs = mock_run.call_args
+        assert kwargs.get("shell") is False
 
     def test_venv_without_command_returns_error(self, tmp_path):
         manifest = minimal_manifest("venv")
@@ -866,6 +894,36 @@ class TestStartServices:
              patch("qa_startup.execute_startup", return_value=(0, "")), \
              patch("qa_startup.wait_for_health", return_value=health_result):
             result = start_services(manifest, Path("/tmp"))
+        assert result.status == "ok"
+
+
+class TestRunFull:
+    def test_short_circuits_validate_urls_on_startup_blocker(self):
+        """When start_services returns BLOCKER, validate_urls must not be called."""
+        manifest = minimal_manifest("docker")
+        startup_blocker = StartupResult(
+            status="blocker",
+            findings=[Finding(level="BLOCKER", message="health check failed", detail="")],
+        )
+        env_ok = StartupResult(status="ok")
+        with patch("qa_startup.start_services", return_value=startup_blocker), \
+             patch("qa_startup.validate_env", return_value=env_ok), \
+             patch("qa_startup.validate_urls") as mock_validate_urls:
+            result = run_full(manifest, Path("/tmp"))
+        mock_validate_urls.assert_not_called()
+        assert result.status == "blocker"
+        assert any(f.level == "INFO" and "skipped" in f.message for f in result.findings)
+
+    def test_runs_validate_urls_when_startup_ok(self):
+        manifest = minimal_manifest("docker")
+        startup_ok = StartupResult(status="ok")
+        env_ok = StartupResult(status="ok")
+        urls_ok = StartupResult(status="ok")
+        with patch("qa_startup.start_services", return_value=startup_ok), \
+             patch("qa_startup.validate_env", return_value=env_ok), \
+             patch("qa_startup.validate_urls", return_value=urls_ok) as mock_validate_urls:
+            result = run_full(manifest, Path("/tmp"))
+        mock_validate_urls.assert_called_once()
         assert result.status == "ok"
 
 

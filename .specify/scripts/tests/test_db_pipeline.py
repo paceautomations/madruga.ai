@@ -396,8 +396,8 @@ def test_epic_status_map_drafted():
     assert _EPIC_STATUS_MAP["draft"] == "drafted"
 
 
-def test_compute_epic_status_does_not_promote_drafted(tmp_db):
-    """compute_epic_status does not auto-promote drafted epics."""
+def test_compute_epic_status_drafted_stays_when_only_epic_context_done(tmp_db):
+    """drafted stays when only epic-context is done (--draft mode footprint)."""
     from db_pipeline import compute_epic_status, upsert_epic, upsert_epic_node, upsert_platform
 
     upsert_platform(tmp_db, "p1", name="P1", repo_path="platforms/p1")
@@ -405,9 +405,71 @@ def test_compute_epic_status_does_not_promote_drafted(tmp_db):
     upsert_epic_node(tmp_db, "p1", "017-test", "epic-context", "done")
 
     new_status, _ = compute_epic_status(
-        tmp_db, "p1", "017-test", required_node_ids={"epic-context"}, current_status="drafted"
+        tmp_db,
+        "p1",
+        "017-test",
+        required_node_ids={"epic-context", "specify", "plan"},
+        current_status="drafted",
     )
     assert new_status == "drafted"
+
+
+def test_compute_epic_status_drafted_stays_with_no_nodes_done(tmp_db):
+    """drafted stays when no nodes are done (pristine draft)."""
+    from db_pipeline import compute_epic_status, upsert_epic, upsert_platform
+
+    upsert_platform(tmp_db, "p1", name="P1", repo_path="platforms/p1")
+    upsert_epic(tmp_db, "p1", "017-test", title="Test", status="drafted")
+
+    new_status, delivered_at = compute_epic_status(
+        tmp_db,
+        "p1",
+        "017-test",
+        required_node_ids={"specify", "plan", "implement"},
+        current_status="drafted",
+    )
+    assert new_status == "drafted"
+    assert delivered_at is None
+
+
+def test_compute_epic_status_drafted_promotes_when_beyond_epic_context(tmp_db):
+    """drafted → in_progress when any node beyond epic-context completes."""
+    from db_pipeline import compute_epic_status, upsert_epic, upsert_epic_node, upsert_platform
+
+    upsert_platform(tmp_db, "p1", name="P1", repo_path="platforms/p1")
+    upsert_epic(tmp_db, "p1", "017-test", title="Test", status="drafted")
+    upsert_epic_node(tmp_db, "p1", "017-test", "epic-context", "done")
+    upsert_epic_node(tmp_db, "p1", "017-test", "specify", "done")
+
+    new_status, delivered_at = compute_epic_status(
+        tmp_db,
+        "p1",
+        "017-test",
+        required_node_ids={"specify", "plan", "implement"},
+        current_status="drafted",
+    )
+    assert new_status == "in_progress"
+    assert delivered_at is None
+
+
+def test_compute_epic_status_drafted_ships_when_all_required_done(tmp_db):
+    """drafted → shipped when all required nodes complete (reseed of fully-run stuck epic)."""
+    from db_pipeline import compute_epic_status, upsert_epic, upsert_epic_node, upsert_platform
+
+    upsert_platform(tmp_db, "p1", name="P1", repo_path="platforms/p1")
+    upsert_epic(tmp_db, "p1", "017-test", title="Test", status="drafted")
+    for node in ("epic-context", "specify", "plan", "implement"):
+        upsert_epic_node(tmp_db, "p1", "017-test", node, "done")
+
+    new_status, delivered_at = compute_epic_status(
+        tmp_db,
+        "p1",
+        "017-test",
+        required_node_ids={"epic-context", "specify", "plan", "implement"},
+        current_status="drafted",
+    )
+    assert new_status == "shipped"
+    assert delivered_at is not None
 
 
 # --- Fix: progress_pct must include skipped nodes ---

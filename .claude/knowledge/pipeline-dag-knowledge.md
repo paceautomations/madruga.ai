@@ -260,7 +260,10 @@ The endpoint enforces the sequential invariant: only 1 epic per platform can be 
 Safety: drafted epics cannot accidentally enter the L2 cycle because:
 1. Easter only polls `status='in_progress'` (easter.py poll_active_epics)
 2. All other L2 skills check `current_branch starts with epic/` (pipeline-contract-base.md Step 0)
-3. `compute_epic_status()` in db.py does not auto-promote `drafted` epics
+3. `compute_epic_status()` promotes `drafted` → `in_progress` only when nodes beyond `epic-context`
+   complete (`completed_ids - {"epic-context"}` non-empty). `--draft` mode only runs `epic-context`
+   (via `--epic-status drafted` override in post_save), so a genuine draft stays `drafted` until
+   the user clicks Start. A stuck epic where the L2 cycle ran but status was frozen auto-heals.
 
 ### Parallel Epics Constraint (ARCHITECTURAL INVARIANT)
 

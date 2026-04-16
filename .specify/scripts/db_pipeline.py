@@ -939,14 +939,28 @@ def compute_epic_status(
 
     Returns (new_status, delivered_at_or_None).
     Pass completed_ids to avoid a redundant DB query when caller already has the data.
-    Safety: never regresses shipped to a lesser status.
+    Safety: never regresses shipped/blocked/cancelled to a lesser status.
+
+    drafted epics auto-promote to in_progress when any node beyond epic-context completes.
+    --draft mode only runs epic-context (via --epic-status drafted override in post_save), so
+    ``completed_ids - {"epic-context"}`` being empty safely means "still a draft".
     """
-    if current_status in ("blocked", "cancelled", "shipped", "drafted"):
+    if current_status in ("blocked", "cancelled", "shipped"):
         return current_status, None
 
     if completed_ids is None:
         nodes = get_epic_nodes(conn, platform_id, epic_id)
         completed_ids = {n["node_id"] for n in nodes if n["status"] in ("done", "skipped")}
+
+    # drafted: promote only when L2 has progressed beyond epic-context.
+    # --draft mode marks epic-context done but no further nodes, so the subtraction
+    # below is empty for a genuine draft and non-empty for a stuck/running epic.
+    if current_status == "drafted":
+        if completed_ids - {"epic-context"}:
+            if required_node_ids and required_node_ids.issubset(completed_ids):
+                return "shipped", _now()[:10]
+            return "in_progress", None
+        return "drafted", None
 
     if required_node_ids and required_node_ids.issubset(completed_ids):
         delivered_at = _now()[:10]

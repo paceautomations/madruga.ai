@@ -26,6 +26,7 @@ import argparse
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 import time
@@ -165,14 +166,18 @@ def _parse_manifest(testing: dict) -> TestingManifest:
 
 
 def load_manifest(platform: str, repo_root: Path) -> TestingManifest | None:
-    """Load and parse testing: block from platform.yaml. Returns None if absent."""
+    """Load and parse testing: block from platform.yaml. Returns None if absent.
+
+    Raises ValueError with a descriptive message for YAML parse errors so callers
+    can distinguish "file not found" from "file is corrupt YAML" (aids SC-003 diagnostics).
+    """
     yaml_path = repo_root / "platforms" / platform / "platform.yaml"
     try:
         data = yaml.safe_load(yaml_path.read_text())
     except FileNotFoundError:
         return None
-    except yaml.YAMLError:
-        return None
+    except yaml.YAMLError as exc:
+        raise ValueError(f"platform.yaml for '{platform}' is not valid YAML: {exc}") from exc
     if not isinstance(data, dict):
         return None
     testing = data.get("testing")
@@ -223,6 +228,9 @@ def _read_env_keys(env_path: Path) -> set[str]:
             stripped = line.strip()
             if not stripped or stripped.startswith("#"):
                 continue
+            # Strip 'export ' prefix used in shell-compatible .env files (e.g. export KEY=value)
+            if stripped.startswith("export "):
+                stripped = stripped[7:].lstrip()
             if "=" in stripped:
                 key = stripped.split("=", 1)[0].strip()
                 if key:
@@ -249,17 +257,16 @@ def validate_env(manifest: TestingManifest, cwd: Path) -> StartupResult:
     env_path = cwd / manifest.env_file
     actual_keys = _read_env_keys(env_path)
 
-    # Also read .env (the real one, not the example) if env_file points to .env.example
-    real_env_path = cwd / ".env"
-    real_keys = _read_env_keys(real_env_path)
-
-    # Which keys are actually "present" — use the real .env as authoritative
-    # If env_file IS .env, use actual_keys; otherwise use real_keys as authoritative presence
+    # Which keys are "present" — use the real .env as authoritative.
+    # If env_file IS .env/.env.local, that file is already the real env.
+    # Otherwise (e.g., .env.example) read the actual .env separately.
     if manifest.env_file in (".env", ".env.local"):
         present_keys = actual_keys
         example_keys: set[str] = set()
     else:
-        # env_file is .env.example or similar — compare real .env against example
+        # env_file is .env.example or similar — read real .env as authoritative presence
+        real_env_path = cwd / ".env"
+        real_keys = _read_env_keys(real_env_path)
         present_keys = real_keys
         example_keys = actual_keys  # keys declared in example
 
@@ -318,7 +325,9 @@ def quick_check(health_checks: list[HealthCheck], timeout: int = 3) -> bool:
     """
     for hc in health_checks:
         try:
-            req = urllib.request.Request(hc.url, method=hc.method)
+            req = urllib.request.Request(
+                hc.url, method=hc.method, headers={"Connection": "close"}
+            )
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 if resp.status != hc.expect_status:
                     return False
@@ -326,7 +335,7 @@ def quick_check(health_checks: list[HealthCheck], timeout: int = 3) -> bool:
                     body = resp.read().decode("utf-8", errors="replace")
                     if hc.expect_body_contains not in body:
                         return False
-        except (urllib.error.URLError, OSError, Exception):
+        except OSError:
             return False
     return True
 
@@ -335,11 +344,14 @@ def quick_check(health_checks: list[HealthCheck], timeout: int = 3) -> bool:
 # T007 — execute_startup
 # ---------------------------------------------------------------------------
 
-_DEFAULT_STARTUP_COMMANDS: dict[str, str] = {
-    "docker": "docker compose up -d",
-    "npm": "npm run dev",
-    "make": "make run",
+_DEFAULT_STARTUP_COMMANDS: dict[str, list[str]] = {
+    "docker": ["docker", "compose", "up", "-d"],
+    "npm": ["npm", "run", "dev"],
+    "make": ["make", "run"],
 }
+
+# Shell metacharacter tokens that require shell=True for user-supplied commands
+_SHELL_METACHAR_TOKENS: frozenset[str] = frozenset({"&&", "||", "|", ";", "&"})
 
 
 def execute_startup(manifest: TestingManifest, cwd: Path) -> tuple[int, str]:
@@ -347,31 +359,50 @@ def execute_startup(manifest: TestingManifest, cwd: Path) -> tuple[int, str]:
 
     Returns (returncode, stderr_output).
     NEVER runs destructive commands (docker compose down, docker stop, etc.).
+
+    Default commands use list form (shell=False, secure).
+    User-provided commands that contain shell metacharacters (&&, ||, |, ;) use
+    shell=True — required for compound commands like "cd portal && npm run dev".
     """
     startup_type = manifest.startup.type
-    command = manifest.startup.command
+    user_command = manifest.startup.command
+    # Use at least 60s for startup; respect platform's ready_timeout for longer pulls
+    cmd_timeout = max(manifest.startup.ready_timeout, 60)
 
     if startup_type == "none":
         return (0, "")
 
-    if command is None:
-        command = _DEFAULT_STARTUP_COMMANDS.get(startup_type)
-
-    if command is None:
-        return (2, f"No command configured for startup type '{startup_type}'")
+    use_shell = False
+    if user_command is None:
+        # Default commands are hardcoded safe lists — always shell=False
+        cmd: str | list[str] | None = _DEFAULT_STARTUP_COMMANDS.get(startup_type)
+        if cmd is None:
+            return (2, f"No command configured for startup type '{startup_type}'")
+    else:
+        # User-supplied command: prefer shlex.split + shell=False for safety.
+        # Fall back to shell=True when shell metacharacters are present (e.g. "cmd1 && cmd2").
+        try:
+            tokens = shlex.split(user_command)
+        except ValueError:
+            tokens = []  # parse error → treat as requiring shell
+        if set(tokens) & _SHELL_METACHAR_TOKENS or "$(" in user_command or "`" in user_command:
+            cmd = user_command
+            use_shell = True
+        else:
+            cmd = tokens if tokens else user_command
 
     try:
         result = subprocess.run(
-            command,
-            shell=True,
+            cmd,  # type: ignore[arg-type]
+            shell=use_shell,
             cwd=str(cwd),
             capture_output=True,
-            timeout=30,
+            timeout=cmd_timeout,
             text=True,
         )
         return (result.returncode, result.stderr or "")
     except subprocess.TimeoutExpired:
-        return (1, "Startup command timed out after 30s")
+        return (1, f"Startup command timed out after {cmd_timeout}s")
     except OSError as exc:
         return (1, str(exc))
 
@@ -517,7 +548,24 @@ def _startup_hint(startup_type: str) -> str:
     return hints.get(startup_type, "verifique se os serviços estão em execução")
 
 
-def validate_urls(manifest: TestingManifest) -> StartupResult:
+# ---------------------------------------------------------------------------
+# _NoRedirectHandler — module-level to allow reuse and proper test patching
+# ---------------------------------------------------------------------------
+
+
+class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Prevent urllib from following redirects so we can inspect the Location header."""
+
+    def http_error_302(self, req, fp, code, msg, headers):  # type: ignore[override]
+        raise urllib.error.HTTPError(req.full_url, code, msg, headers, fp)
+
+    http_error_301 = http_error_302  # type: ignore[assignment]
+    http_error_303 = http_error_302  # type: ignore[assignment]
+    http_error_307 = http_error_302  # type: ignore[assignment]
+    http_error_308 = http_error_302  # type: ignore[assignment]
+
+
+def validate_urls(manifest: TestingManifest, cwd: Path | None = None) -> StartupResult:
     """Check reachability and content of all URLs declared in testing.urls.
 
     FR-013: BLOCKER for inaccessible URLs or unexpected status codes.
@@ -533,18 +581,8 @@ def validate_urls(manifest: TestingManifest) -> StartupResult:
         label = entry.label
 
         try:
-            # Disable automatic redirect following so we can check Location header
-            class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
-                def http_error_302(self, req, fp, code, msg, headers):
-                    raise urllib.error.HTTPError(req.full_url, code, msg, headers, fp)
-
-                http_error_301 = http_error_302
-                http_error_303 = http_error_302
-                http_error_307 = http_error_302
-                http_error_308 = http_error_302
-
-            if entry.expect_redirect:
-                opener = urllib.request.build_opener(NoRedirectHandler)
+            if entry.expect_redirect is not None:
+                opener = urllib.request.build_opener(_NoRedirectHandler)
             else:
                 opener = urllib.request.build_opener()
 
@@ -556,7 +594,7 @@ def validate_urls(manifest: TestingManifest) -> StartupResult:
 
         except urllib.error.HTTPError as exc:
             # Redirect responses come here when expect_redirect is set
-            if entry.expect_redirect:
+            if entry.expect_redirect is not None:
                 location = exc.headers.get("Location", "")
                 status_code = exc.code
                 # Check if redirect goes to expected path
@@ -601,7 +639,7 @@ def validate_urls(manifest: TestingManifest) -> StartupResult:
             continue
 
         # Check redirect expectation (when we followed redirects and shouldn't have)
-        if entry.expect_redirect:
+        if entry.expect_redirect is not None:
             # We reached here only if opener followed the redirect (shouldn't happen with NoRedirectHandler)
             # But just in case:
             detail = f"Esperava redirect para '{entry.expect_redirect}' mas recebeu HTTP {status_code}"
@@ -619,8 +657,9 @@ def validate_urls(manifest: TestingManifest) -> StartupResult:
                 url_results.append(URLResult(url=url, label=label, status_code=status_code, ok=False, detail=detail))
                 continue
 
-        # Check for placeholder content
-        if _is_placeholder(body, content_type, entry.type):
+        # Check for placeholder content (only when body is non-empty to avoid false positives
+        # from e.g. a 401 HTTPError that returns no body but is in expect_status)
+        if body and _is_placeholder(body, content_type, entry.type):
             placeholder_detail = _placeholder_detail(body, content_type, entry.type)
             findings.append(
                 Finding(
@@ -743,24 +782,33 @@ def _merge_results(results: list[StartupResult]) -> StartupResult:
 
 
 def run_full(manifest: TestingManifest, cwd: Path) -> StartupResult:
-    """Sequence: start → validate_env → validate_urls. Merge all results."""
+    """Sequence: start → validate_env → validate_urls. Merge all results.
+
+    Short-circuits validate_urls when start_services returns BLOCKER to avoid
+    redundant connection timeouts (up to N_urls × 10s) against services that
+    failed to start.
+    """
     start_result = start_services(manifest, cwd)
     env_result = validate_env(manifest, cwd)
-    url_result = validate_urls(manifest)
+    if start_result.status == "blocker":
+        url_result = StartupResult(
+            status="ok",
+            findings=[
+                Finding(
+                    level="INFO",
+                    message="URL validation skipped — startup failed",
+                    detail="Fix the startup BLOCKER above before running URL validation.",
+                )
+            ],
+        )
+    else:
+        url_result = validate_urls(manifest, cwd)
     return _merge_results([start_result, env_result, url_result])
 
 
 def _result_to_dict(result: StartupResult) -> dict:
     """Serialize StartupResult to a JSON-serializable dict."""
-    return {
-        "status": result.status,
-        "findings": [asdict(f) for f in result.findings],
-        "health_checks": [asdict(hc) for hc in result.health_checks],
-        "env_missing": result.env_missing,
-        "env_present": result.env_present,
-        "urls": [asdict(u) for u in result.urls],
-        "skipped_startup": result.skipped_startup,
-    }
+    return asdict(result)
 
 
 def _print_result(result: StartupResult, use_json: bool) -> None:
@@ -822,6 +870,16 @@ def main(argv: list[str] | None = None) -> int:
             )
         return 2
 
+    # Early config validation: types requiring an explicit command must have one declared
+    if (args.start or args.full) and manifest.startup.type in ("venv", "script"):
+        if manifest.startup.command is None:
+            print(
+                f"ERROR: startup.type '{manifest.startup.type}' requires "
+                f"testing.startup.command to be set in platform.yaml",
+                file=sys.stderr,
+            )
+            return 2
+
     try:
         if args.parse_config:
             # Just validate and print the manifest
@@ -859,7 +917,7 @@ def main(argv: list[str] | None = None) -> int:
             result = validate_env(manifest, cwd)
 
         elif args.validate_urls:
-            result = validate_urls(manifest)
+            result = validate_urls(manifest, cwd)
 
         elif args.full:
             result = run_full(manifest, cwd)
