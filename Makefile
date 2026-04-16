@@ -11,6 +11,10 @@ help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-18s %s\n", $$1, $$2}'
 
 test: ## Run Python tests
+	MADRUGA_DISPATCH=0 python3 -m pytest .specify/scripts/tests/ -v \
+		--ignore=.specify/scripts/tests/test_reverse_reconcile_ingest.py
+
+test-full: ## Run all tests including slow git-subprocess tests
 	MADRUGA_DISPATCH=0 python3 -m pytest .specify/scripts/tests/ -v
 
 coverage: ## Run tests with coverage report
