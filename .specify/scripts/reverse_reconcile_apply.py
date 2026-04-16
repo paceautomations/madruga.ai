@@ -97,11 +97,23 @@ def _find_anchor(text: str, anchor: str) -> int:
     return sum(len(line) for line in lines[: best[1]])
 
 
-def _apply_one(patch: dict, repo_root: Path) -> tuple[str, str]:
-    """Return (new_content, detail). Does not write."""
+def _apply_one(
+    patch: dict,
+    repo_root: Path,
+    content_cache: dict[str, str] | None = None,
+) -> tuple[str, str]:
+    """Return (new_content, detail). Does not write.
+
+    content_cache maps file rel-path → already-patched content so that
+    multiple patches on the same file are chained rather than each starting
+    from the on-disk original.
+    """
     op = patch["operation"]
-    target = repo_root / patch["file"]
-    if not target.exists():
+    file_rel = patch["file"]
+    target = repo_root / file_rel
+    if content_cache is not None and file_rel in content_cache:
+        original = content_cache[file_rel]
+    elif not target.exists():
         if op == "append":
             original = ""
         else:
@@ -142,15 +154,22 @@ def apply_patches(
     *,
     commit: bool = False,
 ) -> list[PatchResult]:
-    """Apply each patch. Returns per-patch results. Never raises — records errors."""
+    """Apply each patch. Returns per-patch results. Never raises — records errors.
+
+    Multiple patches targeting the same file are chained: each patch reads from
+    the already-patched content of the previous patch on that file (content_cache),
+    so the final proposed/written file contains ALL changes, not just the last one.
+    """
     results: list[PatchResult] = []
+    content_cache: dict[str, str] = {}
     for patch in patches:
         file_rel = patch.get("file", "<unknown>")
         try:
-            new_content, detail = _apply_one(patch, repo_root)
+            new_content, detail = _apply_one(patch, repo_root, content_cache)
         except PatchError as exc:
             results.append(PatchResult(file=file_rel, status="error", detail=str(exc)))
             continue
+        content_cache[file_rel] = new_content
         target = repo_root / file_rel
         target.parent.mkdir(parents=True, exist_ok=True)
         if commit:

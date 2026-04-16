@@ -59,7 +59,7 @@ graph LR
     subgraph external ["External Services"]
         evolution-api["Evolution API<br/><small>WhatsApp gateway</small>"]
         supabase-resenhai[("Supabase ResenhAI<br/><small>PG 15 read-only</small>")]
-        openai-gpt-mini["OpenAI GPT mini<br/><small>classification + generation</small>"]
+        openai-gpt-mini["OpenAI gpt-5.4-mini<br/><small>classification + generation (ADR-025)</small>"]
         infisical["Infisical<br/><small>secrets vault</small>"]
     end
 
@@ -139,7 +139,7 @@ graph LR
 | prosauai-worker | Infisical | HTTPS REST SDK (cached 5min) | sync | Secret retrieval |
 | Supabase ProsaUAI | prosauai-worker | PG LISTEN/NOTIFY | async (event-driven) | Triggers proativos (games, group_members) |
 | prosauai-admin | prosauai-api | REST /api/v1/* | sync | CRUD operations |
-| Bifrost | OpenAI GPT mini | OpenAI API | sync | LLM inference |
+| Bifrost | OpenAI gpt-5.4-mini | OpenAI API | sync | LLM inference |
 
 ---
 

@@ -168,3 +168,40 @@ def test_missing_file_reports_error(tmp_path):
     results = apply_patches([patch], tmp_path, commit=True)
     assert results[0].status == "error"
     assert "not found" in results[0].detail
+
+
+def test_multiple_patches_same_file_are_chained(tmp_path):
+    """Two patches on the same file must both appear in the final output.
+    Previously, the second patch would read from the original on-disk file and
+    overwrite the proposed file produced by the first patch, losing patch 1.
+    """
+    from reverse_reconcile_apply import apply_patches
+
+    doc = tmp_path / "doc.md"
+    doc.write_text(
+        "# Title\n\nLine A: old-a\n\nLine B: old-b\n",
+        encoding="utf-8",
+    )
+
+    patches = [
+        {
+            "file": "doc.md",
+            "operation": "replace",
+            "anchor_before": "Line A: old-a",
+            "new_content": "Line A: new-a",
+        },
+        {
+            "file": "doc.md",
+            "operation": "replace",
+            "anchor_before": "Line B: old-b",
+            "new_content": "Line B: new-b",
+        },
+    ]
+    results = apply_patches(patches, tmp_path, commit=True)
+
+    assert all(r.status == "applied" for r in results)
+    final = doc.read_text(encoding="utf-8")
+    assert "Line A: new-a" in final, "patch 1 must survive when patch 2 runs"
+    assert "Line B: new-b" in final, "patch 2 must be applied"
+    assert "old-a" not in final
+    assert "old-b" not in final

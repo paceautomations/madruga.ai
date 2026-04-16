@@ -1,0 +1,22 @@
+{
+  "patches": [
+    {
+      "file": "platforms/prosauai/engineering/containers.md",
+      "operation": "replace",
+      "anchor_before": "        openai-gpt-mini[\"OpenAI GPT mini<br/><small>classification + generation</small>\"]",
+      "new_content": "        openai-gpt-mini[\"OpenAI gpt-5.4-mini<br/><small>classification + generation (ADR-025)</small>\"]",
+      "reason": "Commit 8915c820 atualizou o modelo padrão para gpt-5.4-mini (migration 009). Diagrama Mermaid referenciava 'GPT mini' sem versão; atualizado para refletir estado HEAD.",
+      "sha_refs": ["8915c820", "25e63e68"],
+      "layer": "engineering"
+    },
+    {
+      "file": "platforms/prosauai/engineering/containers.md",
+      "operation": "replace",
+      "anchor_before": "| Bifrost | OpenAI GPT mini | OpenAI API | sync | LLM inference |",
+      "new_content": "| Bifrost | OpenAI gpt-5.4-mini | OpenAI API | sync | LLM inference |",
+      "reason": "Commit 8915c820 atualizou o modelo padrão para gpt-5.4-mini. Tabela de protocolos referenciava 'OpenAI GPT mini' sem versão; atualizado para refletir estado HEAD.",
+      "sha_refs": ["8915c820"],
+      "layer": "engineering"
+    }
+  ]
+}
