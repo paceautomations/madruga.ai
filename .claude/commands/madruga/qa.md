@@ -47,7 +47,7 @@ Write all generated artifact content in Brazilian Portuguese (PT-BR).
 
 ## Testing Layers
 
-QA runs up to 6 layers in order. Each layer is independent — if one is unavailable, the others still run.
+QA runs up to 7 layers in order. Each layer is independent — if one is unavailable, the others still run.
 
 | Layer | Always? | What it does | Activates when |
 |-------|---------|--------------|----------------|
@@ -56,6 +56,7 @@ QA runs up to 6 layers in order. Each layer is independent — if one is unavail
 | **L3: Code Review** | YES | Read diff, hunt bugs, security, logic, edge cases | Always — this is the core |
 | **L4: Build Verification** | If buildable | Verify project builds without errors | Build scripts detected |
 | **L5: API/Contract Testing** | Conditional | Hit endpoints, validate responses | API routes in diff + server running |
+| **L5.5: Journey Testing** | Conditional | Execute declared user journeys (API + browser steps) | testing.journeys_file declared + file exists |
 | **L6: Browser Testing** | Conditional | Full Playwright: scenarios, snapshots, exploratory | Playwright MCP + web features + app running |
 
 **Minimum guarantee**: L1 + L3 always run. QA always has meaningful work.
@@ -425,6 +426,63 @@ If no tooling is detected at all: `⏭️ L1: No static analysis tools configure
 
 ---
 
+### Phase L5.5: Journey Testing (quando journeys.md declarado)
+
+**Ativa quando:** `testing.journeys_file` declarado em `testing:` block E o arquivo `journeys_file` existe (relativo ao diretório `platforms/<name>/`).
+
+Se a condição não for atendida (testing: ausente, journeys_file não declarado, ou arquivo não existe), pular silenciosamente para Phase 6.
+
+1. **Parsear jornadas do arquivo `journeys_file`:**
+   Ler o arquivo declarado em `testing.journeys_file` (relativo ao diretório `platforms/<name>/`).
+   Extrair blocos YAML fenced com o padrão ` \`\`\`yaml ... \`\`\` ` — apenas blocos cujo campo `id` começa com `J-` são reconhecidos como jornadas (per `contracts/journeys_schema.md`).
+   Se nenhuma jornada encontrada → `⏭️ L5.5: Nenhuma jornada definida em journeys_file — skipping`
+
+2. **Para cada jornada, executar sequencialmente os steps:**
+
+   **Steps `type: api`** — executar via Bash/curl:
+   ```bash
+   # Exemplo para action: "GET http://localhost:8050/health"
+   curl -s -o /tmp/qa_resp.txt -w "%{http_code}" --max-time 10 <URL>
+   ```
+   - `assert_status` definido → comparar HTTP status code com esperado; divergência → FAIL step
+   - `assert_redirect` definido → usar `curl -s -I --max-time 10` e checar header `Location`; divergência → FAIL step
+   - `assert_contains` definido → checar se cada substring está no body da resposta; ausência → FAIL step
+   - Timeout padrão: 10s por step
+   - Connection refused / timeout → FAIL step com mensagem clara
+
+   **Steps `type: browser`** — executar via Playwright MCP:
+   - `navigate <URL>` → `mcp__playwright__browser_navigate`
+   - `assert_contains <texto>` → `mcp__playwright__browser_snapshot` + verificar se texto presente no snapshot
+   - `click <seletor>` → `mcp__playwright__browser_click`
+   - `fill_form <campo>=<valor>` → `mcp__playwright__browser_fill`
+   - `assert_redirect <path>` → verificar URL atual após navegação via snapshot
+
+   **Step com `screenshot: true`** → `mcp__playwright__browser_take_screenshot` obrigatório após a ação do step.
+
+3. **Avaliar resultado por jornada:**
+   - Journey `required: true` + qualquer FAIL → **BLOCKER**:
+     `❌ <ID> FAIL step <N> — <descrição da falha>`
+   - Journey `required: false` + qualquer FAIL → **WARN**:
+     `⚠️ <ID> WARN step <N> — <descrição da falha>`
+   - Todos os steps PASS → `✅ <ID> PASS (<N> steps, <tempo>s)`
+
+4. **Playwright indisponível:**
+   - Steps `type: browser` → marcar como `SKIP — Playwright não disponível`, continuar
+   - Steps `type: api` continuam normalmente
+   - Se journey tem **apenas** steps `type: browser` e Playwright indisponível → `⏭️ <ID> SKIP — somente browser steps, Playwright indisponível`
+
+5. **Report da fase:**
+   ```
+   🗺️ L5.5: Journey Testing
+   | Journey | Steps | Status | Tempo |
+   |---------|-------|--------|-------|
+   | J-001 Admin Login Happy Path | 6 | ✅ PASS | 4.2s |
+   | J-002 Webhook ingest | 1 | ✅ PASS | 0.8s |
+   | J-003 Cookie expirado | 2 | ⏭️ SKIP | — |
+   ```
+
+---
+
 ### Phase 6: L6 — Browser Testing (conditional)
 
 **Activates when:** Playwright MCP available AND web features in diff AND app running.
@@ -724,6 +782,10 @@ Re-execute ONLY the relevant layer/scenario for the fix:
 ### L5: API Testing
 | Endpoint | Method | Test | Result |
 |----------|--------|------|--------|
+
+### L5.5: Journey Testing
+| Journey | Steps | Status | Tempo |
+|---------|-------|--------|-------|
 
 ### L6: Browser Testing
 | # | Journey | Scenario | Prio | Status |
