@@ -13,7 +13,9 @@ help: ## Show available targets
 test: ## Run Python tests
 	MADRUGA_DISPATCH=0 python3 -m pytest .specify/scripts/tests/ -v \
 		--ignore=.specify/scripts/tests/test_reverse_reconcile_ingest.py \
-		--ignore=.specify/scripts/tests/test_reverse_reconcile_e2e.py
+		--ignore=.specify/scripts/tests/test_reverse_reconcile_e2e.py \
+		--ignore=.specify/scripts/tests/test_reverse_reconcile_aggregate.py \
+		--ignore=.specify/scripts/tests/test_implement_remote.py
 
 test-full: ## Run all tests including slow git-subprocess tests
 	MADRUGA_DISPATCH=0 python3 -m pytest .specify/scripts/tests/ -v
