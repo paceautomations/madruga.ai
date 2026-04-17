@@ -98,8 +98,8 @@
 - [x] T064 [P] Criar `apps/api/prosauai/admin/health.py` com mesmas funções em Python (espelho de T063 — regras não divergem entre front e back)
 - [x] T065 [P] Criar `apps/api/tests/unit/admin/test_health_rules.py` — casos de teste para todos os thresholds de FR-011 + todos os caminhos de FR-015 (56 testes verdes cobrindo: 6 boundaries por KPI × 5 KPIs, None/NaN → neutral, volume delta 30%/50% boundaries, 16 caminhos de tenant health incluindo stale >15min, rolling error rate >10%, amber não vence red, null inputs)
 - [x] T066 [P] Criar `apps/admin/src/lib/format.ts` com helpers puros `formatCurrency(usd)`, `formatDuration(ms)`, `maskPhone(e164)`, `truncate(str, n)`, `formatDelta(curr, prev)` (retorna `DeltaDescriptor` com {diff, pct, label, trend, color})
-- [ ] T067 [P] Criar `apps/admin/tests/unit/lib/test_format.ts` + `test_health_rules.ts` com Vitest — cobertura dos edge cases
-- [ ] T068 Executar `pnpm gen:api` após contracts/openapi.yaml finalizado — gera `apps/admin/src/types/api.ts` (depende de T061)
+- [x] T067 [P] Criar `apps/admin/tests/unit/lib/test_format.ts` + `test_health_rules.ts` com Vitest — cobertura dos edge cases (vitest 3.2 + `vitest.config.mjs`; 46 testes verdes cobrindo formatCurrency/formatDuration/maskPhone/truncate/formatDelta + todos os boundaries de classifyKpi/classifyVolumeDelta/classifyTenantHealth)
+- [x] T068 Executar `pnpm gen:api` após contracts/openapi.yaml finalizado — gera `apps/admin/src/types/api.ts` (1418 linhas, openapi-typescript 7.13.0; tsc --noEmit passa)
 
 **Checkpoint Foundational**: Backend schema + instrumentação + endpoints-prontos para implementar; frontend types gerados + libs compartilhadas prontas.
 
