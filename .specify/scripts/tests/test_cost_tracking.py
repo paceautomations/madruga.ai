@@ -377,7 +377,12 @@ class TestCompleteRunMetrics:
         assert row["status"] == "completed"
 
     def test_partial_metrics_leaves_others_null(self, db_with_platform):
-        """Passing only tokens_in leaves tokens_out/cost_usd/duration_ms NULL."""
+        """Passing only tokens_in leaves tokens_out/cost_usd NULL.
+
+        duration_ms is filled by wall-clock fallback (db_pipeline.py:454) — it
+        was None at call site but is computed from started_at/completed_at to
+        recover metrics on success_check rescue paths (epic 008 retro fix).
+        """
         run_id = insert_run(db_with_platform, "test-plat", "vision")
         complete_run(db_with_platform, run_id, "completed", tokens_in=100)
         row = db_with_platform.execute(
@@ -387,10 +392,13 @@ class TestCompleteRunMetrics:
         assert row["tokens_in"] == 100
         assert row["tokens_out"] is None
         assert row["cost_usd"] is None
-        assert row["duration_ms"] is None
+        assert row["duration_ms"] is not None and row["duration_ms"] >= 0
 
     def test_no_metrics_only_updates_status(self, db_with_platform):
-        """complete_run() with no metric kwargs still updates status + completed_at."""
+        """complete_run() with no metric kwargs still updates status + completed_at.
+
+        duration_ms is filled by wall-clock fallback (see test above).
+        """
         run_id = insert_run(db_with_platform, "test-plat", "vision")
         complete_run(db_with_platform, run_id, "completed")
         row = db_with_platform.execute(
@@ -403,7 +411,7 @@ class TestCompleteRunMetrics:
         assert row["tokens_in"] is None
         assert row["tokens_out"] is None
         assert row["cost_usd"] is None
-        assert row["duration_ms"] is None
+        assert row["duration_ms"] is not None and row["duration_ms"] >= 0
 
     def test_error_status_with_metrics(self, db_with_platform):
         """Failed runs still persist metrics (we want cost tracking even on errors)."""

@@ -455,7 +455,25 @@ async def retention_cleanup(conn, shutdown_event, interval=86400):
             logger.exception("retention_cleanup_error")
 
 
-async def periodic_backup(conn, shutdown_event, interval_hours=6):
+def _backup_db(src_db_path: str, target_path: str) -> None:
+    """Open a fresh sqlite connection in the calling thread and VACUUM INTO.
+
+    sqlite3 connections default to ``check_same_thread=True`` and refuse to
+    execute queries from a thread other than the one that created them.
+    ``periodic_backup`` runs the backup via ``asyncio.to_thread`` (worker
+    thread), so we must NOT reuse the lifespan ``conn`` (created in the event
+    loop). Module-level helper for testability.
+    """
+    import sqlite3
+
+    local_conn = sqlite3.connect(src_db_path)
+    try:
+        local_conn.execute("VACUUM INTO ?", (target_path,))
+    finally:
+        local_conn.close()
+
+
+async def periodic_backup(_unused_conn, shutdown_event, interval_hours=6):
     """Create periodic DB backups via VACUUM INTO. Rotate to keep last 5."""
     from config import DB_PATH as _db_path
 
@@ -468,7 +486,7 @@ async def periodic_backup(conn, shutdown_event, interval_hours=6):
         try:
             timestamp = time.strftime("%Y%m%d_%H%M%S", time.gmtime())
             path = backup_dir / f"madruga_{timestamp}.db"
-            await asyncio.to_thread(conn.execute, "VACUUM INTO ?", (str(path),))
+            await asyncio.to_thread(_backup_db, str(_db_path), str(path))
             logger.info("backup_created", path=str(path))
             # Rotate: keep last 5
             backups = sorted(backup_dir.glob("madruga_*.db"))

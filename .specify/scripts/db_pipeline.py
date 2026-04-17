@@ -453,17 +453,17 @@ def insert_run(conn: sqlite3.Connection, platform_id: str, node_id: str, **kwarg
 
 def complete_run(conn: sqlite3.Connection, run_id: str, status: str = "completed", **kwargs) -> None:
     completed_at = _now()
-    # Wall-clock fallback: Claude's duration_ms is inference-only and can be
-    # wildly low (4s reported vs 16min real). Substitute wall-clock when the
-    # reported value is suspiciously short.
+    # Wall-clock fallback: Claude's reported duration_ms is inference-only and
+    # can be missing entirely (success_check rescue path on timeouts) or wildly
+    # low (4s reported vs 16min real). Compute from started_at in either case.
     reported = kwargs.get("duration_ms")
-    if reported is not None and reported < _WALL_CLOCK_THRESHOLD_MS:
+    if reported is None or reported < _WALL_CLOCK_THRESHOLD_MS:
         row = conn.execute("SELECT started_at FROM pipeline_runs WHERE run_id=?", (run_id,)).fetchone()
         if row and row[0]:
             wall_ms = int(
                 (datetime.fromisoformat(completed_at) - datetime.fromisoformat(row[0])).total_seconds() * 1000
             )
-            if wall_ms > reported:
+            if reported is None or wall_ms > reported:
                 kwargs["duration_ms"] = wall_ms
     sets = ["status=?", "completed_at=?"]
     vals: list = [status, completed_at]

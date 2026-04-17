@@ -85,7 +85,10 @@ def test_complete_trace_aggregates_span_metrics(tmp_db):
     r2 = _seed_run(
         tmp_db, pid, "plan", trace_id=trace_id, tokens_in=200, tokens_out=100, cost_usd=0.02, duration_ms=2000
     )
-    complete_run(tmp_db, r2, "completed")
+    # Pass duration_ms explicitly: complete_run() now wall-clock-fills when
+    # the kwarg is None (db_pipeline.py:454, epic 008 retro fix), which would
+    # overwrite the 2000ms set at INSERT with a near-instant test wall-clock.
+    complete_run(tmp_db, r2, "completed", duration_ms=2000)
 
     complete_trace(tmp_db, trace_id, "completed")
 

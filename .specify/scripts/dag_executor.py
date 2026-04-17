@@ -812,10 +812,10 @@ def compose_phase_prompt(
             "4. Git commit: `feat(<epic-number>): TXXX <short description>`",
             "5. Move to the next task",
             "",
-            "After ALL tasks are complete, run the full test suite once.",
-            "When `make test` passes (or after reporting skipped tasks), EXIT IMMEDIATELY.",
-            "Do NOT summarize, explain, or run additional checks after that point.",
-            "The phase orchestrator verifies completion automatically — your job ends at test-green.",
+            "After ALL tasks are complete, run the test suite for THIS repository (the cwd you are in).",
+            "Do NOT cd to other directories. If no test runner is configured, skip and report.",
+            "When tests pass (or skipped), EXIT IMMEDIATELY. The phase orchestrator verifies via tasks.md [X] markers.",
+            "Do NOT summarize, explain, or run additional checks after EXIT.",
             "",
             "If you encounter a blocking error on one task after 2 attempts,",
             "skip it and continue with the next. Report skipped tasks at the end.",
@@ -2507,8 +2507,12 @@ async def run_pipeline_async(
                 conn.close()
             return 1
 
-        # Layer 4: verify branch + HEAD didn't change
-        if epic_slug:
+        # Layer 4: verify branch + HEAD didn't change.
+        # Skip for nodes that run in REPO_ROOT (madruga.ai) — the epic branch
+        # lives in the EXTERNAL repo (e.g. prosauai/), so checking branch in
+        # REPO_ROOT compares apples to oranges and triggers a bogus revert
+        # ("claude -p changed branch") on every dispatch of non-CODE_CWD nodes.
+        if epic_slug and _needs_code_cwd(node):
             branch_check = subprocess.run(
                 ["git", "branch", "--show-current"], capture_output=True, text=True, cwd=str(node_cwd)
             )
@@ -3107,8 +3111,12 @@ def run_pipeline(
             conn.close()
             return 1
 
-        # Layer 4: verify branch + HEAD didn't change
-        if epic_slug:
+        # Layer 4: verify branch + HEAD didn't change.
+        # Skip for nodes that run in REPO_ROOT (madruga.ai) — the epic branch
+        # lives in the EXTERNAL repo (e.g. prosauai/), so checking branch in
+        # REPO_ROOT compares apples to oranges and triggers a bogus revert
+        # ("claude -p changed branch") on every dispatch of non-CODE_CWD nodes.
+        if epic_slug and _needs_code_cwd(node):
             branch_check = subprocess.run(
                 ["git", "branch", "--show-current"], capture_output=True, text=True, cwd=str(node_cwd)
             )

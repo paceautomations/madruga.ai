@@ -91,6 +91,30 @@ def test_insert_complete_run(tmp_db):
     assert runs[0]["tokens_in"] == 1000
 
 
+def test_complete_run_fills_wall_clock_when_duration_missing(tmp_db):
+    """success_check rescue path completes runs WITHOUT duration_ms (Claude
+    output was lost to timeout). Wall-clock must still be filled from started_at.
+
+    Regression for easter-tracking.md (epic 008-admin-evolution, run 8718bb50).
+    Mocks _now() because db_core._now has 1-second resolution — a real sleep
+    would slow the test to >1s.
+    """
+    from unittest.mock import patch
+
+    from db_pipeline import complete_run, get_runs, insert_run, upsert_platform
+
+    upsert_platform(tmp_db, "p1", name="P1", repo_path="platforms/p1")
+
+    with patch("db_pipeline._now", return_value="2026-04-17T12:00:00Z"):
+        rid = insert_run(tmp_db, "p1", "implement:phase-1")
+    with patch("db_pipeline._now", return_value="2026-04-17T12:55:22Z"):
+        complete_run(tmp_db, rid, status="completed")  # no duration_ms passed
+
+    runs = get_runs(tmp_db, "p1")
+    expected_ms = (55 * 60 + 22) * 1000  # 3322000 ms
+    assert runs[0]["duration_ms"] == expected_ms
+
+
 def test_insert_get_events(tmp_db):
     from db_pipeline import upsert_platform, insert_event, get_events
 
