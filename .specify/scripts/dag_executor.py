@@ -778,91 +778,100 @@ def compose_task_prompt(
 
 _PHASE_USER_STORY_RE = re.compile(r"User Story\s+(\d+)", re.IGNORECASE)
 _SPEC_USER_STORY_HEADER_RE = re.compile(r"^##\s+User Story\s+(\d+)\b", re.MULTILINE | re.IGNORECASE)
+_SPEC_ANY_H2_RE = re.compile(r"^##\s+", re.MULTILINE)
+_TASKS_HEADER_RE = re.compile(r"^#")
+_TASKS_ITEM_RE = re.compile(r"^\s*-\s*\[[ xX]\]\s+(T\d+)")
+_PHASE_SETUP_MARKERS = ("setup", "shared infrastructure", "polish", "cleanup", "phase 1")
 
 
 def _phase_kind(phase_label: str, phase_tasks: list[TaskItem]) -> tuple[str, int | None]:
-    """Classify phase from label + task us_tags. Returns (kind, story_number).
-
-    Kinds:
-      - "user_story": this phase implements a single User Story N → only that
-        story's slice of spec.md is relevant.
-      - "setup": setup / shared infrastructure / polish phase. spec.md isn't
-        useful — the work is below the story layer.
-      - "mixed": phase spans multiple stories or doesn't match heuristics →
-        fall back to including the whole spec (current behaviour).
-    """
+    """Classify phase. Returns (kind, story_number) where kind is
+    "user_story" | "setup" | "mixed". Label wins over us_tags."""
     m = _PHASE_USER_STORY_RE.search(phase_label)
     if m:
         return "user_story", int(m.group(1))
 
     label_low = phase_label.lower()
-    setup_markers = ("setup", "shared infrastructure", "polish", "cleanup", "phase 1")
-    if any(label_low.startswith(s) or s in label_low for s in setup_markers):
+    if any(s in label_low for s in _PHASE_SETUP_MARKERS):
         return "setup", None
 
     us_tags = {t.us_tag for t in phase_tasks if t.us_tag}
     if not us_tags:
         return "setup", None
     if len(us_tags) == 1:
-        only_tag = next(iter(us_tags))
-        digits = "".join(ch for ch in only_tag if ch.isdigit())
+        digits = "".join(ch for ch in next(iter(us_tags)) if ch.isdigit())
         if digits:
             return "user_story", int(digits)
     return "mixed", None
 
 
 def _slice_spec_for_user_story(spec_text: str, story_n: int) -> str | None:
-    """Return only the section ``## User Story N ...`` (until the next ``## ``)."""
-    matches = list(_SPEC_USER_STORY_HEADER_RE.finditer(spec_text))
-    if not matches:
-        return None
-    target = next((m for m in matches if int(m.group(1)) == story_n), None)
+    """Return only ``## User Story N ...`` up to the next H2, or None if absent."""
+    target = next(
+        (m for m in _SPEC_USER_STORY_HEADER_RE.finditer(spec_text) if int(m.group(1)) == story_n),
+        None,
+    )
     if target is None:
         return None
-    start = target.start()
-    next_header = re.search(r"^##\s+", spec_text[target.end() :], re.MULTILINE)
-    end = target.end() + next_header.start() if next_header else len(spec_text)
-    return spec_text[start:end].rstrip() + "\n"
+    next_h2 = _SPEC_ANY_H2_RE.search(spec_text, target.end())
+    end = next_h2.start() if next_h2 else len(spec_text)
+    return spec_text[target.start() : end].rstrip() + "\n"
 
 
 def _slice_tasks_for_phase(tasks_text: str, phase_tasks: list[TaskItem]) -> str:
-    """Return tasks.md trimmed to lines belonging to ``phase_tasks`` only.
-
-    Preserves header + phase markers but drops bodies of unrelated tasks. Each
-    pending task in the phase keeps its full surrounding paragraph.
-    """
+    """Keep headers and the lines of tasks in ``phase_tasks``; drop everything else."""
     if not phase_tasks:
         return tasks_text
     target_ids = {t.id for t in phase_tasks}
-    lines = tasks_text.splitlines()
     kept: list[str] = []
     in_target = False
-    keep_blank_buffer = 0
-    header_re = re.compile(r"^#")
-    task_re = re.compile(r"^\s*-\s*\[[ xX]\]\s+(T\d+)")
-
-    for line in lines:
-        if header_re.match(line):
+    for line in tasks_text.splitlines():
+        if _TASKS_HEADER_RE.match(line):
             kept.append(line)
             in_target = False
-            keep_blank_buffer = 0
             continue
-        m = task_re.match(line)
+        m = _TASKS_ITEM_RE.match(line)
         if m:
-            tid = m.group(1)
-            in_target = tid in target_ids
+            in_target = m.group(1) in target_ids
             if in_target:
                 kept.append(line)
             continue
         if in_target:
-            if not line.strip():
-                keep_blank_buffer += 1
-                if keep_blank_buffer <= 1:
-                    kept.append(line)
-            else:
-                keep_blank_buffer = 0
-                kept.append(line)
-    return "\n".join(kept) + "\n"
+            kept.append(line)
+    # Collapse runs of blank lines so the output stays tight
+    out: list[str] = []
+    prev_blank = False
+    for line in kept:
+        blank = not line.strip()
+        if blank and prev_blank:
+            continue
+        out.append(line)
+        prev_blank = blank
+    return "\n".join(out) + "\n"
+
+
+def _scoped_spec_section(epic_dir: Path, phase_label: str, phase_tasks: list[TaskItem]) -> str | None:
+    """Return the spec.md body scoped to the phase, or None to omit spec entirely."""
+    spec_path = epic_dir / "spec.md"
+    if not spec_path.exists():
+        return None
+    kind, story_n = _phase_kind(phase_label, phase_tasks)
+    if kind == "setup":
+        log.info("phase_spec_skipped phase=%r", phase_label)
+        return None
+    spec_text = spec_path.read_text(encoding="utf-8")
+    if kind == "user_story" and story_n is not None:
+        sliced = _slice_spec_for_user_story(spec_text, story_n)
+        if sliced is not None:
+            log.info(
+                "phase_spec_sliced phase=%r story=%d bytes=%d→%d",
+                phase_label,
+                story_n,
+                len(spec_text.encode()),
+                len(sliced.encode()),
+            )
+            return sliced
+    return spec_text
 
 
 def _add_epic_docs_phase_scoped(
@@ -871,42 +880,11 @@ def _add_epic_docs_phase_scoped(
     phase_label: str,
     phase_tasks: list[TaskItem],
 ) -> None:
-    """Variant of ``_add_epic_docs`` that filters spec.md by phase kind.
-
-    plan/data-model/contracts always included (small + cross-cutting).
-    spec.md is the bulk of the prompt (43KB+ on epic 008) — filter it.
-    """
+    """Like ``_add_epic_docs`` but swaps the full spec.md for a phase-scoped slice."""
     add("plan", _read_context(epic_dir / "plan.md", "Implementation Plan"))
-
-    spec_path = epic_dir / "spec.md"
-    if spec_path.exists():
-        kind, story_n = _phase_kind(phase_label, phase_tasks)
-        if kind == "setup":
-            log.info("phase_spec_skipped phase=%r reason=setup_or_no_user_stories", phase_label)
-        else:
-            spec_text = spec_path.read_text(encoding="utf-8")
-            slice_text: str | None = None
-            if kind == "user_story" and story_n is not None:
-                slice_text = _slice_spec_for_user_story(spec_text, story_n)
-                if slice_text is None:
-                    log.info(
-                        "phase_spec_full_fallback phase=%r reason=story_%d_not_found_in_spec",
-                        phase_label,
-                        story_n,
-                    )
-                    slice_text = spec_text
-                else:
-                    log.info(
-                        "phase_spec_sliced phase=%r story=%d original_bytes=%d sliced_bytes=%d",
-                        phase_label,
-                        story_n,
-                        len(spec_text.encode()),
-                        len(slice_text.encode()),
-                    )
-            else:
-                slice_text = spec_text  # mixed → keep full
-            add("spec", _format_context(slice_text, "Specification"))
-
+    scoped_spec = _scoped_spec_section(epic_dir, phase_label, phase_tasks)
+    if scoped_spec is not None:
+        add("spec", _format_context(scoped_spec, "Specification"))
     add("data_model", _read_context(epic_dir / "data-model.md", "Data Model"))
     contracts_dir = epic_dir / "contracts"
     if contracts_dir.is_dir():
@@ -986,13 +964,10 @@ def compose_phase_prompt(
     except OSError:
         tasks_text_full = None
 
-    # Slice tasks.md to ONLY this phase's tasks. On epic 008 setup phase the
-    # full tasks.md was 48KB / 158 tasks; the phase only had 6 tasks, so the
-    # other 152 were pure context bloat.
     if tasks_text_full is not None:
         tasks_text: str | None = _slice_tasks_for_phase(tasks_text_full, phase_tasks)
         log.info(
-            "phase_tasks_sliced phase=%r original_bytes=%d sliced_bytes=%d",
+            "phase_tasks_sliced phase=%r bytes=%d→%d",
             phase_label,
             len(tasks_text_full.encode()),
             len(tasks_text.encode()),

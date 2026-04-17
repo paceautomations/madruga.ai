@@ -29,6 +29,7 @@ import fcntl
 import logging
 import os
 import signal
+import sqlite3
 import sys
 import time
 from contextlib import asynccontextmanager
@@ -308,18 +309,11 @@ async def dag_scheduler(conn, semaphore, shutdown_event, poll_interval=15, platf
                                     f"Pipeline failed for epic {epic_id} "
                                     f"(exit={result}, streak={fail_count}/{MAX_EPIC_DISPATCH_FAILURES})",
                                 )
-                            # Auto-block after max consecutive failures. The user
-                            # must inspect and manually re-enable (status='in_progress')
-                            # once the root cause is fixed.
+                            # Auto-block after max consecutive failures. User
+                            # must re-enable via portal Start after fixing root cause.
                             if fail_count >= MAX_EPIC_DISPATCH_FAILURES:
                                 try:
-                                    block_conn = get_conn()
-                                    block_conn.execute(
-                                        "UPDATE epics SET status='blocked' WHERE platform_id=? AND epic_id=?",
-                                        (epic_platform_id, epic_id),
-                                    )
-                                    block_conn.commit()
-                                    block_conn.close()
+                                    _mark_epic_blocked(epic_platform_id, epic_id)
                                     logger.error(
                                         "epic_auto_blocked",
                                         epic_id=epic_id,
@@ -341,13 +335,8 @@ async def dag_scheduler(conn, semaphore, shutdown_event, poll_interval=15, platf
                             # Cooldown after failure to avoid rapid retry busy-loop
                             await _interruptible_sleep(shutdown_event, poll_interval * 2)
                     except DirtyTreeError as dirty:
-                        # User-actionable: external repo has uncommitted changes
-                        # that the daemon cannot resolve on its own. Block the
-                        # epic immediately (don't waste retries on a state that
-                        # only the user can fix), notify, continue polling
-                        # other epics. Clearing the run is what tells the user
-                        # "I noticed and I'm waiting" instead of looping
-                        # silently every 30s.
+                        # User-actionable — a retry loop would never resolve this.
+                        # Block the epic, notify, continue polling other epics.
                         logger.error(
                             "epic_blocked_dirty_tree",
                             epic_id=epic_id,
@@ -355,13 +344,7 @@ async def dag_scheduler(conn, semaphore, shutdown_event, poll_interval=15, platf
                             dirty_tree_message=str(dirty),
                         )
                         try:
-                            block_conn = get_conn()
-                            block_conn.execute(
-                                "UPDATE epics SET status='blocked' WHERE platform_id=? AND epic_id=?",
-                                (epic_platform_id, epic_id),
-                            )
-                            block_conn.commit()
-                            block_conn.close()
+                            _mark_epic_blocked(epic_platform_id, epic_id)
                         except Exception:
                             logger.exception("dirty_tree_auto_block_failed", epic_id=epic_id)
                         topic = os.environ.get("MADRUGA_NTFY_TOPIC")
@@ -490,21 +473,31 @@ async def retention_cleanup(conn, shutdown_event, interval=86400):
 
 
 def _backup_db(src_db_path: str, target_path: str) -> None:
-    """Open a fresh sqlite connection in the calling thread and VACUUM INTO.
+    """VACUUM INTO using a fresh sqlite connection opened in the caller thread.
 
-    sqlite3 connections default to ``check_same_thread=True`` and refuse to
-    execute queries from a thread other than the one that created them.
-    ``periodic_backup`` runs the backup via ``asyncio.to_thread`` (worker
-    thread), so we must NOT reuse the lifespan ``conn`` (created in the event
-    loop). Module-level helper for testability.
+    sqlite3 connections default to check_same_thread=True; periodic_backup
+    runs via asyncio.to_thread so the lifespan conn cannot be reused.
     """
-    import sqlite3
-
     local_conn = sqlite3.connect(src_db_path)
     try:
         local_conn.execute("VACUUM INTO ?", (target_path,))
     finally:
         local_conn.close()
+
+
+def _mark_epic_blocked(platform_id: str, epic_id: str) -> None:
+    """Set epics.status='blocked' via a short-lived connection."""
+    from db import get_conn
+
+    conn = get_conn()
+    try:
+        conn.execute(
+            "UPDATE epics SET status='blocked' WHERE platform_id=? AND epic_id=?",
+            (platform_id, epic_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
 
 
 async def periodic_backup(_unused_conn, shutdown_event, interval_hours=6):
