@@ -1277,3 +1277,53 @@ def test_aggregate_completed_nodes_no_implement():
     count, progress = _aggregate_completed_nodes(rows)
     assert count == 1
     assert progress is None
+
+
+# --- F5: DirtyTreeError is user-actionable, not a generic retry ---
+
+
+@pytest.mark.asyncio
+async def test_dag_scheduler_blocks_epic_on_dirty_tree_error():
+    """A DirtyTreeError raised by run_pipeline_async (via get_repo_work_dir)
+    must:
+      1. Mark the epic as 'blocked' (no retry on user-actionable errors)
+      2. NOT increment _epic_fail_counts (those are for transient failures)
+      3. Continue polling — i.e. the loop iteration completes without
+         bubbling up to the generic `except Exception:` retry-with-backoff.
+    """
+    from easter import dag_scheduler
+    from ensure_repo import DirtyTreeError
+
+    shutdown = asyncio.Event()
+    mock_conn = MagicMock()
+    block_conn = MagicMock()
+
+    async def _fake_run(*args, **kwargs):
+        raise DirtyTreeError("/tmp/foo has uncommitted changes\nDirty:\n?? a.txt")
+
+    async def _fake_sleep(_event, _seconds):
+        shutdown.set()
+        return True
+
+    with (
+        _mock_scheduler_db(mock_conn),
+        patch("db.get_conn", side_effect=[mock_conn, block_conn, mock_conn]),
+        patch(
+            "easter.poll_active_epics",
+            return_value=[{"epic_id": "016", "platform_id": "test", "branch_name": "epic/test/016"}],
+        ),
+        patch("easter.run_pipeline_async", new=_fake_run),
+        patch("easter._running_epics", set()),
+        patch("easter._interruptible_sleep", new=_fake_sleep),
+        patch("ensure_repo._load_repo_binding", return_value=_SELF_REF_BINDING),
+        patch("ensure_repo._is_self_ref", return_value=True),
+    ):
+        await dag_scheduler(mock_conn, asyncio.Semaphore(3), shutdown, poll_interval=0.01)
+
+    block_calls = [c for c in block_conn.execute.call_args_list if "UPDATE epics SET status='blocked'" in c.args[0]]
+    assert len(block_calls) == 1, f"expected 1 block UPDATE, got {block_conn.execute.call_args_list}"
+    assert block_conn.commit.called
+
+    from easter import _epic_fail_counts
+
+    assert "016" not in _epic_fail_counts

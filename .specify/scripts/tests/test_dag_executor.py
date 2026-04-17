@@ -2935,6 +2935,70 @@ def test_compose_phase_prompt_no_make_hardcode(tmp_path):
     assert "Do NOT cd to other directories" in prompt
 
 
+# --- F6: phase prompt is scope-aware (excludes spec for setup; slices tasks) ---
+
+
+def test_compose_phase_prompt_setup_excludes_spec(tmp_path):
+    """Setup phases (no User Stories) must NOT include the full spec.md.
+
+    On epic 008 the setup phase received 43KB of spec it didn't need.
+    Heuristic: phase_label starts with 'Setup' or no task has us_tag.
+    """
+    from dag_executor import compose_phase_prompt
+
+    epic_dir = _make_epic_dir(tmp_path)
+    (epic_dir / "spec.md").write_text("# Specification\n\n## User Story 1\n\nWebhook ingestion. " + "x" * 5000)
+    (epic_dir / "tasks.md").write_text("- [ ] T001 setup db\n- [ ] T002 setup config\n")
+
+    # Setup tasks: no us_tag → kind detected as 'setup'
+    tasks = [_make_task(task_id="T001", description="setup db"), _make_task(task_id="T002", description="setup config")]
+    prompt = compose_phase_prompt("Setup (Shared Infrastructure)", tasks, epic_dir, "p1", "001-test")
+
+    assert "## Specification" not in prompt, "setup phase must NOT include spec.md"
+    # plan + data-model still included
+    # (data-model not present in fixture — only checking spec exclusion)
+
+
+def test_compose_phase_prompt_user_story_includes_only_that_story(tmp_path):
+    """A 'User Story 2' phase must include ONLY the spec section for story 2,
+    not stories 1, 3, 4..."""
+    from dag_executor import compose_phase_prompt
+
+    epic_dir = _make_epic_dir(tmp_path)
+    (epic_dir / "spec.md").write_text(
+        "# Spec\n\n## User Story 1\n\nFIRST_STORY_BODY\n\n"
+        "## User Story 2\n\nSECOND_STORY_BODY\n\n"
+        "## User Story 3\n\nTHIRD_STORY_BODY\n"
+    )
+    (epic_dir / "tasks.md").write_text("- [ ] T010 implement story 2 endpoint\n")
+
+    tasks = [_make_task(task_id="T010", description="story 2 endpoint", us_tag="US2")]
+    prompt = compose_phase_prompt("User Story 2", tasks, epic_dir, "p1", "001-test")
+
+    assert "SECOND_STORY_BODY" in prompt
+    assert "FIRST_STORY_BODY" not in prompt
+    assert "THIRD_STORY_BODY" not in prompt
+
+
+def test_compose_phase_prompt_slices_tasks_md(tmp_path):
+    """tasks.md is sliced to ONLY the phase's tasks. Unrelated tasks must be dropped."""
+    from dag_executor import compose_phase_prompt
+
+    epic_dir = _make_epic_dir(tmp_path)
+    (epic_dir / "tasks.md").write_text(
+        "# Tasks\n\n## Phase 1: Setup\n\n- [ ] T001 setup\n\n"
+        "## Phase 2: User Story 1\n\n- [ ] T100 webhook\n  Description for T100.\n\n"
+        "- [ ] T200 unrelated task\n  This must NOT appear in Phase 1 prompt.\n"
+    )
+
+    tasks = [_make_task(task_id="T001", description="setup")]
+    prompt = compose_phase_prompt("Setup (Shared Infrastructure)", tasks, epic_dir, "p1", "001-test")
+
+    assert "T001 setup" in prompt
+    assert "T200 unrelated task" not in prompt
+    assert "T100 webhook" not in prompt
+
+
 # --- F3: Layer 4 branch check must skip non-CODE_CWD nodes ---
 
 

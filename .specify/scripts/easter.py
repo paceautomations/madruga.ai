@@ -42,6 +42,7 @@ from fastapi.responses import JSONResponse, Response
 sys.path.insert(0, os.path.dirname(__file__))
 
 from dag_executor import run_pipeline_async  # noqa: E402
+from ensure_repo import DirtyTreeError  # noqa: E402
 from ntfy import ntfy_alert  # noqa: E402
 from sd_notify import sd_notify  # noqa: E402
 
@@ -339,6 +340,39 @@ async def dag_scheduler(conn, semaphore, shutdown_event, poll_interval=15, platf
                                     logger.exception("epic_auto_block_failed", epic_id=epic_id)
                             # Cooldown after failure to avoid rapid retry busy-loop
                             await _interruptible_sleep(shutdown_event, poll_interval * 2)
+                    except DirtyTreeError as dirty:
+                        # User-actionable: external repo has uncommitted changes
+                        # that the daemon cannot resolve on its own. Block the
+                        # epic immediately (don't waste retries on a state that
+                        # only the user can fix), notify, continue polling
+                        # other epics. Clearing the run is what tells the user
+                        # "I noticed and I'm waiting" instead of looping
+                        # silently every 30s.
+                        logger.error(
+                            "epic_blocked_dirty_tree",
+                            epic_id=epic_id,
+                            platform=epic_platform_id,
+                            dirty_tree_message=str(dirty),
+                        )
+                        try:
+                            block_conn = get_conn()
+                            block_conn.execute(
+                                "UPDATE epics SET status='blocked' WHERE platform_id=? AND epic_id=?",
+                                (epic_platform_id, epic_id),
+                            )
+                            block_conn.commit()
+                            block_conn.close()
+                        except Exception:
+                            logger.exception("dirty_tree_auto_block_failed", epic_id=epic_id)
+                        topic = os.environ.get("MADRUGA_NTFY_TOPIC")
+                        if topic:
+                            await asyncio.to_thread(
+                                ntfy_alert,
+                                topic,
+                                f"Epic {epic_id} BLOCKED: dirty working tree in {epic_platform_id} repo. "
+                                f"Commit or stash changes, then re-enable the epic via portal Start button.",
+                            )
+                        _epic_fail_counts.pop(epic_id, None)
                     finally:
                         _running_epics.discard(epic_id)
                         unbind_contextvars("epic_id", "platform")
