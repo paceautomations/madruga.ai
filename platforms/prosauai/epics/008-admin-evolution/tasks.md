@@ -21,7 +21,7 @@
 **Purpose**: Decisões arquiteturais 1-way-door + audit do código existente. Sem código.
 
 - [x] T001 Criar ADR-027 "Admin tables without RLS (carve-out from ADR-011)" em `platforms/prosauai/decisions/ADR-027-admin-tables-no-rls.md` — documenta que `traces`, `trace_steps`, `routing_decisions` são admin-only via `pool_admin`, justificando a exceção ao invariante ADR-011
-- [ ] T002 Criar ADR-028 "Pipeline trace persistence via fire-and-forget" em `platforms/prosauai/decisions/ADR-028-pipeline-fire-and-forget-persistence.md` — documenta o padrão `asyncio.create_task` + batch INSERT em 1 txn para trace e routing decisions, referenciando `observability/phoenix_exporter.py` como precedente
+- [x] T002 Criar ADR-028 "Pipeline trace persistence via fire-and-forget" em `platforms/prosauai/decisions/ADR-028-pipeline-fire-and-forget-persistence.md` — documenta o padrão `asyncio.create_task` + batch INSERT em 1 txn para trace e routing decisions, referenciando `observability/phoenix_exporter.py` como precedente
 - [ ] T003 [P] Criar ADR-029 "Cost pricing table as code constant" em `platforms/prosauai/decisions/ADR-029-cost-pricing-constant.md` — documenta decisão de hardcode `MODEL_PRICING` em `apps/api/prosauai/conversation/pricing.py`, critério de migração para tabela DB (>3 modelos ativos)
 - [ ] T004 [P] Auditar toques atuais em `messages.metadata` no pipeline: `rg "metadata\[" apps/api/prosauai/conversation/ apps/api/prosauai/router/` — registrar resultado em `easter-tracking.md` para garantir que instrumentação de trace_steps não duplica info
 - [ ] T005 [P] Auditar instrumentação OTel ativa: `rg "get_current_span\|tracer\.start" apps/api/prosauai/conversation/` — confirmar que `Pipeline.execute()` já está dentro de um span pai (pré-requisito de R2)
