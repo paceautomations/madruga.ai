@@ -155,27 +155,27 @@
 
 ### Tests for US2
 
-- [ ] T200 [P] [US2] Integration test `apps/api/tests/integration/admin/test_traces.py` — GET /admin/traces filtra por tenant/status/min_duration/period, cursor pagination funcional; GET /admin/traces/{trace_id} aceita hex trace_id E UUID id, retorna waterfall com 12 steps ordenados
-- [ ] T201 [P] [US2] Integration test trace detail: step com `input_truncated=true` retorna `input_jsonb` ≤8KB + `input_size` original
-- [ ] T202 [P] [US2] Integration test trace com step erro: steps posteriores marcados `skipped`, step erro com `error_type`/`error_message` populado
-- [ ] T203 [P] [US2] E2E Playwright `apps/admin/tests/e2e/trace-explorer-filter.spec.ts` — /traces → filter status=error → seleciona trace → waterfall com 12 barras → expande step dominante → input/output JSON visível
+- [x] T200 [P] [US2] Integration test `apps/api/tests/integration/admin/test_traces.py` — GET /admin/traces filtra por tenant/status/min_duration/period, cursor pagination funcional; GET /admin/traces/{trace_id} aceita hex trace_id E UUID id, retorna waterfall com 12 steps ordenados (14 testes verdes; asserts validam `tr.id::text = $1 OR tr.trace_id = $1` no SQL + ordering 1..12 dos steps)
+- [x] T201 [P] [US2] Integration test trace detail: step com `input_truncated=true` retorna `input_jsonb` ≤8KB + `input_size` original (`TestTraceTruncation::test_truncated_step_surfaces_flag_and_original_size`)
+- [x] T202 [P] [US2] Integration test trace com step erro: steps posteriores marcados `skipped`, step erro com `error_type`/`error_message` populado (`TestTraceErrorPropagation::test_error_step_and_skipped_successors`)
+- [x] T203 [P] [US2] E2E Playwright `apps/admin/tests/e2e/trace-explorer-filter.spec.ts` — /traces → filter status=error → seleciona trace → waterfall com 12 barras → expande step dominante → input/output JSON visível (spec criado com `@ts-nocheck` até `@playwright/test` ser instalado na wave final de e2e)
 
 ### Implementation for US2 — Backend (PR 6 parcial)
 
-- [ ] T210 [P] [US2] Criar `apps/api/prosauai/db/queries/traces.py` com `list_traces(pool, tenant, status, min_duration, period, cursor, limit)` + `get_trace_detail(pool, identifier)` (aceita UUID ou hex trace_id — WHERE id::text = $1 OR trace_id = $1); carrega trace + steps em 2 queries (não joins explosivos)
-- [ ] T211 [P] [US2] Criar Pydantic schemas em `apps/api/prosauai/admin/schemas/traces.py` — `TraceListResponse`, `TraceDetail`, `StepDetail` espelhando openapi.yaml; incluir flag `input_truncated` + `input_size` no payload
-- [ ] T212 [US2] Criar router `apps/api/prosauai/admin/traces.py` com 2 endpoints (list + detail); depende T210, T211
-- [ ] T213 [US2] Registrar router em `apps/api/prosauai/main.py`
+- [x] T210 [P] [US2] Criar `apps/api/prosauai/db/queries/traces.py` com `list_traces(pool, tenant, status, min_duration, period, cursor, limit)` + `get_trace_detail(pool, identifier)` (aceita UUID ou hex trace_id — WHERE id::text = $1 OR trace_id = $1); carrega trace + steps em 2 queries (não joins explosivos); inclui `compute_dominant_step_name` server-side para FR-037
+- [x] T211 [P] [US2] Criar Pydantic schemas em `apps/api/prosauai/admin/schemas/traces.py` — `TraceListResponse`, `TraceDetail`, `StepDetail` espelhando openapi.yaml; incluir flag `input_truncated` + `input_size` no payload
+- [x] T212 [US2] Criar router `apps/api/prosauai/admin/traces.py` com 2 endpoints (list + detail); depende T210, T211
+- [x] T213 [US2] Registrar router em `apps/api/prosauai/main.py` — via `admin/router.py` (aggregator consistente com conversations/customers/tenants)
 
 ### Implementation for US2 — Frontend (PR 8)
 
-- [ ] T220 [P] [US2] Criar primitive `apps/admin/src/components/ui/json-tree.tsx` — componente colapsável para objetos aninhados com syntax highlight, copy-to-clipboard, limit de profundidade default 3; reutilizável em routing e outros contexts
-- [ ] T221 [P] [US2] Criar `apps/admin/src/components/traces/trace-list.tsx` — tabela server-rendered com hora, contato, intent, duração, custo, status; filtros via searchParams (tenant, status, min_duration, period)
-- [ ] T222 [P] [US2] Criar `apps/admin/src/components/traces/waterfall-chart.tsx` — custom component (SVG ou divs flex) com barras proporcionais à duração de cada step; highlight visual para step dominante (>60% do total — R10); destacar steps com `status=error` em vermelho e `status=skipped` em cinza-claro
-- [ ] T223 [P] [US2] Criar `apps/admin/src/components/traces/step-accordion.tsx` — accordion para cada step com status icon, nome, duração ms; expansão mostra model + tokens_in/tokens_out + tool_calls + input_jsonb + output_jsonb (via json-tree); banner `[truncado — tamanho original X KB]` quando flag true (FR-034); se `status=error`, auto-expande e mostra error_type/message/stack
-- [ ] T224 [P] [US2] Criar `apps/admin/src/components/traces/step-detail-panel.tsx` — painel lateral quando step selecionado para deep-dive
-- [ ] T225 [US2] Criar page `apps/admin/src/app/(dashboard)/traces/page.tsx` — Server Component renderizando trace-list
-- [ ] T226 [US2] Criar page `apps/admin/src/app/(dashboard)/traces/[trace_id]/page.tsx` — header com metadados (contato, duração, custo, status, intent, QS) + botão "Ver Conversa →" (FR-040) + waterfall-chart + step-accordions (depende T222, T223)
+- [x] T220 [P] [US2] Criar primitive `apps/admin/src/components/ui/json-tree.tsx` — componente colapsável para objetos aninhados com syntax highlight, copy-to-clipboard, limit de profundidade default 3; reutilizável em routing e outros contexts
+- [x] T221 [P] [US2] Criar `apps/admin/src/components/traces/trace-list.tsx` — tabela server-rendered com hora, contato, intent, duração, custo, status; filtros via searchParams (tenant, status, min_duration, period)
+- [x] T222 [P] [US2] Criar `apps/admin/src/components/traces/waterfall-chart.tsx` — custom component (SVG ou divs flex) com barras proporcionais à duração de cada step; highlight visual para step dominante (>60% do total — R10); destacar steps com `status=error` em vermelho e `status=skipped` em cinza-claro
+- [x] T223 [P] [US2] Criar `apps/admin/src/components/traces/step-accordion.tsx` — accordion para cada step com status icon, nome, duração ms; expansão mostra model + tokens_in/tokens_out + tool_calls + input_jsonb + output_jsonb (via json-tree); banner `[truncado — tamanho original X KB]` quando flag true (FR-034); se `status=error`, auto-expande e mostra error_type/message/stack
+- [x] T224 [P] [US2] Criar `apps/admin/src/components/traces/step-detail-panel.tsx` — painel lateral quando step selecionado para deep-dive
+- [x] T225 [US2] Criar page `apps/admin/src/app/(dashboard)/traces/page.tsx` — Server Component renderizando trace-list (implementado em `app/admin/(authenticated)/traces/page.tsx` para seguir o padrão já estabelecido no epic; sidebar agora habilitada para Trace Explorer)
+- [x] T226 [US2] Criar page `apps/admin/src/app/(dashboard)/traces/[trace_id]/page.tsx` — header com metadados (contato, duração, custo, status, intent, QS) + botão "Ver Conversa →" (FR-040) + waterfall-chart + step-accordions (depende T222, T223) — implementado em `app/admin/(authenticated)/traces/[trace_id]/page.tsx`
 
 **Checkpoint US2**: Trace Explorer 100% funcional. MVP atingido (US1+US2).
 
