@@ -554,8 +554,10 @@ class TestExecuteStartup:
         assert code == 0
         mock_run.assert_called_once()
         cmd_arg = mock_run.call_args[0][0]
-        # Default commands use list form (shell=False) for security
-        assert cmd_arg == ["docker", "compose", "up", "-d"]
+        # Default commands use list form (shell=False) for security.
+        # `--build --pull missing`: rebuild on Dockerfile change, pull only
+        # bases we don't have (stale-image bug repro: epic 008 retro).
+        assert cmd_arg == ["docker", "compose", "up", "-d", "--build", "--pull", "missing"]
 
     def test_npm_type(self, tmp_path):
         manifest = minimal_manifest("npm")

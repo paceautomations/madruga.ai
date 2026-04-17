@@ -344,7 +344,10 @@ def quick_check(health_checks: list[HealthCheck], timeout: int = 3) -> bool:
 # ---------------------------------------------------------------------------
 
 _DEFAULT_STARTUP_COMMANDS: dict[str, list[str]] = {
-    "docker": ["docker", "compose", "up", "-d"],
+    # `--build` rebuilds when Dockerfile/context changes (otherwise stale
+    # images mask Dockerfile bugs); `--pull missing` only fetches base
+    # images we don't have locally (cheap; no `--pull always` overhead).
+    "docker": ["docker", "compose", "up", "-d", "--build", "--pull", "missing"],
     "npm": ["npm", "run", "dev"],
     "make": ["make", "run"],
 }

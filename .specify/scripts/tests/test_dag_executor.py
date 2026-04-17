@@ -3018,3 +3018,100 @@ def test_needs_code_cwd_only_for_code_nodes():
     # Code nodes run in code_dir — branch check is meaningful
     for nid in ("implement", "judge", "qa", "implement:phase-1", "implement:phase-18"):
         assert _needs_code_cwd(_make_node(nid)) is True, f"{nid} SHOULD need code cwd"
+
+
+# --- F1: TASK_RE must accept 4+ digit task IDs ---
+
+
+def test_task_re_accepts_4digit_ids():
+    """Regression for epic 008 admin-evolution: T1000-T1005 (Phase 12 Deployment
+    Smoke) were silently invisible to parse_tasks because TASK_RE used \\d{3}
+    (exactly 3 digits). Phase 12 never dispatched and pipeline shipped with 6
+    pending tasks claiming all_done=True.
+    """
+    from dag_executor import TASK_RE
+
+    for tid in ("T100", "T999", "T1000", "T1234", "T9999", "T10000"):
+        assert TASK_RE.match(f"- [ ] {tid} do thing"), f"{tid} should match"
+    for bad in ("T1", "T12", "T99", "U1000"):
+        assert not TASK_RE.match(f"- [ ] {bad} do thing"), f"{bad} should NOT match"
+
+
+# --- F4: tasks marked [x] but containing **DEFERRED** count as pending ---
+
+
+def test_parse_tasks_treats_deferred_as_pending(tmp_path):
+    """Regression for epic 008: 8 tasks (T030, T055, T904-T909) were marked [x]
+    by the dispatched agent with inline `**DEFERRED**: requires X` comments,
+    masking work not actually done. Parser now ignores [x] when **DEFERRED**
+    is present so retry / audit re-surfaces them.
+    """
+    from dag_executor import parse_tasks
+
+    tasks_file = tmp_path / "tasks.md"
+    tasks_file.write_text(
+        "# Tasks\n\n## Phase 1: Setup\n\n"
+        "- [x] T001 plain done task\n"
+        "- [x] T002 done with **DEFERRED**: needs prod traffic\n"
+        "- [ ] T003 not done yet\n"
+    )
+    tasks = parse_tasks(tasks_file)
+    by_id = {t.id: t.checked for t in tasks}
+    assert by_id == {"T001": True, "T002": False, "T003": False}
+
+
+# --- F2: report quality gate detects BLOCKER / UNRESOLVED markers ---
+
+
+def test_report_quality_check_passes_clean(tmp_path):
+    from dag_executor import _report_quality_check
+
+    report = tmp_path / "qa-report.md"
+    body = "## QA Report\n\n" + ("\n## Section\n" * 30) + "\n## HANDOFF\nAll clean.\n"
+    report.write_text(body)
+    assert _report_quality_check(report, "qa") is True
+
+
+def test_report_quality_check_fails_on_blocker(tmp_path):
+    """BLOCKER anywhere in a substantive report invalidates success_check —
+    forces dispatch_with_retry_async to retry and eventually auto-block the epic.
+    """
+    from dag_executor import _report_quality_check
+
+    report = tmp_path / "qa-report.md"
+    body = (
+        "## QA Report\n\n"
+        + ("\n## Section\n" * 30)
+        + "\n#### B1 — pool starvation [CODE REVIEW] **BLOCKER S1 CONFIRMADO**\n"
+        "## HANDOFF\nFinished but flagged 1 BLOCKER.\n"
+    )
+    report.write_text(body)
+    assert _report_quality_check(report, "qa") is False
+
+
+def test_report_quality_check_fails_on_unresolved(tmp_path):
+    from dag_executor import _report_quality_check
+
+    report = tmp_path / "judge-report.md"
+    body = (
+        "## Judge Report\n\n" + ("\n## Section\n" * 30) + "\n| ❌ UNRESOLVED (BLOCKERs confirmados) | 5 |\n"
+        "## HANDOFF\nReport done.\n"
+    )
+    report.write_text(body)
+    assert _report_quality_check(report, "judge") is False
+
+
+def test_report_quality_check_fails_when_too_short(tmp_path):
+    from dag_executor import _report_quality_check
+
+    report = tmp_path / "qa-report.md"
+    report.write_text("## QA\n\nshort report\n## HANDOFF\n")
+    assert _report_quality_check(report, "qa") is False
+
+
+def test_report_quality_check_fails_when_handoff_missing(tmp_path):
+    from dag_executor import _report_quality_check
+
+    report = tmp_path / "qa-report.md"
+    report.write_text("## QA Report\n" + ("filler line\n" * 60))
+    assert _report_quality_check(report, "qa") is False

@@ -348,10 +348,13 @@ def _run_eval_scoring(
 # ── Task-by-Task Implement ────────────────────────────────────────
 
 
-TASK_RE = re.compile(r"^- \[([ Xx])\] (T\d{3})\s+(.+)$")
+TASK_RE = re.compile(r"^- \[([ Xx])\] (T\d{3,})\s+(.+)$")
 PHASE_RE = re.compile(r"^## Phase \d+")
 FILE_PATH_RE = re.compile(r"`([a-zA-Z0-9_./-]+\.[a-zA-Z0-9]+)`")
 US_TAG_RE = re.compile(r"\[US(\d+)\]")
+# Report quality gate: any whole-word BLOCKER or UNRESOLVED in qa/judge/
+# analyze-post reports invalidates success_check, forcing retry/auto-block.
+_REPORT_FINDINGS_RE = re.compile(r"\b(?:BLOCKER|UNRESOLVED)\b", re.IGNORECASE)
 
 # Task-scoping heuristics: decide which static docs are relevant to a given
 # task by matching its files + description against path/keyword regexes.
@@ -435,6 +438,23 @@ class TaskItem:
     us_tag: str | None = None
 
 
+def _report_quality_check(path: Path, node_id: str) -> bool:
+    """True iff report file exists, ≥50 lines, contains HANDOFF, AND has zero
+    BLOCKER/UNRESOLVED markers. Used as success_check for qa/judge/analyze-post —
+    a substantive report that still flags unresolved findings is NOT success.
+    """
+    try:
+        content = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return False
+    if content.count("\n") < 49 or "HANDOFF" not in content:
+        return False
+    if _REPORT_FINDINGS_RE.search(content):
+        log.warning("report_has_unresolved_findings node=%s path=%s", node_id, path)
+        return False
+    return True
+
+
 def _parse_tasks_from_text(content: str) -> list[TaskItem]:
     """Parse pre-loaded tasks.md content. Use when the file is already in memory."""
     tasks: list[TaskItem] = []
@@ -450,11 +470,15 @@ def _parse_tasks_from_text(content: str) -> list[TaskItem]:
             continue
         check, task_id, desc = task_match.groups()
         us_match = US_TAG_RE.search(desc)
+        # `**DEFERRED**` is the convention used to mark tasks the dispatched
+        # agent could not actually do (needs prod traffic, headed browser,
+        # human gate). Treat them as pending so retry / audit picks them up.
+        is_deferred = "**DEFERRED**" in desc
         tasks.append(
             TaskItem(
                 id=task_id,
                 description=desc,
-                checked=check.lower() == "x",
+                checked=(check.lower() == "x") and not is_deferred,
                 phase=current_phase,
                 parallel="[P]" in desc,
                 files=FILE_PATH_RE.findall(desc),
@@ -2572,8 +2596,8 @@ async def run_pipeline_async(
             run_id = insert_run(conn, platform_name, node.id, epic_id=epic_slug, trace_id=trace_id)
             node_cwd = code_dir if _needs_code_cwd(node) else cwd
             # Report-based success_check: qa/analyze-post/judge write a *-report.md early
-            # then spend the remaining timeout on make test validation. If the report
-            # exists with a HANDOFF block (≥50 lines), skip retries — work is done.
+            # then spend the remaining timeout on validation. Report counts as success
+            # only if substantial (≥50 lines + HANDOFF) AND has zero unresolved findings.
             _report_suffixes = {
                 "qa": "qa-report.md",
                 "analyze-post": "analyze-post-report.md",
@@ -2582,13 +2606,10 @@ async def run_pipeline_async(
             _report_file = _report_suffixes.get(node.id)
             if _report_file and epic_slug:
                 _report_path = REPO_ROOT / "platforms" / platform_name / "epics" / epic_slug / _report_file
+                _report_node_id = node.id
 
-                def _report_success_check(path: Path = _report_path) -> bool:
-                    try:
-                        content = path.read_text(encoding="utf-8", errors="replace")
-                        return len(content.splitlines()) >= 50 and "HANDOFF" in content
-                    except OSError:
-                        return False
+                def _report_success_check(path: Path = _report_path, nid: str = _report_node_id) -> bool:
+                    return _report_quality_check(path, nid)
 
                 node_success_check = _report_success_check
             else:
