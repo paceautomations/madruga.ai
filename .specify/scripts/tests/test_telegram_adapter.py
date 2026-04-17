@@ -39,7 +39,7 @@ class TestMessagingProviderABC:
 
 class TestTelegramAdapterSend:
     def test_send_returns_message_id(self, adapter, mock_bot):
-        result = asyncio.get_event_loop().run_until_complete(adapter.send(123, "hello"))
+        result = asyncio.run(adapter.send(123, "hello"))
         assert result == 42
         mock_bot.send_message.assert_called_once()
         call_kwargs = mock_bot.send_message.call_args
@@ -47,7 +47,7 @@ class TestTelegramAdapterSend:
         assert call_kwargs[0][1] == "hello"
 
     def test_send_uses_html_parse_mode(self, adapter, mock_bot):
-        asyncio.get_event_loop().run_until_complete(adapter.send(123, "<b>bold</b>"))
+        asyncio.run(adapter.send(123, "<b>bold</b>"))
         call_kwargs = mock_bot.send_message.call_args
         assert call_kwargs[1]["parse_mode"].value == "HTML"
 
@@ -55,12 +55,12 @@ class TestTelegramAdapterSend:
 class TestTelegramAdapterAskChoice:
     def test_ask_choice_returns_message_id(self, adapter, mock_bot):
         choices = [("Aprovar", "gate:1:a"), ("Rejeitar", "gate:1:r")]
-        result = asyncio.get_event_loop().run_until_complete(adapter.ask_choice(123, "Approve?", choices))
+        result = asyncio.run(adapter.ask_choice(123, "Approve?", choices))
         assert result == 42
 
     def test_ask_choice_sends_inline_keyboard(self, adapter, mock_bot):
         choices = [("Aprovar", "gate:1:a"), ("Rejeitar", "gate:1:r")]
-        asyncio.get_event_loop().run_until_complete(adapter.ask_choice(123, "Approve?", choices))
+        asyncio.run(adapter.ask_choice(123, "Approve?", choices))
         call_kwargs = mock_bot.send_message.call_args
         reply_markup = call_kwargs[1]["reply_markup"]
         buttons = reply_markup.inline_keyboard
@@ -69,30 +69,30 @@ class TestTelegramAdapterAskChoice:
 
 class TestTelegramAdapterAlert:
     def test_alert_info_prefix(self, adapter, mock_bot):
-        asyncio.get_event_loop().run_until_complete(adapter.alert(123, "Node completo", "info"))
+        asyncio.run(adapter.alert(123, "Node completo", "info"))
         call_args = mock_bot.send_message.call_args
         sent_text = call_args[0][1]
         assert ALERT_PREFIXES["info"] in sent_text
 
     def test_alert_warn_prefix(self, adapter, mock_bot):
-        asyncio.get_event_loop().run_until_complete(adapter.alert(123, "Timeout", "warn"))
+        asyncio.run(adapter.alert(123, "Timeout", "warn"))
         sent_text = mock_bot.send_message.call_args[0][1]
         assert "ATENCAO" in sent_text
 
     def test_alert_error_prefix(self, adapter, mock_bot):
-        asyncio.get_event_loop().run_until_complete(adapter.alert(123, "Falha", "error"))
+        asyncio.run(adapter.alert(123, "Falha", "error"))
         sent_text = mock_bot.send_message.call_args[0][1]
         assert "ERRO" in sent_text
 
     def test_alert_unknown_level_defaults_to_info(self, adapter, mock_bot):
-        asyncio.get_event_loop().run_until_complete(adapter.alert(123, "test", "unknown"))
+        asyncio.run(adapter.alert(123, "test", "unknown"))
         sent_text = mock_bot.send_message.call_args[0][1]
         assert ALERT_PREFIXES["info"] in sent_text
 
 
 class TestTelegramAdapterEditMessage:
     def test_edit_message_calls_bot(self, adapter, mock_bot):
-        asyncio.get_event_loop().run_until_complete(adapter.edit_message(123, 42, "Aprovado"))
+        asyncio.run(adapter.edit_message(123, 42, "Aprovado"))
         mock_bot.edit_message_text.assert_called_once()
         call_args = mock_bot.edit_message_text.call_args
         assert call_args[0][0] == "Aprovado"
@@ -100,7 +100,7 @@ class TestTelegramAdapterEditMessage:
         assert call_args[1]["message_id"] == 42
 
     def test_edit_message_removes_reply_markup(self, adapter, mock_bot):
-        asyncio.get_event_loop().run_until_complete(adapter.edit_message(123, 42, "Done", reply_markup=None))
+        asyncio.run(adapter.edit_message(123, 42, "Done", reply_markup=None))
         assert mock_bot.edit_message_text.call_args[1]["reply_markup"] is None
 
 
