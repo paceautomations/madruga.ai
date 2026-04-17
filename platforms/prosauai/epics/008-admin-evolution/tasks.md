@@ -113,21 +113,21 @@
 
 ### Tests for US1
 
-- [ ] T100 [P] [US1] Integration test `apps/api/tests/integration/admin/test_conversations.py` — GET /admin/conversations retorna lista paginada, filtro `q` busca via ILIKE em `customers.display_name` OR `messages.content`, cursor pagination funciona, ordenação: SLA breached primeiro → at_risk → recent DESC
-- [ ] T101 [P] [US1] Integration test GET /admin/conversations/{id} retorna detail com customer profile embedded + SLA state
-- [ ] T102 [P] [US1] Integration test GET /admin/conversations/{id}/messages retorna thread ordenado cronológico com roles (inbound/ai_assistant/human_operator)
-- [ ] T103 [P] [US1] Integration test PATCH /admin/conversations/{id} muda status open→closed, retorna 409 em concurrent modification
-- [ ] T104 [P] [US1] Integration test GET /admin/customers + /admin/customers/{id} retornam profile enriquecido com QS médio, contagem de conversas, histórico
-- [ ] T105 [P] [US1] Integration test GET /admin/tenants retorna lista com quick stats (para dropdown global)
-- [ ] T106 [P] [US1] E2E Playwright `apps/admin/tests/e2e/conversation-to-trace.spec.ts` — login → /conversations → busca "João" → seleciona → thread completa visível → perfil expandido
+- [x] T100 [P] [US1] Integration test `apps/api/tests/integration/admin/test_conversations.py` — GET /admin/conversations retorna lista paginada, filtro `q` busca via ILIKE em `customers.display_name` OR `messages.content`, cursor pagination funciona, ordenação: SLA breached primeiro → at_risk → recent DESC (6 testes, `TestListConversations::*`; ordering degrada para `last_message_at DESC` até coluna `sla_breach_at` aparecer no schema — comentário inline em `queries/conversations.py`)
+- [x] T101 [P] [US1] Integration test GET /admin/conversations/{id} retorna detail com customer profile embedded + SLA state (2 testes `TestConversationDetail::*`)
+- [x] T102 [P] [US1] Integration test GET /admin/conversations/{id}/messages retorna thread ordenado cronológico com roles (inbound/ai_assistant/human_operator) (2 testes `TestConversationMessages::*` — role derivado via `direction + metadata.source/operator_name`)
+- [x] T103 [P] [US1] Integration test PATCH /admin/conversations/{id} muda status open→closed, retorna 409 em concurrent modification (4 testes `TestConversationPatch::*` — happy path, 409 conflict, idempotent no-op, 404)
+- [x] T104 [P] [US1] Integration test GET /admin/customers + /admin/customers/{id} retornam profile enriquecido com QS médio, contagem de conversas, histórico (5 testes em `test_customers.py`)
+- [x] T105 [P] [US1] Integration test GET /admin/tenants retorna lista com quick stats (para dropdown global) (6 testes em `test_tenants.py` cobrindo list/detail/PATCH)
+- [x] T106 [P] [US1] E2E Playwright `apps/admin/tests/e2e/conversation-to-trace.spec.ts` — login → /conversations → busca "João" → seleciona → thread completa visível → perfil expandido (spec criado; @playwright/test ainda não é devDep — ts-nocheck até Playwright ser instalado pela frontend wave)
 
 ### Implementation for US1 — Backend (PR 5)
 
-- [ ] T110 [P] [US1] Criar `apps/api/prosauai/db/queries/conversations.py` com funções: `list_conversations(pool, tenant, q, status, sla, cursor, limit)` (ILIKE + ordering + cursor base64 de `{last_message_at, id}`), `get_conversation_detail(pool, id)`, `get_conversation_messages(pool, id, cursor, limit)`, `update_conversation_status(pool, id, status, expected_current)` (usa WHERE status=expected_current para optimistic locking; retorna None em conflict)
-- [ ] T111 [P] [US1] Criar Pydantic models em `apps/api/prosauai/admin/schemas/conversations.py` espelhando `ConversationListResponse`, `ConversationDetail`, `MessageListResponse` do openapi.yaml
-- [ ] T112 [US1] Criar router `apps/api/prosauai/admin/conversations.py` com 4 endpoints (GET list, GET detail, PATCH status, GET messages) — usa `pool_admin`, auth via dep de cookie JWT existente; 409 para concurrent modification (depende T110, T111)
-- [ ] T113 [P] [US1] Criar `apps/api/prosauai/db/queries/customers.py` + Pydantic schemas + router `apps/api/prosauai/admin/customers.py` (GET list + GET detail com QS médio e histórico)
-- [ ] T114 [P] [US1] Criar `apps/api/prosauai/db/queries/tenants.py` + Pydantic schemas + router `apps/api/prosauai/admin/tenants.py` (GET list + GET detail + PATCH enabled) — PATCH valida que tenant existe e invalida cache Redis se presente
+- [x] T110 [P] [US1] Criar `apps/api/prosauai/db/queries/conversations.py` com funções: `list_conversations(pool, tenant, q, status, sla, cursor, limit)` (ILIKE + ordering + cursor base64 de `{last_message_at, id}`), `get_conversation_detail(pool, id)`, `get_conversation_messages(pool, id, cursor, limit)`, `update_conversation_status(pool, id, status, expected_current)` (usa WHERE status=expected_current para optimistic locking; retorna None em conflict)
+- [x] T111 [P] [US1] Criar Pydantic models em `apps/api/prosauai/admin/schemas/conversations.py` espelhando `ConversationListResponse`, `ConversationDetail`, `MessageListResponse` do openapi.yaml
+- [x] T112 [US1] Criar router `apps/api/prosauai/admin/conversations.py` com 4 endpoints (GET list, GET detail, PATCH status, GET messages) — usa `pool_admin`, auth via dep de cookie JWT existente; 409 para concurrent modification (depende T110, T111)
+- [x] T113 [P] [US1] Criar `apps/api/prosauai/db/queries/customers.py` + Pydantic schemas + router `apps/api/prosauai/admin/customers.py` (GET list + GET detail com QS médio e histórico)
+- [x] T114 [P] [US1] Criar `apps/api/prosauai/db/queries/tenants.py` + Pydantic schemas + router `apps/api/prosauai/admin/tenants.py` (GET list + GET detail + PATCH enabled) — PATCH valida que tenant existe e invalida cache Redis se presente
 - [ ] T115 [US1] Registrar 3 novos routers em `apps/api/prosauai/main.py` sob prefix `/admin` (depende de T112, T113, T114)
 
 ### Implementation for US1 — Frontend (PR 7 parcial)
