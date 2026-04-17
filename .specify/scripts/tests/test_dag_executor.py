@@ -444,7 +444,7 @@ async def test_report_success_check_skips_retry_when_report_exists(tmp_path):
     breaker = CircuitBreaker()
     call_count = 0
 
-    async def mock_dispatch(node, cwd, prompt, timeout=3000, guardrail=None, **kwargs):
+    async def mock_dispatch(*args, **kwargs):
         nonlocal call_count
         call_count += 1
         return False, "timeout", None  # always fails
@@ -2840,7 +2840,7 @@ async def test_dispatch_with_retry_propagates_extra_env():
     breaker = CircuitBreaker()
     captured_kwargs = {}
 
-    async def mock_dispatch(node, cwd, prompt, timeout=3000, guardrail=None, **kwargs):
+    async def mock_dispatch(*args, **kwargs):
         captured_kwargs.update(kwargs)
         return True, None, '{"result": "ok"}'
 
@@ -2910,3 +2910,47 @@ def test_kill_process_group_safely_falls_back_to_process_kill(pid_setter):
     _kill_process_group_safely(proc)
 
     proc.kill.assert_called_once()
+
+
+# --- F1: phase prompt must not hardcode `make test` ---
+
+
+def test_compose_phase_prompt_no_make_hardcode(tmp_path):
+    """Setup phases were running `make test` in the wrong CWD because the prompt
+    hardcoded the command. Verify the new instruction is runner-agnostic.
+
+    Regression for incidents at easter-tracking.md (epic 008-admin-evolution,
+    2026-04-17 ~10:33 and ~13:08 — pytest zombies).
+    """
+    from dag_executor import compose_phase_prompt
+
+    epic_dir = _make_epic_dir(tmp_path)
+    (epic_dir / "tasks.md").write_text("- [ ] T001 setup\n")
+    tasks = [_make_task(task_id="T001", description="setup")]
+
+    prompt = compose_phase_prompt("Setup (Shared Infrastructure)", tasks, epic_dir, "p1", "001-test")
+
+    assert "make test" not in prompt, "phase prompt must not hardcode `make test` — incidents 2026-04-17"
+    assert "test suite for THIS repository" in prompt
+    assert "Do NOT cd to other directories" in prompt
+
+
+# --- F3: Layer 4 branch check must skip non-CODE_CWD nodes ---
+
+
+def test_needs_code_cwd_only_for_code_nodes():
+    """Layer 4 branch revert (dag_executor.py:2511,3113) MUST gate on
+    _needs_code_cwd. For nodes that run in REPO_ROOT (specify/clarify/plan/
+    tasks/analyze/reconcile/roadmap), the epic branch lives in the EXTERNAL
+    repo — checking branch in REPO_ROOT triggers a bogus 'claude -p changed
+    branch' ERROR every dispatch.
+    """
+    from dag_executor import _needs_code_cwd
+
+    # Non-code nodes run in REPO_ROOT — branch check must be skipped
+    for nid in ("specify", "clarify", "plan", "tasks", "analyze", "analyze-post", "reconcile", "roadmap"):
+        assert _needs_code_cwd(_make_node(nid)) is False, f"{nid} should NOT need code cwd"
+
+    # Code nodes run in code_dir — branch check is meaningful
+    for nid in ("implement", "judge", "qa", "implement:phase-1", "implement:phase-18"):
+        assert _needs_code_cwd(_make_node(nid)) is True, f"{nid} SHOULD need code cwd"

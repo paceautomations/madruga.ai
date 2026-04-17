@@ -1185,6 +1185,13 @@ def test_post_save_allows_protected_node_without_phase_ctx(monkeypatch, setup_pl
     (epic_dir / "spec.md").write_text("# Spec\n\nContent.\n")
 
     try:
+        from db import get_conn as gc, upsert_epic, upsert_platform
+
+        conn = gc(db_path)
+        upsert_platform(conn, "test-plat", name="test-plat", repo_path="platforms/test-plat")
+        upsert_epic(conn, "test-plat", "001-feat", title="Test Feature")
+        conn.close()
+
         result = post_save.record_save(
             platform="test-plat",
             node="implement",
