@@ -191,25 +191,25 @@
 
 ### Tests for US3
 
-- [ ] T300 [P] [US3] Integration test `apps/api/tests/integration/admin/test_performance.py` — GET /admin/metrics/performance com period=7d retorna 4 KPIs (containment, QS avg, P95 latency, fallback rate) + distribuição de intents + quality trend + latency waterfall + error heatmap 24×7 + cost by tenant/model
-- [ ] T301 [P] [US3] Integration test cache: primeira request mede DB; segunda request dentro de 5min mede Redis; após 5min cache expira; header `Cache-Control: max-age=300` presente
-- [ ] T302 [P] [US3] Integration test fallback rate: contabiliza mensagens com (intent=fallback|unknown|out_of_scope) OR intent_confidence<0.5 OR output_guard=safety_refused OR handoff humano iniciado; exclui mensagens com routing decision DROP/LOG_ONLY/BYPASS_AI (FR-050)
+- [x] T300 [P] [US3] Integration test `apps/api/tests/integration/admin/test_performance.py` — GET /admin/metrics/performance com period=7d retorna 4 KPIs (containment, QS avg, P95 latency, fallback rate) + distribuição de intents + quality trend + latency waterfall + error heatmap 24×7 + cost by tenant/model
+- [x] T301 [P] [US3] Integration test cache: primeira request mede DB; segunda request dentro de 5min mede Redis; após 5min cache expira; header `Cache-Control: max-age=300` presente
+- [x] T302 [P] [US3] Integration test fallback rate: contabiliza mensagens com (intent=fallback|unknown|out_of_scope) OR intent_confidence<0.5 OR output_guard=safety_refused OR handoff humano iniciado; exclui mensagens com routing decision DROP/LOG_ONLY/BYPASS_AI (FR-050)
 
 ### Implementation for US3 — Backend
 
-- [ ] T310 [P] [US3] Criar `apps/api/prosauai/db/queries/performance.py` com funções: `aggregate_kpis(pool, tenant, period)` (containment, QS avg, P95 latency, fallback rate — implementa FR-050 com EXCLUI routing DROP/LOG_ONLY/BYPASS_AI via JOIN routing_decisions), `intent_distribution(pool, tenant, period)`, `quality_trend(pool, tenant, period, bucket='1h'|'1d')`, `latency_breakdown(pool, tenant, period)` (P50/P95/P99 por step — PipelineLatencyBreakdown), `error_heatmap(pool, tenant, period)` (grid 24×7 EXTRACT(hour, dow) — R6/FR-054), `cost_by_model(pool, tenant, period)` + sparkline 30d
-- [ ] T311 [P] [US3] Criar helper `apps/api/prosauai/admin/cache.py` com decorator `@cached_redis(key_prefix, ttl=300, jitter=30)` — key baseada em hash de params, jitter TTL (300±30s) para evitar thundering herd (plan.md Risks)
-- [ ] T312 [US3] Criar Pydantic schemas em `apps/api/prosauai/admin/schemas/performance.py` espelhando `PerformanceMetrics`
-- [ ] T313 [US3] Criar router `apps/api/prosauai/admin/metrics/performance.py` com GET /admin/metrics/performance + cache Redis 5min; adiciona header `Cache-Control: max-age=300`; registrar em main.py (depende T310, T311, T312)
+- [x] T310 [P] [US3] Criar `apps/api/prosauai/db/queries/performance.py` com funções: `aggregate_kpis(pool, tenant, period)` (containment, QS avg, P95 latency, fallback rate — implementa FR-050 com EXCLUI routing DROP/LOG_ONLY/BYPASS_AI via JOIN routing_decisions), `intent_distribution(pool, tenant, period)`, `quality_trend(pool, tenant, period, bucket='1h'|'1d')`, `latency_breakdown(pool, tenant, period)` (P50/P95/P99 por step — PipelineLatencyBreakdown), `error_heatmap(pool, tenant, period)` (grid 24×7 EXTRACT(hour, dow) — R6/FR-054), `cost_by_model(pool, tenant, period)` + sparkline 30d
+- [x] T311 [P] [US3] Criar helper `apps/api/prosauai/admin/cache.py` com decorator `@cached_redis(key_prefix, ttl=300, jitter=30)` — key baseada em hash de params, jitter TTL (300±30s) para evitar thundering herd (plan.md Risks)
+- [x] T312 [US3] Criar Pydantic schemas em `apps/api/prosauai/admin/schemas/performance.py` espelhando `PerformanceMetrics`
+- [x] T313 [US3] Criar router `apps/api/prosauai/admin/metrics/performance.py` com GET /admin/metrics/performance + cache Redis 5min; adiciona header `Cache-Control: max-age=300`; registrar em main.py (depende T310, T311, T312)
 
 ### Implementation for US3 — Frontend (PR 9)
 
-- [ ] T320 [P] [US3] Criar shadcn Chart wrapper já instalado (epic 007) — validar tokens `--chart-1..5` configurados em `apps/admin/src/app/globals.css`
-- [ ] T321 [P] [US3] Criar `apps/admin/src/components/performance/intent-distribution.tsx` — barH chart (shadcn Chart + Recharts) ordenado por volume desc; cor adicional para intents com fallback rate >20% (FR-051)
-- [ ] T322 [P] [US3] Criar `apps/admin/src/components/performance/quality-trend.tsx` — area chart P50 + line P95 com reference line no threshold crítico=70 (FR-052)
-- [ ] T323 [P] [US3] Criar `apps/admin/src/components/performance/latency-waterfall.tsx` — stacked barH (3 segmentos P50 / P95-P50 / P99-P95) por step do pipeline (FR-053)
-- [ ] T324 [P] [US3] Criar `apps/admin/src/components/performance/error-heatmap.tsx` — custom SVG grid 24×7 com intensidade proporcional, tooltip com contagem ao hover, toggle "Erros"/"Fallbacks" (FR-054, R10)
-- [ ] T325 [P] [US3] Criar `apps/admin/src/components/performance/cost-bars.tsx` — barV agregado por tenant e por modelo + sparkline 30d abaixo (FR-055)
+- [x] T320 [P] [US3] Criar shadcn Chart wrapper já instalado (epic 007) — validar tokens `--chart-1..5` configurados em `apps/admin/src/app/globals.css` (confirmado: `--chart-1..5` OKLCH tokens presentes em `globals.css` + `components/ui/chart.tsx` já exporta `ChartContainer`, `ChartTooltip`, `ChartTooltipContent` para consumo pelos componentes US3)
+- [x] T321 [P] [US3] Criar `apps/admin/src/components/performance/intent-distribution.tsx` — barH chart (shadcn Chart + Recharts) ordenado por volume desc; cor adicional para intents com fallback rate >20% (FR-051)
+- [x] T322 [P] [US3] Criar `apps/admin/src/components/performance/quality-trend.tsx` — area chart P50 + line P95 com reference line no threshold crítico=70 (FR-052)
+- [x] T323 [P] [US3] Criar `apps/admin/src/components/performance/latency-waterfall.tsx` — stacked barH (3 segmentos P50 / P95-P50 / P99-P95) por step do pipeline (FR-053)
+- [x] T324 [P] [US3] Criar `apps/admin/src/components/performance/error-heatmap.tsx` — custom SVG grid 24×7 com intensidade proporcional, tooltip com contagem ao hover, toggle "Erros"/"Fallbacks" (FR-054, R10)
+- [x] T325 [P] [US3] Criar `apps/admin/src/components/performance/cost-bars.tsx` — barV agregado por tenant e por modelo + sparkline 30d abaixo (FR-055) — horizontal bar chart com 3 pivots (tenant×modelo / tenant / modelo), rollup client-side com soma elementwise das sparklines, custom SVG sparkline 120×32 por bar para evitar Recharts overhead; tokens `--chart-4`; mesmo "sem dados" visual dos demais componentes do feature folder
 - [ ] T326 [US3] Criar page `apps/admin/src/app/(dashboard)/performance/page.tsx` — grid com 4 KPIs no topo + 5 charts; aceita `searchParams` (tenant, period); Server Component com prefetch de `/admin/metrics/performance` (depende T321..T325)
 
 **Checkpoint US3**: Aba Performance AI completa. Benchmarks SC-004 validados.
