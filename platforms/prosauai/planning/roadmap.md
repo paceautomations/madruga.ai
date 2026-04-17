@@ -1,6 +1,6 @@
 ---
 title: "Roadmap"
-updated: 2026-04-13
+updated: 2026-04-17
 ---
 # ProsaUAI — Delivery Roadmap
 
@@ -10,11 +10,11 @@ updated: 2026-04-13
 
 ## Status
 
-**Lifecycle:** building — **MVP completo** (6/6 epics shipped). Proximo: primeiro deploy de producao VPS.
+**Lifecycle:** building — **MVP completo** (6/6 epics shipped) + **Admin Evolution in-progress**. Proximo: merge epic 008 + primeiro deploy de producao VPS.
 **L1 Pipeline:** 12/13 nodes completos. Revisao completa realizada em 2026-04-07.
 **L1 Pendente:** codebase-map (opcional — plataforma greenfield, sem valor agregado).
-**L2 Status:** Epic 001 shipped (52 tasks, 122 testes, judge 92%, QA 97%). Epic 002 shipped (Phoenix + OTel). Epic 003 shipped (multi-tenant auth + parser reality + deploy). Epic 004 shipped (MECE routing engine + agent resolution). Epic 005 shipped (conversation pipeline 12-step, LLM agent pydantic-ai, safety guards, tool registry, 52 test files). Epic 006 shipped (schema isolation, migration runner, data retention, log persistence, host monitoring — 34 tasks, 67 testes, judge 88%, QA 100%).
-**Proximo marco:** primeiro deploy de producao VPS (2 vCPU, 4GB RAM, 40GB SSD). Post-MVP: epic 007 (Configurable Routing DB + Groups).
+**L2 Status:** Epic 001 shipped (52 tasks, 122 testes, judge 92%, QA 97%). Epic 002 shipped (Phoenix + OTel). Epic 003 shipped (multi-tenant auth + parser reality + deploy). Epic 004 shipped (MECE routing engine + agent resolution). Epic 005 shipped (conversation pipeline 12-step, LLM agent pydantic-ai, safety guards, tool registry, 52 test files). Epic 006 shipped (schema isolation, migration runner, data retention, log persistence, host monitoring — 34 tasks, 67 testes, judge 88%, QA 100%). **Epic 007 shipped** (admin front foundation — sidebar, login, pool_admin BYPASSRLS, dbmate migrations). **Epic 008 in-progress** (Admin Evolution — 8 abas operacionais, 3 tabelas admin-only [traces/trace_steps/routing_decisions], ~25 endpoints, pipeline instrumentation fire-and-forget, denorm inbox — 152/158 tasks, 5 BLOCKERs herdados no repo externo).
+**Proximo marco:** merge epic 008 para develop + primeiro deploy de producao VPS (2 vCPU, 4GB RAM, 40GB SSD).
 
 ---
 
@@ -40,14 +40,15 @@ gantt
     004 Router MECE (DONE)         :done, a4, after a3, 1w
     005 Conversation Core (DONE)    :done, a5, after a4, 2w
     006 Production Readiness (DONE) :done, a6, after a5, 1w
-    section Post-MVP
-    007 Configurable Routing (DB) + Groups :a7, after a6, 1w
-    008 Agent Tools         :a8, after a6, 2w
-    009 Handoff Engine      :a9, after a6, 2w
-    010 Trigger Engine      :a10, after a9, 1w
     section Admin
-    011 Admin Dashboard     :a11, after a8, 2w
-    012 Admin Handoff Inbox :a12, after a9, 1w
+    007 Admin Front Foundation (DONE) :done, a7, after a6, 1w
+    008 Admin Evolution (IN PROGRESS) :active, a8, after a7, 6w
+    012 Admin Dashboard (absorvido por 008) :a12, after a8, 0d
+    013 Admin Handoff Inbox :a13, after a10, 1w
+    section Post-MVP
+    009 Agent Tools         :a9, after a6, 2w
+    010 Handoff Engine      :a10, after a6, 2w
+    011 Trigger Engine      :a11, after a10, 1w
 ```
 
 ---
@@ -61,6 +62,8 @@ gantt
 > **Definicao do slot 003 (2026-04-10):** epic 003 agora e **Multi-Tenant Foundation** (auth + parser reality fix + deploy isolado + tenant abstraction). Pre-requisito duro para 004+, baseado em [docs/prosauai/IMPLEMENTATION_PLAN.md](../../../docs/prosauai/IMPLEMENTATION_PLAN.md). Sequencia 003 + 004 e back-to-back, single prod deploy apos os dois mergerem. Fase 2 (Caddy + Admin API + rate limit) e Fase 3 (Postgres TenantStore + billing) **documentadas agora** em [ADR-021](../decisions/ADR-021-caddy-edge-proxy.md), [ADR-022](../decisions/ADR-022-admin-api.md), [ADR-023](../decisions/ADR-023-tenant-store-postgres-migration.md).
 >
 > **Renumeracao 2026-04-12 (3a):** Slot 006 inserido para **Production Readiness** (schema isolation, log persistence, data retention, particionamento, host monitoring, migration runner). Gaps identificados ao cruzar ADRs aprovados com estado real do codigo. Antigo 006 (Configurable Routing) → 007. Demais epics bumpados +1. Epics futuros re-referenciados.
+>
+> **Renumeracao 2026-04-17 (4a):** Slot 008 adotado para **Admin Evolution** (plataforma operacional completa — 8 abas). Antigo "008 Agent Tools" → 009, "009 Handoff Engine" → 010, "010 Trigger Engine" → 011. Slot 007 preenchido com "Admin Front Foundation" (shipped — sidebar+login+pool_admin+dbmate, substituiu o antigo "Configurable Routing DB" que foi absorvido pelo epic 004). Slot "011 Admin Dashboard" absorvido por 008 (8 abas supera o escopo original). "012 Admin Handoff Inbox" → 013 (depende de 010 Handoff Engine). Ref: [epics/008-admin-evolution/decisions.md](../epics/008-admin-evolution/decisions.md) decisao 1.
 
 | Ordem | Epic | Deps | Risco | Milestone | Status |
 |-------|------|------|-------|-----------|--------|
@@ -70,12 +73,13 @@ gantt
 | 4 | 004: Router MECE | 003 | medio | MVP | **shipped** (classify() + RoutingEngine declarativa, MECE 4 camadas, config YAML per-tenant) |
 | 5 | 005: Conversation Core | 004 | medio | MVP | **shipped** (conversation pipeline 12-step, LLM agent pydantic-ai, safety guards 3-layer, tool registry, 52 test files) |
 | 6 | 006: Production Readiness | 005 | baixo | MVP | **shipped** (schema isolation, migration runner, data retention LGPD, log persistence, host monitoring Netdata — 34 tasks, 67 testes, judge 88%, QA 100%) |
-| 7 | 007: Configurable Routing (DB) + Groups | 004, 006 | baixo | Post-MVP | sugerido — escopo reduzido pelo 004 |
-| 8 | 008: Agent Tools | 006 | medio | Post-MVP | sugerido |
-| 9 | 009: Handoff Engine | 006 | medio | Post-MVP | sugerido |
-| 10 | 010: Trigger Engine | 009 | baixo | Post-MVP | sugerido |
-| 11 | 011: Admin Dashboard | 008 | medio | Admin | sugerido |
-| 12 | 012: Admin Handoff Inbox | 009 | baixo | Admin | sugerido |
+| 7 | 007: Admin Front Foundation | 006 | baixo | Admin | **shipped** (sidebar+login Next.js 15, pool_admin BYPASSRLS, dbmate migrations, dashboard inicial) |
+| 8 | **008: Admin Evolution** | 006, 007 | medio | Admin | **in-progress** (152/158 tasks — 8 abas, 3 tabelas admin-only, ~25 endpoints, pipeline instrumentation fire-and-forget, 5 BLOCKERs abertos no repo externo) |
+| 9 | 009: Agent Tools | 006 | medio | Post-MVP | sugerido |
+| 10 | 010: Handoff Engine | 006 | medio | Post-MVP | sugerido |
+| 11 | 011: Trigger Engine | 010 | baixo | Post-MVP | sugerido |
+| 12 | 012: Admin Dashboard | — | — | Admin | **absorvido por 008** (8 abas superam escopo original) |
+| 13 | 013: Admin Handoff Inbox | 010 | baixo | Admin | sugerido (depende de 010 Handoff Engine) |
 
 ### Epics Futuros (criados conforme necessidade)
 
@@ -103,14 +107,13 @@ graph LR
   E003 --> E004[004 Router MECE]
   E004 --> E005[005 Conversation Core]
   E005 --> E006[006 Production Readiness]
-  E006 --> E007[007 Configurable Routing DB + Groups]
-  E004 --> E007
-  E006 --> E008[008 Agent Tools]
-  E006 --> E009[009 Handoff Engine]
-  E009 --> E010[010 Trigger Engine]
-  E008 --> E011[011 Admin Dashboard]
-  E009 --> E012[012 Admin Handoff Inbox]
-  E008 --> E022[022 Agent Pipeline Steps]
+  E006 --> E007[007 Admin Front Foundation - DONE]
+  E007 --> E008[008 Admin Evolution - IN PROGRESS]
+  E006 --> E009[009 Agent Tools]
+  E006 --> E010[010 Handoff Engine]
+  E010 --> E011[011 Trigger Engine]
+  E010 --> E013[013 Admin Handoff Inbox]
+  E009 --> E022[022 Agent Pipeline Steps]
   E003 -.-> E013[013 Public API Fase 2]
   E013 -.-> E014[014 Postgres + Ops Fase 3]
   E002 -.-> E015[015 Evals Offline]
@@ -124,8 +127,8 @@ graph LR
 | Milestone | Epics | Criterio de Sucesso | Estimativa |
 |-----------|-------|---------------------|------------|
 | **MVP** | 001, 002, 003, 004, 005, 006 | ✅ **COMPLETO.** Agente responde mensagens WhatsApp **multi-tenant** com IA, parseia 100% dos payloads reais, persiste conversas, funciona em grupo, **com observabilidade total + router MECE provado em CI + infra production-ready** (schema isolation, logs, retention, monitoring) | realizado |
-| **Post-MVP** | 007-010 | Routing configuravel via DB + grupos, tools, handoff humano, triggers proativos | ~6 semanas |
-| **Admin** | 011-012 | Dashboard + fila de atendimento humano funcionais | ~3 semanas |
+| **Admin** | 007, 008, 013 | 007 ✅ shipped (foundation) · **008 in-progress** (Admin Evolution — 8 abas operacionais, 152/158 tasks) · 013 sugerido (Handoff Inbox, depende de 010) | ~8 semanas (007+008 realizadas) |
+| **Post-MVP** | 009, 010, 011 | Agent Tools, Handoff Engine, Trigger Engine (renumerados de 008-010 antigos) | ~6 semanas |
 | **Public API (Fase 2)** | 013 | Caddy + Admin API + onboarding de cliente externo. Trigger: primeiro cliente pagante. | ~2 semanas |
 | **Ops (Fase 3)** | 014 | TenantStore Postgres + circuit breaker + billing + alertas. Trigger: >=5 tenants reais ou dor operacional | ~3 semanas |
 
@@ -149,13 +152,20 @@ graph LR
 | **Schema collision com Supabase (auth + public)** | **Mitigado (epic 006)** | — | — | Schemas dedicados `prosauai` + `prosauai_ops`. `public.tenant_id()` SECURITY DEFINER. Migrations idempotentes com `gen_random_uuid()` (sem `uuid-ossp`). [ADR-024](../decisions/ADR-024-schema-isolation.md) |
 | **Disco VPS cheio (logs + Phoenix SQLite + pgdata)** | **Mitigado (epic 006)** | — | — | Log rotation Docker json-file (max 1.25GB stack). Phoenix Postgres backend em prod. Netdata host monitoring (:19999) |
 | **LGPD non-compliance (sem purge de dados)** | **Mitigado (epic 006)** | — | — | retention-cron diario: DROP PARTITION messages, batch DELETE conversations/eval_scores/traces. `--dry-run` default. 17 testes. [ADR-018](../decisions/ADR-018-data-retention-lgpd.md) |
+| **`pool_admin.max_size=5` esgota com 2-3 admins simultaneos** | **ABERTO (epic 008 B5)** | Alto | Alta | Aumentar `admin_pool_max_size` para 20 em `config.py` antes do merge; patch no repo externo `paceautomations/prosauai` |
+| **8KB truncation de `trace_steps` pode ultrapassar limite em UTF-8 multibyte** | **ABERTO (epic 008 B3)** | Medio | Baixa | Fix em `step_record._truncate_value` (`ensure_ascii=False` + revalidacao de bytes); patch no repo externo |
+| **`INSTRUMENTATION_ENABLED` kill switch ausente** | **ABERTO (epic 008 B1)** | Alto | Baixa | Adicionar env flag em `.env.example` + guard em `pipeline.py` e `trace_persist.py`; patch no repo externo |
+| **`activate_prompt` sem INSERT em `audit_log`** | **ABERTO (epic 008 B2)** | Alto | Media | Adicionar INSERT em `agents.py:427-454`; patch no repo externo |
+| **Phase 12 smoke (epic 008) nunca executado em container real** | **ABERTO (epic 008 B4)** | Alto | Certeza | Executar runbook `benchmarks/pipeline_instrumentation_smoke.md` no primeiro deploy staging |
+| **Cost sparkline O(N) round-trips em dashboard** | **Aberto (epic 008 W2)** | Medio | Alta (hit em qualquer dashboard view) | Consolidar em single JOIN ou VIEW materializada antes do epic 009 |
+| **ILIKE sem trigram GIN index degrada inbox >10k conversas** | **Aberto (epic 008 W7)** | Medio | Media | Adicionar `pg_trgm` + GIN index antes de 10k conversas; SC-005 inbox <100ms nao garantido em escala |
 
 ---
 
-*MVP completo: todos 6 epics shipped (001-006). Proximo: primeiro deploy de producao VPS.*
+*MVP completo: todos 6 epics shipped (001-006). Admin: 007 shipped, 008 in-progress (152/158 tasks). Proximo: merge 008 + primeiro deploy de producao VPS.*
 
 ---
 
-> **Proximo passo:** Primeiro deploy de producao VPS (2 vCPU, 4GB RAM, 40GB SSD) com `docker compose -f docker-compose.yml -f docker-compose.prod.yml up`. Post-MVP: epic 007 (Configurable Routing DB + Groups) ou epic 008 (Agent Tools) conforme prioridade.
+> **Proximo passo:** Resolver 5 BLOCKERs herdados do epic 008 no repo externo `paceautomations/prosauai` (pool_admin size, UTF-8 truncation, kill switch, audit_log, smoke Phase 12) → merge `epic/prosauai/008-admin-evolution` para `develop` → primeiro deploy de producao VPS (2 vCPU, 4GB RAM, 40GB SSD) com `docker compose -f docker-compose.yml -f docker-compose.prod.yml up`. Post-MVP: epic 009 (Agent Tools) ou epic 010 (Handoff Engine) conforme prioridade.
 >
 > **Supabase deployment readiness (epic 006):** Migrations hardened (idempotent, `gen_random_uuid()`, sem `uuid-ossp`), tenants table (008) created, dual slug/UUID tenant identity implemented. Schema isolation (`prosauai` + `prosauai_ops`) pronto para Supabase managed.
