@@ -431,6 +431,66 @@ async def test_success_check_skips_retry():
     assert check_count == 1  # success_check called once (before retry 1)
 
 
+@pytest.mark.asyncio
+async def test_report_success_check_skips_retry_when_report_exists(tmp_path):
+    """run_pipeline_async passes a report-based success_check for qa/analyze-post/judge.
+
+    Verifies that when a *-report.md exists with ≥50 lines and 'HANDOFF', the
+    success_check returns True and retries are skipped — mirroring the implement-phase
+    tasks.md success_check pattern.
+    """
+    from dag_executor import dispatch_with_retry_async
+
+    breaker = CircuitBreaker()
+    call_count = 0
+
+    async def mock_dispatch(node, cwd, prompt, timeout=3000, guardrail=None, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        return False, "timeout", None  # always fails
+
+    # Build a fake report with ≥50 lines and a HANDOFF block
+    report = tmp_path / "qa-report.md"
+    lines = ["# QA Report\n"] + [f"line {i}\n" for i in range(55)] + ["## HANDOFF\n", "to: reconcile\n"]
+    report.write_text("".join(lines))
+
+    def success_check(path=report):
+        try:
+            content = path.read_text()
+            return len(content.splitlines()) >= 50 and "HANDOFF" in content
+        except OSError:
+            return False
+
+    with (
+        patch("dag_executor.dispatch_node_async", side_effect=mock_dispatch),
+        patch("dag_executor.asyncio.sleep", new_callable=AsyncMock),
+    ):
+        success, error, _stdout = await dispatch_with_retry_async(
+            _make_node(), "/tmp", "test", 600, breaker, success_check=success_check
+        )
+
+    assert success is True
+    assert call_count == 1  # only first attempt ran
+
+    # Negative case: report too short → retries proceed
+    short_report = tmp_path / "short.md"
+    short_report.write_text("# tiny\nHANDOFF\n")
+    call_count = 0
+    with (
+        patch("dag_executor.dispatch_node_async", side_effect=mock_dispatch),
+        patch("dag_executor.asyncio.sleep", new_callable=AsyncMock),
+    ):
+        success2, _, _ = await dispatch_with_retry_async(
+            _make_node(),
+            "/tmp",
+            "test",
+            600,
+            breaker,
+            success_check=lambda p=short_report: len(p.read_text().splitlines()) >= 50 and "HANDOFF" in p.read_text(),
+        )
+    assert success2 is False  # retries exhausted, check never passed
+
+
 # --- Tests for gate dispatch and resume fixes ---
 
 

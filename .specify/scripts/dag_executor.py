@@ -2399,6 +2399,28 @@ async def run_pipeline_async(
             # Insert "running" record before dispatch so it appears in real-time
             run_id = insert_run(conn, platform_name, node.id, epic_id=epic_slug, trace_id=trace_id)
             node_cwd = code_dir if _needs_code_cwd(node) else cwd
+            # Report-based success_check: qa/analyze-post/judge write a *-report.md early
+            # then spend the remaining timeout on make test validation. If the report
+            # exists with a HANDOFF block (≥50 lines), skip retries — work is done.
+            _report_suffixes = {
+                "qa": "qa-report.md",
+                "analyze-post": "analyze-post-report.md",
+                "judge": "judge-report.md",
+            }
+            _report_file = _report_suffixes.get(node.id)
+            if _report_file and epic_slug:
+                _report_path = REPO_ROOT / "platforms" / platform_name / "epics" / epic_slug / _report_file
+
+                def _report_success_check(path: Path = _report_path) -> bool:
+                    try:
+                        content = path.read_text(encoding="utf-8", errors="replace")
+                        return len(content.splitlines()) >= 50 and "HANDOFF" in content
+                    except OSError:
+                        return False
+
+                node_success_check = _report_success_check
+            else:
+                node_success_check = None
             if semaphore:
                 async with semaphore:
                     success, error, stdout = await dispatch_with_retry_async(
@@ -2410,6 +2432,7 @@ async def run_pipeline_async(
                         guardrail,
                         platform_name=platform_name,
                         abort_check=abort_fn,
+                        success_check=node_success_check,
                     )
             else:
                 success, error, stdout = await dispatch_with_retry_async(
@@ -2421,6 +2444,7 @@ async def run_pipeline_async(
                     guardrail,
                     platform_name=platform_name,
                     abort_check=abort_fn,
+                    success_check=node_success_check,
                 )
 
         # Truncate stdout for dispatch_log (debug aid, max 4KB)
