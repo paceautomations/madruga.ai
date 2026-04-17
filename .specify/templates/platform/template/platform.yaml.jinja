@@ -10,3 +10,15 @@ repo:
   base_branch: {{ repo_base_branch }}
   epic_branch_prefix: "epic/{{ platform_name }}/"
 {%- endif %}
+{%- if testing_startup_type is defined and testing_startup_type != 'none' %}
+testing:
+  startup:
+    type: {{ testing_startup_type }}
+    command: null
+    ready_timeout: 60
+  health_checks: []
+  urls: []
+  required_env: []
+  env_file: null
+  journeys_file: testing/journeys.md
+{%- endif %}

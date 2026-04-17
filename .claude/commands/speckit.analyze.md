@@ -109,6 +109,30 @@ Focus on high-signal findings. Limit to 50 findings total; aggregate the remaind
 - Task ordering contradictions (e.g., integration tasks before foundational setup tasks without dependency note).
 - Conflicting requirements (e.g., one requires Next.js while another specifies Vue).
 
+#### G. URL Coverage Check (quando testing: block presente)
+
+Se a plataforma ativa possui bloco `testing:` em `platform.yaml`, executar:
+
+```bash
+python3 $REPO_ROOT/.specify/scripts/qa_startup.py \
+  --platform $PLATFORM --parse-config --json 2>/dev/null
+```
+
+- `testing:` ausente (exit code 2) → skip silencioso, sem error.
+- `testing:` presente → comparar rotas novas detectadas no diff com `testing.urls` declarado.
+
+**Detecção de rotas por framework:**
+
+- **Python/FastAPI**: Extrair decorators `@router.get/post/put/delete/patch` do diff
+- **Next.js App Router**: Extrair arquivos novos `app/*/page.tsx|ts` (rotas UI) e `app/*/route.ts|js` (rotas API)
+- **Next.js Pages Router**: Extrair arquivos novos em `pages/`
+- **Frameworks não reconhecidos**: Emitir WARN explícito — "Framework não reconhecido: URL coverage check disponível apenas para FastAPI e Next.js/React. Verificar cobertura manualmente" — NUNCA skip silencioso (FR-017)
+
+Rotas detectadas sem correspondência em `testing.urls` → HIGH finding:
+> "Rota nova não declarada em platform.yaml testing.urls — adicionar para cobertura de QA"
+
+**Nota**: Este check é especialmente relevante no modo pós-implement (Phase 8 do ciclo L2), mas também pode sinalizar lacunas de planejamento quando executado pré-implement.
+
 ### Step 5: Severity Assignment
 
 Apply this heuristic:

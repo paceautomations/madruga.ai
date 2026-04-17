@@ -394,6 +394,103 @@ async def test_circuit_breaker_open_blocks_dispatch():
     assert "circuit breaker OPEN" in error
 
 
+@pytest.mark.asyncio
+async def test_success_check_skips_retry():
+    """dispatch_with_retry_async skips remaining retries when success_check returns True."""
+    from dag_executor import dispatch_with_retry_async
+
+    breaker = CircuitBreaker()
+    call_count = 0
+
+    async def mock_dispatch(
+        node, cwd, prompt, timeout=3000, guardrail=None, resume_session_id=None, platform_name="", **kwargs
+    ):
+        nonlocal call_count
+        call_count += 1
+        return False, "timeout", None  # always fails
+
+    # success_check returns True on second check (i.e., before retry 1)
+    check_count = 0
+
+    def success_check():
+        nonlocal check_count
+        check_count += 1
+        return check_count >= 1  # True on first call (before retry 1)
+
+    with (
+        patch("dag_executor.dispatch_node_async", side_effect=mock_dispatch),
+        patch("dag_executor.asyncio.sleep", new_callable=AsyncMock),
+    ):
+        success, error, _stdout = await dispatch_with_retry_async(
+            _make_node(), "/tmp", "test", 600, breaker, success_check=success_check
+        )
+
+    assert success is True
+    assert error is None
+    assert call_count == 1  # only the first attempt ran, no retries
+    assert check_count == 1  # success_check called once (before retry 1)
+
+
+@pytest.mark.asyncio
+async def test_report_success_check_skips_retry_when_report_exists(tmp_path):
+    """run_pipeline_async passes a report-based success_check for qa/analyze-post/judge.
+
+    Verifies that when a *-report.md exists with ≥50 lines and 'HANDOFF', the
+    success_check returns True and retries are skipped — mirroring the implement-phase
+    tasks.md success_check pattern.
+    """
+    from dag_executor import dispatch_with_retry_async
+
+    breaker = CircuitBreaker()
+    call_count = 0
+
+    async def mock_dispatch(*args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        return False, "timeout", None  # always fails
+
+    # Build a fake report with ≥50 lines and a HANDOFF block
+    report = tmp_path / "qa-report.md"
+    lines = ["# QA Report\n"] + [f"line {i}\n" for i in range(55)] + ["## HANDOFF\n", "to: reconcile\n"]
+    report.write_text("".join(lines))
+
+    def success_check(path=report):
+        try:
+            content = path.read_text()
+            return len(content.splitlines()) >= 50 and "HANDOFF" in content
+        except OSError:
+            return False
+
+    with (
+        patch("dag_executor.dispatch_node_async", side_effect=mock_dispatch),
+        patch("dag_executor.asyncio.sleep", new_callable=AsyncMock),
+    ):
+        success, error, _stdout = await dispatch_with_retry_async(
+            _make_node(), "/tmp", "test", 600, breaker, success_check=success_check
+        )
+
+    assert success is True
+    assert call_count == 1  # only first attempt ran
+
+    # Negative case: report too short → retries proceed
+    short_report = tmp_path / "short.md"
+    short_report.write_text("# tiny\nHANDOFF\n")
+    call_count = 0
+    with (
+        patch("dag_executor.dispatch_node_async", side_effect=mock_dispatch),
+        patch("dag_executor.asyncio.sleep", new_callable=AsyncMock),
+    ):
+        success2, _, _ = await dispatch_with_retry_async(
+            _make_node(),
+            "/tmp",
+            "test",
+            600,
+            breaker,
+            success_check=lambda p=short_report: len(p.read_text().splitlines()) >= 50 and "HANDOFF" in p.read_text(),
+        )
+    assert success2 is False  # retries exhausted, check never passed
+
+
 # --- Tests for gate dispatch and resume fixes ---
 
 
@@ -2723,3 +2820,290 @@ def test_disallowed_tools_preserves_original_patterns():
     assert "Bash(git checkout:*)" in DISALLOWED_TOOLS
     assert "Bash(git branch -:*)" in DISALLOWED_TOOLS
     assert "Bash(git switch:*)" in DISALLOWED_TOOLS
+
+
+# ---------------------------------------------------------------------------
+# extra_env propagation (Fix C: MADRUGA_PHASE_CTX)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_dispatch_with_retry_propagates_extra_env():
+    """dispatch_with_retry_async passes extra_env through to dispatch_node_async.
+
+    This verifies that MADRUGA_PHASE_CTX=1 set by _run_implement_phases reaches
+    the subprocess environment, enabling post_save.py to detect and block direct
+    L2 node writes that would corrupt epic_nodes resume state.
+    """
+    from dag_executor import dispatch_with_retry_async
+
+    breaker = CircuitBreaker()
+    captured_kwargs = {}
+
+    async def mock_dispatch(*args, **kwargs):
+        captured_kwargs.update(kwargs)
+        return True, None, '{"result": "ok"}'
+
+    with patch("dag_executor.dispatch_node_async", side_effect=mock_dispatch):
+        await dispatch_with_retry_async(
+            _make_node(),
+            "/tmp",
+            "test",
+            600,
+            breaker,
+            extra_env={"MADRUGA_PHASE_CTX": "1"},
+        )
+
+    assert captured_kwargs.get("extra_env") == {"MADRUGA_PHASE_CTX": "1"}
+
+
+# ---------------------------------------------------------------------------
+# Process group isolation (Fix B: start_new_session + killpg)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_dispatch_node_async_uses_new_session():
+    """dispatch_node_async spawns subprocesses with start_new_session=True.
+
+    Without a new session, SIGKILL on timeout only kills the direct claude -p
+    process; orphan children (pytest, make, zsh) survive and accumulate CPU/IO
+    contention across phase retries.
+    """
+    from dag_executor import dispatch_node_async
+
+    mock_proc = _mock_async_proc(stdout=b"{}", stderr=b"", returncode=0)
+    captured_kwargs = {}
+
+    async def capturing_exec(*args, **kwargs):
+        captured_kwargs.update(kwargs)
+        return mock_proc
+
+    with (
+        patch("dag_executor.shutil.which", return_value="/usr/bin/claude"),
+        patch("dag_executor.asyncio.create_subprocess_exec", side_effect=capturing_exec),
+    ):
+        await dispatch_node_async(_make_node(), "/tmp", "test prompt")
+
+    assert captured_kwargs.get("start_new_session") is True
+
+
+@pytest.mark.parametrize(
+    "pid_setter",
+    [
+        pytest.param(lambda p: None, id="invalid_pid"),  # leaves MagicMock auto-attr
+        pytest.param(lambda p: setattr(p, "pid", os.getpid()), id="runner_pgid"),
+    ],
+)
+def test_kill_process_group_safely_falls_back_to_process_kill(pid_setter):
+    """Both unsafe inputs (non-int pid, runner's own pgid) fall back to process.kill().
+
+    Defense-in-depth: prevents killpg() from signalling the caller's own
+    process group, which in WSL would kill the shell and everything in it.
+    """
+    from dag_executor import _kill_process_group_safely
+
+    proc = MagicMock()
+    pid_setter(proc)
+    proc.kill = MagicMock()
+
+    _kill_process_group_safely(proc)
+
+    proc.kill.assert_called_once()
+
+
+# --- F1: phase prompt must not hardcode `make test` ---
+
+
+def test_compose_phase_prompt_no_make_hardcode(tmp_path):
+    """Setup phases were running `make test` in the wrong CWD because the prompt
+    hardcoded the command. Verify the new instruction is runner-agnostic.
+
+    Regression for incidents at easter-tracking.md (epic 008-admin-evolution,
+    2026-04-17 ~10:33 and ~13:08 — pytest zombies).
+    """
+    from dag_executor import compose_phase_prompt
+
+    epic_dir = _make_epic_dir(tmp_path)
+    (epic_dir / "tasks.md").write_text("- [ ] T001 setup\n")
+    tasks = [_make_task(task_id="T001", description="setup")]
+
+    prompt = compose_phase_prompt("Setup (Shared Infrastructure)", tasks, epic_dir, "p1", "001-test")
+
+    assert "make test" not in prompt, "phase prompt must not hardcode `make test` — incidents 2026-04-17"
+    assert "test suite for THIS repository" in prompt
+    assert "Do NOT cd to other directories" in prompt
+
+
+# --- F6: phase prompt is scope-aware (excludes spec for setup; slices tasks) ---
+
+
+def test_compose_phase_prompt_setup_excludes_spec(tmp_path):
+    """Setup phases (no User Stories) must NOT include the full spec.md.
+
+    On epic 008 the setup phase received 43KB of spec it didn't need.
+    Heuristic: phase_label starts with 'Setup' or no task has us_tag.
+    """
+    from dag_executor import compose_phase_prompt
+
+    epic_dir = _make_epic_dir(tmp_path)
+    (epic_dir / "spec.md").write_text("# Specification\n\n## User Story 1\n\nWebhook ingestion. " + "x" * 5000)
+    (epic_dir / "tasks.md").write_text("- [ ] T001 setup db\n- [ ] T002 setup config\n")
+
+    # Setup tasks: no us_tag → kind detected as 'setup'
+    tasks = [_make_task(task_id="T001", description="setup db"), _make_task(task_id="T002", description="setup config")]
+    prompt = compose_phase_prompt("Setup (Shared Infrastructure)", tasks, epic_dir, "p1", "001-test")
+
+    assert "## Specification" not in prompt, "setup phase must NOT include spec.md"
+    # plan + data-model still included
+    # (data-model not present in fixture — only checking spec exclusion)
+
+
+def test_compose_phase_prompt_user_story_includes_only_that_story(tmp_path):
+    """A 'User Story 2' phase must include ONLY the spec section for story 2,
+    not stories 1, 3, 4..."""
+    from dag_executor import compose_phase_prompt
+
+    epic_dir = _make_epic_dir(tmp_path)
+    (epic_dir / "spec.md").write_text(
+        "# Spec\n\n## User Story 1\n\nFIRST_STORY_BODY\n\n"
+        "## User Story 2\n\nSECOND_STORY_BODY\n\n"
+        "## User Story 3\n\nTHIRD_STORY_BODY\n"
+    )
+    (epic_dir / "tasks.md").write_text("- [ ] T010 implement story 2 endpoint\n")
+
+    tasks = [_make_task(task_id="T010", description="story 2 endpoint", us_tag="US2")]
+    prompt = compose_phase_prompt("User Story 2", tasks, epic_dir, "p1", "001-test")
+
+    assert "SECOND_STORY_BODY" in prompt
+    assert "FIRST_STORY_BODY" not in prompt
+    assert "THIRD_STORY_BODY" not in prompt
+
+
+def test_compose_phase_prompt_slices_tasks_md(tmp_path):
+    """tasks.md is sliced to ONLY the phase's tasks. Unrelated tasks must be dropped."""
+    from dag_executor import compose_phase_prompt
+
+    epic_dir = _make_epic_dir(tmp_path)
+    (epic_dir / "tasks.md").write_text(
+        "# Tasks\n\n## Phase 1: Setup\n\n- [ ] T001 setup\n\n"
+        "## Phase 2: User Story 1\n\n- [ ] T100 webhook\n  Description for T100.\n\n"
+        "- [ ] T200 unrelated task\n  This must NOT appear in Phase 1 prompt.\n"
+    )
+
+    tasks = [_make_task(task_id="T001", description="setup")]
+    prompt = compose_phase_prompt("Setup (Shared Infrastructure)", tasks, epic_dir, "p1", "001-test")
+
+    assert "T001 setup" in prompt
+    assert "T200 unrelated task" not in prompt
+    assert "T100 webhook" not in prompt
+
+
+# --- F3: Layer 4 branch check must skip non-CODE_CWD nodes ---
+
+
+def test_needs_code_cwd_only_for_code_nodes():
+    """Layer 4 branch revert (dag_executor.py:2511,3113) MUST gate on
+    _needs_code_cwd. For nodes that run in REPO_ROOT (specify/clarify/plan/
+    tasks/analyze/reconcile/roadmap), the epic branch lives in the EXTERNAL
+    repo — checking branch in REPO_ROOT triggers a bogus 'claude -p changed
+    branch' ERROR every dispatch.
+    """
+    from dag_executor import _needs_code_cwd
+
+    # Non-code nodes run in REPO_ROOT — branch check must be skipped
+    for nid in ("specify", "clarify", "plan", "tasks", "analyze", "analyze-post", "reconcile", "roadmap"):
+        assert _needs_code_cwd(_make_node(nid)) is False, f"{nid} should NOT need code cwd"
+
+    # Code nodes run in code_dir — branch check is meaningful
+    for nid in ("implement", "judge", "qa", "implement:phase-1", "implement:phase-18"):
+        assert _needs_code_cwd(_make_node(nid)) is True, f"{nid} SHOULD need code cwd"
+
+
+# --- F1: TASK_RE must accept 4+ digit task IDs ---
+
+
+def test_task_re_accepts_4digit_ids():
+    """TASK_RE must admit T1000+ — the `\\d{3}` form silently hid whole phases
+    when an epic exceeded 999 tasks."""
+    from dag_executor import TASK_RE
+
+    for tid in ("T100", "T999", "T1000", "T1234", "T9999", "T10000"):
+        assert TASK_RE.match(f"- [ ] {tid} do thing"), f"{tid} should match"
+    for bad in ("T1", "T12", "T99", "U1000"):
+        assert not TASK_RE.match(f"- [ ] {bad} do thing"), f"{bad} should NOT match"
+
+
+# --- F4: tasks marked [x] but containing **DEFERRED** count as pending ---
+
+
+def test_parse_tasks_treats_deferred_as_pending(tmp_path):
+    """`[x] ... **DEFERRED**` must parse as pending — agent marks [x] while
+    deferring the actual work; parser forces it back to pending so audit sees it."""
+    from dag_executor import parse_tasks
+
+    tasks_file = tmp_path / "tasks.md"
+    tasks_file.write_text(
+        "# Tasks\n\n## Phase 1: Setup\n\n"
+        "- [x] T001 plain done task\n"
+        "- [x] T002 done with **DEFERRED**: needs prod traffic\n"
+        "- [ ] T003 not done yet\n"
+    )
+    tasks = parse_tasks(tasks_file)
+    by_id = {t.id: t.checked for t in tasks}
+    assert by_id == {"T001": True, "T002": False, "T003": False}
+
+
+# --- F2: report quality gate detects BLOCKER / UNRESOLVED markers ---
+
+
+def test_report_quality_check_passes_clean(tmp_path):
+    from dag_executor import _report_quality_check
+
+    report = tmp_path / "qa-report.md"
+    body = "## QA Report\n\n" + ("\n## Section\n" * 30) + "\n## HANDOFF\nAll clean.\n"
+    report.write_text(body)
+    assert _report_quality_check(report, "qa") is True
+
+
+def test_report_quality_check_fails_on_blocker(tmp_path):
+    """Any BLOCKER in a report invalidates success — forces retry then auto-block."""
+    from dag_executor import _report_quality_check
+
+    report = tmp_path / "qa-report.md"
+    body = (
+        "## QA Report\n\n"
+        + ("\n## Section\n" * 30)
+        + "\n#### B1 — pool starvation [CODE REVIEW] **BLOCKER S1 CONFIRMADO**\n"
+        "## HANDOFF\nFinished but flagged 1 BLOCKER.\n"
+    )
+    report.write_text(body)
+    assert _report_quality_check(report, "qa") is False
+
+
+def test_report_quality_check_fails_on_unresolved(tmp_path):
+    from dag_executor import _report_quality_check
+
+    report = tmp_path / "judge-report.md"
+    body = (
+        "## Judge Report\n\n" + ("\n## Section\n" * 30) + "\n| ❌ UNRESOLVED (BLOCKERs confirmados) | 5 |\n"
+        "## HANDOFF\nReport done.\n"
+    )
+    report.write_text(body)
+    assert _report_quality_check(report, "judge") is False
+
+
+def test_report_quality_check_fails_when_too_short(tmp_path):
+    from dag_executor import _report_quality_check
+
+    report = tmp_path / "qa-report.md"
+    report.write_text("## QA\n\nshort report\n## HANDOFF\n")
+    assert _report_quality_check(report, "qa") is False
+
+
+def test_report_quality_check_fails_when_handoff_missing(tmp_path):
+    from dag_executor import _report_quality_check
+
+    report = tmp_path / "qa-report.md"
+    report.write_text("## QA Report\n" + ("filler line\n" * 60))
+    assert _report_quality_check(report, "qa") is False

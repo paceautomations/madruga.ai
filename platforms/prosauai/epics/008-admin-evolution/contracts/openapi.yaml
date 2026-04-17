@@ -1,0 +1,1024 @@
+openapi: 3.1.0
+info:
+  title: ProsaUAI Admin API — Epic 008 (Admin Evolution)
+  version: "0.8.0"
+  description: |
+    Endpoints administrativos para o admin operacional. Todos os endpoints estão sob /admin.
+    Autenticação: cookie JWT `admin_token` (herdado do epic 007). 401 deve redirecionar para `/login?next=...`.
+    Pool de DB: todas as queries usam `pool_admin` (BYPASSRLS) — acesso cross-tenant.
+
+servers:
+  - url: http://localhost:8050
+    description: dev
+  - url: https://api.prosauai.com
+    description: prod
+
+security:
+  - adminCookie: []
+
+tags:
+  - name: conversations
+  - name: customers
+  - name: tenants
+  - name: traces
+  - name: metrics
+  - name: routing
+  - name: agents
+  - name: audit
+
+paths:
+  # ============================================================
+  # Conversations
+  # ============================================================
+  /admin/conversations:
+    get:
+      tags: [conversations]
+      summary: List conversations (paginated, searchable)
+      parameters:
+        - $ref: '#/components/parameters/TenantFilter'
+        - in: query
+          name: q
+          description: ILIKE search em customers.display_name OU messages.content
+          schema: { type: string }
+        - in: query
+          name: status
+          schema: { type: string, enum: [open, closed, pending_handoff, all] }
+        - in: query
+          name: sla
+          description: Filtrar por estado de SLA
+          schema: { type: string, enum: [breached, at_risk, ok, all] }
+        - in: query
+          name: cursor
+          description: Opaque cursor (base64 de {last_message_at, id})
+          schema: { type: string }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        '200':
+          description: Lista paginada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationListResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /admin/conversations/{id}:
+    get:
+      tags: [conversations]
+      summary: Get conversation detail (metadata + contact)
+      parameters:
+        - $ref: '#/components/parameters/ConversationId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConversationDetail' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [conversations]
+      summary: Update conversation status (close/reopen)
+      parameters:
+        - $ref: '#/components/parameters/ConversationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status: { type: string, enum: [open, closed] }
+              required: [status]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConversationDetail' }
+        '409':
+          description: Conflict (concurrent modification)
+
+  /admin/conversations/{id}/messages:
+    get:
+      tags: [conversations]
+      summary: Get full message thread for a conversation
+      parameters:
+        - $ref: '#/components/parameters/ConversationId'
+        - in: query
+          name: cursor
+          schema: { type: string }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 500, default: 100 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageListResponse' }
+
+  # ============================================================
+  # Customers
+  # ============================================================
+  /admin/customers:
+    get:
+      tags: [customers]
+      summary: List customers
+      parameters:
+        - $ref: '#/components/parameters/TenantFilter'
+        - in: query
+          name: q
+          schema: { type: string }
+        - in: query
+          name: cursor
+          schema: { type: string }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 50 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CustomerListResponse' }
+
+  /admin/customers/{id}:
+    get:
+      tags: [customers]
+      summary: Get customer profile (incl. conversation history & avg QS)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CustomerDetail' }
+
+  # ============================================================
+  # Tenants
+  # ============================================================
+  /admin/tenants:
+    get:
+      tags: [tenants]
+      summary: List tenants with quick stats (for global dropdown + Tenants tab)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TenantListResponse' }
+
+  /admin/tenants/{slug}:
+    get:
+      tags: [tenants]
+      summary: Get tenant detail (config + agents + 7d metrics)
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TenantDetail' }
+    patch:
+      tags: [tenants]
+      summary: Enable/disable tenant
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled: { type: boolean }
+              required: [enabled]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TenantDetail' }
+
+  # ============================================================
+  # Traces
+  # ============================================================
+  /admin/traces:
+    get:
+      tags: [traces]
+      summary: List traces (paginated, filterable)
+      parameters:
+        - $ref: '#/components/parameters/TenantFilter'
+        - in: query
+          name: status
+          schema: { type: string, enum: [success, error, degraded, all] }
+        - in: query
+          name: min_duration_ms
+          schema: { type: integer, minimum: 0 }
+        - in: query
+          name: period
+          schema: { type: string, enum: [1h, 24h, 7d, 30d], default: 24h }
+        - in: query
+          name: cursor
+          schema: { type: string }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TraceListResponse' }
+
+  /admin/traces/{trace_id}:
+    get:
+      tags: [traces]
+      summary: Get trace detail with waterfall (12 steps)
+      parameters:
+        - in: path
+          name: trace_id
+          required: true
+          description: hex trace_id OU UUID id
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TraceDetail' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ============================================================
+  # Metrics
+  # ============================================================
+  /admin/metrics/overview:
+    get:
+      tags: [metrics]
+      summary: 6 KPIs + sparklines 24h + delta vs yesterday
+      parameters:
+        - $ref: '#/components/parameters/TenantFilter'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OverviewMetrics' }
+
+  /admin/metrics/activity-feed:
+    get:
+      tags: [metrics]
+      summary: Last 50 activity events (derived via UNION ALL)
+      parameters:
+        - $ref: '#/components/parameters/TenantFilter'
+        - in: query
+          name: since
+          description: ISO8601 timestamp — return only events after this
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ActivityFeedResponse' }
+
+  /admin/metrics/performance:
+    get:
+      tags: [metrics]
+      summary: Performance AI aggregates (cached 5min)
+      parameters:
+        - $ref: '#/components/parameters/TenantFilter'
+        - in: query
+          name: period
+          schema: { type: string, enum: [1d, 7d, 30d], default: 7d }
+      responses:
+        '200':
+          description: OK (cached — Cache-Control max-age=300)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PerformanceMetrics' }
+
+  /admin/metrics/tenant-health:
+    get:
+      tags: [metrics]
+      summary: Health status per tenant (hierarchical rule FR-015)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TenantHealthResponse' }
+
+  /admin/metrics/system-health:
+    get:
+      tags: [metrics]
+      summary: Status of external components (API/PG/Redis/Evolution/Phoenix)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SystemHealth' }
+
+  # ============================================================
+  # Routing
+  # ============================================================
+  /admin/routing/rules:
+    get:
+      tags: [routing]
+      summary: In-memory routing rules per tenant (read-only)
+      parameters:
+        - $ref: '#/components/parameters/TenantFilter'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RoutingRulesResponse' }
+
+  /admin/routing/decisions:
+    get:
+      tags: [routing]
+      summary: Recent routing decisions (incl. DROPs)
+      parameters:
+        - $ref: '#/components/parameters/TenantFilter'
+        - in: query
+          name: decision_type
+          schema: { type: string, enum: [RESPOND, DROP, LOG_ONLY, BYPASS_AI, EVENT_HOOK, all] }
+        - in: query
+          name: period
+          schema: { type: string, enum: [1h, 24h, 7d], default: 24h }
+        - in: query
+          name: phone_hash
+          schema: { type: string }
+        - in: query
+          name: cursor
+          schema: { type: string }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 50 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RoutingDecisionsResponse' }
+
+  /admin/routing/decisions/{id}:
+    get:
+      tags: [routing]
+      summary: Get routing decision detail (with rule + facts JSON)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RoutingDecisionDetail' }
+
+  /admin/routing/stats:
+    get:
+      tags: [routing]
+      summary: Donut distribution + top-N reasons
+      parameters:
+        - $ref: '#/components/parameters/TenantFilter'
+        - in: query
+          name: period
+          schema: { type: string, enum: [1h, 24h, 7d], default: 24h }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RoutingStats' }
+
+  # ============================================================
+  # Agents
+  # ============================================================
+  /admin/agents:
+    get:
+      tags: [agents]
+      summary: List agents (filter by tenant)
+      parameters:
+        - $ref: '#/components/parameters/TenantFilter'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentListResponse' }
+
+  /admin/agents/{id}:
+    get:
+      tags: [agents]
+      summary: Get agent detail (config + metrics + prompt refs)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentDetail' }
+
+  /admin/agents/{id}/prompts:
+    get:
+      tags: [agents]
+      summary: List prompt versions of an agent
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PromptListResponse' }
+
+  /admin/agents/{id}/prompts/activate:
+    post:
+      tags: [agents]
+      summary: Activate a specific prompt version
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                prompt_id: { type: string, format: uuid }
+              required: [prompt_id]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentDetail' }
+
+  # ============================================================
+  # Audit
+  # ============================================================
+  /admin/audit:
+    get:
+      tags: [audit]
+      summary: Paginated audit timeline
+      parameters:
+        - in: query
+          name: action
+          schema: { type: string }
+        - in: query
+          name: user_email
+          schema: { type: string }
+        - in: query
+          name: period
+          schema: { type: string, enum: [1d, 7d, 30d, 90d], default: 7d }
+        - in: query
+          name: cursor
+          schema: { type: string }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 50 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuditListResponse' }
+
+# ============================================================
+# Components
+# ============================================================
+components:
+  securitySchemes:
+    adminCookie:
+      type: apiKey
+      in: cookie
+      name: admin_token
+
+  parameters:
+    TenantFilter:
+      in: query
+      name: tenant
+      description: tenant slug OR "all" (default)
+      schema: { type: string, default: all }
+    ConversationId:
+      in: path
+      name: id
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    Unauthorized:
+      description: Missing/expired admin_token
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error: { type: string, example: unauthorized }
+              next_url: { type: string }
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error: { type: string, example: not_found }
+
+  schemas:
+    Pagination:
+      type: object
+      properties:
+        next_cursor: { type: string, nullable: true }
+        has_more: { type: boolean }
+
+    Conversation:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        tenant_id: { type: string, format: uuid }
+        tenant_slug: { type: string }
+        customer:
+          $ref: '#/components/schemas/CustomerSummary'
+        channel: { type: string, example: whatsapp }
+        status: { type: string, enum: [open, closed, pending_handoff] }
+        intent_current: { type: string, nullable: true }
+        intent_confidence: { type: number, format: float, nullable: true }
+        quality_score_avg: { type: integer, nullable: true, minimum: 0, maximum: 100 }
+        message_count: { type: integer }
+        last_message_at: { type: string, format: date-time, nullable: true }
+        last_message_preview: { type: string, nullable: true }
+        sla_state: { type: string, enum: [ok, at_risk, breached], nullable: true }
+        opened_at: { type: string, format: date-time }
+
+    ConversationDetail:
+      allOf:
+        - $ref: '#/components/schemas/Conversation'
+        - type: object
+          properties:
+            tags: { type: array, items: { type: string } }
+            metadata: { type: object, additionalProperties: true }
+            history_summary:
+              type: object
+              properties:
+                previous_conversations: { type: integer }
+                historical_quality_avg: { type: integer, nullable: true }
+
+    ConversationListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Conversation' }
+        pagination: { $ref: '#/components/schemas/Pagination' }
+
+    CustomerSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        display_name: { type: string, nullable: true }
+        phone_masked: { type: string }  # (11) ****-1234
+        tenant_slug: { type: string }
+
+    CustomerDetail:
+      allOf:
+        - $ref: '#/components/schemas/CustomerSummary'
+        - type: object
+          properties:
+            conversation_count: { type: integer }
+            quality_score_avg: { type: integer, nullable: true }
+            tags: { type: array, items: { type: string } }
+            first_contact_at: { type: string, format: date-time }
+            last_contact_at: { type: string, format: date-time, nullable: true }
+            metadata: { type: object, additionalProperties: true }
+
+    CustomerListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/CustomerSummary' }
+        pagination: { $ref: '#/components/schemas/Pagination' }
+
+    Message:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        conversation_id: { type: string, format: uuid }
+        role: { type: string, enum: [inbound, ai_assistant, human_operator] }
+        content: { type: string }
+        operator_name: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        trace_id: { type: string, nullable: true }
+        latency_ms: { type: integer, nullable: true }
+        tokens_in: { type: integer, nullable: true }
+        tokens_out: { type: integer, nullable: true }
+        quality_score: { type: integer, nullable: true }
+        intent: { type: string, nullable: true }
+
+    MessageListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Message' }
+        pagination: { $ref: '#/components/schemas/Pagination' }
+
+    TenantSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string }
+        name: { type: string }
+        enabled: { type: boolean }
+        active_conversations: { type: integer }
+        quality_score_avg: { type: integer, nullable: true }
+        last_webhook_at: { type: string, format: date-time, nullable: true }
+
+    TenantListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/TenantSummary' }
+
+    TenantDetail:
+      allOf:
+        - $ref: '#/components/schemas/TenantSummary'
+        - type: object
+          properties:
+            config: { type: object, additionalProperties: true }
+            agents:
+              type: array
+              items: { $ref: '#/components/schemas/AgentSummary' }
+            metrics_7d: { $ref: '#/components/schemas/PerformanceMetrics' }
+
+    TraceSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        trace_id: { type: string }
+        tenant_slug: { type: string }
+        conversation_id: { type: string, format: uuid }
+        customer_display_name: { type: string, nullable: true }
+        intent: { type: string, nullable: true }
+        duration_ms: { type: integer }
+        cost_usd: { type: number, nullable: true }
+        status: { type: string, enum: [success, error, degraded] }
+        started_at: { type: string, format: date-time }
+
+    TraceStep:
+      type: object
+      properties:
+        order: { type: integer, minimum: 1, maximum: 12 }
+        name: { type: string }
+        status: { type: string, enum: [success, error, skipped] }
+        duration_ms: { type: integer }
+        started_at: { type: string, format: date-time }
+        ended_at: { type: string, format: date-time }
+        input: { type: object, additionalProperties: true, nullable: true }
+        input_truncated: { type: boolean }
+        input_size: { type: integer, nullable: true }
+        output: { type: object, additionalProperties: true, nullable: true }
+        output_truncated: { type: boolean }
+        output_size: { type: integer, nullable: true }
+        model: { type: string, nullable: true }
+        tokens_in: { type: integer, nullable: true }
+        tokens_out: { type: integer, nullable: true }
+        tool_calls:
+          type: array
+          nullable: true
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              args: { type: object, additionalProperties: true }
+              result: { type: object, additionalProperties: true }
+        error_type: { type: string, nullable: true }
+        error_message: { type: string, nullable: true }
+        error_stack: { type: string, nullable: true }
+
+    TraceDetail:
+      type: object
+      properties:
+        trace: { $ref: '#/components/schemas/TraceSummary' }
+        steps:
+          type: array
+          items: { $ref: '#/components/schemas/TraceStep' }
+        dominant_step_name: { type: string, nullable: true }
+        phoenix_url: { type: string, nullable: true }
+
+    TraceListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/TraceSummary' }
+        pagination: { $ref: '#/components/schemas/Pagination' }
+
+    KpiCard:
+      type: object
+      properties:
+        label: { type: string }
+        value: { type: number }
+        unit: { type: string, nullable: true }
+        sparkline: { type: array, items: { type: number } }
+        delta_pct: { type: number, nullable: true }
+        color: { type: string, enum: [green, amber, red, neutral] }
+
+    OverviewMetrics:
+      type: object
+      properties:
+        active_conversations: { $ref: '#/components/schemas/KpiCard' }
+        messages_today: { $ref: '#/components/schemas/KpiCard' }
+        containment_rate: { $ref: '#/components/schemas/KpiCard' }
+        latency_avg_ms: { $ref: '#/components/schemas/KpiCard' }
+        quality_score_avg: { $ref: '#/components/schemas/KpiCard' }
+        errors_24h: { $ref: '#/components/schemas/KpiCard' }
+
+    ActivityEvent:
+      type: object
+      properties:
+        kind: { type: string, enum: [new_conversation, sla_breach, pipeline_error, fallback_intent, ai_resolved] }
+        id: { type: string, format: uuid }
+        tenant_slug: { type: string }
+        ref:
+          type: object
+          properties:
+            type: { type: string, enum: [conversation, trace] }
+            id: { type: string, format: uuid }
+        label: { type: string }
+        created_at: { type: string, format: date-time }
+
+    ActivityFeedResponse:
+      type: object
+      properties:
+        events:
+          type: array
+          items: { $ref: '#/components/schemas/ActivityEvent' }
+
+    PerformanceMetrics:
+      type: object
+      properties:
+        period: { type: string }
+        kpis:
+          type: object
+          properties:
+            containment_rate: { type: number }
+            quality_score_p50: { type: integer }
+            quality_score_p95: { type: integer }
+            latency_p95_ms: { type: integer }
+            fallback_rate: { type: number }
+        intent_distribution:
+          type: array
+          items:
+            type: object
+            properties:
+              intent: { type: string }
+              count: { type: integer }
+              fallback_rate: { type: number }
+        quality_trend:
+          type: array
+          items:
+            type: object
+            properties:
+              ts: { type: string, format: date-time }
+              p50: { type: integer }
+              p95: { type: integer }
+        latency_per_step:
+          type: array
+          items:
+            type: object
+            properties:
+              step_name: { type: string }
+              p50_ms: { type: integer }
+              p95_ms: { type: integer }
+              p99_ms: { type: integer }
+        error_heatmap:
+          type: object
+          properties:
+            cells:
+              type: array
+              items:
+                type: object
+                properties:
+                  dow: { type: integer, minimum: 0, maximum: 6 }
+                  hour: { type: integer, minimum: 0, maximum: 23 }
+                  count: { type: integer }
+        cost_by_tenant_model:
+          type: array
+          items:
+            type: object
+            properties:
+              tenant_slug: { type: string }
+              model: { type: string }
+              cost_usd: { type: number }
+              sparkline_30d: { type: array, items: { type: number } }
+
+    TenantHealth:
+      type: object
+      properties:
+        tenant_slug: { type: string }
+        tenant_name: { type: string }
+        active_conversations: { type: integer }
+        quality_score_avg: { type: integer, nullable: true }
+        latency_p50_ms: { type: integer, nullable: true }
+        status: { type: string, enum: [verde, ambar, vermelho, neutral] }
+
+    TenantHealthResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/TenantHealth' }
+
+    SystemHealth:
+      type: object
+      properties:
+        components:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string, enum: [api, postgres, redis, evolution_api, phoenix] }
+              status: { type: string, enum: [up, degraded, down] }
+              latency_ms: { type: integer, nullable: true }
+              checked_at: { type: string, format: date-time }
+
+    RoutingRule:
+      type: object
+      properties:
+        tenant_slug: { type: string }
+        rule_id: { type: string }
+        priority: { type: integer }
+        conditions: { type: object, additionalProperties: true }
+        action: { type: string, enum: [RESPOND, DROP, LOG_ONLY, BYPASS_AI, EVENT_HOOK] }
+        agent_target: { type: string, nullable: true }
+
+    RoutingRulesResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/RoutingRule' }
+
+    RoutingDecision:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        tenant_slug: { type: string }
+        customer_display_name: { type: string, nullable: true }
+        customer_phone_hash: { type: string }
+        decision_type: { type: string, enum: [RESPOND, DROP, LOG_ONLY, BYPASS_AI, EVENT_HOOK] }
+        decision_reason: { type: string }
+        agent_target: { type: string, nullable: true }
+        trace_id: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+
+    RoutingDecisionDetail:
+      allOf:
+        - $ref: '#/components/schemas/RoutingDecision'
+        - type: object
+          properties:
+            matched_rule: { type: object, nullable: true }
+            facts: { type: object, additionalProperties: true }
+
+    RoutingDecisionsResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/RoutingDecision' }
+        pagination: { $ref: '#/components/schemas/Pagination' }
+
+    RoutingStats:
+      type: object
+      properties:
+        period: { type: string }
+        distribution:
+          type: array
+          items:
+            type: object
+            properties:
+              decision_type: { type: string }
+              count: { type: integer }
+              share: { type: number }
+        top_reasons:
+          type: array
+          items:
+            type: object
+            properties:
+              decision_type: { type: string }
+              reason: { type: string }
+              count: { type: integer }
+
+    AgentSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string }
+        name: { type: string }
+        tenant_slug: { type: string, nullable: true }
+        enabled: { type: boolean }
+        model: { type: string, nullable: true }
+        # The underlying ``prompts.version`` column is VARCHAR(50); we
+        # surface it as a free-form string so ``"3.0"``-style tags work.
+        active_prompt_version: { type: string, nullable: true }
+
+    AgentMetrics:
+      type: object
+      properties:
+        quality_score_avg: { type: integer, nullable: true }
+        containment_rate: { type: number }
+        latency_p95_ms: { type: integer }
+        fallback_rate: { type: number }
+        platform_quality_score_avg: { type: integer, nullable: true }
+        sparkline_30d_qs: { type: array, items: { type: integer } }
+
+    AgentDetail:
+      allOf:
+        - $ref: '#/components/schemas/AgentSummary'
+        - type: object
+          properties:
+            temperature: { type: number }
+            max_tokens: { type: integer }
+            tools: { type: array, items: { type: string } }
+            active_prompt:
+              $ref: '#/components/schemas/Prompt'
+            metrics: { $ref: '#/components/schemas/AgentMetrics' }
+
+    AgentListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/AgentSummary' }
+
+    Prompt:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        # VARCHAR(50) tag, e.g. "1.0", "2.0-hotfix".
+        version: { type: string }
+        safety_prefix: { type: string }
+        system_prompt: { type: string }
+        safety_suffix: { type: string }
+        active: { type: boolean }
+        created_at: { type: string, format: date-time, nullable: true }
+        notes: { type: string, nullable: true }
+
+    PromptListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Prompt' }
+
+    AuditEvent:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+        action: { type: string }
+        user_email: { type: string, nullable: true }
+        ip: { type: string, nullable: true }
+        user_agent: { type: string, nullable: true }
+        target_type: { type: string, nullable: true }
+        target_id: { type: string, nullable: true }
+        details: { type: object, additionalProperties: true }
+        anomaly_flag: { type: string, nullable: true, description: 'ex: "multiple_failed_logins"' }
+
+    AuditListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/AuditEvent' }
+        pagination: { $ref: '#/components/schemas/Pagination' }

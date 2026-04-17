@@ -25,6 +25,7 @@ import os
 import random
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -347,10 +348,13 @@ def _run_eval_scoring(
 # ── Task-by-Task Implement ────────────────────────────────────────
 
 
-TASK_RE = re.compile(r"^- \[([ Xx])\] (T\d{3})\s+(.+)$")
+TASK_RE = re.compile(r"^- \[([ Xx])\] (T\d{3,})\s+(.+)$")
 PHASE_RE = re.compile(r"^## Phase \d+")
 FILE_PATH_RE = re.compile(r"`([a-zA-Z0-9_./-]+\.[a-zA-Z0-9]+)`")
 US_TAG_RE = re.compile(r"\[US(\d+)\]")
+# Report quality gate: any whole-word BLOCKER or UNRESOLVED in qa/judge/
+# analyze-post reports invalidates success_check, forcing retry/auto-block.
+_REPORT_FINDINGS_RE = re.compile(r"\b(?:BLOCKER|UNRESOLVED)\b", re.IGNORECASE)
 
 # Task-scoping heuristics: decide which static docs are relevant to a given
 # task by matching its files + description against path/keyword regexes.
@@ -434,6 +438,23 @@ class TaskItem:
     us_tag: str | None = None
 
 
+def _report_quality_check(path: Path, node_id: str) -> bool:
+    """True iff report file exists, ≥50 lines, contains HANDOFF, AND has zero
+    BLOCKER/UNRESOLVED markers. Used as success_check for qa/judge/analyze-post —
+    a substantive report that still flags unresolved findings is NOT success.
+    """
+    try:
+        content = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return False
+    if content.count("\n") < 49 or "HANDOFF" not in content:
+        return False
+    if _REPORT_FINDINGS_RE.search(content):
+        log.warning("report_has_unresolved_findings node=%s path=%s", node_id, path)
+        return False
+    return True
+
+
 def _parse_tasks_from_text(content: str) -> list[TaskItem]:
     """Parse pre-loaded tasks.md content. Use when the file is already in memory."""
     tasks: list[TaskItem] = []
@@ -449,11 +470,13 @@ def _parse_tasks_from_text(content: str) -> list[TaskItem]:
             continue
         check, task_id, desc = task_match.groups()
         us_match = US_TAG_RE.search(desc)
+        # Tasks tagged inline with `**DEFERRED**` are pending regardless of [x] —
+        # agent marks done while explicitly deferring (needs prod/human/etc).
         tasks.append(
             TaskItem(
                 id=task_id,
                 description=desc,
-                checked=check.lower() == "x",
+                checked=(check.lower() == "x") and "**DEFERRED**" not in desc,
                 phase=current_phase,
                 parallel="[P]" in desc,
                 files=FILE_PATH_RE.findall(desc),
@@ -775,6 +798,122 @@ def compose_task_prompt(
     return "\n".join(content for _, content, _ in sections)
 
 
+_PHASE_USER_STORY_RE = re.compile(r"User Story\s+(\d+)", re.IGNORECASE)
+_SPEC_USER_STORY_HEADER_RE = re.compile(r"^##\s+User Story\s+(\d+)\b", re.MULTILINE | re.IGNORECASE)
+_SPEC_ANY_H2_RE = re.compile(r"^##\s+", re.MULTILINE)
+_TASKS_HEADER_RE = re.compile(r"^#")
+_TASKS_ITEM_RE = re.compile(r"^\s*-\s*\[[ xX]\]\s+(T\d+)")
+_PHASE_SETUP_MARKERS = ("setup", "shared infrastructure", "polish", "cleanup", "phase 1")
+
+
+def _phase_kind(phase_label: str, phase_tasks: list[TaskItem]) -> tuple[str, int | None]:
+    """Classify phase. Returns (kind, story_number) where kind is
+    "user_story" | "setup" | "mixed". Label wins over us_tags."""
+    m = _PHASE_USER_STORY_RE.search(phase_label)
+    if m:
+        return "user_story", int(m.group(1))
+
+    label_low = phase_label.lower()
+    if any(s in label_low for s in _PHASE_SETUP_MARKERS):
+        return "setup", None
+
+    us_tags = {t.us_tag for t in phase_tasks if t.us_tag}
+    if not us_tags:
+        return "setup", None
+    if len(us_tags) == 1:
+        digits = "".join(ch for ch in next(iter(us_tags)) if ch.isdigit())
+        if digits:
+            return "user_story", int(digits)
+    return "mixed", None
+
+
+def _slice_spec_for_user_story(spec_text: str, story_n: int) -> str | None:
+    """Return only ``## User Story N ...`` up to the next H2, or None if absent."""
+    target = next(
+        (m for m in _SPEC_USER_STORY_HEADER_RE.finditer(spec_text) if int(m.group(1)) == story_n),
+        None,
+    )
+    if target is None:
+        return None
+    next_h2 = _SPEC_ANY_H2_RE.search(spec_text, target.end())
+    end = next_h2.start() if next_h2 else len(spec_text)
+    return spec_text[target.start() : end].rstrip() + "\n"
+
+
+def _slice_tasks_for_phase(tasks_text: str, phase_tasks: list[TaskItem]) -> str:
+    """Keep headers and the lines of tasks in ``phase_tasks``; drop everything else."""
+    if not phase_tasks:
+        return tasks_text
+    target_ids = {t.id for t in phase_tasks}
+    kept: list[str] = []
+    in_target = False
+    for line in tasks_text.splitlines():
+        if _TASKS_HEADER_RE.match(line):
+            kept.append(line)
+            in_target = False
+            continue
+        m = _TASKS_ITEM_RE.match(line)
+        if m:
+            in_target = m.group(1) in target_ids
+            if in_target:
+                kept.append(line)
+            continue
+        if in_target:
+            kept.append(line)
+    # Collapse runs of blank lines so the output stays tight
+    out: list[str] = []
+    prev_blank = False
+    for line in kept:
+        blank = not line.strip()
+        if blank and prev_blank:
+            continue
+        out.append(line)
+        prev_blank = blank
+    return "\n".join(out) + "\n"
+
+
+def _scoped_spec_section(epic_dir: Path, phase_label: str, phase_tasks: list[TaskItem]) -> str | None:
+    """Return the spec.md body scoped to the phase, or None to omit spec entirely."""
+    spec_path = epic_dir / "spec.md"
+    if not spec_path.exists():
+        return None
+    kind, story_n = _phase_kind(phase_label, phase_tasks)
+    if kind == "setup":
+        log.info("phase_spec_skipped phase=%r", phase_label)
+        return None
+    spec_text = spec_path.read_text(encoding="utf-8")
+    if kind == "user_story" and story_n is not None:
+        sliced = _slice_spec_for_user_story(spec_text, story_n)
+        if sliced is not None:
+            log.info(
+                "phase_spec_sliced phase=%r story=%d bytes=%d→%d",
+                phase_label,
+                story_n,
+                len(spec_text.encode()),
+                len(sliced.encode()),
+            )
+            return sliced
+    return spec_text
+
+
+def _add_epic_docs_phase_scoped(
+    add,
+    epic_dir: Path,
+    phase_label: str,
+    phase_tasks: list[TaskItem],
+) -> None:
+    """Like ``_add_epic_docs`` but swaps the full spec.md for a phase-scoped slice."""
+    add("plan", _read_context(epic_dir / "plan.md", "Implementation Plan"))
+    scoped_spec = _scoped_spec_section(epic_dir, phase_label, phase_tasks)
+    if scoped_spec is not None:
+        add("spec", _format_context(scoped_spec, "Specification"))
+    add("data_model", _read_context(epic_dir / "data-model.md", "Data Model"))
+    contracts_dir = epic_dir / "contracts"
+    if contracts_dir.is_dir():
+        for cf in sorted(contracts_dir.glob("*.md")):
+            add(f"contract:{cf.name}", _read_context(cf, f"Contract: {cf.name}"))
+
+
 def compose_phase_prompt(
     phase_label: str,
     phase_tasks: list[TaskItem],
@@ -811,7 +950,10 @@ def compose_phase_prompt(
             "4. Git commit: `feat(<epic-number>): TXXX <short description>`",
             "5. Move to the next task",
             "",
-            "After ALL tasks are complete, run the full test suite once.",
+            "After ALL tasks are complete, run the test suite for THIS repository (the cwd you are in).",
+            "Do NOT cd to other directories. If no test runner is configured, skip and report.",
+            "When tests pass (or skipped), EXIT IMMEDIATELY. The phase orchestrator verifies via tasks.md [X] markers.",
+            "Do NOT summarize, explain, or run additional checks after EXIT.",
             "",
             "If you encounter a blocking error on one task after 2 attempts,",
             "skip it and continue with the next. Report skipped tasks at the end.",
@@ -822,6 +964,8 @@ def compose_phase_prompt(
             f"- You are on branch: epic/{platform_name}/{epic_slug}",
             "- Do NOT create, switch, or checkout any branch.",
             f"- Save ALL output to: {output_dir}/ or project root (for scripts/portal).",
+            "- Do NOT run `post_save.py` for any `--node` tracking (implement, analyze, etc.).",
+            "  The phase orchestrator manages node completion. Calling it will corrupt resume state.",
         ]
     )
 
@@ -838,23 +982,34 @@ def compose_phase_prompt(
 
     tasks_md_path = epic_dir / "tasks.md"
     try:
-        tasks_text: str | None = tasks_md_path.read_text(encoding="utf-8")
+        tasks_text_full: str | None = tasks_md_path.read_text(encoding="utf-8")
     except OSError:
+        tasks_text_full = None
+
+    if tasks_text_full is not None:
+        tasks_text: str | None = _slice_tasks_for_phase(tasks_text_full, phase_tasks)
+        log.info(
+            "phase_tasks_sliced phase=%r bytes=%d→%d",
+            phase_label,
+            len(tasks_text_full.encode()),
+            len(tasks_text.encode()),
+        )
+    else:
         tasks_text = None
 
     cache_ordered = _flag(ENV_CACHE_ORDERED)
 
     if cache_ordered:
         add("cue", _CACHE_PREFIX_CUE)
-        _add_epic_docs(add, epic_dir)
+        _add_epic_docs_phase_scoped(add, epic_dir, phase_label, phase_tasks)
         if tasks_text is not None:
-            add("tasks", _format_context(tasks_text, "All Tasks (current progress)"))
+            add("tasks", _format_context(tasks_text, "Tasks for this phase"))
         add("header", header)
     else:
         add("header", header)
         if tasks_text is not None:
-            add("tasks", _format_context(tasks_text, "All Tasks (current progress)"))
-        _add_epic_docs(add, epic_dir)
+            add("tasks", _format_context(tasks_text, "Tasks for this phase"))
+        _add_epic_docs_phase_scoped(add, epic_dir, phase_label, phase_tasks)
 
     # Include referenced files from ALL tasks in the phase (deduplicated).
     seen: set[str] = set()
@@ -1135,7 +1290,7 @@ async def _run_implement_phases(
 
         phase_id = f"implement:phase-{phase_idx + 1}"
         max_turns = _phase_max_turns(len(still_pending))
-        timeout = min(timeout_per_task * len(still_pending), DEFAULT_TIMEOUT)
+        timeout = max(DEFAULT_TIMEOUT, 300 * len(still_pending) + 600)
 
         prompt = compose_phase_prompt(
             phase_label,
@@ -1172,6 +1327,7 @@ async def _run_implement_phases(
             trace_id=trace_id,
         )
 
+        _pending_snapshot = still_pending  # capture for closure
         success, error, stdout = await dispatch_with_retry_async(
             phase_node,
             cwd,
@@ -1182,6 +1338,10 @@ async def _run_implement_phases(
             platform_name=platform_name,
             abort_check=_make_abort_check(conn, epic_slug),
             max_turns_override=max_turns,
+            success_check=lambda: (
+                len(_verify_phase_completion(tasks_path, _pending_snapshot)[0]) == len(_pending_snapshot)
+            ),
+            extra_env={"MADRUGA_PHASE_CTX": "1"},
         )
 
         # Verify which tasks actually completed (regardless of dispatch result)
@@ -1796,6 +1956,45 @@ def dispatch_with_retry(
 _active_subprocesses: "set[asyncio.subprocess.Process]" = set()
 
 
+def _kill_process_group_safely(process) -> None:
+    """SIGKILL the subprocess's process group to clean up orphan children.
+
+    Why: a naive ``os.killpg(os.getpgid(process.pid), SIGKILL)`` signals the
+    caller's own group if ``process.pid`` is bogus (e.g. a MagicMock) or if
+    ``start_new_session=True`` wasn't honored — which in WSL kills the shell
+    and everything in it. Guarded by: (1) pid must be int > 1, (2) target
+    pgid must differ from ours, (3) any OS error falls back to process.kill().
+    """
+    pid = getattr(process, "pid", None)
+    if not isinstance(pid, int) or pid <= 1:
+        try:
+            process.kill()
+        except (ProcessLookupError, AttributeError):
+            pass
+        return
+    try:
+        target_pgid = os.getpgid(pid)
+        if target_pgid == os.getpgid(0):
+            # Child inherited our pgid (start_new_session=True not honored, or
+            # this is a test mock leaking through). Do NOT signal — would kill
+            # the caller's own group (pytest runner, shell, terminal).
+            log.warning(
+                "Refusing killpg(%d): target pgid matches current pgid (would kill runner)",
+                target_pgid,
+            )
+            try:
+                process.kill()
+            except (ProcessLookupError, AttributeError):
+                pass
+            return
+        os.killpg(target_pgid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError, OSError):
+        try:
+            process.kill()
+        except (ProcessLookupError, AttributeError):
+            pass
+
+
 async def terminate_active_subprocesses(graceful_timeout: float = 5.0) -> int:
     """Signal every live dispatch subprocess to exit cleanly.
 
@@ -1837,14 +2036,11 @@ async def terminate_active_subprocesses(graceful_timeout: float = 5.0) -> int:
             break
         await asyncio.sleep(min(0.2, remaining))
 
-    # Escalate to SIGKILL on any survivors.
+    # Escalate to SIGKILL on any survivors — kill entire process group so orphan
+    # children (pytest, make, zsh spawned by the subprocess) are also terminated.
     for proc in list(_active_subprocesses):
-        try:
-            proc.kill()
-        except ProcessLookupError:
-            pass
-        finally:
-            _active_subprocesses.discard(proc)
+        _kill_process_group_safely(proc)
+        _active_subprocesses.discard(proc)
 
     return signalled
 
@@ -1904,6 +2100,7 @@ async def dispatch_node_async(
     resume_session_id: str | None = None,
     platform_name: str = "",
     max_turns_override: int | None = None,
+    extra_env: dict | None = None,
 ) -> tuple[bool, str | None, str | None]:
     """Async version of dispatch_node using asyncio.create_subprocess_exec.
 
@@ -1929,13 +2126,17 @@ async def dispatch_node_async(
         f", resume={resume_session_id[:12]}" if resume_session_id else "",
     )
 
+    dispatch_env = _dispatch_env()
+    if extra_env:
+        dispatch_env.update(extra_env)
     process = await asyncio.create_subprocess_exec(
         *cmd,
         stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
         cwd=str(cwd),
-        env=_dispatch_env(),
+        env=dispatch_env,
+        start_new_session=True,
     )
     # A8: register so shutdown can terminate us
     _active_subprocesses.add(process)
@@ -1983,7 +2184,7 @@ async def dispatch_node_async(
                 timeout=timeout,
             )
         except asyncio.TimeoutError:
-            process.kill()
+            _kill_process_group_safely(process)
             await process.wait()
             partial = stdout_buf.decode(errors="replace")
             # Persist partial stdout to disk so we can diagnose silent hangs
@@ -2062,6 +2263,8 @@ async def dispatch_with_retry_async(
     platform_name: str = "",
     abort_check: "object | None" = None,
     max_turns_override: int | None = None,
+    success_check: "object | None" = None,
+    extra_env: dict | None = None,
 ) -> tuple[bool, str | None, str | None]:
     """Async version of dispatch_with_retry using asyncio.sleep.
 
@@ -2079,6 +2282,11 @@ async def dispatch_with_retry_async(
     same_error_count = 0
     for attempt, backoff in enumerate([0] + RETRY_BACKOFFS, 1):
         if backoff > 0:
+            # Pre-retry: check if work already completed externally (e.g. tasks all done)
+            if success_check and success_check():
+                log.info("Pre-retry success_check passed for '%s' — skipping remaining retries", node.id)
+                breaker.record_success()
+                return True, None, None
             # F2: Check if epic was cancelled/blocked before retrying
             if abort_check and abort_check():
                 log.info("Aborting retries for '%s' — epic status changed", node.id)
@@ -2098,6 +2306,7 @@ async def dispatch_with_retry_async(
             resume_session_id,
             platform_name,
             max_turns_override=max_turns_override,
+            extra_env=extra_env,
         )
         if success:
             breaker.record_success()
@@ -2384,6 +2593,24 @@ async def run_pipeline_async(
             # Insert "running" record before dispatch so it appears in real-time
             run_id = insert_run(conn, platform_name, node.id, epic_id=epic_slug, trace_id=trace_id)
             node_cwd = code_dir if _needs_code_cwd(node) else cwd
+            # Report-based success_check: qa/analyze-post/judge write a *-report.md early
+            # then spend the remaining timeout on validation. Report counts as success
+            # only if substantial (≥50 lines + HANDOFF) AND has zero unresolved findings.
+            _report_suffixes = {
+                "qa": "qa-report.md",
+                "analyze-post": "analyze-post-report.md",
+                "judge": "judge-report.md",
+            }
+            _report_file = _report_suffixes.get(node.id)
+            if _report_file and epic_slug:
+                _report_path = REPO_ROOT / "platforms" / platform_name / "epics" / epic_slug / _report_file
+
+                def _report_success_check(path: Path = _report_path, nid: str = node.id) -> bool:
+                    return _report_quality_check(path, nid)
+
+                node_success_check = _report_success_check
+            else:
+                node_success_check = None
             if semaphore:
                 async with semaphore:
                     success, error, stdout = await dispatch_with_retry_async(
@@ -2395,6 +2622,7 @@ async def run_pipeline_async(
                         guardrail,
                         platform_name=platform_name,
                         abort_check=abort_fn,
+                        success_check=node_success_check,
                     )
             else:
                 success, error, stdout = await dispatch_with_retry_async(
@@ -2406,6 +2634,7 @@ async def run_pipeline_async(
                     guardrail,
                     platform_name=platform_name,
                     abort_check=abort_fn,
+                    success_check=node_success_check,
                 )
 
         # Truncate stdout for dispatch_log (debug aid, max 4KB)
@@ -2423,8 +2652,12 @@ async def run_pipeline_async(
                 conn.close()
             return 1
 
-        # Layer 4: verify branch + HEAD didn't change
-        if epic_slug:
+        # Layer 4: verify branch + HEAD didn't change.
+        # Skip for nodes that run in REPO_ROOT (madruga.ai) — the epic branch
+        # lives in the EXTERNAL repo (e.g. prosauai/), so checking branch in
+        # REPO_ROOT compares apples to oranges and triggers a bogus revert
+        # ("claude -p changed branch") on every dispatch of non-CODE_CWD nodes.
+        if epic_slug and _needs_code_cwd(node):
             branch_check = subprocess.run(
                 ["git", "branch", "--show-current"], capture_output=True, text=True, cwd=str(node_cwd)
             )
@@ -3023,8 +3256,12 @@ def run_pipeline(
             conn.close()
             return 1
 
-        # Layer 4: verify branch + HEAD didn't change
-        if epic_slug:
+        # Layer 4: verify branch + HEAD didn't change.
+        # Skip for nodes that run in REPO_ROOT (madruga.ai) — the epic branch
+        # lives in the EXTERNAL repo (e.g. prosauai/), so checking branch in
+        # REPO_ROOT compares apples to oranges and triggers a bogus revert
+        # ("claude -p changed branch") on every dispatch of non-CODE_CWD nodes.
+        if epic_slug and _needs_code_cwd(node):
             branch_check = subprocess.run(
                 ["git", "branch", "--show-current"], capture_output=True, text=True, cwd=str(node_cwd)
             )

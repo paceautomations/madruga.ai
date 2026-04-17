@@ -47,7 +47,7 @@ Write all generated artifact content in Brazilian Portuguese (PT-BR).
 
 ## Testing Layers
 
-QA runs up to 6 layers in order. Each layer is independent — if one is unavailable, the others still run.
+QA runs up to 7 layers in order. Each layer is independent — if one is unavailable, the others still run.
 
 | Layer | Always? | What it does | Activates when |
 |-------|---------|--------------|----------------|
@@ -56,6 +56,7 @@ QA runs up to 6 layers in order. Each layer is independent — if one is unavail
 | **L3: Code Review** | YES | Read diff, hunt bugs, security, logic, edge cases | Always — this is the core |
 | **L4: Build Verification** | If buildable | Verify project builds without errors | Build scripts detected |
 | **L5: API/Contract Testing** | Conditional | Hit endpoints, validate responses | API routes in diff + server running |
+| **L5.5: Journey Testing** | Conditional | Execute declared user journeys (API + browser steps) | testing.journeys_file declared + file exists |
 | **L6: Browser Testing** | Conditional | Full Playwright: scenarios, snapshots, exploratory | Playwright MCP + web features + app running |
 
 **Minimum guarantee**: L1 + L3 always run. QA always has meaningful work.
@@ -63,6 +64,55 @@ QA runs up to 6 layers in order. Each layer is independent — if one is unavail
 ---
 
 ## Instructions
+
+### Phase 0: Testing Manifest
+
+**Pré-condição**: Esta seção executa ANTES do Environment Detection. Se o bloco `testing:` estiver ausente, a fase termina silenciosamente e o pipeline continua para `### Phase 0: Environment Detection` com comportamento atual (retrocompatibilidade total — SC-007). Se presente, utiliza o manifest como contexto autoritativo para L4/L5/L6.
+
+1. **Detectar plataforma ativa:**
+   ```bash
+   python3 $REPO_ROOT/.specify/scripts/platform_cli.py current
+   ```
+   Exportar resultado como `$PLATFORM` para uso nos passos seguintes.
+
+2. **Ler testing: block:**
+   ```bash
+   python3 $REPO_ROOT/.specify/scripts/qa_startup.py \
+     --platform $PLATFORM --cwd $(pwd) --parse-config --json
+   ```
+   - **Exit code 2** (testing: ausente ou platform.yaml sem bloco `testing:`) → continuar para `### Phase 0: Environment Detection` com comportamento atual (retrocompatibilidade total — SC-007)
+   - **Exit code 0** (testing: presente) → parsear JSON output e usar `TestingManifest` como contexto autoritativo para L4/L5/L6; `$TESTING_MANIFEST` disponível nos passos seguintes
+
+3. **Iniciar serviços** (quando testing: presente e `startup.type != none`):
+   ```bash
+   python3 $REPO_ROOT/.specify/scripts/qa_startup.py \
+     --platform $PLATFORM --cwd $(pwd) --start --json
+   ```
+   Parsear `StartupResult` do JSON output:
+   - `status: blocker` → **BLOCKER** imediato: exibir lista de health checks falhados com conteúdo do campo `detail` de cada `Finding` (inclui últimas linhas de logs de container para `type: docker`); interromper execução — não prosseguir para L1–L6
+   - `skipped_startup: true` → INFO: "Serviços já rodando e saudáveis — startup pulado"
+   - `status: warn` → registrar WARN e continuar para validação de URLs
+   - `status: ok` → continuar para validação de URLs
+
+4. **Validar reachability de URLs** (após startup bem-sucedido):
+   ```bash
+   python3 $REPO_ROOT/.specify/scripts/qa_startup.py \
+     --platform $PLATFORM --cwd $(pwd) --validate-urls --json
+   ```
+   Parsear lista `urls` e `findings` do `StartupResult`:
+   - **Connection refused / timeout** em qualquer URL → **BLOCKER**:
+     `❌ <label>: <URL> inacessível — <detail>`
+     Hint por `startup.type`:
+     - `docker`: "verifique `docker compose ps` e port bindings em `docker-compose.override.yml`"
+     - `npm`: "verifique se `npm run dev` está rodando"
+     - `make` / `script` / `venv`: "verifique se o processo de startup está em execução"
+   - **Status code fora do esperado** → **BLOCKER**:
+     `❌ <label>: <URL> retornou HTTP <actual>, esperado <expected>`
+   - **Placeholder HTML detectado** (finding `level: WARN`) → **WARN**:
+     `⚠️ <label>: <URL> responde mas conteúdo parece placeholder`
+   - Todas as URLs OK → continuar para `### Phase 0: Environment Detection`
+
+---
 
 ### Phase 0: Environment Detection
 
@@ -100,7 +150,22 @@ QA runs up to 6 layers in order. Each layer is independent — if one is unavail
    - If file(s) found: read the most relevant one (match by current directory/repo name)
    - Extract: `base_url`, credentials, P0-P2 journeys, screens, business rules, known issues
 
-5. **Display capability matrix:**
+#### Env Diff (quando testing: block declarado)
+
+5. **Verificar variáveis de ambiente obrigatórias** (quando `testing:` block existe e `testing.env_file` está declarado):
+   ```bash
+   python3 $REPO_ROOT/.specify/scripts/qa_startup.py \
+     --platform $PLATFORM --cwd $(pwd) --validate-env --json
+   ```
+   - Parsear o JSON output do script
+   - Variável listada em `required_env` ausente no `.env` → **BLOCKER imediato** antes de qualquer layer de runtime:
+     `❌ ENV: <VAR_NAME> ausente — variável obrigatória declarada em testing.required_env`
+   - Variável presente em `.env.example` mas ausente no `.env` real e **não** em `required_env` → **WARN**:
+     `⚠️ ENV: <VAR_NAME> ausente em .env (opcional — declarado em .env.example mas não em required_env)`
+   - Se `env_file` for `null` ou não declarado → skip silencioso, sem erro
+   - Todas as variáveis `required_env` presentes → INFO: listar variáveis presentes e continuar
+
+6. **Display capability matrix:**
    ```
    🔍 Environment Detection
    | Layer | Status | Details |
@@ -353,7 +418,68 @@ If no tooling is detected at all: `⏭️ L1: No static analysis tools configure
    | /api/users | GET | no auth | ✅ 401 |
    ```
 
-If no server running or no API endpoints in diff: `⏭️ L5: No API endpoints to test — skipping`
+**Skip/BLOCKER logic (GAP-01/03):**
+- Se `testing:` block **não** declarado em `platform.yaml` e não há server rodando: `⏭️ L5: No API endpoints to test — skipping`
+- Se `testing:` block **declarado** com `testing.urls` e server não acessível:
+  `❌ L5: BLOCKER — testing.urls declarado mas serviços inacessíveis. Execute: python3 $REPO_ROOT/.specify/scripts/qa_startup.py --start --platform $PLATFORM --cwd <platform_cwd>`
+  Nunca skip silencioso quando `testing:` block declarado.
+
+---
+
+### Phase L5.5: Journey Testing (quando journeys.md declarado)
+
+**Ativa quando:** `testing.journeys_file` declarado em `testing:` block E o arquivo `journeys_file` existe (relativo ao diretório `platforms/<name>/`).
+
+Se a condição não for atendida (testing: ausente, journeys_file não declarado, ou arquivo não existe), pular silenciosamente para Phase 6.
+
+1. **Parsear jornadas do arquivo `journeys_file`:**
+   Ler o arquivo declarado em `testing.journeys_file` (relativo ao diretório `platforms/<name>/`).
+   Extrair blocos YAML fenced com o padrão ` \`\`\`yaml ... \`\`\` ` — apenas blocos cujo campo `id` começa com `J-` são reconhecidos como jornadas (per `contracts/journeys_schema.md`).
+   Se nenhuma jornada encontrada → `⏭️ L5.5: Nenhuma jornada definida em journeys_file — skipping`
+
+2. **Para cada jornada, executar sequencialmente os steps:**
+
+   **Steps `type: api`** — executar via Bash/curl:
+   ```bash
+   # Exemplo para action: "GET http://localhost:8050/health"
+   curl -s -o /tmp/qa_resp.txt -w "%{http_code}" --max-time 10 <URL>
+   ```
+   - `assert_status` definido → comparar HTTP status code com esperado; divergência → FAIL step
+   - `assert_redirect` definido → usar `curl -s -I --max-time 10` e checar header `Location`; divergência → FAIL step
+   - `assert_contains` definido → checar se cada substring está no body da resposta; ausência → FAIL step
+   - Timeout padrão: 10s por step
+   - Connection refused / timeout → FAIL step com mensagem clara
+
+   **Steps `type: browser`** — executar via Playwright MCP:
+   - `navigate <URL>` → `mcp__playwright__browser_navigate`
+   - `assert_contains <texto>` → `mcp__playwright__browser_snapshot` + verificar se texto presente no snapshot
+   - `click <seletor>` → `mcp__playwright__browser_click`
+   - `fill_form <campo>=<valor>` → `mcp__playwright__browser_fill`
+   - `assert_redirect <path>` → verificar URL atual após navegação via snapshot
+
+   **Step com `screenshot: true`** → `mcp__playwright__browser_take_screenshot` obrigatório após a ação do step.
+
+3. **Avaliar resultado por jornada:**
+   - Journey `required: true` + qualquer FAIL → **BLOCKER**:
+     `❌ <ID> FAIL step <N> — <descrição da falha>`
+   - Journey `required: false` + qualquer FAIL → **WARN**:
+     `⚠️ <ID> WARN step <N> — <descrição da falha>`
+   - Todos os steps PASS → `✅ <ID> PASS (<N> steps, <tempo>s)`
+
+4. **Playwright indisponível:**
+   - Steps `type: browser` → marcar como `SKIP — Playwright não disponível`, continuar
+   - Steps `type: api` continuam normalmente
+   - Se journey tem **apenas** steps `type: browser` e Playwright indisponível → `⏭️ <ID> SKIP — somente browser steps, Playwright indisponível`
+
+5. **Report da fase:**
+   ```
+   🗺️ L5.5: Journey Testing
+   | Journey | Steps | Status | Tempo |
+   |---------|-------|--------|-------|
+   | J-001 Admin Login Happy Path | 6 | ✅ PASS | 4.2s |
+   | J-002 Webhook ingest | 1 | ✅ PASS | 0.8s |
+   | J-003 Cookie expirado | 2 | ⏭️ SKIP | — |
+   ```
 
 ---
 
@@ -362,6 +488,28 @@ If no server running or no API endpoints in diff: `⏭️ L5: No API endpoints t
 **Activates when:** Playwright MCP available AND web features in diff AND app running.
 
 If this layer is not activated, skip entirely — the other layers provide coverage.
+
+#### 6.0 Frontend URL Screenshots — GAP-10 (quando testing.urls declarado)
+
+**Aplica quando:** Playwright MCP disponível E bloco `testing:` declarado com `testing.urls`.
+
+Para cada URL declarada como `type: frontend` em `testing.urls`:
+
+1. Navegar para a URL:
+   ```
+   mcp__playwright__browser_navigate -> <url>
+   ```
+2. Capturar screenshot **obrigatório**:
+   ```
+   mcp__playwright__browser_take_screenshot -> fullPage: true
+   ```
+3. Validar com vision:
+   - Título da página não vazio → OK
+   - Título vazio ou ausente → `⚠️ GAP-10 WARN: <url> — título da página vazio`
+   - Conteúdo parece placeholder HTML (body < 500 bytes após strip, ou contém "You need to enable JavaScript"/"React App"/"Vite + React"/"Welcome to nginx"/"It works!", ou `<body>` apenas com whitespace, ou Content-Type não é text/html para URL frontend) → `⚠️ GAP-10 WARN: <url> — conteúdo parece placeholder`
+4. Screenshot ausente por qualquer falha → `⚠️ GAP-10 WARN: <url> — screenshot não capturado`
+
+Esta verificação é **obrigatória** para todas as URLs `type: frontend` declaradas — não é opcional.
 
 #### 6.1 Scenario Planning (automatic)
 
@@ -634,6 +782,10 @@ Re-execute ONLY the relevant layer/scenario for the fix:
 ### L5: API Testing
 | Endpoint | Method | Test | Result |
 |----------|--------|------|--------|
+
+### L5.5: Journey Testing
+| Journey | Steps | Status | Tempo |
+|---------|-------|--------|-------|
 
 ### L6: Browser Testing
 | # | Journey | Scenario | Prio | Status |

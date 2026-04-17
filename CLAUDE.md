@@ -132,6 +132,9 @@ Direct edits bypass validation (frontmatter, handoff chains, archetype complianc
 - Redis 7 (state lookup: seen + handoff keys), YAML em disco (routing config) (epic/prosauai/004-router-mece)
 - Python 3.12 + FastAPI >=0.115, pydantic-ai >=1.70, asyncpg >=0.30, pydantic >=2.0, httpx, structlog, redis[hiredis] >=5.0 (main)
 - PostgreSQL 15 (Docker container) com RLS per-transaction (ADR-011), Redis 7 (existente — debounce + idempotency) (main)
+- Next.js 15 App Router + shadcn/ui + Tailwind v4 + Recharts + **TanStack Query v5** + **openapi-typescript** (dev-only) + lucide-react + Playwright (epic/prosauai/008-admin-evolution)
+- Novas tabelas admin-only em `public.*` (sem RLS — ADR-027): `traces`, `trace_steps`, `routing_decisions`; denormalização de `conversations.last_message_*` para inbox <100 ms (epic/prosauai/008-admin-evolution)
 
 ## Recent Changes
+- epic/prosauai/008-admin-evolution: Admin evolution — 8 abas (Overview enriquecido, Conversas, Trace Explorer, Performance AI, Agentes, Roteamento, Tenants, Auditoria); 3 tabelas admin-only (traces, trace_steps, routing_decisions) com retention 30 d/90 d; pipeline instrumentation fire-and-forget (ADR-028) com zero impacto no caminho crítico; pool_admin BYPASSRLS para cross-tenant (ADR-027). TanStack Query v5 + openapi-typescript para tipos gerados.
 - epic/madruga-ai/017-observability-tracing-evals: Added Python 3.11+ (backend), TypeScript/React (portal) + sqlite3 (stdlib), structlog, FastAPI (easter), React + @xyflow/react (portal existente), Astro Starlight

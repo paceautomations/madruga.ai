@@ -10,11 +10,14 @@ PLATFORM := .specify/scripts/platform_cli.py
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-18s %s\n", $$1, $$2}'
 
-test: ## Run Python tests
-	python3 -m pytest .specify/scripts/tests/ -v
+test: ## Run Python tests (excludes slow git-subprocess tests)
+	MADRUGA_DISPATCH=0 python3 -m pytest .specify/scripts/tests/ -v -m "not slow"
+
+test-full: ## Run all tests including slow git-subprocess tests
+	MADRUGA_DISPATCH=0 python3 -m pytest .specify/scripts/tests/ -v
 
 coverage: ## Run tests with coverage report
-	python3 -m pytest .specify/scripts/tests/ -v --cov --cov-report=term-missing --cov-report=html
+	MADRUGA_DISPATCH=0 python3 -m pytest .specify/scripts/tests/ -v --cov --cov-report=term-missing --cov-report=html
 	@echo "HTML report at htmlcov/index.html"
 
 lint: ## Lint all platforms

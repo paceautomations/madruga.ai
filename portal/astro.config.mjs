@@ -7,6 +7,7 @@ import starlight from '@astrojs/starlight';
 import react from '@astrojs/react';
 import mermaid from 'astro-mermaid';
 import { discoverPlatforms, buildSidebar } from './src/lib/platforms.mjs';
+import remarkResolveLinks from './src/lib/remarkResolveLinks.mjs';
 
 const platforms = discoverPlatforms();
 
@@ -103,6 +104,9 @@ function platformSymlinksPlugin() {
 
 export default defineConfig({
   site: 'https://madruga.ai',
+  markdown: {
+    remarkPlugins: [[remarkResolveLinks, { platformsDir }]],
+  },
   vite: {
     resolve: { preserveSymlinks: true },
     server: {

@@ -1,6 +1,6 @@
 ---
 title: "Solution Overview"
-updated: 2026-04-13
+updated: 2026-04-17
 sidebar:
   order: 2
 ---
@@ -84,6 +84,28 @@ Em grupos WhatsApp, o agente participa quando mencionado — publica ranking, re
 | **Host monitoring** | Netdata :19999 (bind 127.0.0.1, acesso via SSH tunnel). CPU, RAM, disco, containers Docker. Temporario ate Prometheus+Grafana (epic 013) | 006 |
 | **Message partitioning** | Tabela `messages` particionada por mes (PARTITION BY RANGE created_at). Purge via DROP PARTITION (<100ms). Particoes futuras criadas 3 meses a frente | 006 |
 | **Phoenix Postgres backend** | SQLite em dev, Postgres em prod (`PHOENIX_SQL_DATABASE_SCHEMA=observability`). [ADR-020](../decisions/ADR-020-phoenix-observability.md) | 006 |
+
+### Epic 007 — Admin Front Foundation
+
+| Feature | Descricao | Epic |
+|---------|-----------|------|
+| **Sidebar + login Next.js 15** | Layout App Router com sidebar de navegacao + login por cookie JWT (`admin_token`) | 007 |
+| **pool_admin (BYPASSRLS)** | Pool Postgres dedicado para queries cross-tenant sem RLS; dbmate como migration tool | 007 |
+| **Dashboard inicial** | Overview com KPI de volume diario de mensagens + lista rapida de conversas recentes | 007 |
+| **Tailwind v4 + shadcn/ui** | Stack UI estabelecida (dark mode forcado — principio 5); Recharts para graficos; TanStack Query para data-fetching | 007 |
+
+### Epic 008 — Admin Evolution
+
+| Feature | Descricao | Epic |
+|---------|-----------|------|
+| **8 abas operacionais** | Overview enriquecido · Conversas · Trace Explorer · Performance AI · Agentes · Roteamento · Tenants · Auditoria | 008 |
+| **Pipeline instrumentado (fire-and-forget)** | 12 etapas canonicas do pipeline capturadas em `public.traces` + `public.trace_steps`. Zero impacto no caminho critico ([ADR-028](../decisions/ADR-028-pipeline-fire-and-forget-persistence.md)) | 008 |
+| **Routing decisions persistidas** | Todas as decisoes MECE (incluindo `DROP`/`LOG_ONLY` antes invisiveis) em `public.routing_decisions` — 90d retention | 008 |
+| **Denormalizacao inbox** | `conversations.last_message_{id,at,preview}` para listagem <100ms em 10k+ conversas | 008 |
+| **~25 endpoints Admin API** | FastAPI montado sob `/admin` no `prosauai-api`; tipos TypeScript gerados via `openapi-typescript` | 008 |
+| **Custo por modelo** | `traces.cost_usd` calculado via `MODEL_PRICING` hardcoded em `pricing.py` ([ADR-029](../decisions/ADR-029-cost-pricing-constant.md)) | 008 |
+| **Retention estendido** | Cron diario (epic 006) estendido para purgar `traces` (30d) + `routing_decisions` (90d). Configuravel via env | 008 |
+| **Acesso cross-tenant sem RLS** | 3 tabelas admin em `public.*` acessadas exclusivamente via `pool_admin` (BYPASSRLS); `pool_app` nao tem permissao ([ADR-027](../decisions/ADR-027-admin-tables-no-rls.md)) | 008 |
 
 ---
 

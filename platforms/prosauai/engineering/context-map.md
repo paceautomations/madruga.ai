@@ -1,6 +1,6 @@
 ---
 title: "Context Map"
-updated: 2026-04-12
+updated: 2026-04-17
 sidebar:
   order: 3
 ---
@@ -43,6 +43,11 @@ flowchart LR
 
     subgraph Observability ["Observability<br/><small>#generic</small>"]
         M14["M14 Observabilidade"]
+    end
+
+    subgraph Admin ["Admin<br/><small>#supporting (cross-tenant)</small>"]
+        M15["M15 Admin API (/admin/*)"]
+        M16["M16 prosauai-admin :3000"]
     end
 
     %% External
@@ -90,6 +95,17 @@ flowchart LR
 
     %% === Observability → External ===
     M14 -- "Conformist" --> phoenix
+
+    %% === Pipeline → Admin (fire-and-forget, epic 008 / ADR-028) ===
+    M1 -. "fire-and-forget" .-> M15
+    M3 -. "fire-and-forget" .-> M15
+    M9 -. "fire-and-forget" .-> M15
+
+    %% === Admin API → UI ===
+    M15 -- "REST /admin/*" --> M16
+
+    %% === Admin → Supabase (pool_admin BYPASSRLS, ADR-027) ===
+    M15 -- "ACL (pool_admin)" --> supabase-prosauai
 ```
 
 ---
@@ -121,6 +137,9 @@ flowchart LR
 | 21 | Channel (M2) → Redis | ACL | Debounce via Lua scripts com ACL isolando detalhes |
 | 22 | M1, M5, M8, M9, M12, M13 → Observability (M14) | Pub-Sub | Eventos de todos os modulos para tracing passivo |
 | 23 | Observability (M14) → Phoenix (Arize) | Conformist | Conforma-se ao OTel SDK/OTLP gRPC do Phoenix |
+| 24 | Pipeline (M1, M3, M9) → Admin API (M15) | Pub-Sub (fire-and-forget) | [ADR-028](../decisions/ADR-028-pipeline-fire-and-forget-persistence/) — escrita assincrona de `traces`/`trace_steps`/`routing_decisions` sem acoplar caminho critico (epic 008) |
+| 25 | Admin API (M15) → prosauai-admin (M16) | Customer-Supplier | Endpoints REST `/admin/*` consumidos pela UI Next.js 15 (TanStack Query + tipos gerados via openapi-typescript) |
+| 26 | Admin API (M15) → Supabase ProsaUAI | ACL (pool_admin) | Leituras cross-tenant via `pool_admin` com BYPASSRLS — sem `SET LOCAL app.current_tenant_id` ([ADR-027](../decisions/ADR-027-admin-tables-no-rls/)) |
 
 ---
 
@@ -133,6 +152,7 @@ flowchart LR
 | **Supporting** | Safety | Guardrails — critico mas nao diferenciador |
 | **Supporting** | Operations | Handoff/triggers — regras de negocio mas nao core |
 | **Generic** | Observability | Tracing — poderia ser ferramenta externa |
+| **Supporting (cross-tenant)** | Admin | Plataforma operacional — 8 abas consultam dados cross-tenant via `pool_admin`; necessario para ops mas nao diferenciador (epic 008) |
 
 ---
 
@@ -141,9 +161,9 @@ flowchart LR
 | Padrao | Descricao | Quando Usar | Usado Em |
 |--------|-----------|-------------|----------|
 | **Conformist** | Downstream adota modelo do upstream sem traducao | Upstream estavel e confiavel | Evolution API → Channel, Channel → Evolution API, Observability → Phoenix |
-| **ACL** | Traduz modelo externo para modelo interno | Upstream tem modelo diferente | Channel → Conversation, Channel → Operations, Conversation → Bifrost/Supabase, Channel → Redis |
-| **Customer-Supplier** | Upstream adapta-se ao que downstream precisa | Downstream tem poder de negociacao | Conversation → Safety, Safety → Conversation, Conversation → Operations, Safety → Channel, Operations → Channel |
-| **Pub-Sub** | Publicacao de eventos sem acoplamento direto | Observabilidade passiva | Todos os modulos → Observability |
+| **ACL** | Traduz modelo externo para modelo interno | Upstream tem modelo diferente | Channel → Conversation, Channel → Operations, Conversation → Bifrost/Supabase, Channel → Redis, Admin API → Supabase (pool_admin) |
+| **Customer-Supplier** | Upstream adapta-se ao que downstream precisa | Downstream tem poder de negociacao | Conversation → Safety, Safety → Conversation, Conversation → Operations, Safety → Channel, Operations → Channel, Admin API → prosauai-admin UI |
+| **Pub-Sub** | Publicacao de eventos sem acoplamento direto | Observabilidade passiva | Todos os modulos → Observability; Pipeline (M1/M3/M9) → Admin (fire-and-forget, ADR-028) |
 | **Intra-BC** | Fluxo interno dentro do mesmo bounded context | Modulos do mesmo BC | M1→M2→M3 (Channel), M4→M5 / M7→M8→M9 (Conversation) |
 
 ---

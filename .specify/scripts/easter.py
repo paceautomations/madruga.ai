@@ -29,6 +29,7 @@ import fcntl
 import logging
 import os
 import signal
+import sqlite3
 import sys
 import time
 from contextlib import asynccontextmanager
@@ -42,6 +43,7 @@ from fastapi.responses import JSONResponse, Response
 sys.path.insert(0, os.path.dirname(__file__))
 
 from dag_executor import run_pipeline_async  # noqa: E402
+from ensure_repo import DirtyTreeError  # noqa: E402
 from ntfy import ntfy_alert  # noqa: E402
 from sd_notify import sd_notify  # noqa: E402
 
@@ -307,18 +309,11 @@ async def dag_scheduler(conn, semaphore, shutdown_event, poll_interval=15, platf
                                     f"Pipeline failed for epic {epic_id} "
                                     f"(exit={result}, streak={fail_count}/{MAX_EPIC_DISPATCH_FAILURES})",
                                 )
-                            # Auto-block after max consecutive failures. The user
-                            # must inspect and manually re-enable (status='in_progress')
-                            # once the root cause is fixed.
+                            # Auto-block after max consecutive failures. User
+                            # must re-enable via portal Start after fixing root cause.
                             if fail_count >= MAX_EPIC_DISPATCH_FAILURES:
                                 try:
-                                    block_conn = get_conn()
-                                    block_conn.execute(
-                                        "UPDATE epics SET status='blocked' WHERE platform_id=? AND epic_id=?",
-                                        (epic_platform_id, epic_id),
-                                    )
-                                    block_conn.commit()
-                                    block_conn.close()
+                                    _mark_epic_blocked(epic_platform_id, epic_id)
                                     logger.error(
                                         "epic_auto_blocked",
                                         epic_id=epic_id,
@@ -339,6 +334,28 @@ async def dag_scheduler(conn, semaphore, shutdown_event, poll_interval=15, platf
                                     logger.exception("epic_auto_block_failed", epic_id=epic_id)
                             # Cooldown after failure to avoid rapid retry busy-loop
                             await _interruptible_sleep(shutdown_event, poll_interval * 2)
+                    except DirtyTreeError as dirty:
+                        # User-actionable — a retry loop would never resolve this.
+                        # Block the epic, notify, continue polling other epics.
+                        logger.error(
+                            "epic_blocked_dirty_tree",
+                            epic_id=epic_id,
+                            platform=epic_platform_id,
+                            dirty_tree_message=str(dirty),
+                        )
+                        try:
+                            _mark_epic_blocked(epic_platform_id, epic_id)
+                        except Exception:
+                            logger.exception("dirty_tree_auto_block_failed", epic_id=epic_id)
+                        topic = os.environ.get("MADRUGA_NTFY_TOPIC")
+                        if topic:
+                            await asyncio.to_thread(
+                                ntfy_alert,
+                                topic,
+                                f"Epic {epic_id} BLOCKED: dirty working tree in {epic_platform_id} repo. "
+                                f"Commit or stash changes, then re-enable the epic via portal Start button.",
+                            )
+                        _epic_fail_counts.pop(epic_id, None)
                     finally:
                         _running_epics.discard(epic_id)
                         unbind_contextvars("epic_id", "platform")
@@ -455,7 +472,35 @@ async def retention_cleanup(conn, shutdown_event, interval=86400):
             logger.exception("retention_cleanup_error")
 
 
-async def periodic_backup(conn, shutdown_event, interval_hours=6):
+def _backup_db(src_db_path: str, target_path: str) -> None:
+    """VACUUM INTO using a fresh sqlite connection opened in the caller thread.
+
+    sqlite3 connections default to check_same_thread=True; periodic_backup
+    runs via asyncio.to_thread so the lifespan conn cannot be reused.
+    """
+    local_conn = sqlite3.connect(src_db_path)
+    try:
+        local_conn.execute("VACUUM INTO ?", (target_path,))
+    finally:
+        local_conn.close()
+
+
+def _mark_epic_blocked(platform_id: str, epic_id: str) -> None:
+    """Set epics.status='blocked' via a short-lived connection."""
+    from db import get_conn
+
+    conn = get_conn()
+    try:
+        conn.execute(
+            "UPDATE epics SET status='blocked' WHERE platform_id=? AND epic_id=?",
+            (platform_id, epic_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+async def periodic_backup(_unused_conn, shutdown_event, interval_hours=6):
     """Create periodic DB backups via VACUUM INTO. Rotate to keep last 5."""
     from config import DB_PATH as _db_path
 
@@ -468,7 +513,7 @@ async def periodic_backup(conn, shutdown_event, interval_hours=6):
         try:
             timestamp = time.strftime("%Y%m%d_%H%M%S", time.gmtime())
             path = backup_dir / f"madruga_{timestamp}.db"
-            await asyncio.to_thread(conn.execute, "VACUUM INTO ?", (str(path),))
+            await asyncio.to_thread(_backup_db, str(_db_path), str(path))
             logger.info("backup_created", path=str(path))
             # Rotate: keep last 5
             backups = sorted(backup_dir.glob("madruga_*.db"))

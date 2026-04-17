@@ -176,6 +176,104 @@ project-root/
 | ... | ... |
 ```
 
+### Testing Scaffold
+
+Ao gerar os artefatos da plataforma (Step 2), incluir automaticamente a infraestrutura de testes:
+
+#### 1. Bloco `testing:` em platform.yaml
+
+Inferir `startup.type` a partir da stack declarada nas ADRs ou perguntas estruturais:
+
+| Stack detectada | startup.type |
+|-----------------|-------------|
+| Docker / docker-compose | `docker` |
+| Node.js / npm / Next.js | `npm` |
+| Python / venv / FastAPI | `script` |
+| Makefile como entrypoint | `make` |
+| Indefinido / sem servidor | `none` |
+
+Gerar o bloco `testing:` com skeleton preenchível:
+
+```yaml
+testing:
+  startup:
+    type: <inferido da stack>   # docker | npm | make | script | none
+    command: null               # override; obrigatório se type=script ou venv
+    ready_timeout: 60           # segundos
+  health_checks: []             # preencher com URLs de health check do serviço
+  urls: []                      # preencher com URLs a validar (type: api|frontend)
+  required_env: []              # listar env vars obrigatórias para o serviço subir
+  env_file: null                # ex: .env.example (relativo ao repo da plataforma)
+  journeys_file: testing/journeys.md
+```
+
+#### 2. Arquivo `testing/journeys.md`
+
+Criar `platforms/<name>/testing/journeys.md` com J-001 placeholder estruturado baseado na US principal declarada na visão/spec da plataforma:
+
+````markdown
+# Jornadas de Teste — <Platform Name>
+
+> Jornadas de usuário para validação end-to-end. Atualizado por `speckit.tasks` e `reconcile`.
+
+## J-001 — Happy Path Principal
+
+Descrever brevemente o fluxo principal do usuário.
+
+```yaml
+id: J-001
+title: "Happy Path Principal"
+required: true
+steps:
+  # Exemplo de step de API:
+  # - type: api
+  #   action: "GET http://localhost:PORT/health"
+  #   assert_status: 200
+  # Exemplo de step de browser:
+  # - type: browser
+  #   action: "navigate http://localhost:PORT"
+  #   screenshot: true
+  # - type: browser
+  #   action: "assert_contains <texto esperado>"
+```
+````
+
+#### 3. CI Workflow (plataformas com `repo:` binding)
+
+Para plataformas com `repo:` binding declarado em `platform.yaml`, gerar `.github/workflows/ci.yml` com os jobs:
+
+- **lint**: análise estática + linting
+- **test**: suite de testes automatizados
+- **build**: build de produção (se `startup.type=docker`, incluir `docker build` com flag opcional `--no-cache`)
+
+Exemplo mínimo para startup.type=docker:
+
+```yaml
+name: CI
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # [lint steps da stack]
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # [test steps da stack]
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker image
+        run: docker build -t <platform>:ci .
+        # Flag opcional para CI lento: adicionar --build-arg SKIP_TESTS=1
+```
+
 ### Auto-Review Additions
 
 | # | Check | Action on Failure |

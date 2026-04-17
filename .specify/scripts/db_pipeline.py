@@ -453,17 +453,17 @@ def insert_run(conn: sqlite3.Connection, platform_id: str, node_id: str, **kwarg
 
 def complete_run(conn: sqlite3.Connection, run_id: str, status: str = "completed", **kwargs) -> None:
     completed_at = _now()
-    # Wall-clock fallback: Claude's duration_ms is inference-only and can be
-    # wildly low (4s reported vs 16min real). Substitute wall-clock when the
-    # reported value is suspiciously short.
+    # Wall-clock fallback: Claude's reported duration_ms is inference-only and
+    # can be missing entirely (success_check rescue path on timeouts) or wildly
+    # low (4s reported vs 16min real). Compute from started_at in either case.
     reported = kwargs.get("duration_ms")
-    if reported is not None and reported < _WALL_CLOCK_THRESHOLD_MS:
+    if reported is None or reported < _WALL_CLOCK_THRESHOLD_MS:
         row = conn.execute("SELECT started_at FROM pipeline_runs WHERE run_id=?", (run_id,)).fetchone()
         if row and row[0]:
             wall_ms = int(
                 (datetime.fromisoformat(completed_at) - datetime.fromisoformat(row[0])).total_seconds() * 1000
             )
-            if wall_ms > reported:
+            if reported is None or wall_ms > reported:
                 kwargs["duration_ms"] = wall_ms
     sets = ["status=?", "completed_at=?"]
     vals: list = [status, completed_at]
@@ -939,14 +939,28 @@ def compute_epic_status(
 
     Returns (new_status, delivered_at_or_None).
     Pass completed_ids to avoid a redundant DB query when caller already has the data.
-    Safety: never regresses shipped to a lesser status.
+    Safety: never regresses shipped/blocked/cancelled to a lesser status.
+
+    drafted epics auto-promote to in_progress when any node beyond epic-context completes.
+    --draft mode only runs epic-context (via --epic-status drafted override in post_save), so
+    ``completed_ids - {"epic-context"}`` being empty safely means "still a draft".
     """
-    if current_status in ("blocked", "cancelled", "shipped", "drafted"):
+    if current_status in ("blocked", "cancelled", "shipped"):
         return current_status, None
 
     if completed_ids is None:
         nodes = get_epic_nodes(conn, platform_id, epic_id)
         completed_ids = {n["node_id"] for n in nodes if n["status"] in ("done", "skipped")}
+
+    # drafted: promote only when L2 has progressed beyond epic-context.
+    # --draft mode marks epic-context done but no further nodes, so the subtraction
+    # below is empty for a genuine draft and non-empty for a stuck/running epic.
+    if current_status == "drafted":
+        if completed_ids - {"epic-context"}:
+            if required_node_ids and required_node_ids.issubset(completed_ids):
+                return "shipped", _now()[:10]
+            return "in_progress", None
+        return "drafted", None
 
     if required_node_ids and required_node_ids.issubset(completed_ids):
         delivered_at = _now()[:10]

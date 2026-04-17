@@ -29,6 +29,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import re
 import subprocess
 import sys
@@ -42,6 +43,20 @@ sys.path.insert(0, str(Path(__file__).parent))
 from config import REPO_ROOT, UNFILLED_TEMPLATE_MARKERS  # noqa: F401
 
 log = logging.getLogger("post_save")
+
+# L2 nodes whose completion state is owned exclusively by dag_executor.
+# Direct writes via post_save.py inside a phase-dispatch subprocess corrupt
+# epic_nodes resume state (see guard in main()).
+_PROTECTED_L2_NODES = frozenset(
+    {
+        "implement",
+        "analyze-post",
+        "judge",
+        "reconcile",
+        "qa",
+        "roadmap-reassess",
+    }
+)
 
 
 from log_utils import setup_logging as _setup_logging  # noqa: E402
@@ -741,6 +756,14 @@ def main():
         result = reseed(args.platform)
         print(json.dumps(result))
         return
+
+    if args.node in _PROTECTED_L2_NODES and os.environ.get("MADRUGA_PHASE_CTX") == "1":
+        print(
+            f"ERROR: post_save.py --node {args.node!r} blocked inside phase dispatch "
+            f"(MADRUGA_PHASE_CTX=1). L2 nodes are managed by dag_executor.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     # Normal save recording
     if not all([args.platform, args.node, args.skill, args.artifact]):

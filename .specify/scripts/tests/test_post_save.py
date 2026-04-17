@@ -1127,3 +1127,79 @@ def test_reseed_commit_sync_idempotent(setup_platform):
     finally:
         post_save.REPO_ROOT = original_repo
         db_mod.DB_PATH = original_db
+
+
+# ---------------------------------------------------------------------------
+# MADRUGA_PHASE_CTX guard
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "node",
+    ["implement", "analyze-post", "judge", "reconcile", "qa", "roadmap-reassess"],
+)
+def test_post_save_blocks_protected_node_in_phase_ctx(monkeypatch, node):
+    """Each L2 protected node exits with code 1 when MADRUGA_PHASE_CTX=1.
+
+    Prevents phase subprocesses from corrupting epic_nodes resume state via
+    direct post_save.py calls for nodes owned by dag_executor.
+    """
+    import post_save
+
+    monkeypatch.setenv("MADRUGA_PHASE_CTX", "1")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "post_save.py",
+            "--platform",
+            "test-plat",
+            "--node",
+            node,
+            "--skill",
+            "speckit.implement",
+            "--artifact",
+            "epics/001/spec.md",
+        ],
+    )
+    with pytest.raises(SystemExit) as exc_info:
+        post_save.main()
+    assert exc_info.value.code == 1
+
+
+def test_post_save_allows_protected_node_without_phase_ctx(monkeypatch, setup_platform):
+    """post_save.py --node implement proceeds normally when MADRUGA_PHASE_CTX is absent."""
+    import post_save
+    import db_core as db_mod
+
+    tmp_path, db_path = setup_platform
+    monkeypatch.delenv("MADRUGA_PHASE_CTX", raising=False)
+    original_repo = post_save.REPO_ROOT
+    original_db = db_mod.DB_PATH
+    post_save.REPO_ROOT = tmp_path
+    db_mod.DB_PATH = db_path
+
+    # Create a minimal artifact so record_save doesn't fail on hash
+    epic_dir = tmp_path / "platforms" / "test-plat" / "epics" / "001-feat"
+    epic_dir.mkdir(parents=True)
+    (epic_dir / "spec.md").write_text("# Spec\n\nContent.\n")
+
+    try:
+        from db import get_conn as gc, upsert_epic, upsert_platform
+
+        conn = gc(db_path)
+        upsert_platform(conn, "test-plat", name="test-plat", repo_path="platforms/test-plat")
+        upsert_epic(conn, "test-plat", "001-feat", title="Test Feature")
+        conn.close()
+
+        result = post_save.record_save(
+            platform="test-plat",
+            node="implement",
+            skill="speckit.implement",
+            artifact="epics/001-feat/spec.md",
+            epic="001-feat",
+        )
+        assert result["status"] == "ok"
+    finally:
+        post_save.REPO_ROOT = original_repo
+        db_mod.DB_PATH = original_db

@@ -88,6 +88,35 @@ You **MUST** consider the user input before proceeding (if not empty).
    - Parallel execution examples per story
    - Implementation strategy section (MVP first, incremental delivery)
 
+   #### Deployment Smoke Phase (auto-gerada se testing: block presente)
+
+   Após determinar o número da última fase (Phase N — tipicamente a fase Polish), detectar bloco `testing:` em `platform.yaml`:
+   ```bash
+   python3 $REPO_ROOT/.specify/scripts/qa_startup.py \
+     --platform $PLATFORM --parse-config --json 2>/dev/null
+   ```
+   Se exit code 0 (testing: presente), adicionar `## Phase {N+1}: Deployment Smoke` como **ÚLTIMA** fase do tasks.md (após Polish), com as seguintes tarefas adaptadas ao `startup.type`:
+
+   **Para `startup.type: docker`** — adicionar pré-fase de build antes do start:
+   ```markdown
+   - [ ] T{N+1}00 Executar `docker compose build` no diretório da plataforma — build sem erros
+   ```
+   **Para `startup.type: npm`** — adicionar pré-fase de build:
+   ```markdown
+   - [ ] T{N+1}00 Executar `npm run build` — build de produção sem erros
+   ```
+
+   **Tarefas obrigatórias para todos os tipos (exceto `none`):**
+   ```markdown
+   - [ ] T{N+1}01 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --start --platform <name>` — todos os health_checks respondem dentro do ready_timeout
+   - [ ] T{N+1}02 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --validate-env --platform <name>` — zero required_env vars ausentes no .env
+   - [ ] T{N+1}03 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --validate-urls --platform <name>` — todas as URLs acessíveis com status esperado
+   - [ ] T{N+1}04 Capturar screenshot de cada URL `type: frontend` declarada em `testing.urls` — conteúdo não é placeholder
+   - [ ] T{N+1}05 Executar Journey J-001 (happy path) declarado em `testing/journeys.md` — todos os steps com assertions OK
+   ```
+
+   Se testing: ausente (exit code não-zero) → skip silenciosamente, sem adicionar a fase.
+
 5. **Report**: Output path to generated tasks.md and summary:
    - Total task count
    - Task count per user story

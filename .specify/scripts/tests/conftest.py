@@ -1,6 +1,7 @@
 """Shared fixtures for db.py tests."""
 
 import gc
+import os
 from pathlib import Path
 from unittest.mock import patch
 
@@ -15,6 +16,39 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 # `from post_save import _get_required_epic_nodes` inside run_pipeline(),
 # causing post_save.get_conn to be bound to the mock permanently.
 import post_save  # noqa: F401, E402
+
+
+# Snapshot the test runner's process group at collection time so the safety
+# fixture below can detect calls that would signal the runner's own group.
+_TEST_RUNNER_PGID = os.getpgid(0)
+
+
+@pytest.fixture(autouse=True)
+def _prevent_killpg_suicide(monkeypatch):
+    """Safety net: block os.killpg() calls during tests that would kill the runner.
+
+    Production code in dag_executor (dispatch_node_async timeout, shutdown
+    cascade) calls os.killpg() on the subprocess's process group. If a test
+    mock leaks a non-int pid, or if production logic drifts and stops creating
+    new sessions (start_new_session=True), the target pgid can equal the
+    runner's pgid — SIGKILL to that group kills pytest, make, the shell, and
+    in WSL can crash the terminal/session.
+
+    This fixture wraps os.killpg to raise PermissionError instead of actually
+    signalling when the target equals the runner's pgid (or is 0, meaning
+    "current group"). dag_executor._kill_process_group_safely catches
+    PermissionError and falls back to process.kill(), which is safe.
+    """
+    real_killpg = os.killpg
+
+    def safe_killpg(pgid, sig):
+        if pgid in (0, _TEST_RUNNER_PGID):
+            raise PermissionError(
+                f"Test safety: refused killpg(pgid={pgid}, sig={sig}) — would signal test runner's process group"
+            )
+        return real_killpg(pgid, sig)
+
+    monkeypatch.setattr(os, "killpg", safe_killpg)
 
 
 @pytest.fixture(autouse=True)

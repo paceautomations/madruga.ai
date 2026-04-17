@@ -22,6 +22,7 @@ timeout = 120
 timeout_method = "thread"
 markers = [
     "real_epic_output_dir: bypass _epic_output_dir autouse mock",
+    "slow: marks tests with real git subprocess operations (deselect with '-m not slow')",
 ]
 
 [tool.coverage.run]

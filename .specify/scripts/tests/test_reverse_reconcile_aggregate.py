@@ -59,6 +59,7 @@ def _list_shas(repo: Path, ref: str) -> list[str]:
     return [s for s in out.stdout.splitlines() if s]
 
 
+@pytest.mark.slow
 def test_file_touched_by_3_commits_collapses_to_1_item(tmp_path, mock_binding):
     import reverse_reconcile_aggregate as mod
 
@@ -94,6 +95,7 @@ def test_file_touched_by_3_commits_collapses_to_1_item(tmp_path, mock_binding):
     assert item["head_sha"] == _sha_of(repo, "origin/develop")
 
 
+@pytest.mark.slow
 def test_file_added_then_deleted_goes_to_deleted_files(tmp_path, mock_binding):
     import reverse_reconcile_aggregate as mod
 
@@ -124,6 +126,7 @@ def test_file_added_then_deleted_goes_to_deleted_files(tmp_path, mock_binding):
     assert set(result["deleted_files"][0]["touched_by_shas"]) == set(shas)
 
 
+@pytest.mark.slow
 def test_doc_self_edit_passes_through_to_auto_reconcile(tmp_path, mock_binding):
     import reverse_reconcile_aggregate as mod
 
@@ -144,6 +147,7 @@ def test_doc_self_edit_passes_through_to_auto_reconcile(tmp_path, mock_binding):
     assert len(result["code_items"]) == 0
 
 
+@pytest.mark.slow
 def test_aba_revert_sequence_still_one_item_with_all_shas(tmp_path, mock_binding):
     """A→B→A' sequence: file returns to A's state. 1 item, all 3 SHAs in touched_by_shas.
 
@@ -184,6 +188,7 @@ def test_aba_revert_sequence_still_one_item_with_all_shas(tmp_path, mock_binding
     assert content_b.strip() not in item["head_content_snippet"]
 
 
+@pytest.mark.slow
 def test_candidate_docs_for_models_path(tmp_path, mock_binding):
     import reverse_reconcile_aggregate as mod
 
@@ -202,6 +207,7 @@ def test_candidate_docs_for_models_path(tmp_path, mock_binding):
     assert any("blueprint.md" in c for c in cand)
 
 
+@pytest.mark.slow
 def test_candidate_docs_for_api_path(tmp_path, mock_binding):
     import reverse_reconcile_aggregate as mod
 
@@ -219,6 +225,7 @@ def test_candidate_docs_for_api_path(tmp_path, mock_binding):
     assert cand[0].endswith("context-map.md")
 
 
+@pytest.mark.slow
 def test_candidate_docs_filters_missing_files(tmp_path, mock_binding):
     """Candidate docs pointing to files that don't exist get filtered out.
 
@@ -244,6 +251,7 @@ def test_candidate_docs_filters_missing_files(tmp_path, mock_binding):
     assert any("domain-model.md" in c for c in cand)
 
 
+@pytest.mark.slow
 def test_candidate_docs_fallback_when_all_missing(tmp_path, mock_binding):
     """If no candidate exists on disk, fall back to blueprint.md unconditionally."""
     import reverse_reconcile_aggregate as mod
@@ -264,6 +272,7 @@ def test_candidate_docs_fallback_when_all_missing(tmp_path, mock_binding):
     assert cand[0].endswith("blueprint.md")
 
 
+@pytest.mark.slow
 def test_head_snippet_truncates_large_file(tmp_path, mock_binding):
     import reverse_reconcile_aggregate as mod
 
@@ -284,6 +293,7 @@ def test_head_snippet_truncates_large_file(tmp_path, mock_binding):
     assert "line 199" in snippet
 
 
+@pytest.mark.slow
 def test_binding_branch_override(tmp_path, monkeypatch):
     import reverse_reconcile_aggregate as mod
 
@@ -304,6 +314,7 @@ def test_binding_branch_override(tmp_path, monkeypatch):
     assert len(result["code_items"]) == 1
 
 
+@pytest.mark.slow
 def test_aggregate_raises_on_reconciled_leak(tmp_path, mock_binding):
     """Invariant 6: a reconciled commit appearing in triage MUST raise AssertionError."""
     import sqlite3
@@ -340,6 +351,7 @@ def test_aggregate_raises_on_reconciled_leak(tmp_path, mock_binding):
         mod.aggregate("testplat", triage, db_path=db_file)
 
 
+@pytest.mark.slow
 def test_aggregate_passes_when_no_leak(tmp_path, mock_binding):
     """Empty triage or all-unreconciled SHAs must pass the invariant."""
     import sqlite3

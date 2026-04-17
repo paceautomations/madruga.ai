@@ -9,3 +9,25 @@ repo:
   base_branch: main
   epic_branch_prefix: "epic/madruga-ai/"
 tags: [architecture, documentation, spec-to-code]
+testing:
+  startup:
+    type: npm
+    command: "cd portal && npm run dev"
+    ready_timeout: 30
+  health_checks:
+    - url: http://localhost:4321
+      method: GET
+      expect_status: 200
+      label: Portal Dev Server
+  urls:
+    - url: http://localhost:4321
+      type: frontend
+      label: Portal Home
+      expect_status: 200
+    - url: http://localhost:4321/madruga-ai/business/vision/
+      type: frontend
+      label: Plataforma madruga-ai (vision doc)
+      expect_status: 200
+  required_env: []
+  env_file: null
+  journeys_file: testing/journeys.md

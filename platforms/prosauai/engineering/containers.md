@@ -120,7 +120,23 @@ graph LR
 | 8 | Infisical | — (infra) | Docker (self-hosted) | Secrets vault: envelope encryption, rotation | HTTPS REST SDK | — |
 | 9 | Evolution API | Channel | Cloud mode (managed) | WhatsApp gateway: send/receive messages | HTTP POST (sendText) | Webhook POST |
 | 10 | Netdata :19999 | — (infra) | Docker (self-hosted) | Host monitoring: CPU, RAM, disco, containers Docker. Dashboard web. Bind `127.0.0.1` only (acesso via SSH tunnel) | — | HTTP :19999 (dashboard) |
-| 11 | retention-cron | Operations | Python 3.12 (same image as API) | Purge diario de dados expirados: DROP PARTITION (messages), batch DELETE (conversations, eval_scores, traces). LGPD compliance | asyncpg SQL | Logs (structlog JSON) |
+| 11 | retention-cron | Operations | Python 3.12 (same image as API) | Purge diario de dados expirados: DROP PARTITION (messages), batch DELETE (conversations, eval_scores, traces, trace_steps, routing_decisions — epic 008). LGPD compliance | asyncpg SQL | Logs (structlog JSON) |
+| 12 | Admin API (FastAPI) | Admin / Observability | Python 3.12 + FastAPI (montado em `prosauai-api` sob prefixo `/admin`) | Superficie de **~25 endpoints** REST consumidos pelo `prosauai-admin` (epic 008). Auth via cookie JWT `admin_token` (epic 007). Todas as queries usam `pool_admin` (BYPASSRLS — cross-tenant por design). Filtro global `?tenant=<slug>` como unica fonte de verdade. Cache Redis em `/admin/metrics/performance` (TTL 300 s ± jitter 30 s) e `/admin/metrics/activity-feed` (TTL 10 s). OpenAPI 3.1 em `epics/008-admin-evolution/contracts/openapi.yaml` | HTTPS + cookie JWT | asyncpg (pool_admin), Redis (cache + rate) |
+
+### Admin API — superficie por dominio (epic 008)
+
+| Grupo | Endpoints | Aba consumidora |
+|-------|-----------|-----------------|
+| Conversations | `GET/PATCH /admin/conversations`, `GET /admin/conversations/{id}`, `GET /admin/conversations/{id}/messages` | Conversas |
+| Customers | `GET /admin/customers`, `GET /admin/customers/{id}` | (contact profile) |
+| Tenants | `GET /admin/tenants`, `GET/PATCH /admin/tenants/{slug}` | Tenants + header dropdown |
+| Traces | `GET /admin/traces`, `GET /admin/traces/{id}` | Trace Explorer |
+| Metrics | `GET /admin/metrics/{overview,activity-feed,performance,tenant-health,system-health}` | Overview + Performance AI |
+| Routing | `GET /admin/routing/{rules,decisions,stats}`, `GET /admin/routing/decisions/{id}` | Roteamento |
+| Agents | `GET /admin/agents`, `GET /admin/agents/{id}`, `GET /admin/agents/{id}/prompts`, `POST /admin/agents/{id}/prompts/activate` | Agentes |
+| Audit | `GET /admin/audit` | Auditoria |
+
+Falhas em `pool_admin` **nao** bloqueiam webhooks (que usam `pool_app` com RLS). Persistencia de `traces` + `trace_steps` + `routing_decisions` feita pelo pipeline/router em modo fire-and-forget via `asyncio.create_task` (ADR-028).
 
 ---
 
@@ -139,6 +155,7 @@ graph LR
 | prosauai-worker | Infisical | HTTPS REST SDK (cached 5min) | sync | Secret retrieval |
 | Supabase ProsaUAI | prosauai-worker | PG LISTEN/NOTIFY | async (event-driven) | Triggers proativos (games, group_members) |
 | prosauai-admin | prosauai-api | REST /api/v1/* | sync | CRUD operations |
+| prosauai-admin | Admin API (FastAPI) | HTTPS + cookie JWT `admin_token` | sync | Admin evolution (epic 008) — 8 tabs: Overview, Conversas, Trace Explorer, Performance AI, Agentes, Roteamento, Tenants, Auditoria |
 | Bifrost | OpenAI gpt-5.4-mini | OpenAI API | sync | LLM inference |
 
 ---
@@ -170,7 +187,9 @@ graph LR
 |-----------|--------|------|-------|
 | prosauai-api | ✅ Operacional | 001-006 | Webhook + health + debounce + multi-tenant auth (X-Webhook-Secret) + MECE router + idempotency + **conversation pipeline 12-step** (customer lifecycle, context window, intent classifier, LLM agent pydantic-ai, safety guards 3-layer, tool registry, evaluator) + **DB migrations** (7 files, asyncpg pool, RLS on all tables) + **schema isolation** (`prosauai` + `prosauai_ops`). OTel SDK + structlog bridge. Port 8050. **Nota:** LLM orchestration atualmente roda inline na API (sem worker separado) |
 | prosauai-worker | ⏳ Planejado (arquitetura target) | — | Arquitetura target: LLM orchestration, delivery, eval batch e triggers migram para ARQ worker com Redis Streams consumer groups. **Atualmente:** toda logica de conversacao roda inline no prosauai-api. Migracao para worker planejada quando throughput exigir scaling independente |
-| prosauai-admin | ⏳ Planejado | — | — |
+| prosauai-admin | 🔄 Em evolução | 007, 008 | Fundação operacional (epic 007): sidebar mínima, login cookie JWT, `pool_admin` BYPASSRLS, dbmate. **Epic 008 (em andamento)**: 8 abas (Overview enriquecido, Conversas, Trace Explorer, Performance AI, Agentes, Roteamento, Tenants, Auditoria). Next.js 15 App Router + shadcn/ui + Tailwind v4 + Recharts + TanStack Query v5 + Playwright. Dark mode único na v1 |
+| Admin API (epic 008) | 🔄 Em evolução | 008 | Router FastAPI montado sob `/admin` no `prosauai-api`. ~25 endpoints cobrindo 8 abas do `prosauai-admin`. OpenAPI 3.1 em `epics/008-admin-evolution/contracts/openapi.yaml`. Cache Redis 300 s ± jitter em `performance`, 10 s em `activity-feed`. **Distinto** do "Admin API" do epic 012 (que é CRUD de tenants com master token) |
+| Traces + Trace Steps (epic 008) | 🔄 Em evolução | 008 | 3 tabelas admin-only em `public.*` (sem RLS — ADR-027): `traces` (parent), `trace_steps` (12 rows/trace, FK CASCADE, JSONB 8 KB truncados), `routing_decisions` (append-only com DROPs). Populadas pelo pipeline/router em fire-and-forget via `asyncio.create_task` (ADR-028). Retention 30 d (traces) + 90 d (routing) |
 | Redis 7 | ✅ Operacional | 001-004 | Debounce keys (buf:/tmr:) + keyspace notifications + idempotency (seen:tenant_id:msg_id SETNX 24h) |
 | Supabase ProsaUAI | ✅ Schema isolation | 005-006 | Schema `prosauai` (7 tabelas de negocio) + `prosauai_ops` (schema_migrations). `public.tenant_id()` SECURITY DEFINER (Supabase compat — movido de `prosauai_ops`). `gen_random_uuid()` built-in (sem `uuid-ossp`). Messages particionada por mes. Migrations idempotentes com `DROP POLICY IF EXISTS`. Migration runner asyncpg automatizado no startup (advisory lock + checksum). Pool: `statement_cache_size=0` (Supavisor compat), JSONB codec auto. [ADR-024](../decisions/ADR-024-schema-isolation.md) |
 | Bifrost | ⏳ Planejado | — | — |

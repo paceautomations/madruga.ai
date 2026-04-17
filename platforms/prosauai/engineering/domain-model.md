@@ -1,6 +1,6 @@
 ---
 title: "Domain Model"
-updated: 2026-04-13
+updated: 2026-04-17
 sidebar:
   order: 2
 ---
@@ -21,6 +21,7 @@ Consolidacao dos bounded contexts, diagramas de classe (L4), schemas SQL e invar
 | 3 | **Safety** | Supporting | Guardrails de entrada e saida | M6 Guardrails Entrada, M10 Guardrails Saida | PiiDetector, InjectionDetector, GuardrailCheck |
 | 4 | **Operations** | Supporting | Handoff humano e triggers proativos | M12 Handoff, M13 Triggers | HandoffRequest, TriggerRule |
 | 5 | **Observability** | Generic | Tracing e metricas | M14 Observabilidade | UsageEvent |
+| 6 | **Admin** | Supporting (cross-tenant) | Plataforma operacional: persistencia local de traces/routing + 8 abas admin (epic 008) | M15 Admin API, M16 prosauai-admin UI | Trace, TraceStep, RoutingDecision |
 
 > Relacionamentos entre contextos e padroes DDD → ver [context-map.md](../context-map/)
 
@@ -1164,6 +1165,175 @@ ORDER BY avg_score ASC;
 3. **Eval scores podem ser gerados async** — batch jobs no worker processam em background
 4. **Retencao de 90 dias para usage_events** — alem disso, agregados em tabela resumo
 5. **Phoenix trace_id = conversation_id** — correlacao 1:1 para facilitar debugging. Phoenix substitui LangFuse (epic 002)
+
+---
+
+## Admin — Persistencia Local para Admin Platform (M15, M16)
+
+Bounded context cross-tenant introduzido pelo **epic 008** (Admin Evolution). Espelha a telemetria do pipeline em tabelas `public.*` consultadas pela UI admin sem depender de Phoenix API em runtime. Acesso via `pool_admin` (BYPASSRLS). [→ Ver [ADR-027](../decisions/ADR-027-admin-tables-no-rls/) (tabelas sem RLS) | [ADR-028](../decisions/ADR-028-pipeline-fire-and-forget-persistence/) (fire-and-forget)]
+
+### Modelo
+
+| Entidade | Tabela | Proposito | Retencao | Relacao com Pipeline |
+|----------|--------|-----------|----------|----------------------|
+| **Trace** | `public.traces` | 1 row por execucao completa do pipeline (parent). Campos: `trace_id` (UUID do OTel span context), `conversation_id`, `tenant_id`, `status` (ok/error), `duration_ms`, `cost_usd`, `model_used`, `input_tokens`, `output_tokens`, `quality_score`, `intent_label`, `started_at`, `completed_at` | **30d** | Criado fire-and-forget em `Pipeline.execute()` apos `deliver` |
+| **TraceStep** | `public.trace_steps` | 12 rows por trace cobrindo as etapas canonicas: `webhook_received, route, customer_lookup, conversation_get, save_inbound, build_context, classify_intent, generate_response, evaluate_response, output_guard, save_outbound, deliver`. Campos: `trace_id FK CASCADE`, `step_order INT 1..12`, `name`, `status`, `duration_ms`, `input_jsonb` (8KB max), `output_jsonb` (8KB max), `error_detail` | **30d (cascade)** | 1 `StepRecord` por span OTel existente do pipeline (epic 002) |
+| **RoutingDecision** | `public.routing_decisions` | Append-only. Toda decisao do `RoutingEngine.evaluate()` — incluindo `DROP` e `LOG_ONLY` que antes eram invisiveis. Campos: `tenant_id`, `rule_name`, `action`, `agent_id`, `reason`, `facts_jsonb`, `decided_at` | **90d** | Criada pelo `RoutingEngine.evaluate()` via `decision_persist.py` — fire-and-forget |
+
+### Class Diagram (L4)
+
+```mermaid
+classDiagram
+    class Trace {
+        +uuid trace_id
+        +uuid conversation_id
+        +uuid tenant_id
+        +string status
+        +int duration_ms
+        +decimal cost_usd
+        +string model_used
+        +int input_tokens
+        +int output_tokens
+        +decimal quality_score
+        +string intent_label
+        +timestamp started_at
+        +timestamp completed_at
+        +persist_fire_and_forget()
+    }
+
+    class TraceStep {
+        +uuid trace_id
+        +int step_order
+        +string name
+        +string status
+        +int duration_ms
+        +jsonb input_jsonb
+        +jsonb output_jsonb
+        +string error_detail
+        +truncate_to_8kb(value)
+    }
+
+    class RoutingDecision {
+        +uuid id
+        +uuid tenant_id
+        +string rule_name
+        +string action
+        +uuid agent_id
+        +string reason
+        +jsonb facts_jsonb
+        +timestamp decided_at
+    }
+
+    Trace "1" --> "12" TraceStep : owns (FK CASCADE)
+    RoutingDecision --> Trace : correlates via trace_id (loose)
+```
+
+### Schema SQL
+
+```sql
+-- public.traces (ADR-027: sem RLS — acesso via pool_admin BYPASSRLS)
+CREATE TABLE public.traces (
+    trace_id          UUID PRIMARY KEY,                 -- vem do OTel span context (nao gerado aqui)
+    conversation_id   UUID,
+    tenant_id         UUID,
+    status            TEXT NOT NULL CHECK (status IN ('ok', 'error')),
+    duration_ms       INT,
+    cost_usd          NUMERIC(10,6),
+    model_used        TEXT,
+    input_tokens      INT,
+    output_tokens     INT,
+    quality_score     NUMERIC(4,3) CHECK (quality_score >= 0 AND quality_score <= 1),
+    intent_label      TEXT,
+    error_detail      TEXT,
+    started_at        TIMESTAMPTZ NOT NULL,
+    completed_at      TIMESTAMPTZ,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_traces_tenant_time ON public.traces (tenant_id, started_at DESC);
+CREATE INDEX idx_traces_status ON public.traces (status, started_at DESC);
+CREATE INDEX idx_traces_conversation ON public.traces (conversation_id) WHERE conversation_id IS NOT NULL;
+
+-- public.trace_steps (ADR-027: sem RLS)
+CREATE TABLE public.trace_steps (
+    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    trace_id          UUID NOT NULL REFERENCES public.traces(trace_id) ON DELETE CASCADE,
+    step_order        INT NOT NULL CHECK (step_order BETWEEN 1 AND 12),
+    name              TEXT NOT NULL CHECK (name IN (
+        'webhook_received','route','customer_lookup','conversation_get',
+        'save_inbound','build_context','classify_intent','generate_response',
+        'evaluate_response','output_guard','save_outbound','deliver'
+    )),
+    status            TEXT NOT NULL CHECK (status IN ('ok','error','skipped')),
+    duration_ms       INT,
+    input_jsonb       JSONB,   -- truncado a 8KB no insert
+    output_jsonb      JSONB,   -- truncado a 8KB no insert
+    error_detail      TEXT,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (trace_id, step_order)
+);
+
+CREATE INDEX idx_trace_steps_trace ON public.trace_steps (trace_id);
+CREATE INDEX idx_trace_steps_name_status ON public.trace_steps (name, status, created_at DESC);
+
+-- public.routing_decisions (ADR-027: sem RLS)
+CREATE TABLE public.routing_decisions (
+    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id         UUID NOT NULL,
+    trace_id          UUID,                    -- correlacao loose (pode ser NULL se rota ocorre fora de trace)
+    rule_name         TEXT NOT NULL,
+    action            TEXT NOT NULL CHECK (action IN ('RESPOND','LOG_ONLY','DROP','BYPASS_AI','EVENT_HOOK')),
+    agent_id          UUID,
+    reason            TEXT,
+    facts_jsonb       JSONB NOT NULL,
+    decided_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_routing_decisions_tenant_time ON public.routing_decisions (tenant_id, decided_at DESC);
+CREATE INDEX idx_routing_decisions_action ON public.routing_decisions (action, decided_at DESC);
+```
+
+### Fluxo de Persistencia
+
+```
+Pipeline.execute()
+  -> [12 StepRecords coletados em buffer in-memory]
+  -> deliver (caminho critico completo)
+  -> asyncio.create_task(persist_trace_fire_and_forget(...))
+       -> single transaction: INSERT traces + INSERT trace_steps (batch)
+       -> se falha: log.error + skip (nunca bloqueia resposta)
+
+RoutingEngine.evaluate(facts, tenant)
+  -> Decision
+  -> asyncio.create_task(persist_routing_decision_fire_and_forget(...))
+       -> INSERT routing_decisions
+```
+
+### Invariantes
+
+1. **Fire-and-forget e inviolavel** — falha de INSERT **NUNCA** bloqueia a entrega da resposta (FR-033, ADR-028)
+2. **`trace_id` vem do OTel SDK existente** (epic 002) — sem geracao de UUID adicional; fallback `uuid.uuid4()` se nao houver span ativo
+3. **TraceStep tem exatamente 12 rows por trace** — nomes sao canonicos, validados via CHECK constraint
+4. **`input_jsonb`/`output_jsonb` truncados a 8KB** no insert — overflow marcado com `[truncated]` no output
+5. **RoutingDecision e append-only** — imutavel apos insert, inclui `DROP` e `LOG_ONLY` (antes invisiveis)
+6. **Sem RLS nas 3 tabelas** — acesso exclusivo via `pool_admin` (BYPASSRLS) conforme ADR-027. Tenta tentativa de SELECT via `pool_app` falha por nao ter permissao
+7. **Retention estendido** — cron do epic 006 purga `traces` (30d), `trace_steps` (cascade via FK), `routing_decisions` (90d). Configuravel via env
+8. **`cost_usd` calculado no fim do pipeline** — `tokens_in * $/1k_in + tokens_out * $/1k_out` via `MODEL_PRICING` hardcoded em `pricing.py` (ADR-029)
+
+### Denormalizacao em `conversations` (inbox performance)
+
+Para que a listagem da aba "Conversas" seja <100ms em >10k conversas, epic 008 adicionou 3 colunas ao `conversations`:
+
+```sql
+ALTER TABLE conversations ADD COLUMN last_message_id UUID;
+ALTER TABLE conversations ADD COLUMN last_message_at TIMESTAMPTZ;
+ALTER TABLE conversations ADD COLUMN last_message_preview TEXT;  -- 200 char max
+```
+
+Atualizadas no hot path do `save_inbound`/`save_outbound` do pipeline. Invariantes:
+
+9. **`last_message_*` eventualmente consistente** — update assincrono, tolera lag de 1-2s em relacao a `messages`
+10. **`last_message_preview` maximo 200 char** — truncado no insert; sem PII unmasked (passa por guard de output)
 
 ---
 
