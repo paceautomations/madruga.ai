@@ -2,9 +2,10 @@
 title: "026 — Runtime QA & Testing Pyramid"
 epic_id: 026-runtime-qa-testing-pyramid
 platform: madruga-ai
-status: drafted
+status: shipped
 created: 2026-04-16
 updated: 2026-04-16
+delivered_at: 2026-04-17
 ---
 # Epic 026 — Runtime QA & Testing Pyramid
 

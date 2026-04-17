@@ -25,6 +25,7 @@ import os
 import random
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -1191,6 +1192,7 @@ async def _run_implement_phases(
             success_check=lambda: (
                 len(_verify_phase_completion(tasks_path, _pending_snapshot)[0]) == len(_pending_snapshot)
             ),
+            extra_env={"MADRUGA_PHASE_CTX": "1"},
         )
 
         # Verify which tasks actually completed (regardless of dispatch result)
@@ -1805,6 +1807,45 @@ def dispatch_with_retry(
 _active_subprocesses: "set[asyncio.subprocess.Process]" = set()
 
 
+def _kill_process_group_safely(process) -> None:
+    """SIGKILL the subprocess's process group to clean up orphan children.
+
+    Why: a naive ``os.killpg(os.getpgid(process.pid), SIGKILL)`` signals the
+    caller's own group if ``process.pid`` is bogus (e.g. a MagicMock) or if
+    ``start_new_session=True`` wasn't honored — which in WSL kills the shell
+    and everything in it. Guarded by: (1) pid must be int > 1, (2) target
+    pgid must differ from ours, (3) any OS error falls back to process.kill().
+    """
+    pid = getattr(process, "pid", None)
+    if not isinstance(pid, int) or pid <= 1:
+        try:
+            process.kill()
+        except (ProcessLookupError, AttributeError):
+            pass
+        return
+    try:
+        target_pgid = os.getpgid(pid)
+        if target_pgid == os.getpgid(0):
+            # Child inherited our pgid (start_new_session=True not honored, or
+            # this is a test mock leaking through). Do NOT signal — would kill
+            # the caller's own group (pytest runner, shell, terminal).
+            log.warning(
+                "Refusing killpg(%d): target pgid matches current pgid (would kill runner)",
+                target_pgid,
+            )
+            try:
+                process.kill()
+            except (ProcessLookupError, AttributeError):
+                pass
+            return
+        os.killpg(target_pgid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError, OSError):
+        try:
+            process.kill()
+        except (ProcessLookupError, AttributeError):
+            pass
+
+
 async def terminate_active_subprocesses(graceful_timeout: float = 5.0) -> int:
     """Signal every live dispatch subprocess to exit cleanly.
 
@@ -1846,14 +1887,11 @@ async def terminate_active_subprocesses(graceful_timeout: float = 5.0) -> int:
             break
         await asyncio.sleep(min(0.2, remaining))
 
-    # Escalate to SIGKILL on any survivors.
+    # Escalate to SIGKILL on any survivors — kill entire process group so orphan
+    # children (pytest, make, zsh spawned by the subprocess) are also terminated.
     for proc in list(_active_subprocesses):
-        try:
-            proc.kill()
-        except ProcessLookupError:
-            pass
-        finally:
-            _active_subprocesses.discard(proc)
+        _kill_process_group_safely(proc)
+        _active_subprocesses.discard(proc)
 
     return signalled
 
@@ -1913,6 +1951,7 @@ async def dispatch_node_async(
     resume_session_id: str | None = None,
     platform_name: str = "",
     max_turns_override: int | None = None,
+    extra_env: dict | None = None,
 ) -> tuple[bool, str | None, str | None]:
     """Async version of dispatch_node using asyncio.create_subprocess_exec.
 
@@ -1938,13 +1977,17 @@ async def dispatch_node_async(
         f", resume={resume_session_id[:12]}" if resume_session_id else "",
     )
 
+    dispatch_env = _dispatch_env()
+    if extra_env:
+        dispatch_env.update(extra_env)
     process = await asyncio.create_subprocess_exec(
         *cmd,
         stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
         cwd=str(cwd),
-        env=_dispatch_env(),
+        env=dispatch_env,
+        start_new_session=True,
     )
     # A8: register so shutdown can terminate us
     _active_subprocesses.add(process)
@@ -1992,7 +2035,7 @@ async def dispatch_node_async(
                 timeout=timeout,
             )
         except asyncio.TimeoutError:
-            process.kill()
+            _kill_process_group_safely(process)
             await process.wait()
             partial = stdout_buf.decode(errors="replace")
             # Persist partial stdout to disk so we can diagnose silent hangs
@@ -2072,6 +2115,7 @@ async def dispatch_with_retry_async(
     abort_check: "object | None" = None,
     max_turns_override: int | None = None,
     success_check: "object | None" = None,
+    extra_env: dict | None = None,
 ) -> tuple[bool, str | None, str | None]:
     """Async version of dispatch_with_retry using asyncio.sleep.
 
@@ -2113,6 +2157,7 @@ async def dispatch_with_retry_async(
             resume_session_id,
             platform_name,
             max_turns_override=max_turns_override,
+            extra_env=extra_env,
         )
         if success:
             breaker.record_success()

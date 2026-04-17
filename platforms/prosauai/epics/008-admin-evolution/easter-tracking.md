@@ -9,7 +9,45 @@ Started: 2026-04-17T11:37:00Z
 - **Portal Start button não faz pre-flight check no repo externo** — usuário clica Start, status vai para `in_progress`, easter dispara, falha por dirty tree, fica em loop. Preventivo melhor: `POST /api/epics/{platform}/{epic}/start` valida `git status` no repo externo antes de mudar status. Bloqueia com mensagem amigável "repo prosauai tem 2 arquivos untracked: <list>. Limpe antes de iniciar".
 - **🔴 PONTO A RESOLVER — `epic-context` deve garantir que TODO contexto fique no epic dir** — qualquer referência externa apontada como input (path para `docs/prosauai/`, link para Notion, gist, copy-paste em system-reminder, etc.) precisa terminar dentro de `platforms/<p>/epics/<NNN>/` para que SpecKit consuma automaticamente nas etapas seguintes. Hoje a skill apenas CITA o path externo no pitch — se o arquivo está fora do epic dir, `speckit.specify`/`plan` podem não ler. Soluções possíveis: (a) auto-mover arquivo apontado via `--ref <path>`, (b) auto-copiar como `epics/<NNN>/reference-<basename>.md` + atualizar refs no pitch, (c) fail-fast se input file está fora de epic dir até user mover. Sem isso, qualquer detalhamento (specs UI, payloads, SQL queries) fica órfão e o épico construído acima fica anêmico de contexto. **Manifestou-se neste épico**: usuário passou doc de 1001 linhas em `madruga.ai/docs/prosauai/`, fix manual necessário durante pair-program para mover.
 - **Backup periódico do madruga.db quebra com `sqlite3.ProgrammingError: thread`** — `easter.py:471` cria conn fora da thread executor. Apareceu em log de 06:06 (boot anterior). Não é crítico (próximo boot reseta) mas é noise nos logs.
+- **Telegram bot conflict — duas instâncias do aiogram rodando** — desde 09:20:44 logs do easter (PID 30837 / uvicorn) mostram `TelegramConflictError: terminated by other getUpdates request`. 15 retries com backoff exponencial (~5s cada). Indica outro processo polling o mesmo bot @madrugaAI_bot id=8618777736. Pode ser: (a) outra instância do easter rodando em background (verificar `pgrep -af easter`), (b) script de dev local, (c) leak de boot anterior. Não bloqueia o pipeline mas polui logs e gasta rede. Sugestão: lock distribuído para o getUpdates loop OR file lock que impede 2 daemons do bot ativo.
 - **🟡 Branch swap RECORRENTE em dispatched claude — investigar urgente** — repete em TODA dispatch que termina. Logs confirmados: 08:45:27 (specify), 08:49:01 (clarify). Padrão: `"claude -p changed branch to 'epic/madruga-ai/026-runtime-qa-testing-pyramid', reverted to 'epic/prosauai/008-admin-evolution'"`. Disallowed tools incluem `git checkout/branch-/switch`, então o vetor pode ser: (a) `git worktree add` (não bloqueado), (b) Write em `.git/HEAD`, (c) algum side-effect interno do `claude -p` (sessão, hooks). Proteção funciona (dag_executor reverte), MAS gera 1 ERROR log por nó — vai poluir métricas Phoenix/observabilidade quando epic 002 estiver mais maduro. Ações sugeridas em ordem de impacto: (1) instrumentar `dag_executor` para logar QUEM mudou o HEAD (stack trace ou audit do filesystem mtime de `.git/HEAD`); (2) adicionar `Bash(git worktree:*)` + Read/Write `.git/HEAD` ao disallowedTools; (3) se persistir, abrir issue no `claude` CLI sobre side-effect de branch state.
+- **🟠 Prompt da implement:phase-1 = 134KB (acima do threshold 80KB)** — log às 09:09:18 mostra `phase_prompt_composed sections={cue: 64, plan: 22147, spec: 43549, data_model: 15238, contract:README.md: 2271, tasks: 48217, header: 3263} total_bytes=134749`. Phase 1 = "Setup (Shared Infrastructure)" com APENAS 6 tasks (T001-T006), mas recebe a spec completa de 8 user stories (43KB) e o tasks.md inteiro com 158 tasks (48KB). Cache-optimal prefix (gotcha CLAUDE.md `MADRUGA_CACHE_ORDERED=1`) ajuda no custo (mesmo prefixo nas tasks 2..N), mas o tamanho absoluto polui o context window e diminui qualidade do modelo. Sugestões em ordem: (1) **Scope-aware composer**: para phase de "Setup" (zero user-story tasks), excluir spec.md inteiro — basta plan + data_model + contracts. (2) Para phases "User Story N", incluir SÓ a seção daquela story em spec.md (parsing via `## User Story N` headers). (3) tasks.md sempre incluído inteiro? Não — incluir header + tasks daquela phase só. Economia esperada: 70-80KB por phase de setup, 30-50KB por phase de user story. Valida `compose_task_prompt` em `dag_executor.py:1291` ou wherever phase composition lives.
+- **🔴 PONTO A RESOLVER — dispatched claude rodou `make test` no repo ERRADO** — durante implement:phase-1 do prosauai/008, o claude executou `make test 2>&1 | tail -40` cujo subprocess pytest rodou `python3 -m pytest .specify/scripts/tests/` (testes do MADRUGA.AI, não do prosauai). Causa: o CWD do dispatched claude é `madruga.ai/` (onde easter roda), não o repo da plataforma. As 6 tasks já estão [X] em tasks.md, mas `make test` está pendurado há 10+ min validando código irrelevante. **Custo:** ~10min de CPU/wallclock já gastos + ~5-10min mais até pytest terminar = ~15-20min desperdiçados por phase. Para 18 phases, isso é **4-6h de waste se cada phase rodar o mesmo make test**. Sugestões: (a) `--append-system-prompt` deve ESPECIFICAR o repo de testes (`cd <code_dir> && make test` se phases produzirem código), (b) ou injetar override de `make test` para um wrapper que respeita `code_dir`, (c) ou simplesmente dizer "do not run repo-level test commands; trust per-task assertions". Para Phase 1 que é só audit, nem precisa rodar testes nenhum.
+- **Lição pair-program (2026-04-17 ~10:33)** — durante observação de implement:phase-1, classifiquei como critical com base em `pipeline_runs.status='running'` há 27min + subprocess `claude` ELAPSED 26min + pytest 59524 com CPU time travado em 2:40. Pedi e recebi aprovação para `kill 59524`. Pós-kill descobri que o pipeline já tinha avançado naturalmente: phase-1 completed às 10:04 local (~55min total), phase-2 completed às 10:26 (~22min), phase-3 já running há 7min. **O pytest 59524 que matei era de phase-2 ou 3 (ELAPSED 1h3min → started ~09:30, não phase-1 que começou 09:09)**. Cache do snapshot pipeline_runs estava certo, mas eu interpretei mal o vínculo entre processos. Lição: na próxima borderline, query `pipeline_runs` MAIS DE UMA VEZ no mesmo tick antes de classificar critical, e correlacione subprocess timestamps com node start times. Net effect do kill: removeu um pytest pendurado (provavelmente positivo), sem dano ao pipeline.
+
+- **🔴 PONTO A RESOLVER — `duration_ms` NULL em runs rescued por `success_check` (timeout sem stdout)** — implement:phase-1 do prosauai/008 sofreu timeout de 3000s sem capturar stdout JSON (0 bytes). O `success_check` rescue-path (commit `849f183`) detectou que o trabalho foi feito (tasks marcadas [X]) e marcou o run como `completed` corretamente. Mas as métricas (cost_usd, tokens_in, tokens_out, duration_ms) ficaram NULL no DB, e o portal mostra `—` em todas as colunas exceto Q/A/C/E.
+
+  **Causa raiz:** [db_pipeline.py:459-467](.specify/scripts/db_pipeline.py#L459-L467):
+  ```python
+  reported = kwargs.get("duration_ms")
+  if reported is not None and reported < _WALL_CLOCK_THRESHOLD_MS:  # ← bug: requires non-None
+      # compute wall_ms from started_at to completed_at
+  ```
+  Quando `reported is None` (success_check rescue path), o fallback de wall-clock nem é tentado.
+
+  **Fix proposto (~5 LOC):**
+  ```python
+  reported = kwargs.get("duration_ms")
+  needs_wall_clock = reported is None or reported < _WALL_CLOCK_THRESHOLD_MS
+  if needs_wall_clock:
+      row = conn.execute("SELECT started_at FROM pipeline_runs WHERE run_id=?", (run_id,)).fetchone()
+      if row and row[0]:
+          wall_ms = int(
+              (datetime.fromisoformat(completed_at) - datetime.fromisoformat(row[0])).total_seconds() * 1000
+          )
+          if reported is None or wall_ms > reported:
+              kwargs["duration_ms"] = wall_ms
+  ```
+
+  **Impacto:** cost_usd e tokens não podem ser recuperados (vivem só no stdout perdido) — esses ficam NULL legitimamente. Mas `duration_ms` é trivialmente computável dos timestamps, então o fix preenche essa coluna em 100% dos casos.
+
+  **Backward-compat:** `reported >= THRESHOLD` mantém comportamento atual; `reported < THRESHOLD` mantém substituição existente; novo caso `reported is None` entra no wall-clock branch.
+
+  **Teste a adicionar** (em `tests/test_db_pipeline.py`): caso `complete_run(run_id, status='completed')` sem passar `duration_ms` → DB deve ter `duration_ms` calculado como `(completed_at - started_at) * 1000`.
+
+  **Retro-fix (após code fix mergeado):** `UPDATE pipeline_runs SET duration_ms = CAST((julianday(completed_at) - julianday(started_at)) * 86400000 AS INTEGER) WHERE duration_ms IS NULL AND status='completed' AND completed_at IS NOT NULL` — preenche históricos.
+
+  Manifestou-se em: implement:phase-1 (run_id `8718bb50`) — duration real ~55min (3322s).
 
 ## Melhoria — prosauai
 - Repo nao tem `.playwright-mcp/` no `.gitignore` — qualquer rodada de Playwright MCP suja a tree e bloqueia easter. **RESOLVIDO** no commit `118a67d` durante este epic.

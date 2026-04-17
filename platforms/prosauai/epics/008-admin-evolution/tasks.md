@@ -224,28 +224,28 @@
 
 ### Tests for US4
 
-- [ ] T400 [P] [US4] Integration test `apps/api/tests/integration/admin/test_overview.py` — GET /admin/metrics/overview retorna 6 KPIs com valor atual, sparkline 24h (24 pontos 1h-bucketed), delta vs. yesterday, cor por threshold FR-011
-- [ ] T401 [P] [US4] Integration test GET /admin/metrics/activity-feed retorna até 50 eventos (UNION ALL de new_conversation + sla_breach + pipeline_error + fallback_intent + ai_resolved); filtro `since` funciona; Redis cache 10s funcional (R8)
-- [ ] T402 [P] [US4] Integration test GET /admin/metrics/system-health checa PG (SELECT 1), Redis (PING), Evolution API (GET /status), Phoenix (GET /healthz); degraded/down status refletem latência/timeout
-- [ ] T403 [P] [US4] Integration test GET /admin/metrics/tenant-health aplica regra hierárquica FR-015 (vermelho se qualquer KPI vermelho OR last_message >15min OR rolling 5min error_rate >10%, etc.)
-- [ ] T404 [P] [US4] E2E Playwright `apps/admin/tests/e2e/login-to-overview.spec.ts` — login → / → 6 KPI cards visíveis acima da dobra → activity feed renderiza → system health visível → tenant health table
+- [x] T400 [P] [US4] Integration test `apps/api/tests/integration/admin/test_overview.py` — GET /admin/metrics/overview retorna 6 KPIs com valor atual, sparkline 24h (24 pontos 1h-bucketed), delta vs. yesterday, cor por threshold FR-011
+- [x] T401 [P] [US4] Integration test GET /admin/metrics/activity-feed retorna até 50 eventos (UNION ALL de new_conversation + sla_breach + pipeline_error + fallback_intent + ai_resolved); filtro `since` funciona; Redis cache 10s funcional (R8)
+- [x] T402 [P] [US4] Integration test GET /admin/metrics/system-health checa PG (SELECT 1), Redis (PING), Evolution API (GET /status), Phoenix (GET /healthz); degraded/down status refletem latência/timeout
+- [x] T403 [P] [US4] Integration test GET /admin/metrics/tenant-health aplica regra hierárquica FR-015 (vermelho se qualquer KPI vermelho OR last_message >15min OR rolling 5min error_rate >10%, etc.)
+- [x] T404 [P] [US4] E2E Playwright `apps/admin/tests/e2e/login-to-overview.spec.ts` — login → / → 6 KPI cards visíveis acima da dobra → activity feed renderiza → system health visível → tenant health table
 
 ### Implementation for US4 — Backend
 
-- [ ] T410 [P] [US4] Criar `apps/api/prosauai/db/queries/overview.py` com `overview_kpis(pool, tenant)` — computa 6 KPIs com sparklines 24h (bucketed por hora) + delta vs. dia anterior
-- [ ] T411 [P] [US4] Criar `apps/api/prosauai/db/queries/activity.py` com `activity_feed(pool, tenant, since)` — UNION ALL de 5 SELECTs (new_conversation/sla_breach/pipeline_error/fallback_intent/ai_resolved), cada um LIMIT 10, GLOBAL ORDER BY created_at DESC LIMIT 50 (decisão 19, R8)
-- [ ] T412 [P] [US4] Criar `apps/api/prosauai/db/queries/tenant_health.py` com `tenant_health(pool)` — iterar tenants ativos, computar KPIs + aplicar `classify_tenant_health()` de T064
-- [ ] T413 [P] [US4] Criar `apps/api/prosauai/admin/metrics/system_health.py` com probes assíncronos paralelos (asyncio.gather) para PG/Redis/Evolution/Phoenix; retorna {component, status, latency_ms, last_checked}
-- [ ] T414 [US4] Criar Pydantic schemas em `apps/api/prosauai/admin/schemas/metrics.py` — `OverviewMetrics`, `ActivityFeedResponse`, `SystemHealth`, `TenantHealthResponse`
-- [ ] T415 [US4] Criar routers `apps/api/prosauai/admin/metrics/{overview,activity_feed,tenant_health,system_health}.py` — activity_feed usa cache Redis TTL 10s (R8); registrar todos em main.py (depende T410..T414)
+- [x] T410 [P] [US4] Criar `apps/api/prosauai/db/queries/overview.py` com `overview_kpis(pool, tenant)` — computa 6 KPIs com sparklines 24h (bucketed por hora) + delta vs. dia anterior
+- [x] T411 [P] [US4] Criar `apps/api/prosauai/db/queries/activity.py` com `activity_feed(pool, tenant, since)` — UNION ALL de 5 SELECTs (new_conversation/sla_breach/pipeline_error/fallback_intent/ai_resolved), cada um LIMIT 10, GLOBAL ORDER BY created_at DESC LIMIT 50 (decisão 19, R8)
+- [x] T412 [P] [US4] Criar `apps/api/prosauai/db/queries/tenant_health.py` com `tenant_health(pool)` — iterar tenants ativos, computar KPIs + aplicar `classify_tenant_health()` de T064
+- [x] T413 [P] [US4] Criar `apps/api/prosauai/admin/metrics/system_health.py` com probes assíncronos paralelos (asyncio.gather) para PG/Redis/Evolution/Phoenix; retorna {component, status, latency_ms, last_checked}
+- [x] T414 [US4] Criar Pydantic schemas em `apps/api/prosauai/admin/schemas/metrics.py` — `OverviewMetrics`, `ActivityFeedResponse`, `SystemHealth`, `TenantHealthResponse`
+- [x] T415 [US4] Criar routers `apps/api/prosauai/admin/metrics/{overview,activity_feed,tenant_health,system_health}.py` — activity_feed usa cache Redis TTL 10s (R8); registrar todos em main.py (depende T410..T414)
 
 ### Implementation for US4 — Frontend (PR 7)
 
-- [ ] T420 [P] [US4] Criar primitive `apps/admin/src/components/ui/kpi-card.tsx` — card com valor grande, label, sparkline 24h (shadcn Chart), delta colorido conforme FR-011 (uses `classifyKpi` de T063); variant para cards de volume (sem cor por valor absoluto, só delta)
-- [ ] T421 [P] [US4] Criar `apps/admin/src/components/shared/activity-feed.tsx` — client component com polling 15s via TanStack Query (`refetchInterval: 15000`); renderiza 50 items clicáveis para navegação ao contexto (conversation_id ou trace_id)
-- [ ] T422 [P] [US4] Criar `apps/admin/src/components/shared/system-health.tsx` — client component com polling 30s; badges com pontos coloridos (verde/âmbar/vermelho/cinza) por componente
-- [ ] T423 [P] [US4] Criar `apps/admin/src/components/shared/tenant-health-table.tsx` — Server Component (render inicial server) + client island para auto-refresh 30s; aplica classifyTenantHealth; cada row clicável navega para `?tenant=<slug>` (FR-015)
-- [ ] T424 [US4] Refatorar `apps/admin/src/app/(dashboard)/page.tsx` Overview — grid 6 KPI cards + activity-feed + system-health + tenant-health-table (depende T420..T423)
+- [x] T420 [P] [US4] Criar primitive `apps/admin/src/components/ui/kpi-card.tsx` — card com valor grande, label, sparkline 24h (shadcn Chart), delta colorido conforme FR-011 (uses `classifyKpi` de T063); variant para cards de volume (sem cor por valor absoluto, só delta)
+- [x] T421 [P] [US4] Criar `apps/admin/src/components/shared/activity-feed.tsx` — client component com polling 15s via TanStack Query (`refetchInterval: 15000`); renderiza 50 items clicáveis para navegação ao contexto (conversation_id ou trace_id)
+- [x] T422 [P] [US4] Criar `apps/admin/src/components/shared/system-health.tsx` — client component com polling 30s; badges com pontos coloridos (verde/âmbar/vermelho/cinza) por componente
+- [x] T423 [P] [US4] Criar `apps/admin/src/components/shared/tenant-health-table.tsx` — Server Component (render inicial server) + client island para auto-refresh 30s; aplica classifyTenantHealth; cada row clicável navega para `?tenant=<slug>` (FR-015)
+- [x] T424 [US4] Refatorar `apps/admin/src/app/(dashboard)/page.tsx` Overview — grid 6 KPI cards + activity-feed + system-health + tenant-health-table (depende T420..T423)
 
 **Checkpoint US4**: Overview enriquecido completo. SC-003 validado.
 
@@ -259,23 +259,23 @@
 
 ### Tests for US5
 
-- [ ] T500 [P] [US5] Integration test `apps/api/tests/integration/admin/test_routing.py` — GET /admin/routing/rules retorna snapshot do estado in-memory do RoutingEngine; GET /admin/routing/decisions filtra decision_type/phone_hash/period; GET /admin/routing/decisions/{id} retorna matched_rule + facts JSON; GET /admin/routing/stats retorna donut + top-N reasons
-- [ ] T501 [P] [US5] Integration test decision detail: navegação trace_id → conversa quando RESPOND; matched_rule=null quando default
+- [x] T500 [P] [US5] Integration test `apps/api/tests/integration/admin/test_routing.py` — GET /admin/routing/rules retorna snapshot do estado in-memory do RoutingEngine; GET /admin/routing/decisions filtra decision_type/phone_hash/period; GET /admin/routing/decisions/{id} retorna matched_rule + facts JSON; GET /admin/routing/stats retorna donut + top-N reasons (19 testes verdes cobrindo 4 endpoints + filtros + cursor + auth + JSONB string coercion)
+- [x] T501 [P] [US5] Integration test decision detail: navegação trace_id → conversa quando RESPOND; matched_rule=null quando default (`TestDecisionDetail::test_respond_with_trace_id` + `test_default_rule_surfaces_as_null`)
 
 ### Implementation for US5 — Backend
 
-- [ ] T510 [P] [US5] Criar `apps/api/prosauai/db/queries/routing_decisions.py` com `list_decisions(pool, tenant, decision_type, period, phone_hash, cursor, limit)`, `get_decision(pool, id)`, `stats(pool, tenant, period)` (donut agregado + top-N reasons)
-- [ ] T511 [P] [US5] Expor snapshot de regras via novo método `RoutingEngine.snapshot_rules() -> dict[str, list[RoutingRule]]` em `apps/api/prosauai/router/engine.py` — lê estado in-memory atual (FR-072)
-- [ ] T512 [US5] Criar Pydantic schemas em `apps/api/prosauai/admin/schemas/routing.py`
-- [ ] T513 [US5] Criar router `apps/api/prosauai/admin/routing.py` com 4 endpoints (rules, decisions list, decisions detail, stats); registrar em main.py (depende T510, T511, T512)
+- [x] T510 [P] [US5] Criar `apps/api/prosauai/db/queries/routing_decisions.py` com `list_decisions(pool, tenant, decision_type, period, phone_hash, cursor, limit)`, `get_decision(pool, id)`, `stats(pool, tenant, period)` (donut agregado + top-N reasons) — cursor opaco compartilha shape `{t, i}` via `encode_cursor`; stats sempre retorna as 5 decision types para donut estável
+- [x] T511 [P] [US5] Expor snapshot de regras via novo método `RoutingEngine.snapshot_rules() -> list[dict]` em `apps/api/prosauai/core/router/engine.py` — lê estado in-memory atual (FR-072); path real é `core/router/engine.py` (não `router/engine.py` como o plano indicava); regra sintética `__default__` inclusa no output
+- [x] T512 [US5] Criar Pydantic schemas em `apps/api/prosauai/admin/schemas/routing.py` — espelha OpenAPI contract (`RoutingRule`, `RoutingDecision`, `RoutingDecisionDetail`, `RoutingStats`)
+- [x] T513 [US5] Criar router `apps/api/prosauai/admin/routing.py` com 4 endpoints (rules, decisions list, decisions detail, stats); registrado em `admin/router.py` aggregator (consistente com conversations/traces)
 
 ### Implementation for US5 — Frontend (PR 10 parcial)
 
-- [ ] T520 [P] [US5] Criar `apps/admin/src/components/routing/rules-table.tsx` — tabela de regras ativas por tenant (priority, condições, ação, agente alvo); ícone de refresh manual + indicação "lido em <timestamp>"
-- [ ] T521 [P] [US5] Criar `apps/admin/src/components/routing/decisions-donut.tsx` — pie chart shadcn Chart com 5 slices (RESPOND/DROP/LOG_ONLY/BYPASS_AI/EVENT_HOOK), cores distintas, percent labels
-- [ ] T522 [P] [US5] Criar `apps/admin/src/components/routing/decisions-list.tsx` — tabela com hora, contato (display_name ou masked phone), preview, decision_type badge, reason; filtros via searchParams
-- [ ] T523 [P] [US5] Criar `apps/admin/src/components/routing/decision-detail-panel.tsx` — painel com matched_rule e facts via json-tree (reuso T220); link "Ver Trace →" quando trace_id presente
-- [ ] T524 [US5] Criar page `apps/admin/src/app/(dashboard)/routing/page.tsx` — grid com rules-table + decisions-donut + decisions-list + top-N reasons widget (depende T520..T523)
+- [x] T520 [P] [US5] Criar `apps/admin/src/components/routing/rules-table.tsx` — Server Component full-width; tabela de regras em memória por tenant (priority, condições como pills, ação tinted, agente alvo); header com timestamp da última leitura + link "Recarregar" (in-memory não polia, mudança só em restart)
+- [x] T521 [P] [US5] Criar `apps/admin/src/components/routing/decisions-donut.tsx` — client donut Recharts + shadcn Chart; 5 slices sempre renderizadas (RESPOND/DROP/LOG_ONLY/BYPASS_AI/EVENT_HOOK) para geometria estável; cores OKLCH chart-1..4 + destructive; legenda lateral com count+share; seção footer com top-N reasons inline
+- [x] T522 [P] [US5] Criar `apps/admin/src/components/routing/decisions-list.tsx` — Server Component via `serverApiGet`; colunas hora/contato/decisão/razão/trace; display_name + hash abreviado; linha selecionada destacada via `?decision=<id>`; link "Ver trace" quando presente; filtros via searchParams (tenant/decision_type/period/phone_hash/cursor)
+- [x] T523 [P] [US5] Criar `apps/admin/src/components/routing/decision-detail-panel.tsx` — Server Component; reuso de `<JsonTree>` (T220) para `matched_rule` + `facts`; header com badge do decision_type + id; meta (contato, tenant, hash, timestamp, agente, trace); footer com "Ver trace →" quando trace_id presente; empty state quando `?decision` ausente
+- [x] T524 [US5] Criar page `apps/admin/src/app/admin/(authenticated)/routing/page.tsx` — 2 linhas (rules-table full-width + donut/list/detail em 3 colunas); toggle de período (1h/24h/7d) e decision_type via `<Link>` preservando filtros; stats pré-fetched em server; sidebar habilitada para Roteamento (removido `disabled: true`)
 
 **Checkpoint US5**: Aba Routing completa. SC-008 + SC-012 validados.
 
@@ -289,21 +289,21 @@
 
 ### Tests for US6
 
-- [ ] T600 [P] [US6] Integration test `apps/api/tests/integration/admin/test_agents.py` — GET /admin/agents lista agentes filtrados por tenant; GET /admin/agents/{id} retorna config+metrics+prompt refs; GET /admin/agents/{id}/prompts lista versions; POST /admin/agents/{id}/prompts/activate muda `active_prompt_id`
-- [ ] T601 [P] [US6] Integration test metrics: media do agente vs. plataforma (QS, containment, latência, fallback) com delta
+- [x] T600 [P] [US6] Integration test `apps/api/tests/integration/admin/test_agents.py` — GET /admin/agents lista agentes filtrados por tenant; GET /admin/agents/{id} retorna config+metrics+prompt refs; GET /admin/agents/{id}/prompts lista versions; POST /admin/agents/{id}/prompts/activate muda `active_prompt_id`
+- [x] T601 [P] [US6] Integration test metrics: media do agente vs. plataforma (QS, containment, latência, fallback) com delta
 
 ### Implementation for US6 — Backend
 
-- [ ] T610 [P] [US6] Criar `apps/api/prosauai/db/queries/agents.py` com `list_agents`, `get_agent_with_metrics`, `list_prompts`, `activate_prompt` (UPDATE agents SET active_prompt_id=$1)
-- [ ] T611 [US6] Criar Pydantic schemas + router `apps/api/prosauai/admin/agents.py` com 4 endpoints; registrar em main.py (depende T610)
+- [x] T610 [P] [US6] Criar `apps/api/prosauai/db/queries/agents.py` com `list_agents`, `get_agent_with_metrics`, `list_prompts`, `activate_prompt` (UPDATE agents SET active_prompt_id=$1)
+- [x] T611 [US6] Criar Pydantic schemas + router `apps/api/prosauai/admin/agents.py` com 4 endpoints; registrar em main.py (depende T610)
 
 ### Implementation for US6 — Frontend (PR 10 parcial)
 
-- [ ] T620 [P] [US6] Criar `apps/admin/src/components/agents/agent-list.tsx` — lista 240px à esquerda, filtro por tenant, toggle enabled
-- [ ] T621 [P] [US6] Criar `apps/admin/src/components/agents/prompt-viewer.tsx` — visualizador com 3 seções distintas (safety_prefix / system_prompt / safety_suffix) com background diferenciado via tokens OKLCH + preserve whitespace (FR-063)
-- [ ] T622 [P] [US6] Criar `apps/admin/src/components/agents/prompt-diff-view.tsx` — diff side-by-side (lib leve tipo `diff` + custom render OU `react-diff-viewer`); pills com versions, selectable 2 para diff (FR-062)
-- [ ] T623 [P] [US6] Criar `apps/admin/src/components/agents/agent-detail-tabs.tsx` — 3 tabs shadcn Tabs: Configuração (modelo, temp, max_tokens, tools como badges) / Prompts (pills + viewer + diff) / Métricas (KPIs + sparkline 30d vs. platform avg)
-- [ ] T624 [US6] Criar page `apps/admin/src/app/(dashboard)/agents/page.tsx` + `[id]/page.tsx` — layout lista + detalhe com tabs; ação "Ativar" dispara POST com confirmation dialog (depende T620..T623)
+- [x] T620 [P] [US6] Criar `apps/admin/src/components/agents/agent-list.tsx` — lista 240px à esquerda, filtro por tenant, toggle enabled
+- [x] T621 [P] [US6] Criar `apps/admin/src/components/agents/prompt-viewer.tsx` — visualizador com 3 seções distintas (safety_prefix / system_prompt / safety_suffix) com background diferenciado via tokens OKLCH + preserve whitespace (FR-063)
+- [x] T622 [P] [US6] Criar `apps/admin/src/components/agents/prompt-diff-view.tsx` — diff side-by-side (lib leve tipo `diff` + custom render OU `react-diff-viewer`); pills com versions, selectable 2 para diff (FR-062)
+- [x] T623 [P] [US6] Criar `apps/admin/src/components/agents/agent-detail-tabs.tsx` — 3 tabs shadcn Tabs: Configuração (modelo, temp, max_tokens, tools como badges) / Prompts (pills + viewer + diff) / Métricas (KPIs + sparkline 30d vs. platform avg)
+- [x] T624 [US6] Criar page `apps/admin/src/app/(dashboard)/agents/page.tsx` + `[id]/page.tsx` — layout lista + detalhe com tabs; ação "Ativar" dispara POST com confirmation dialog (depende T620..T623)
 
 **Checkpoint US6**: Aba Agents completa.
 
@@ -317,7 +317,7 @@
 
 ### Tests for US7
 
-- [ ] T700 [P] [US7] Integration test `apps/api/tests/integration/admin/test_tenants.py` — coberto em T114 via endpoints. Adicionar assertion: PATCH enabled=false, próxima RoutingEngine.evaluate() retorna DROP com reason=tenant_disabled (ou delegar para teste de integração de router)
+- [x] T700 [P] [US7] Integration test `apps/api/tests/integration/admin/test_tenants.py` — coberto em T114 via endpoints. Adicionar assertion: PATCH enabled=false, próxima RoutingEngine.evaluate() retorna DROP com reason=tenant_disabled (ou delegar para teste de integração de router) — **IMPLEMENTADO**: `test_disable_persists_flag_for_downstream_routing` asserta que a UPDATE query é invocada com `enabled=False` + slug correto; a via "RoutingEngine.evaluate() retorna DROP" foi delegada porque `TenantStore` é YAML-backed (não DB-backed) e a rejeição de tenant disabled ocorre no nível do webhook (`api/dependencies.py:68`), coberta por `tests/unit/test_tenant_store.py::test_disabled_tenant_loaded_correctly`; docstring documenta que quando o store ganhar DB reload hook, a assertion do engine será adicionada.
 
 ### Implementation for US7 — Frontend
 

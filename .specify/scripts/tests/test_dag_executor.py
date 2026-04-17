@@ -2820,3 +2820,93 @@ def test_disallowed_tools_preserves_original_patterns():
     assert "Bash(git checkout:*)" in DISALLOWED_TOOLS
     assert "Bash(git branch -:*)" in DISALLOWED_TOOLS
     assert "Bash(git switch:*)" in DISALLOWED_TOOLS
+
+
+# ---------------------------------------------------------------------------
+# extra_env propagation (Fix C: MADRUGA_PHASE_CTX)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_dispatch_with_retry_propagates_extra_env():
+    """dispatch_with_retry_async passes extra_env through to dispatch_node_async.
+
+    This verifies that MADRUGA_PHASE_CTX=1 set by _run_implement_phases reaches
+    the subprocess environment, enabling post_save.py to detect and block direct
+    L2 node writes that would corrupt epic_nodes resume state.
+    """
+    from dag_executor import dispatch_with_retry_async
+
+    breaker = CircuitBreaker()
+    captured_kwargs = {}
+
+    async def mock_dispatch(node, cwd, prompt, timeout=3000, guardrail=None, **kwargs):
+        captured_kwargs.update(kwargs)
+        return True, None, '{"result": "ok"}'
+
+    with patch("dag_executor.dispatch_node_async", side_effect=mock_dispatch):
+        await dispatch_with_retry_async(
+            _make_node(),
+            "/tmp",
+            "test",
+            600,
+            breaker,
+            extra_env={"MADRUGA_PHASE_CTX": "1"},
+        )
+
+    assert captured_kwargs.get("extra_env") == {"MADRUGA_PHASE_CTX": "1"}
+
+
+# ---------------------------------------------------------------------------
+# Process group isolation (Fix B: start_new_session + killpg)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_dispatch_node_async_uses_new_session():
+    """dispatch_node_async spawns subprocesses with start_new_session=True.
+
+    Without a new session, SIGKILL on timeout only kills the direct claude -p
+    process; orphan children (pytest, make, zsh) survive and accumulate CPU/IO
+    contention across phase retries.
+    """
+    from dag_executor import dispatch_node_async
+
+    mock_proc = _mock_async_proc(stdout=b"{}", stderr=b"", returncode=0)
+    captured_kwargs = {}
+
+    async def capturing_exec(*args, **kwargs):
+        captured_kwargs.update(kwargs)
+        return mock_proc
+
+    with (
+        patch("dag_executor.shutil.which", return_value="/usr/bin/claude"),
+        patch("dag_executor.asyncio.create_subprocess_exec", side_effect=capturing_exec),
+    ):
+        await dispatch_node_async(_make_node(), "/tmp", "test prompt")
+
+    assert captured_kwargs.get("start_new_session") is True
+
+
+@pytest.mark.parametrize(
+    "pid_setter",
+    [
+        pytest.param(lambda p: None, id="invalid_pid"),  # leaves MagicMock auto-attr
+        pytest.param(lambda p: setattr(p, "pid", os.getpid()), id="runner_pgid"),
+    ],
+)
+def test_kill_process_group_safely_falls_back_to_process_kill(pid_setter):
+    """Both unsafe inputs (non-int pid, runner's own pgid) fall back to process.kill().
+
+    Defense-in-depth: prevents killpg() from signalling the caller's own
+    process group, which in WSL would kill the shell and everything in it.
+    """
+    from dag_executor import _kill_process_group_safely
+
+    proc = MagicMock()
+    pid_setter(proc)
+    proc.kill = MagicMock()
+
+    _kill_process_group_safely(proc)
+
+    proc.kill.assert_called_once()

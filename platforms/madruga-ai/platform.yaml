@@ -24,9 +24,9 @@ testing:
       type: frontend
       label: Portal Home
       expect_status: 200
-    - url: http://localhost:4321/platforms/madruga-ai
+    - url: http://localhost:4321/madruga-ai/business/vision/
       type: frontend
-      label: Plataforma madruga-ai
+      label: Plataforma madruga-ai (vision doc)
       expect_status: 200
   required_env: []
   env_file: null

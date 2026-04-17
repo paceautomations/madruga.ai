@@ -18,12 +18,11 @@ from __future__ import annotations
 
 import json
 import sys
-import tempfile
 import textwrap
 import urllib.error
 import urllib.request
 from pathlib import Path
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 import pytest
 import yaml
@@ -38,7 +37,6 @@ from qa_startup import (
     StartupResult,
     TestingManifest,
     URLEntry,
-    URLResult,
     _is_placeholder,
     _read_env_keys,
     execute_startup,
@@ -97,7 +95,9 @@ class TestLoadManifest:
     def test_valid_testing_block(self, tmp_path):
         testing = {
             "startup": {"type": "docker", "command": None, "ready_timeout": 120},
-            "health_checks": [{"url": "http://localhost:8050/health", "label": "API", "method": "GET", "expect_status": 200}],
+            "health_checks": [
+                {"url": "http://localhost:8050/health", "label": "API", "method": "GET", "expect_status": 200}
+            ],
             "urls": [{"url": "http://localhost:3000", "type": "frontend", "label": "Frontend"}],
             "required_env": ["JWT_SECRET", "DB_URL"],
             "env_file": ".env.example",
@@ -158,6 +158,7 @@ class TestLoadManifest:
         platform_dir.mkdir(parents=True)
         (platform_dir / "platform.yaml").write_text("key: [unclosed")
         import pytest as _pytest
+
         with _pytest.raises(ValueError, match="not valid YAML"):
             load_manifest("bad-platform", tmp_path)
 
@@ -508,19 +509,20 @@ class TestWaitForHealth:
     def test_success_after_retry(self):
         hcs = [HealthCheck(url="http://localhost:8050/health", expect_status=200, label="API")]
         # First call fails, second succeeds
-        with patch("qa_startup.quick_check", side_effect=[False, True]), \
-             patch("time.sleep"):
+        with patch("qa_startup.quick_check", side_effect=[False, True]), patch("time.sleep"):
             result = wait_for_health(hcs, "npm", timeout=10, cwd=Path("/tmp"))
         assert result.status == "ok"
 
     def test_timeout_triggers_blocker(self):
         hcs = [HealthCheck(url="http://localhost:8050/health", expect_status=200, label="API")]
         # Simulate time running out
-        with patch("qa_startup.quick_check", return_value=False), \
-             patch("time.monotonic", side_effect=[0, 0, 100, 100, 100, 100]), \
-             patch("time.sleep"), \
-             patch("urllib.request.urlopen", side_effect=urllib.error.URLError("refused")), \
-             patch("subprocess.run") as mock_sub:
+        with (
+            patch("qa_startup.quick_check", return_value=False),
+            patch("time.monotonic", side_effect=[0, 0, 100, 100, 100, 100]),
+            patch("time.sleep"),
+            patch("urllib.request.urlopen", side_effect=urllib.error.URLError("refused")),
+            patch("subprocess.run") as mock_sub,
+        ):
             mock_sub.return_value = MagicMock(stdout="log line", stderr="", returncode=0)
             result = wait_for_health(hcs, "docker", timeout=5, cwd=Path("/tmp"))
         assert result.status == "blocker"
@@ -528,10 +530,12 @@ class TestWaitForHealth:
 
     def test_timeout_non_docker_no_logs(self):
         hcs = [HealthCheck(url="http://localhost:3000", expect_status=200, label="Frontend")]
-        with patch("qa_startup.quick_check", return_value=False), \
-             patch("time.monotonic", side_effect=[0, 0, 100, 100, 100, 100]), \
-             patch("time.sleep"), \
-             patch("urllib.request.urlopen", side_effect=urllib.error.URLError("refused")):
+        with (
+            patch("qa_startup.quick_check", return_value=False),
+            patch("time.monotonic", side_effect=[0, 0, 100, 100, 100, 100]),
+            patch("time.sleep"),
+            patch("urllib.request.urlopen", side_effect=urllib.error.URLError("refused")),
+        ):
             result = wait_for_health(hcs, "npm", timeout=5, cwd=Path("/tmp"))
         assert result.status == "blocker"
 
@@ -666,6 +670,20 @@ class TestIsPlaceholder:
         body = b"<html><body>Hi</body></html>"
         assert _is_placeholder(body, "text/html", "frontend") is True
 
+    def test_criterion_1_short_body_api_type_not_placeholder(self):
+        """Short API responses (e.g. health checks) must NOT be flagged as placeholder.
+
+        FR-023 criterion 1 applies only to frontend URLs — short API JSON responses
+        like {"status":"ok"} are legitimate and should not generate false WARNs.
+        """
+        body = b'{"status": "ok"}'  # 16 bytes — typical API health check response
+        assert _is_placeholder(body, "application/json", "api") is False
+
+    def test_criterion_1_short_body_api_json_status_not_placeholder(self):
+        """Prosauai health endpoint body must not trigger placeholder WARN."""
+        body = b'{"status": "healthy", "version": "1.0.0"}'
+        assert _is_placeholder(body, "application/json", "api") is False
+
     def test_criterion_1_long_body_not_placeholder(self):
         body = b"x" * 600
         # Not a placeholder by size, assume no other criteria
@@ -710,7 +728,9 @@ class TestIsPlaceholder:
         assert _is_placeholder(body, "application/json", "api") is False
 
     def test_not_placeholder_real_content(self):
-        body = b"<html><head><title>App</title></head><body><div id='root'><main>Real App Content goes here</main></div></body></html>" * 5
+        # Large real HTML page — body must exceed 500 bytes for criterion 1
+        chunk = b"<html><body><div id='app'><main>Real App Content Here</main></div></body></html>"
+        body = chunk * 10  # ~800 bytes — above the 500-byte threshold
         assert _is_placeholder(body, "text/html; charset=utf-8", "frontend") is False
 
 
@@ -809,9 +829,7 @@ class TestValidateUrls:
         manifest = self._make_manifest([entry])
         headers_mock = MagicMock()
         headers_mock.get = lambda k, d="": "/login" if k == "Location" else d
-        http_err = urllib.error.HTTPError(
-            "http://localhost:3000", 302, "Found", headers_mock, None
-        )
+        http_err = urllib.error.HTTPError("http://localhost:3000", 302, "Found", headers_mock, None)
         with patch("urllib.request.build_opener") as mock_builder:
             opener = MagicMock()
             mock_builder.return_value = opener
@@ -829,14 +847,52 @@ class TestValidateUrls:
         manifest = self._make_manifest([entry])
         headers_mock = MagicMock()
         headers_mock.get = lambda k, d="": "/dashboard" if k == "Location" else d
-        http_err = urllib.error.HTTPError(
-            "http://localhost:3000", 302, "Found", headers_mock, None
-        )
+        http_err = urllib.error.HTTPError("http://localhost:3000", 302, "Found", headers_mock, None)
         with patch("urllib.request.build_opener") as mock_builder:
             opener = MagicMock()
             mock_builder.return_value = opener
             opener.open.side_effect = http_err
             result = validate_urls(manifest)
+        assert result.urls[0].ok is False
+        assert any("BLOCKER" == f.level for f in result.findings)
+
+    def test_redirect_check_full_url_location(self):
+        """Location header with full URL (http://host/login) should match expect_redirect='/login'."""
+        entry = URLEntry(
+            url="http://localhost:3000",
+            type="frontend",
+            label="Root",
+            expect_redirect="/login",
+        )
+        manifest = self._make_manifest([entry])
+        headers_mock = MagicMock()
+        headers_mock.get = lambda k, d="": "http://localhost:3000/login" if k == "Location" else d
+        http_err = urllib.error.HTTPError("http://localhost:3000", 302, "Found", headers_mock, None)
+        with patch("urllib.request.build_opener") as mock_builder:
+            opener = MagicMock()
+            mock_builder.return_value = opener
+            opener.open.side_effect = http_err
+            result = validate_urls(manifest)
+        assert result.urls[0].ok is True
+
+    def test_redirect_check_no_false_positive_substring(self):
+        """'/admin/login' should NOT match expect_redirect='/login' (substring check would be wrong)."""
+        entry = URLEntry(
+            url="http://localhost:3000",
+            type="frontend",
+            label="Root",
+            expect_redirect="/login",
+        )
+        manifest = self._make_manifest([entry])
+        headers_mock = MagicMock()
+        headers_mock.get = lambda k, d="": "http://localhost:3000/admin/login" if k == "Location" else d
+        http_err = urllib.error.HTTPError("http://localhost:3000", 302, "Found", headers_mock, None)
+        with patch("urllib.request.build_opener") as mock_builder:
+            opener = MagicMock()
+            mock_builder.return_value = opener
+            opener.open.side_effect = http_err
+            result = validate_urls(manifest)
+        # /admin/login contains /login as substring but they are different paths → must be BLOCKER
         assert result.urls[0].ok is False
         assert any("BLOCKER" == f.level for f in result.findings)
 
@@ -865,9 +921,7 @@ class TestValidateUrls:
 class TestStartServices:
     def test_already_healthy_skips_startup(self):
         manifest = minimal_manifest("docker")
-        manifest.health_checks = [
-            HealthCheck(url="http://localhost:8050/health", expect_status=200, label="API")
-        ]
+        manifest.health_checks = [HealthCheck(url="http://localhost:8050/health", expect_status=200, label="API")]
         with patch("qa_startup.quick_check", return_value=True):
             result = start_services(manifest, Path("/tmp"))
         assert result.status == "ok"
@@ -881,8 +935,10 @@ class TestStartServices:
 
     def test_startup_failure_returns_blocker(self):
         manifest = minimal_manifest("docker")
-        with patch("qa_startup.quick_check", return_value=False), \
-             patch("qa_startup.execute_startup", return_value=(1, "fatal error")):
+        with (
+            patch("qa_startup.quick_check", return_value=False),
+            patch("qa_startup.execute_startup", return_value=(1, "fatal error")),
+        ):
             result = start_services(manifest, Path("/tmp"))
         assert result.status == "blocker"
         assert any("fatal error" in f.detail for f in result.findings)
@@ -890,12 +946,14 @@ class TestStartServices:
     def test_startup_success_waits_for_health(self):
         manifest = minimal_manifest("npm")
         manifest.health_checks = [HealthCheck(url="http://localhost:3000", expect_status=200, label="FE")]
-        health_result = StartupResult(status="ok", health_checks=[
-            HealthCheckResult(label="FE", url="http://localhost:3000", status="ok")
-        ])
-        with patch("qa_startup.quick_check", return_value=False), \
-             patch("qa_startup.execute_startup", return_value=(0, "")), \
-             patch("qa_startup.wait_for_health", return_value=health_result):
+        health_result = StartupResult(
+            status="ok", health_checks=[HealthCheckResult(label="FE", url="http://localhost:3000", status="ok")]
+        )
+        with (
+            patch("qa_startup.quick_check", return_value=False),
+            patch("qa_startup.execute_startup", return_value=(0, "")),
+            patch("qa_startup.wait_for_health", return_value=health_result),
+        ):
             result = start_services(manifest, Path("/tmp"))
         assert result.status == "ok"
 
@@ -909,9 +967,11 @@ class TestRunFull:
             findings=[Finding(level="BLOCKER", message="health check failed", detail="")],
         )
         env_ok = StartupResult(status="ok")
-        with patch("qa_startup.start_services", return_value=startup_blocker), \
-             patch("qa_startup.validate_env", return_value=env_ok), \
-             patch("qa_startup.validate_urls") as mock_validate_urls:
+        with (
+            patch("qa_startup.start_services", return_value=startup_blocker),
+            patch("qa_startup.validate_env", return_value=env_ok),
+            patch("qa_startup.validate_urls") as mock_validate_urls,
+        ):
             result = run_full(manifest, Path("/tmp"))
         mock_validate_urls.assert_not_called()
         assert result.status == "blocker"
@@ -922,9 +982,11 @@ class TestRunFull:
         startup_ok = StartupResult(status="ok")
         env_ok = StartupResult(status="ok")
         urls_ok = StartupResult(status="ok")
-        with patch("qa_startup.start_services", return_value=startup_ok), \
-             patch("qa_startup.validate_env", return_value=env_ok), \
-             patch("qa_startup.validate_urls", return_value=urls_ok) as mock_validate_urls:
+        with (
+            patch("qa_startup.start_services", return_value=startup_ok),
+            patch("qa_startup.validate_env", return_value=env_ok),
+            patch("qa_startup.validate_urls", return_value=urls_ok) as mock_validate_urls,
+        ):
             result = run_full(manifest, Path("/tmp"))
         mock_validate_urls.assert_called_once()
         assert result.status == "ok"
@@ -976,8 +1038,10 @@ class TestMain:
     def test_start_services_dispatched(self, tmp_path):
         testing = {"startup": {"type": "none"}}
         write_platform_yaml(tmp_path, "p", make_platform_yaml(testing))
-        with patch("qa_startup._detect_repo_root", return_value=tmp_path), \
-             patch("qa_startup.start_services", return_value=StartupResult(status="ok")) as mock_start:
+        with (
+            patch("qa_startup._detect_repo_root", return_value=tmp_path),
+            patch("qa_startup.start_services", return_value=StartupResult(status="ok")) as mock_start,
+        ):
             code = main(["--platform", "p", "--start", "--json"])
         assert code == 0
         mock_start.assert_called_once()
@@ -985,8 +1049,10 @@ class TestMain:
     def test_validate_urls_dispatched(self, tmp_path):
         testing = {"startup": {"type": "none"}}
         write_platform_yaml(tmp_path, "p", make_platform_yaml(testing))
-        with patch("qa_startup._detect_repo_root", return_value=tmp_path), \
-             patch("qa_startup.validate_urls", return_value=StartupResult(status="ok")) as mock_urls:
+        with (
+            patch("qa_startup._detect_repo_root", return_value=tmp_path),
+            patch("qa_startup.validate_urls", return_value=StartupResult(status="ok")) as mock_urls,
+        ):
             code = main(["--platform", "p", "--validate-urls", "--json"])
         assert code == 0
         mock_urls.assert_called_once()
@@ -994,8 +1060,10 @@ class TestMain:
     def test_full_dispatched(self, tmp_path):
         testing = {"startup": {"type": "none"}}
         write_platform_yaml(tmp_path, "p", make_platform_yaml(testing))
-        with patch("qa_startup._detect_repo_root", return_value=tmp_path), \
-             patch("qa_startup.run_full", return_value=StartupResult(status="ok")) as mock_full:
+        with (
+            patch("qa_startup._detect_repo_root", return_value=tmp_path),
+            patch("qa_startup.run_full", return_value=StartupResult(status="ok")) as mock_full,
+        ):
             code = main(["--platform", "p", "--full", "--json"])
         assert code == 0
         mock_full.assert_called_once()
@@ -1007,8 +1075,10 @@ class TestMain:
             status="blocker",
             findings=[Finding(level="BLOCKER", message="something failed")],
         )
-        with patch("qa_startup._detect_repo_root", return_value=tmp_path), \
-             patch("qa_startup.validate_urls", return_value=blocker_result):
+        with (
+            patch("qa_startup._detect_repo_root", return_value=tmp_path),
+            patch("qa_startup.validate_urls", return_value=blocker_result),
+        ):
             code = main(["--platform", "p", "--validate-urls"])
         assert code == 1
 
@@ -1016,7 +1086,7 @@ class TestMain:
         testing = {"startup": {"type": "none"}, "required_env": [], "env_file": None}
         write_platform_yaml(tmp_path, "p", make_platform_yaml(testing))
         with patch("qa_startup._detect_repo_root", return_value=tmp_path):
-            code = main(["--platform", "p", "--validate-env", "--json"])
+            main(["--platform", "p", "--validate-env", "--json"])
         captured = capsys.readouterr()
         data = json.loads(captured.out)
         assert "status" in data

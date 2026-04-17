@@ -64,6 +64,7 @@ def _bind(monkeypatch, repo: Path, branch: str) -> None:
         monkeypatch.setattr(mod.ensure_repo_mod, "load_repo_binding", lambda _p, _b=branch: {"base_branch": _b})
 
 
+@pytest.mark.slow
 def test_full_pipeline_with_aggregate(tmp_path, fresh_db, monkeypatch):
     """Baseline pipeline with mix of noise / doc-self-edit / code commits."""
     import reverse_reconcile_apply as apply_mod
@@ -153,6 +154,7 @@ def test_full_pipeline_with_aggregate(tmp_path, fresh_db, monkeypatch):
         shutil.rmtree(agg_mod.REPO_ROOT / "platforms" / "testplat", ignore_errors=True)
 
 
+@pytest.mark.slow
 def test_chronological_collapse(tmp_path, fresh_db, monkeypatch):
     """The chronological guarantee: A→B→C→D→E on same file collapses to 1 work item, HEAD-only.
 
@@ -204,6 +206,7 @@ def test_chronological_collapse(tmp_path, fresh_db, monkeypatch):
     assert "section X MODIFIED" not in snippet
 
 
+@pytest.mark.slow
 def test_chronological_delete_goes_to_deleted_files(tmp_path, fresh_db, monkeypatch):
     """File that existed in earlier commits but not at HEAD → deleted_files."""
     import reverse_reconcile_aggregate as agg_mod

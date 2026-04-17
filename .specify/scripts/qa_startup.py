@@ -31,6 +31,7 @@ import subprocess
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -325,14 +326,12 @@ def quick_check(health_checks: list[HealthCheck], timeout: int = 3) -> bool:
     """
     for hc in health_checks:
         try:
-            req = urllib.request.Request(
-                hc.url, method=hc.method, headers={"Connection": "close"}
-            )
+            req = urllib.request.Request(hc.url, method=hc.method, headers={"Connection": "close"})
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 if resp.status != hc.expect_status:
                     return False
                 if hc.expect_body_contains:
-                    body = resp.read().decode("utf-8", errors="replace")
+                    body = resp.read(65536).decode("utf-8", errors="replace")  # cap at 64 KB
                     if hc.expect_body_contains not in body:
                         return False
         except OSError:
@@ -431,8 +430,10 @@ def _is_placeholder(body: bytes, content_type: str, url_type: str) -> bool:
     """
     stripped = body.strip()
 
-    # Criterion 1: too short
-    if len(stripped) < 500:
+    # Criterion 1: too short — applies only to frontend URLs.
+    # API responses are frequently short by design (e.g., `{"status":"ok"}` is ~16 bytes).
+    # Flagging them as placeholder would produce false WARNs on healthy API endpoints.
+    if url_type == "frontend" and len(stripped) < 500:
         return True
 
     # Criterion 2: known placeholder strings
@@ -475,10 +476,7 @@ def wait_for_health(
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if quick_check(health_checks, timeout=3):
-            hc_results = [
-                HealthCheckResult(label=hc.label, url=hc.url, status="ok")
-                for hc in health_checks
-            ]
+            hc_results = [HealthCheckResult(label=hc.label, url=hc.url, status="ok") for hc in health_checks]
             return StartupResult(status="ok", health_checks=hc_results)
         remaining = deadline - time.monotonic()
         if remaining > 2:
@@ -495,15 +493,11 @@ def wait_for_health(
                     hc_results.append(HealthCheckResult(label=hc.label, url=hc.url, status="ok"))
                     continue
                 detail = f"HTTP {resp.status}, esperado {hc.expect_status}"
-                hc_results.append(
-                    HealthCheckResult(label=hc.label, url=hc.url, status="failed", detail=detail)
-                )
+                hc_results.append(HealthCheckResult(label=hc.label, url=hc.url, status="failed", detail=detail))
                 failed_labels.append(hc.label)
         except (urllib.error.URLError, OSError) as exc:
             detail = str(exc)
-            hc_results.append(
-                HealthCheckResult(label=hc.label, url=hc.url, status="timeout", detail=detail)
-            )
+            hc_results.append(HealthCheckResult(label=hc.label, url=hc.url, status="timeout", detail=detail))
             failed_labels.append(hc.label)
 
     # Collect docker logs if applicable
@@ -524,7 +518,7 @@ def wait_for_health(
     failed_str = ", ".join(f"'{lbl}'" for lbl in failed_labels)
     detail = f"Health checks falhados: {failed_str}."
     if docker_logs:
-        detail += f" Logs:\n{docker_logs[:2000]}"
+        detail += f" Logs:\n{docker_logs[-2000:]}"  # keep last 2000 chars (most recent — where failures appear)
 
     finding = Finding(
         level="BLOCKER",
@@ -590,23 +584,32 @@ def validate_urls(manifest: TestingManifest, cwd: Path | None = None) -> Startup
             with opener.open(req, timeout=10) as resp:
                 status_code = resp.status
                 content_type = resp.headers.get("Content-Type", "")
-                body = resp.read()
+                body = resp.read(65536)  # cap at 64 KB — enough for content checks
 
         except urllib.error.HTTPError as exc:
             # Redirect responses come here when expect_redirect is set
             if entry.expect_redirect is not None:
                 location = exc.headers.get("Location", "")
                 status_code = exc.code
-                # Check if redirect goes to expected path
-                if entry.expect_redirect in location:
+                # Check if redirect goes to expected path — use URL path comparison
+                # (not substring match) to avoid false positives like "/log" matching "/login"
+                try:
+                    actual_path = urllib.parse.urlparse(location).path
+                except Exception:
+                    actual_path = location
+                if actual_path == entry.expect_redirect or location == entry.expect_redirect:
                     url_results.append(
                         URLResult(url=url, label=label, status_code=status_code, ok=True, detail="redirect ok")
                     )
                     continue
                 else:
                     detail = f"Redirect para '{location}', esperado '{entry.expect_redirect}'"
-                    findings.append(Finding(level="BLOCKER", message=f"{url} redireciona para lugar errado", detail=detail))
-                    url_results.append(URLResult(url=url, label=label, status_code=status_code, ok=False, detail=detail))
+                    findings.append(
+                        Finding(level="BLOCKER", message=f"{url} redireciona para lugar errado", detail=detail)
+                    )
+                    url_results.append(
+                        URLResult(url=url, label=label, status_code=status_code, ok=False, detail=detail)
+                    )
                     continue
             else:
                 status_code = exc.code
@@ -634,7 +637,9 @@ def validate_urls(manifest: TestingManifest, cwd: Path | None = None) -> Startup
 
         if status_code not in expected_list:
             detail = f"HTTP {status_code}, esperado {expected}"
-            findings.append(Finding(level="BLOCKER", message=f"{url} retornou {status_code}, esperado {expected}", detail=detail))
+            findings.append(
+                Finding(level="BLOCKER", message=f"{url} retornou {status_code}, esperado {expected}", detail=detail)
+            )
             url_results.append(URLResult(url=url, label=label, status_code=status_code, ok=False, detail=detail))
             continue
 
@@ -713,18 +718,12 @@ def start_services(manifest: TestingManifest, cwd: Path) -> StartupResult:
     print("Checking if services are already running...", file=sys.stderr)
 
     if manifest.startup.type == "none":
-        hc_results = [
-            HealthCheckResult(label=hc.label, url=hc.url, status="ok")
-            for hc in manifest.health_checks
-        ]
+        hc_results = [HealthCheckResult(label=hc.label, url=hc.url, status="ok") for hc in manifest.health_checks]
         return StartupResult(status="ok", health_checks=hc_results, skipped_startup=True)
 
     if quick_check(manifest.health_checks, timeout=3):
         print("Services already healthy — skipping startup.", file=sys.stderr)
-        hc_results = [
-            HealthCheckResult(label=hc.label, url=hc.url, status="ok")
-            for hc in manifest.health_checks
-        ]
+        hc_results = [HealthCheckResult(label=hc.label, url=hc.url, status="ok") for hc in manifest.health_checks]
         return StartupResult(status="ok", health_checks=hc_results, skipped_startup=True)
 
     print(f"Starting services (type: {manifest.startup.type})...", file=sys.stderr)

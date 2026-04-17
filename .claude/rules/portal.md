@@ -14,11 +14,30 @@ Dynamic routes em `src/pages/[platform]/` geram páginas para todas plataformas 
 
 ## Cross-Reference Links in Platform Docs
 
-- **Always use relative paths** between platform docs (e.g., `[Vision](./vision/)`, `[ADR-011](../decisions/ADR-011-pool-rls-multi-tenant/)`).
-- **Never use absolute paths** like `/prosauai/engineering/containers/` — they break when the route structure changes and section names are easy to omit.
-- Relative path calculation from the source file's directory:
-  - Same section: `./other-doc/`
-  - Adjacent section: `../other-section/other-doc/`
-  - From epics (nested deeper): `../../section/doc/`
+The remark plugin `remarkResolveLinks` (wired in `astro.config.mjs` → `markdown.remarkPlugins`)
+resolves relative links **filesystem-style from the source `.md`** at build time. If the
+target exists under `platforms/<p>/`, the link is rewritten to the absolute portal URL
+(`/<platform>/<section>/<doc>/`). If the target does not exist on disk, the plugin leaves
+the link untouched so the browser can still do URL-style resolution (which is what works
+for same-section links).
+
+This means authors can **think filesystem-relative** and it just works:
+
+- Same-section (`engineering/blueprint.md` → `engineering/containers.md`):
+  `[containers](./containers/)` (filesystem) or `[containers](../containers/)` (URL-style) — both resolve.
+- Cross-section (`business/process.md` → `engineering/domain-model.md`):
+  `[domain-model](../engineering/domain-model/)` — plugin resolves filesystem, emits `/prosauai/engineering/domain-model/`.
+- From epics (`epics/NNN/pitch.md` → `engineering/blueprint.md`):
+  `[blueprint](../../engineering/blueprint/)` — plugin resolves.
+- Anchors and queries are preserved: `../engineering/blueprint/#containers` is fine.
+- `.md` extensions are stripped: both `../decisions/ADR-024-schema.md` and `../decisions/ADR-024-schema/` work.
+
+Conventions:
+- **Never use absolute paths** like `/prosauai/engineering/containers/` — plugin emits
+  those at build; sources stay portable if a platform is renamed.
 - Use **original filename casing** (e.g., `ADR-011-...`, not `adr-011-...`).
-- Always end with trailing slash (e.g., `../engineering/containers/`).
+- Always end with trailing slash on directory-style targets (e.g., `../engineering/containers/`).
+
+If a link 404s, the plugin didn't find the target on disk. Fix the source path — don't
+add `../` levels to compensate for URL-style resolution quirks, since that re-introduces
+the legacy breakage class.

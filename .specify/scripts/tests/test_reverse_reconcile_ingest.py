@@ -50,6 +50,7 @@ def fresh_db(tmp_path, monkeypatch):
     return db_file
 
 
+@pytest.mark.slow
 def test_list_remote_shas_returns_three_commits(fake_repo):
     from reverse_reconcile_ingest import _list_remote_shas
 
@@ -61,6 +62,7 @@ def test_list_remote_shas_returns_three_commits(fake_repo):
     assert "f3.txt" in commits[0]["files"]
 
 
+@pytest.mark.slow
 def test_ingest_inserts_all_new_commits(fake_repo, fresh_db, monkeypatch):
     import reverse_reconcile_ingest as mod
 
@@ -83,6 +85,7 @@ def test_ingest_inserts_all_new_commits(fake_repo, fresh_db, monkeypatch):
     conn.close()
 
 
+@pytest.mark.slow
 def test_ingest_is_idempotent(fake_repo, fresh_db, monkeypatch):
     import reverse_reconcile_ingest as mod
 
@@ -94,6 +97,7 @@ def test_ingest_is_idempotent(fake_repo, fresh_db, monkeypatch):
     assert result["already_tracked"] == 3
 
 
+@pytest.mark.slow
 def test_dry_run_does_not_insert(fake_repo, fresh_db, monkeypatch):
     import reverse_reconcile_ingest as mod
 
@@ -111,6 +115,7 @@ def test_dry_run_does_not_insert(fake_repo, fresh_db, monkeypatch):
     assert count == 0
 
 
+@pytest.mark.slow
 def test_ingest_respects_composite_sha_dedup(fake_repo, fresh_db, monkeypatch):
     """If a commit is already in the table under composite form <sha>:<plat>, skip it."""
     import reverse_reconcile_ingest as mod
@@ -172,6 +177,7 @@ def _init_multi_branch_repo(tmp_path: Path) -> Path:
     return repo
 
 
+@pytest.mark.slow
 def test_ingest_scopes_to_base_branch_only(tmp_path, fresh_db, monkeypatch):
     """Only commits reachable from origin/<base_branch> should be ingested."""
     import reverse_reconcile_ingest as mod
@@ -198,6 +204,7 @@ def test_ingest_scopes_to_base_branch_only(tmp_path, fresh_db, monkeypatch):
     assert "main commit 2" not in msgs
 
 
+@pytest.mark.slow
 def test_ingest_main_branch_excludes_develop(tmp_path, fresh_db, monkeypatch):
     import reverse_reconcile_ingest as mod
 
@@ -211,6 +218,7 @@ def test_ingest_main_branch_excludes_develop(tmp_path, fresh_db, monkeypatch):
     assert result["inserted"] == 3
 
 
+@pytest.mark.slow
 def test_ingest_cli_branch_override(tmp_path, fresh_db, monkeypatch):
     """--branch overrides platform.yaml base_branch."""
     import reverse_reconcile_ingest as mod
@@ -225,6 +233,7 @@ def test_ingest_cli_branch_override(tmp_path, fresh_db, monkeypatch):
     assert result["inserted"] == 4
 
 
+@pytest.mark.slow
 def test_ingest_uses_composite_sha_when_other_platform_owns_raw(fake_repo, fresh_db, monkeypatch):
     """If a SHA exists in DB under platform X, ingesting same SHA for Y uses <sha>:Y form.
 
@@ -263,6 +272,7 @@ def test_ingest_uses_composite_sha_when_other_platform_owns_raw(fake_repo, fresh
     assert shas[f"{target_sha}:testplat"] == "testplat"
 
 
+@pytest.mark.slow
 def test_ingest_reconciles_orphan_shas(fake_repo, fresh_db, monkeypatch):
     """SHAs tagged for a platform but absent from its base_branch get auto-reconciled.
 
@@ -294,6 +304,7 @@ def test_ingest_reconciles_orphan_shas(fake_repo, fresh_db, monkeypatch):
     assert reconciled_at is not None
 
 
+@pytest.mark.slow
 def test_ingest_orphan_reconcile_ignores_valid_shas(fake_repo, fresh_db, monkeypatch):
     """SHAs that ARE in the base branch must not be touched by orphan reconcile."""
     import sqlite3
@@ -312,6 +323,7 @@ def test_ingest_orphan_reconcile_ignores_valid_shas(fake_repo, fresh_db, monkeyp
     assert null_count == 3
 
 
+@pytest.mark.slow
 def test_ingest_missing_branch_raises(fake_repo, fresh_db, monkeypatch):
     import pytest as _pytest
 
@@ -356,6 +368,7 @@ def _patch_platforms_dir(monkeypatch, mod, platforms_dir: Path):
     monkeypatch.setattr(mod, "REPO_PLATFORMS_DIR", platforms_dir)
 
 
+@pytest.mark.slow
 def test_ingest_tag_in_subject(tmp_path, fresh_db, monkeypatch):
     import reverse_reconcile_ingest as mod
 
@@ -374,6 +387,7 @@ def test_ingest_tag_in_subject(tmp_path, fresh_db, monkeypatch):
     assert epic_id == "042-bar"
 
 
+@pytest.mark.slow
 def test_ingest_tag_slug_digits_only(tmp_path, fresh_db, monkeypatch):
     import reverse_reconcile_ingest as mod
 
@@ -392,6 +406,7 @@ def test_ingest_tag_slug_digits_only(tmp_path, fresh_db, monkeypatch):
     assert epic_id == "042-bar"
 
 
+@pytest.mark.slow
 def test_ingest_trailer_in_body(tmp_path, fresh_db, monkeypatch):
     import reverse_reconcile_ingest as mod
 
@@ -427,6 +442,7 @@ def test_ingest_trailer_in_body(tmp_path, fresh_db, monkeypatch):
     assert epic_id == "042-bar"
 
 
+@pytest.mark.slow
 def test_ingest_squash_no_tag_stays_null(tmp_path, fresh_db, monkeypatch):
     import reverse_reconcile_ingest as mod
 
@@ -446,6 +462,7 @@ def test_ingest_squash_no_tag_stays_null(tmp_path, fresh_db, monkeypatch):
     assert row[1] is None
 
 
+@pytest.mark.slow
 def test_ingest_tag_mismatch_logs_warning(tmp_path, fresh_db, monkeypatch, caplog):
     import reverse_reconcile_ingest as mod
 
@@ -469,6 +486,7 @@ def test_ingest_tag_mismatch_logs_warning(tmp_path, fresh_db, monkeypatch, caplo
     assert epic_id is None
 
 
+@pytest.mark.slow
 def test_ingest_merge_commit_resolves_children(tmp_path, fresh_db, monkeypatch):
     """A traditional merge commit attributes its branch's children to the epic."""
     import reverse_reconcile_ingest as mod
@@ -518,6 +536,7 @@ def test_ingest_merge_commit_resolves_children(tmp_path, fresh_db, monkeypatch):
     assert all(r[1] == "042-bar" for r in rows)
 
 
+@pytest.mark.slow
 def test_ingest_tag_beats_merge_map(tmp_path, fresh_db, monkeypatch):
     """Subject tag overrides merge-commit attribution."""
     import reverse_reconcile_ingest as mod
@@ -563,6 +582,7 @@ def test_ingest_tag_beats_merge_map(tmp_path, fresh_db, monkeypatch):
     assert epic_id == "050-other"
 
 
+@pytest.mark.slow
 def test_ingest_merge_map_only_one_git_call_for_graph(tmp_path, fresh_db, monkeypatch):
     """_build_merge_map must use a single `git log --format=%H %P %s` subprocess."""
     import reverse_reconcile_ingest as mod
@@ -587,6 +607,7 @@ def test_ingest_merge_map_only_one_git_call_for_graph(tmp_path, fresh_db, monkey
     assert len(graph_calls) == 1
 
 
+@pytest.mark.slow
 def test_ingest_auto_marks_when_report_exists(tmp_path, fresh_db, monkeypatch):
     """epic_id resolved + reconcile-report.md present → reconciled_at set on INSERT."""
     import reverse_reconcile_ingest as mod
@@ -608,6 +629,7 @@ def test_ingest_auto_marks_when_report_exists(tmp_path, fresh_db, monkeypatch):
     assert reconciled_at is not None
 
 
+@pytest.mark.slow
 def test_ingest_no_report_stays_null(tmp_path, fresh_db, monkeypatch):
     """Same scenario but without the report → reconciled_at NULL."""
     import reverse_reconcile_ingest as mod
@@ -630,6 +652,7 @@ def test_ingest_no_report_stays_null(tmp_path, fresh_db, monkeypatch):
     assert row[1] is None
 
 
+@pytest.mark.slow
 def test_ingest_retroactive_upgrade_after_report_added(tmp_path, fresh_db, monkeypatch):
     """Commit ingested before report exists → next ingest upgrades reconciled_at."""
     import reverse_reconcile_ingest as mod
@@ -654,6 +677,7 @@ def test_ingest_retroactive_upgrade_after_report_added(tmp_path, fresh_db, monke
     assert reconciled_at is not None
 
 
+@pytest.mark.slow
 def test_retroactive_skips_already_reconciled(tmp_path, fresh_db, monkeypatch):
     """Idempotency: rows already reconciled are not re-touched by retroactive UPDATE."""
     import reverse_reconcile_ingest as mod
@@ -671,6 +695,7 @@ def test_retroactive_skips_already_reconciled(tmp_path, fresh_db, monkeypatch):
     assert result["retroactively_marked"] == 0
 
 
+@pytest.mark.slow
 def test_load_approved_epics_scans_filesystem(tmp_path, monkeypatch):
     import reverse_reconcile_ingest as mod
 
@@ -682,6 +707,7 @@ def test_load_approved_epics_scans_filesystem(tmp_path, monkeypatch):
     assert approved == {"042-bar", "044-qux"}
 
 
+@pytest.mark.slow
 def test_assume_reconciled_before_marks_ancestors(fake_repo, fresh_db, monkeypatch):
     import reverse_reconcile_ingest as mod
 

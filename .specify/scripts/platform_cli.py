@@ -360,9 +360,7 @@ def _lint_testing_block(testing_data: dict, platform_name: str) -> list[str]:
     else:
         for i, var in enumerate(required_env):
             if not isinstance(var, str):
-                errors.append(
-                    f"{platform_name}: testing.required_env[{i}] must be a string, got {type(var).__name__}"
-                )
+                errors.append(f"{platform_name}: testing.required_env[{i}] must be a string, got {type(var).__name__}")
 
     return errors
 
