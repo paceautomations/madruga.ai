@@ -128,7 +128,7 @@
 - [x] T112 [US1] Criar router `apps/api/prosauai/admin/conversations.py` com 4 endpoints (GET list, GET detail, PATCH status, GET messages) — usa `pool_admin`, auth via dep de cookie JWT existente; 409 para concurrent modification (depende T110, T111)
 - [x] T113 [P] [US1] Criar `apps/api/prosauai/db/queries/customers.py` + Pydantic schemas + router `apps/api/prosauai/admin/customers.py` (GET list + GET detail com QS médio e histórico)
 - [x] T114 [P] [US1] Criar `apps/api/prosauai/db/queries/tenants.py` + Pydantic schemas + router `apps/api/prosauai/admin/tenants.py` (GET list + GET detail + PATCH enabled) — PATCH valida que tenant existe e invalida cache Redis se presente
-- [ ] T115 [US1] Registrar 3 novos routers em `apps/api/prosauai/main.py` sob prefix `/admin` (depende de T112, T113, T114)
+- [x] T115 [US1] Registrar 3 novos routers em `apps/api/prosauai/main.py` sob prefix `/admin` (depende de T112, T113, T114) — já registrados via `admin/router.py` (auth + metrics + conversations + customers + tenants) e incluídos em `main.py` L471
 
 ### Implementation for US1 — Frontend (PR 7 parcial)
 
