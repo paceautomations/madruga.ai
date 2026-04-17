@@ -2,9 +2,10 @@
 epic: 008-admin-evolution
 title: "Admin Evolution — Plataforma Operacional Completa"
 appetite: 6-8 semanas
-status: drafted
+status: shipped
 created: 2026-04-17
 updated: 2026-04-17
+delivered_at: 2026-04-17
 ---
 # Epic 008 — Admin Evolution
 

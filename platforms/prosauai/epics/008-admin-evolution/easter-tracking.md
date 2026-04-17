@@ -128,3 +128,75 @@ Verificação manual contra ADR-025 + notas públicas OpenAI (2026-04):
 - **Fix:** (1) `rm prosauai/Evolução_front_admin.md` (duplicata, original ja em madruga.ai). (2) Append `.playwright-mcp/` ao `prosauai/.gitignore` + commit `118a67d "chore: ignore .playwright-mcp/ test artifacts"` na branch epic/prosauai/008-admin-evolution. (3) Move `madruga.ai/docs/prosauai/Evolução_front_admin.md` → `epics/008-admin-evolution/reference-spec.md` (vira input para SpecKit). (4) Update refs em pitch.md + decisions.md.
 - **Test:** N/A (fix de dados/config, nao de codigo).
 - **Duration lost:** ~30min (de 08:35 ate 09:39 intervencao).
+
+### Pytest zumbi bloqueando implement:phase-1 (2026-04-17 ~10:33)
+- **Symptom:** `pipeline_runs.status='running'` há 27min em implement:phase-1 + subprocess `claude -p` ELAPSED 26min + pytest 59524 travado com CPU time estagnado em 2:40. Zero stdout JSON emitido.
+- **Detection:** `ps --ppid` + correlação com `pipeline_runs` durante tick do pair-program.
+- **Root cause:** **dispatched claude executou `make test` no CWD errado** — rodou `python3 -m pytest .specify/scripts/tests/` (testes do madruga.ai) em vez dos testes do prosauai. Pytest do madruga.ai tinha suite pesada que deadlockou. `--append-system-prompt` não especifica `cd <code_dir>` antes de test commands.
+- **Fix:** `kill 59524` destravou o wait de `claude -p`. Success_check rescue-path (commit `849f183`) detectou tasks [X] e marcou run completed. Fix sistêmico (dispatch) documentado em Melhoria — madruga.ai bullet 🔴 acima — não aplicado neste ciclo.
+- **Test:** N/A neste ciclo (fix deferred).
+- **Duration lost:** ~55min de wall-clock (phase-1: 09:09 → 10:04). Métricas NULL (cost/tokens/duration_ms) por falta de stdout — levou ao bullet 🔴 duration_ms separado.
+
+### Phase-18 deadlock — 5 pytests zumbi (2026-04-17 ~13:08)
+- **Symptom:** implement:phase-18 running há ~42min, 5 processos pytest acumulados (alguns ELAPSED >1h). Mesmo padrão do incidente anterior.
+- **Detection:** `ps --ppid <easter-pid>` + user feedback "limpar os pytests zombies".
+- **Root cause:** Mesmo sistêmico (wrong CWD em `make test` dispatched). Acúmulo desta vez foi pior porque 18 phases × mesmo bug = vazamento gradual de pytests.
+- **Fix:** `kill -9` cascade nos 5 zombies + 2 adicionais que nasceram após (incluindo PID 317406). Pipeline retomou: Easter re-dispatched phase-1 (T030 deferred) + phase-2 (T904-T909 polish) = 152/152 tasks. **Observado durante:** 7 tasks pending foram absorvidas em novo dispatch sequencial — Easter usou DAG graceful retry após success_check mark.
+- **Test:** N/A neste ciclo.
+- **Duration lost:** ~45min de wall-clock.
+
+## Síntese (2026-04-17)
+
+### Métricas
+
+| Métrica | Valor |
+|---------|-------|
+| Nodes executados | 30 (incluindo 18 phases + 2 retries implement) |
+| Wall-clock total | 291 min (~4h51) |
+| Custo total | $164.46 |
+| Tasks entregues | 152 / 152 (100%) |
+| Incidentes críticos | 3 |
+| Tempo perdido em incidentes | ~130 min (~45% do total!) |
+| Fixes commitados durante epic | 1 (`118a67d` .gitignore .playwright-mcp/) |
+| Fixes deferred para follow-up | 4 (documentados com código pronto) |
+| Oportunidades registradas | 9 (madruga.ai) + 1 (prosauai — resolvida) |
+
+### Causas raiz (agrupadas por origem)
+
+**RC-1: Dispatch não especifica CWD para subprocess de test** — causa raiz de 2 dos 3 incidentes (~100min perdidos). Manifesta como pytest zumbi quando dispatched claude roda `make test`. Solução: `--append-system-prompt` deve dizer `cd <code_dir>` antes de qualquer test command, ou injetar wrapper de `make test` que respeita `code_dir`.
+
+**RC-2: Pre-flight check ausente no Start button** — causa raiz do incidente DirtyTreeError (~30min). Usuário clica Start sem saber que repo externo tem untracked files; Easter entra em loop infinito de retry. Solução: `POST /api/epics/{p}/{e}/start` valida `git status` no repo externo antes de promover status.
+
+**RC-3: `success_check` rescue-path deixa métricas NULL** — efeito colateral do workaround de timeout: preserva funcionalidade (tasks marcadas, pipeline avança) mas perde `duration_ms`/`cost_usd`/`tokens`. Solução documentada com 5 LOC de patch + retro-fix SQL.
+
+### Consolidado — Melhoria madruga.ai (por prioridade)
+
+**🔴 CRÍTICO — aplicar antes do próximo epic:**
+
+1. **Dispatched `make test` no CWD errado** (RC-1) — `--append-system-prompt` deve garantir `cd <code_dir>` antes de test commands. Impacto: ~100min/epic desperdiçados + pytests zumbi acumulam. Alvo: `dag_executor.compose_task_prompt` ou system prompt base.
+2. **`duration_ms` NULL em success_check rescue** (RC-3) — 5 LOC em [db_pipeline.py:459-467](.specify/scripts/db_pipeline.py#L459-L467) + teste + retro-fix SQL. Patch completo documentado acima.
+3. **`epic-context` não move refs externos para epic dir** — qualquer input file apontado via path deve ser auto-movido/copiado para `epics/<NNN>/` para que SpecKit consuma. Solução: flag `--ref <path>` com auto-copy.
+
+**🟡 IMPORTANTE — aplicar no próximo sprint:**
+
+4. **Branch swap em dispatched claude** (toda dispatch emite 1 ERROR) — instrumentar `dag_executor` para logar QUEM muda `.git/HEAD`; adicionar `Bash(git worktree:*)` + Write em `.git/HEAD` ao disallowedTools.
+5. **DirtyTreeError não é classificado como user-actionable** (RC-2) — classificar exceptions em `transient` vs `user-actionable` no `easter.py:281`; user-actionable sai do loop após 1 retry com notificação Telegram.
+6. **Prompt de phase de Setup = 134KB** — scope-aware composer: phases "Setup" não precisam de spec.md inteiro; phases "User Story N" incluem só a seção daquela story. Alvo: `compose_task_prompt`.
+
+**🟢 POLISH:**
+
+7. Pre-flight `git status` no `POST /api/epics/{p}/{e}/start` (RC-2) — bloqueia Start com mensagem amigável se repo externo está sujo.
+8. Backup periódico do madruga.db quebra com `sqlite3.ProgrammingError` — `easter.py:471` cria conn fora da thread executor.
+9. Telegram bot conflict (duas instâncias aiogram) — lock distribuído ou file lock para impedir 2 daemons ativos.
+
+### Consolidado — Melhoria prosauai
+
+Zero pendências novas. A única oportunidade registrada (`.playwright-mcp/` no `.gitignore`) foi resolvida durante o epic via commit `118a67d`.
+
+### Lição processo (pair-program)
+
+Na primeira intervenção crítica, classifiquei subprocess pytest como "trava de phase-1" baseado em timestamps batidos — mas o processo era de phase-2/3 (já em andamento). Lição: **na próxima classificação borderline, query `pipeline_runs` MAIS DE UMA VEZ no mesmo tick** e correlacione `started_at` dos nodes com ELAPSED dos subprocessos. Net effect neste caso foi neutro (pytest travado merecia kill), mas poderia ter sido destrutivo em outro contexto.
+
+### Status final
+
+Epic `shipped`, branch `epic/prosauai/008-admin-evolution` pronta para merge via PR. Fixes deferred ficam documentados aqui — aplicar em next epic ou em PR de infra dedicada em madruga.ai.
