@@ -321,9 +321,9 @@
 
 ### Implementation for US7 — Frontend
 
-- [ ] T710 [P] [US7] Criar `apps/admin/src/components/tenants/tenant-list.tsx` — tabela com name, slug, status, conversas ativas, QS médio, last_webhook_at (FR-080)
-- [ ] T711 [P] [US7] Criar `apps/admin/src/components/tenants/tenant-detail.tsx` — config JSON viewer + agentes associados (link para /agents?tenant=slug) + métricas 7d + toggle enabled com confirmation (FR-081)
-- [ ] T712 [US7] Criar page `apps/admin/src/app/(dashboard)/tenants/page.tsx` + `[slug]/page.tsx` (depende T710, T711)
+- [x] T710 [P] [US7] Criar `apps/admin/src/components/tenants/tenant-list.tsx` — tabela com name, slug, status, conversas ativas, QS médio, last_webhook_at (FR-080) — Server Component que faz fetch de `/admin/tenants` via `serverApiGet`; linha clicável → `/admin/tenants/{slug}`; highlight via `selectedSlug` para sincronia com detalhe; status badge (habilitado/desabilitado) com tokens OKLCH `--chart-1`; reusa `<QualityScoreBadge>` (threshold FR-011); timestamp do último webhook em "há Xh" (helper local alinhado com `conversation-list.tsx`); empty state + erro amigável.
+- [x] T711 [P] [US7] Criar `apps/admin/src/components/tenants/tenant-detail.tsx` — config JSON viewer + agentes associados (link para /agents?tenant=slug) + métricas 7d + toggle enabled com confirmation (FR-081) — Server Component com `<JsonTree>` para config (fallback quando vazio aponta para `tenants.yaml`), lista de agentes com link para `/admin/agents/{id}` e `/admin/agents?tenant=<slug>`, 4 KPIs 7d (containment, QS P50, P95 latência, fallback) com fallback para Performance tab quando `metrics_7d` ausente; toggle via client island `<TenantToggleButton>` (PATCH `/admin/tenants/{slug}` com `apiPatch` + confirmation dialog descrevendo impacto no roteador + `router.refresh()` pós-sucesso).
+- [x] T712 [US7] Criar page `apps/admin/src/app/(dashboard)/tenants/page.tsx` + `[slug]/page.tsx` (depende T710, T711) — implementado em `app/admin/(authenticated)/tenants/{page.tsx,[slug]/page.tsx}` seguindo o padrão já estabelecido no epic 007 (sem route group `(dashboard)`). List page renderiza `<TenantList />`; detail page faz pre-fetch de `/admin/tenants/{slug}` via `serverApiGet`, 404 → `notFound()`, renderiza `<TenantDetail>` + breadcrumb "Tenants / slug" + lista de outros tenants no rodapé com highlight `selectedSlug`. Sidebar habilitada para Tenants (removido `disabled: true`).
 
 **Checkpoint US7**: Aba Tenants completa.
 
