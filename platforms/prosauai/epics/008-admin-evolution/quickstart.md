@@ -189,3 +189,99 @@ diff before.txt after.txt
 - [contracts/openapi.yaml](./contracts/openapi.yaml) — API completa
 - [pitch.md](./pitch.md) — contexto Shape Up
 - [reference-spec.md](./reference-spec.md) — ground truth dos layouts
+- [benchmarks/inbox_list_query.md](./benchmarks/inbox_list_query.md) — query plan esperado para inbox listing (SC-005)
+
+---
+
+## Validação final (dry-run) — Phase 11
+
+Checklist de validação funcional a rodar antes do merge para `main`. Cada item
+é independente e reproduz critério de sucesso do spec.
+
+### SC-001 — Localizar conversa em <30s (US1)
+
+```bash
+# 1. Clock start
+# 2. Login em http://localhost:3000/login
+# 3. Navegar /admin/conversations
+# 4. Buscar "João" (nome conhecido do seed)
+# 5. Clicar na conversa → thread + perfil renderizados
+# 6. Clock stop ⇒ deve ser <30s
+```
+
+PASS se clock stop <30s. Falha típica: busca lenta (verificar `EXPLAIN` da query + índice em `customers.display_name`).
+
+### SC-002 — Identificar step dominante em <30s (US2)
+
+```bash
+# 1. Clock start
+# 2. /admin/traces com filter status=error OU min_duration=5000
+# 3. Selecionar trace
+# 4. Waterfall rendered → step dominante destacado
+# 5. Expandir step → input/output visíveis
+# 6. Clock stop ⇒ deve ser <30s
+```
+
+PASS se clock stop <30s + dominant step (>60% do total) visualmente destacado.
+
+### SC-003 — Overview em <10s (US4)
+
+```bash
+# 1. Clock start no login page
+# 2. Login
+# 3. Redirect para /
+# 4. 6 KPI cards + activity feed + system health + tenant table visíveis acima da dobra
+# 5. Clock stop ⇒ deve ser <10s
+```
+
+PASS se clock stop <10s. Falha típica: SSR lento (adicionar `unstable_cache` ou medir com Lighthouse).
+
+### SC-004 — Endpoints P95 (listagens <300 ms, performance <2 s / <200 ms cached)
+
+```bash
+# Com dataset seedado 10k conversas + 50k traces
+for i in {1..50}; do
+  curl -s -o /dev/null -w "%{time_total}\n" \
+    -H "Cookie: admin_token=<JWT>" \
+    "http://localhost:8050/admin/conversations?tenant=pace-internal&limit=50"
+done | sort -n | awk 'NR==48{print "P95:",$1"s"}'
+
+# Idem para /admin/traces, /admin/metrics/performance (medir cache hit/miss)
+```
+
+PASS se P95 <300 ms (listagens) + <2 s (performance sem cache) + <200 ms (performance com cache).
+
+### SC-005 — Inbox <100 ms (bench query)
+
+Ver `benchmarks/inbox_list_query.md` — rodar `EXPLAIN ANALYZE` em dataset de 10k conversas.
+
+### SC-007 — Suíte verde antes do merge
+
+```bash
+# Gate obrigatório do PR 2 + PR 10
+cd apps/api && pytest tests/ -v 2>&1 | tail -5
+# PASS: "X passed, 0 failed" — nenhum test pré-existente dos epics 004/005 quebrou
+```
+
+### SC-012 — 100% das decisões de routing persistidas
+
+```bash
+# Last 24h
+psql $DATABASE_URL -c \
+  "SELECT COUNT(*) FROM routing_decisions WHERE created_at > now() - '24h'::interval"
+# Comparar com contagem de webhooks recebidos:
+grep "webhook_received" apps/api/logs/api.log | wc -l
+```
+
+PASS se delta <1% (fire-and-forget pode perder alguns em caso de falha transiente de conexão).
+
+---
+
+## Rollback plan
+
+Se algum dos PRs apresenta regressão em prod após deploy:
+
+1. **Rollback rápido** — env flag `INSTRUMENTATION_ENABLED=false` desativa a persistência de trace/steps e routing_decisions (pipeline volta ao comportamento epic 005); admin continua funcional mas mostra `—` em campos dependentes.
+2. **Rollback migration** — `dbmate rollback` reverte a migration mais recente. Ordem inversa das 4 migrations (T010..T013) funciona porque não há FK do schema antigo para o novo.
+3. **Rollback frontend** — revert do PR em Next.js é idempotente (sem side-effects no DB).
+4. **Rollback completo do epic** — revert dos 10 PRs na ordem inversa; `dbmate rollback` 4x para desfazer migrations; backfill não precisa ser revertido (colunas ficam NULL e não afetam queries antigas).

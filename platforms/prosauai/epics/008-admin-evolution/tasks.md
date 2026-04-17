@@ -337,18 +337,18 @@
 
 ### Tests for US8
 
-- [ ] T800 [P] [US8] Integration test `apps/api/tests/integration/admin/test_audit.py` — GET /admin/audit paginado, filtros action/user_email/period funcionam; anomaly detection (3+ login_failed mesmo IP 24h) flagrada no response
+- [x] T800 [P] [US8] Integration test `apps/api/tests/integration/admin/test_audit.py` — GET /admin/audit paginado, filtros action/user_email/period funcionam; anomaly detection (3+ login_failed mesmo IP 24h) flagrada no response (14 testes verdes cobrindo list/filters/cursor/auth + anomaly flag + SQL shape regression guards)
 
 ### Implementation for US8 — Backend
 
-- [ ] T810 [P] [US8] Criar `apps/api/prosauai/db/queries/audit.py` com `list_audit(pool, action, user_email, period, cursor, limit)` + anomaly detection inline (subquery COUNT login_failed agrupado por IP)
-- [ ] T811 [US8] Criar Pydantic schemas + router `apps/api/prosauai/admin/audit.py`; registrar em main.py (depende T810)
+- [x] T810 [P] [US8] Criar `apps/api/prosauai/db/queries/audit.py` com `list_audit(pool, action, user_email, period, cursor, limit)` + anomaly detection inline (subquery COUNT login_failed agrupado por IP) — flatten de `user_agent` / `target_type` / `target_id` via `_row_to_event` porque o schema atual (migration `20260415000003`) guarda esses campos dentro de `details` JSONB; cursor compartilha `encode_cursor`/`decode_cursor` com conversations/routing para consistência
+- [x] T811 [US8] Criar Pydantic schemas + router `apps/api/prosauai/admin/audit.py`; registrar em main.py (depende T810) — router incluído via `admin/router.py` aggregator (consistente com conversations/routing/agents); mapeia FR-090..FR-093 1:1 do OpenAPI `AuditEvent`/`AuditListResponse`
 
 ### Implementation for US8 — Frontend
 
-- [ ] T820 [P] [US8] Criar `apps/admin/src/components/audit/audit-filters.tsx` — filtros action/user/period (searchParams)
-- [ ] T821 [P] [US8] Criar `apps/admin/src/components/audit/audit-timeline.tsx` — timeline com 50 items/página, cursor-based next page; anomaly rows com borda vermelha + badge "múltiplas falhas" (FR-093)
-- [ ] T822 [US8] Criar page `apps/admin/src/app/(dashboard)/audit/page.tsx` (depende T820, T821)
+- [x] T820 [P] [US8] Criar `apps/admin/src/components/audit/audit-filters.tsx` — filtros action/user/period (searchParams) — client island com debounce 300ms no email (mesmo padrão de `conversations/_search-bar.tsx`); `cursor` é invalidado a cada troca de filtro; opções de ação cobrem `login_success`/`login_failed`/`logout`/`rate_limit_hit` (auditadas pelo `auth_routes.py`)
+- [x] T821 [P] [US8] Criar `apps/admin/src/components/audit/audit-timeline.tsx` — timeline com 50 items/página, cursor-based next page; anomaly rows com borda vermelha + badge "múltiplas falhas" (FR-093) — Server Component via `serverApiGet<AuditListResponse>`, reusa tokens OKLCH `--chart-1..4` para cores de ação, destaca anomalia com `border-l-[3px] border-l-destructive` + chip uppercase; preview compacto dos 3 campos mais relevantes de `details` (email/reason/operator_name primeiro) + linha UA secundária
+- [x] T822 [US8] Criar page `apps/admin/src/app/(dashboard)/audit/page.tsx` (depende T820, T821) — path real `app/admin/(authenticated)/audit/page.tsx` (mantém padrão do epic 007); header explicativo + filters + timeline; sidebar habilitada para Auditoria (removido `disabled: true`); normaliza `?period` via whitelist 1d/7d/30d/90d para evitar 500s; tenant filter ignorado (FR-101 — auditoria é platform-scoped)
 
 **Checkpoint US8**: Aba Auditoria completa. Todas 8 user stories entregues.
 
@@ -356,7 +356,7 @@
 
 ## Phase 11: Polish & Cross-Cutting Concerns
 
-- [ ] T900 [P] Atualizar docs em `platforms/prosauai/epics/008-admin-evolution/quickstart.md` com instruções finais (verified via dry-run)
+- [x] T900 [P] Atualizar docs em `platforms/prosauai/epics/008-admin-evolution/quickstart.md` com instruções finais (verified via dry-run) — adicionada seção "Validação final (dry-run) — Phase 11" cobrindo SC-001/002/003/004/005/007/012 com comandos reproduzíveis + "Rollback plan" com 4 níveis (env flag → migration rollback → FE revert → full epic revert)
 - [ ] T901 [P] Atualizar `platforms/prosauai/engineering/blueprint.md` seção "Admin" mencionando 8 abas + novas tabelas `traces`, `trace_steps`, `routing_decisions`
 - [ ] T902 [P] Atualizar `platforms/prosauai/engineering/containers.md` adicionando componente "Admin API (FastAPI)" com nova superfície de 25 endpoints
 - [ ] T903 [P] Atualizar CLAUDE.md do repo prosauai e madruga.ai com entrada em "Active Technologies" (TanStack Query v5, openapi-typescript) e "Recent Changes"
