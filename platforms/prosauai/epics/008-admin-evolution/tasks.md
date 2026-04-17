@@ -357,7 +357,7 @@
 ## Phase 11: Polish & Cross-Cutting Concerns
 
 - [x] T900 [P] Atualizar docs em `platforms/prosauai/epics/008-admin-evolution/quickstart.md` com instruções finais (verified via dry-run) — adicionada seção "Validação final (dry-run) — Phase 11" cobrindo SC-001/002/003/004/005/007/012 com comandos reproduzíveis + "Rollback plan" com 4 níveis (env flag → migration rollback → FE revert → full epic revert)
-- [ ] T901 [P] Atualizar `platforms/prosauai/engineering/blueprint.md` seção "Admin" mencionando 8 abas + novas tabelas `traces`, `trace_steps`, `routing_decisions`
+- [x] T901 [P] Atualizar `platforms/prosauai/engineering/blueprint.md` seção "Admin" mencionando 8 abas + novas tabelas `traces`, `trace_steps`, `routing_decisions` — adicionada seção 3e (Admin) com tabela das 8 abas + matriz das 3 tabelas admin-only + denormalização inbox + URL-as-state + stack reaproveitada; atualizado 3b para referenciar ADR-027 (no-RLS carve-out)
 - [ ] T902 [P] Atualizar `platforms/prosauai/engineering/containers.md` adicionando componente "Admin API (FastAPI)" com nova superfície de 25 endpoints
 - [ ] T903 [P] Atualizar CLAUDE.md do repo prosauai e madruga.ai com entrada em "Active Technologies" (TanStack Query v5, openapi-typescript) e "Recent Changes"
 - [ ] T904 Revisar overhead do pipeline em prod — baseline A/B 48h após rollout (SC-006 <10ms p95); se falhar, rollback via env flag

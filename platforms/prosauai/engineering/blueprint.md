@@ -214,7 +214,7 @@ prosauai/
 |--------|----------|----------------|
 | `prosauai` | 7 tabelas de negocio: customers, conversations, conversation_states, messages (particionada), agents, prompts, eval_scores | Migrations da app (`migrations/*.sql`) |
 | `prosauai_ops` | `schema_migrations` (tracking de migrations aplicadas) | Migrations da app |
-| `public` | `tenant_id()` SECURITY DEFINER STABLE (funcao RLS helper). Usa `gen_random_uuid()` built-in — **sem extensoes adicionais** | Migrations da app (funcao) + Supabase (schema) |
+| `public` | `tenant_id()` SECURITY DEFINER STABLE (funcao RLS helper). Usa `gen_random_uuid()` built-in — **sem extensoes adicionais**. **Epic 008**: tabelas admin-only sem RLS: `traces` (pipeline execution — 12 steps cada), `trace_steps` (FK CASCADE; JSONB input/output truncados 8 KB), `routing_decisions` (append-only, incluindo DROPs invisiveis no epic 004). Acessiveis exclusivamente via `pool_admin` (BYPASSRLS) — carve-out documentado em ADR-027 | Migrations da app (funcao) + Supabase (schema) |
 | `observability` | Tabelas Phoenix (traces, spans) | Phoenix auto-managed (`PHOENIX_SQL_DATABASE_SCHEMA`) |
 | `admin` | Reservado — tenants, audit_log (epic 013) | Futuro |
 | `auth` | Supabase-managed (GoTrue) — **NAO TOCAR** | Supabase |
@@ -256,6 +256,46 @@ x-logging: &default-logging
 - **Max total stack** (5 services): 1.25GB
 - **Aplicado a**: api, redis, postgres, phoenix + netdata, retention-cron (prod)
 - **Logs sobrevivem restarts** e sao acessiveis via `docker compose logs`
+
+---
+
+## 3e. Admin (epic 008)
+
+O epic 008 evoluiu o admin (fundacao do epic 007: sidebar minima + login +
+dashboard com 1 KPI) para plataforma operacional com **8 abas funcionais**,
+cada uma cobrindo um vertice do ciclo de vida da conversa:
+
+| # | Aba | Finalidade principal | User Story |
+|---|-----|----------------------|------------|
+| 1 | **Overview** | "Esta tudo bem?" em <10 s: 6 KPIs (conversas, mensagens, containment, latencia, QS, erros) + sparklines 24 h + activity feed + system health + saude por tenant | US4 |
+| 2 | **Conversas** | Inbox com thread + perfil do contato, busca ILIKE em `customers.display_name` + `messages.content`; read-only (envio via WhatsApp externo) | US1 |
+| 3 | **Trace Explorer** | Waterfall das 12 etapas do pipeline com input/output por step (truncados 8 KB), tokens/modelo/custo, erro auto-expandido | US2 |
+| 4 | **Performance AI** | Agregacoes qualidade/custo com 5 graficos (intent distribution, quality trend, latency waterfall, error heatmap 24×7, cost by model); cache Redis 5 min | US3 |
+| 5 | **Agentes** | Config + diff de prompts (safety_prefix / system_prompt / safety_suffix com fundo distinto), metricas vs. media da plataforma | US6 |
+| 6 | **Roteamento** | Decisoes MECE persistidas INCLUINDO `DROP`/`LOG_ONLY`/`BYPASS_AI` (antes invisiveis em logs) com `matched_rule` + `MessageFacts` em JSON | US5 |
+| 7 | **Tenants** | Admin CRUD + toggle `enabled`, metricas 7 d por tenant | US7 |
+| 8 | **Auditoria** | Timeline paginada com anomaly detection (3+ `login_failed` mesmo IP em 24 h destacados) | US8 |
+
+Persistencia (3 tabelas admin-only em `public.*`, sem RLS — ADR-027):
+
+| Tabela | Finalidade | Retencao default |
+|--------|-----------|------------------|
+| `public.traces` | 1 row por execucao completa do pipeline (parent) | 30 d |
+| `public.trace_steps` | 12 rows por trace (FK CASCADE); JSONB input/output truncados 8 KB | 30 d (cascade) |
+| `public.routing_decisions` | Append-only; toda decisao do router MECE com `decision_type` + `matched_rule` + `facts` + `trace_id` | 90 d |
+
+Denormalizacao: `public.conversations` ganha `last_message_id` + `last_message_at` + `last_message_preview` (200 chars) para inbox <100 ms em 10k conversas (SC-005).
+
+Caracteristicas-chave:
+
+- **Fire-and-forget**: persistencia de trace/steps e routing_decisions via `asyncio.create_task` — zero impacto no caminho critico da resposta ao cliente (padrao herdado do Phoenix exporter; ADR-028).
+- **Filtro global de tenant**: URL param `?tenant=<slug>` (ou `all`) como unica fonte de verdade. Server Components leem via `searchParams` — sem context/cookie.
+- **Tudo acessado via `pool_admin`**: queries admin fazem bypass de RLS (cross-tenant por design). Apps que escrevem (pipeline/router) tambem usam `pool_admin` para popular as 3 tabelas novas.
+- **Stack reaproveitada** do epic 007: Next.js 15 App Router + shadcn/ui + Tailwind v4 + Recharts + TanStack Query v5 + lucide-react. Dark mode unico na v1 (tokens OKLCH).
+- **Tipos gerados**: backend expoe OpenAPI 3.1 em `contracts/openapi.yaml`; frontend consome via `pnpm gen:api` (openapi-typescript) — evita drift.
+- **Retention cron** do epic 006 estendido com 3 DELETEs novos (ver `3d`).
+
+Detalhes de arquitetura: [epics/008-admin-evolution/](../epics/008-admin-evolution/) (spec + plan + research + data-model + contracts).
 
 ---
 
