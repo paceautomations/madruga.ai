@@ -470,15 +470,13 @@ def _parse_tasks_from_text(content: str) -> list[TaskItem]:
             continue
         check, task_id, desc = task_match.groups()
         us_match = US_TAG_RE.search(desc)
-        # `**DEFERRED**` is the convention used to mark tasks the dispatched
-        # agent could not actually do (needs prod traffic, headed browser,
-        # human gate). Treat them as pending so retry / audit picks them up.
-        is_deferred = "**DEFERRED**" in desc
+        # Tasks tagged inline with `**DEFERRED**` are pending regardless of [x] —
+        # agent marks done while explicitly deferring (needs prod/human/etc).
         tasks.append(
             TaskItem(
                 id=task_id,
                 description=desc,
-                checked=(check.lower() == "x") and not is_deferred,
+                checked=(check.lower() == "x") and "**DEFERRED**" not in desc,
                 phase=current_phase,
                 parallel="[P]" in desc,
                 files=FILE_PATH_RE.findall(desc),
@@ -2606,9 +2604,8 @@ async def run_pipeline_async(
             _report_file = _report_suffixes.get(node.id)
             if _report_file and epic_slug:
                 _report_path = REPO_ROOT / "platforms" / platform_name / "epics" / epic_slug / _report_file
-                _report_node_id = node.id
 
-                def _report_success_check(path: Path = _report_path, nid: str = _report_node_id) -> bool:
+                def _report_success_check(path: Path = _report_path, nid: str = node.id) -> bool:
                     return _report_quality_check(path, nid)
 
                 node_success_check = _report_success_check

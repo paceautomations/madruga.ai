@@ -3024,11 +3024,8 @@ def test_needs_code_cwd_only_for_code_nodes():
 
 
 def test_task_re_accepts_4digit_ids():
-    """Regression for epic 008 admin-evolution: T1000-T1005 (Phase 12 Deployment
-    Smoke) were silently invisible to parse_tasks because TASK_RE used \\d{3}
-    (exactly 3 digits). Phase 12 never dispatched and pipeline shipped with 6
-    pending tasks claiming all_done=True.
-    """
+    """TASK_RE must admit T1000+ — the `\\d{3}` form silently hid whole phases
+    when an epic exceeded 999 tasks."""
     from dag_executor import TASK_RE
 
     for tid in ("T100", "T999", "T1000", "T1234", "T9999", "T10000"):
@@ -3041,11 +3038,8 @@ def test_task_re_accepts_4digit_ids():
 
 
 def test_parse_tasks_treats_deferred_as_pending(tmp_path):
-    """Regression for epic 008: 8 tasks (T030, T055, T904-T909) were marked [x]
-    by the dispatched agent with inline `**DEFERRED**: requires X` comments,
-    masking work not actually done. Parser now ignores [x] when **DEFERRED**
-    is present so retry / audit re-surfaces them.
-    """
+    """`[x] ... **DEFERRED**` must parse as pending — agent marks [x] while
+    deferring the actual work; parser forces it back to pending so audit sees it."""
     from dag_executor import parse_tasks
 
     tasks_file = tmp_path / "tasks.md"
@@ -3073,9 +3067,7 @@ def test_report_quality_check_passes_clean(tmp_path):
 
 
 def test_report_quality_check_fails_on_blocker(tmp_path):
-    """BLOCKER anywhere in a substantive report invalidates success_check —
-    forces dispatch_with_retry_async to retry and eventually auto-block the epic.
-    """
+    """Any BLOCKER in a report invalidates success — forces retry then auto-block."""
     from dag_executor import _report_quality_check
 
     report = tmp_path / "qa-report.md"
