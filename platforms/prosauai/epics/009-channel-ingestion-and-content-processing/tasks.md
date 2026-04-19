@@ -85,7 +85,7 @@
 ### 2.7 EvolutionAdapter (inbound) + outbound rename
 
 - [X] T035 [P] Move `apps/api/prosauai/channels/evolution.py` (outbound delivery) to `apps/api/prosauai/channels/outbound/evolution.py`. Update all imports via `git mv` + grep. No behavioral change
-- [ ] T036 Create `apps/api/prosauai/channels/inbound/evolution/auth.py` with `verify_evolution_webhook(request, tenant_config)` — reads `X-Webhook-Secret`, compares (constant-time) with `tenant_config.webhook_secret`. Raise `AuthError` on mismatch
+- [X] T036 Create `apps/api/prosauai/channels/inbound/evolution/auth.py` with `verify_evolution_webhook(request, tenant_config)` — reads `X-Webhook-Secret`, compares (constant-time) with `tenant_config.webhook_secret`. Raise `AuthError` on mismatch
 - [ ] T037 Create `apps/api/prosauai/channels/inbound/evolution/adapter.py` — `EvolutionAdapter` class with attrs `source="evolution"`, `source_version="1.0.0"`. Migrate logic from existing `apps/api/prosauai/core/formatter.py::parse_evolution_message` to `normalize(payload, source_instance) -> list[CanonicalInboundMessage]`. Map `data.messageType` per contracts/channel-adapter.md §2.1. Compute `idempotency_key = sha256(f"evolution:{source_instance}:{data.key.id}".encode()).hexdigest()`. Prefer `data.message.base64` when present (skip download later)
 - [ ] T038 Register EvolutionAdapter in `apps/api/prosauai/main.py` startup hook: `from prosauai.channels.inbound.evolution.adapter import EvolutionAdapter; register(EvolutionAdapter())`
 - [ ] T039 Deprecate `apps/api/prosauai/core/formatter.py::parse_evolution_message` — keep a thin re-export that calls into EvolutionAdapter for 1 release, emits `DeprecationWarning`
