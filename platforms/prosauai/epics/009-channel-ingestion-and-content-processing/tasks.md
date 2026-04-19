@@ -92,7 +92,7 @@
 
 ### 2.8 Webhook handlers split
 
-- [ ] T040 Create `apps/api/prosauai/api/webhooks/dispatch.py` — shared pipeline: resolve tenant from `source_instance`, enqueue idempotency key check, push `CanonicalInboundMessage` list to debounce buffer. Exposes `async def dispatch(messages: list[CanonicalInboundMessage], correlation_id: str)`
+- [X] T040 Create `apps/api/prosauai/api/webhooks/dispatch.py` — shared pipeline: resolve tenant from `source_instance`, enqueue idempotency key check, push `CanonicalInboundMessage` list to debounce buffer. Exposes `async def dispatch(messages: list[CanonicalInboundMessage], correlation_id: str)`
 - [ ] T041 Create `apps/api/prosauai/api/webhooks/evolution.py` with `POST /webhook/evolution/{instance_name}` FastAPI route: call `EvolutionAdapter.verify_webhook`, parse body, call `adapter.normalize`, forward to `dispatch.dispatch`. Return 202 Accepted with correlation_id
 - [ ] T042 Edit `apps/api/prosauai/api/webhooks.py` — convert to alias forwarder: keep path `POST /webhook/whatsapp/{instance_name}`, internally forward to the new Evolution handler. Emit structured log `POST /webhook/whatsapp/{instance_name} (legacy alias → evolution)`. Do NOT remove — slated for epic 010 after metrics confirm zero legacy traffic (FR-005)
 - [ ] T043 Register the new Evolution router in `apps/api/prosauai/main.py` via `app.include_router(evolution_router)`
