@@ -141,7 +141,7 @@ pii_patterns = {
 
 - **NUNCA fine-tunar modelos com dados de tenant** sem contrato especifico e consentimento explicito
 - **NUNCA compartilhar embeddings entre tenants** — namespace isolation obrigatoria (ADR-013)
-- **NUNCA armazenar numero WhatsApp em plain text** em logs ou traces — usar hash SHA-256
+- **NUNCA emitir numero WhatsApp em plain text em logs, traces ou responses de endpoints tenant-scoped** — sempre usar hash SHA-256 para identificacao cruzada. **Carve-out admin:** a tabela `customers` possui coluna `phone` (E.164) lida exclusivamente via pool_admin (BYPASSRLS) e exibida apenas no Admin Panel autenticado (JWT + RBAC). Phone NUNCA entra em structlog, OTel spans, Phoenix, ou payloads retornados por endpoints com prefixo diferente de `/admin/*`. Migration: `20260420000006_customers_add_phone.sql`. Motivacao: operadores precisam ligar para o cliente quando apropriado (suporte).
 - **NUNCA reter dados alem do periodo configurado** — cron job de purge e obrigatorio, nao opcional
 
 ## Implementacao (epic 006)

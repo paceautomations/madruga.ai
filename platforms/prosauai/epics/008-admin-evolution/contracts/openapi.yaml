@@ -604,7 +604,15 @@ components:
       properties:
         id: { type: string, format: uuid }
         display_name: { type: string, nullable: true }
-        phone_masked: { type: string }  # (11) ****-1234
+        phone:
+          type: string
+          nullable: true
+          description: >
+            Raw E.164 phone (digits only, e.g. ``5511999998888``). Admin-only
+            carve-out per ADR-018 — never emitted in logs/traces or
+            tenant-scoped endpoint responses. ``null`` when the sender
+            has only a @lid opaque identifier.
+        phone_masked: { type: string }  # raw phone when available, else ****-<hash[:4]>
         tenant_slug: { type: string }
 
     CustomerDetail:
@@ -688,6 +696,13 @@ components:
         tenant_slug: { type: string }
         conversation_id: { type: string, format: uuid }
         customer_display_name: { type: string, nullable: true }
+        customer_phone:
+          type: string
+          nullable: true
+          description: >
+            Raw E.164 phone (admin-only carve-out, ADR-018). ``null`` when
+            the sender has only a @lid opaque identifier.
+        customer_phone_masked: { type: string, nullable: true }
         intent: { type: string, nullable: true }
         duration_ms: { type: integer }
         cost_usd: { type: number, nullable: true }
@@ -724,6 +739,7 @@ components:
         error_type: { type: string, nullable: true }
         error_message: { type: string, nullable: true }
         error_stack: { type: string, nullable: true }
+        span_id: { type: string, nullable: true, description: "16-char hex OTel span id for this step; deep-links to Phoenix." }
 
     TraceDetail:
       type: object
@@ -851,6 +867,8 @@ components:
         quality_score_avg: { type: integer, nullable: true }
         latency_p50_ms: { type: integer, nullable: true }
         status: { type: string, enum: [verde, ambar, vermelho, neutral] }
+        last_message_minutes: { type: number, nullable: true }
+        status_reason: { type: string, enum: [stale, kpi], nullable: true }
 
     TenantHealthResponse:
       type: object
