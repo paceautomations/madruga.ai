@@ -178,8 +178,8 @@
 - [x] T104 [US1] Wire audio path in `pipeline/steps/content_process.py` — for `block.kind == AUDIO`, call AudioProcessor via registry. Update `block.text = result.text_representation` (or pass via sidecar field in ConversationRequest if frozen prevents)
 - [x] T105 [US1] Add fire-and-forget persist of `MediaAnalysis` after AudioProcessor returns — `apps/api/prosauai/observability/media_analyses_repo.py::insert(...)` uses `pool_admin` and swallows exceptions with structured log (ADR-028). Invoked from the pipeline step (not from the processor, per contracts/content-processor.md §10)
 - [x] T106 [P] [US1] Emit OTel spans `processor.audio.transcribe` (wrapping the whole process) and `openai.whisper.create` (wrapping the SDK call) with attributes `{tenant.id, processor.kind, processor.provider, processor.cache_hit, processor.cost_usd, processor.prompt_version}` per plan.md Technical Context
-- [ ] T107 [P] [US1] Add Ruff/Mypy compliance pass on new audio files: `ruff check apps/api/prosauai/processors/audio.py apps/api/prosauai/processors/providers/openai_stt.py --fix`
-- [ ] T108 [P] [US1] Draft ADR-033 at `platforms/prosauai/decisions/ADR-033-openai-stt-vision-provider.md` — rationale for whisper-1 + gpt-4o-mini (v1), alternatives considered (Deepgram, Azure Speech, Google STT, gpt-4o-mini-transcribe, Claude Haiku), swap migration path via `ProcessorContext.providers`
+- [x] T107 [P] [US1] Add Ruff/Mypy compliance pass on new audio files: `ruff check apps/api/prosauai/processors/audio.py apps/api/prosauai/processors/providers/openai_stt.py --fix`
+- [x] T108 [P] [US1] Draft ADR-033 at `platforms/prosauai/decisions/ADR-033-openai-stt-vision-provider.md` — rationale for whisper-1 + gpt-4o-mini (v1), alternatives considered (Deepgram, Azure Speech, Google STT, gpt-4o-mini-transcribe, Claude Haiku), swap migration path via `ProcessorContext.providers`
 
 **Checkpoint**: US1 independently verifiable via T092 integration test + T094 benchmark. Audio end-to-end works with mocked Whisper; real Whisper works when `OPENAI_API_KEY` is set.
 
