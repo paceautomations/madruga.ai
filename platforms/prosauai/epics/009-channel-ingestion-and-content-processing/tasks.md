@@ -101,17 +101,17 @@
 ### 2.9 Core module refactor (facts + debounce)
 
 - [X] T045 Edit `apps/api/prosauai/core/router/facts.py::_derive_content_kind` — replace the Evolution-specific `message.media_type` check with `canonical_message.content[0].kind == ContentKind.X`. Preserve the exact ContentKind→RouteFact output (no behavioral change). Reference data-model.md §6
-- [ ] T046 Edit `apps/api/prosauai/core/debounce.py` — update serialization of buffered messages to `CanonicalInboundMessage.model_dump_json()`. Update flush to return `list[CanonicalInboundMessage]` (not `str`). Preserve Redis key format (`buf:{sender_key}`) unchanged
-- [ ] T047 [P] Unit test `apps/api/tests/unit/core/test_debounce_canonical_shape.py` — buffer serialization round-trips; flush returns list
+- [X] T046 Edit `apps/api/prosauai/core/debounce.py` — update serialization of buffered messages to `CanonicalInboundMessage.model_dump_json()`. Update flush to return `list[CanonicalInboundMessage]` (not `str`). Preserve Redis key format (`buf:{sender_key}`) unchanged
+- [X] T047 [P] Unit test `apps/api/tests/unit/core/test_debounce_canonical_shape.py` — buffer serialization round-trips; flush returns list
 
 ### 2.10 Fixtures (canonical outputs for 13 Evolution payloads)
 
-- [ ] T048 [P] For each of the 13 Evolution fixtures in `apps/api/tests/fixtures/captured/evolution_*.input.json`, run `EvolutionAdapter.normalize` and save the canonical output JSON to `apps/api/tests/fixtures/canonical/evolution_{name}.canonical.json`. Commit both input and canonical pairs
-- [ ] T049 [P] Fill the parameterized case list of `apps/api/tests/contract/test_channel_adapter_contract.py::test_normalize_produces_valid_canonical` with the 13 Evolution fixtures. Each fixture MUST produce ≥1 CanonicalInboundMessage that survives Pydantic validation
+- [X] T048 [P] For each of the 13 Evolution fixtures in `apps/api/tests/fixtures/captured/evolution_*.input.json`, run `EvolutionAdapter.normalize` and save the canonical output JSON to `apps/api/tests/fixtures/canonical/evolution_{name}.canonical.json`. Commit both input and canonical pairs
+- [X] T049 [P] Fill the parameterized case list of `apps/api/tests/contract/test_channel_adapter_contract.py::test_normalize_produces_valid_canonical` with the 13 Evolution fixtures. Each fixture MUST produce ≥1 CanonicalInboundMessage that survives Pydantic validation
 
 ### 2.11 Regression + latency gate
 
-- [ ] T050 Full suite run: `cd apps/api && pytest -x tests/ -k "not (slow or e2e)"` — MUST pass 173 (epic 005) + 191 (epic 008) = 364 tests unchanged (SC-010 gate)
+- [X] T050 Full suite run: `cd apps/api && pytest -x tests/ -k "not (slow or e2e)"` — MUST pass 173 (epic 005) + 191 (epic 008) = 364 tests unchanged (SC-010 gate)
 - [ ] T051 Create `apps/api/tests/benchmarks/test_text_latency.py` — runs 1000 text-only requests through the refactored pipeline and reports p95. Compares against `baselines/pre-epic-009.json`. Fails if p95 > baseline + 5ms (SC-009 gate)
 - [ ] T052 [P] Draft ADR-030 at `platforms/prosauai/decisions/ADR-030-canonical-inbound-message.md` — Nygard format: Context (Evolution coupling in InboundMessage), Decision (CanonicalInboundMessage + frozen + discriminated-via-kind via attrs-flattened), Consequences (phased PR-A1/A2/A3 migration, compat shim lifetime), Alternatives rejected (Discriminated Union Pydantic per kind — data-model.md §9.2)
 - [ ] T053 [P] Draft ADR-031 at `platforms/prosauai/decisions/ADR-031-multi-source-channel-adapter.md` — Nygard format: adapter-as-pure-translator policy, registry lookup, validation gate SC-013
