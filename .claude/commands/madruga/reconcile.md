@@ -89,6 +89,53 @@ Wait for answers BEFORE generating the report or proposing updates.
 
 ---
 
+### Phase 1b. Staleness Scan (L1 Health)
+
+The DAG computes "stale" nodes as those whose dependency completed AFTER them (see `db_pipeline.get_stale_nodes()`). The portal flags these as "artefato(s) desatualizado(s)". This is orthogonal to git-diff drift — a stale L1 node may hide undocumented state even when the current epic's diff is clean.
+
+Query stale nodes for this platform:
+
+```bash
+python3 -c "import sys; sys.path.insert(0, '.specify/scripts'); \
+from db import get_conn, get_stale_nodes; \
+from config import load_pipeline; \
+conn = get_conn(); \
+edges = {n['id']: n.get('depends', []) for n in load_pipeline()['nodes']}; \
+import json; \
+print(json.dumps(get_stale_nodes(conn, '<name>', edges), indent=2))"
+```
+
+If the result is empty, skip this phase.
+
+If the result is non-empty, for each stale node present numbered options (user replies by number):
+
+1. **Re-execute** the stale L1 node now via the DAG executor — most thorough, consumes a full skill cycle.
+2. **Inline patch** — add the node's owned doc(s) to the Phase 2 scope and propose concrete diffs against HEAD code, then mark the node `completed_at=now` via `post_save.py` so the staleness clears.
+3. **Defer** — record as debt in the report's "Staleness Deferred" section and proceed with epic drift only.
+
+**Default recommendation** when the stale node's owned docs are already in the Phase 2 read set (i.e., the epic diff touches the same area): **option 2 (inline patch)**. When the stale node is upstream of the epic diff (e.g., `tech-research` stale but the epic added no new tech): **option 1 or 3**.
+
+Docs owned by each node — add to Phase 2 read set when the user picks option 2:
+
+| Node | Owned doc |
+|------|-----------|
+| tech-research | `research/tech-alternatives.md` |
+| codebase-map | `research/codebase-context.md` |
+| adr | `decisions/ADR-*.md` |
+| blueprint | `engineering/blueprint.md` |
+| domain-model | `engineering/domain-model.md` |
+| containers | `engineering/containers.md` |
+| context-map | `engineering/context-map.md` |
+| solution-overview | `business/solution-overview.md` |
+| business-process | `business/process.md` |
+| vision | `business/vision.md` |
+| epic-breakdown | `epics/*/pitch.md` |
+| roadmap | `planning/roadmap.md` |
+
+Record user's choice per stale node in the report under "Staleness Resolution".
+
+---
+
 ### Phase 2. Detect Drift (10 Categories)
 
 Scan each category systematically. For each drift item found, record: ID, category, affected doc, current state in doc, actual state in code, severity (high/medium/low).
@@ -105,6 +152,7 @@ Scan each category systematically. For each drift item found, record: ID, catego
 | D8 | Integration | `engineering/context-map.md` | Actual API contracts, events | Published API changed; new integration not in context map | New webhook not documented |
 | D9 | README | `platforms/<name>/README.md` | Current implementation state | Setup instructions outdated; new dependencies not listed; architecture section stale | README lists old env vars; missing new service |
 | D10 | Epic Decisions | `epics/<NNN>/decisions.md` | `decisions/ADR-*.md` + code | Decision in log contradicts ADR; significant decision not promoted to ADR; decision no longer reflected in code | decisions.md says "used polling" but ADR-005 mandates websockets |
+| D11 | Research | `research/tech-alternatives.md` | Dependency manifests + code imports | New tech/version adopted but not listed, or listed alternative never used | Blueprint uses Redis but tech-alternatives.md only lists SQLite |
 
 #### D5 — Decision Drift: Action on Detection
 
@@ -204,12 +252,13 @@ If zero future epics are affected: report "Nenhum impacto em epics futuros detec
 | # | Check | How | Action on Failure |
 |---|-------|-----|-------------------|
 | 1 | Report file exists and is non-empty | `test -s <file>` | Save it |
-| 2 | All 10 drift categories scanned | grep for D1-D10 in report | Scan missing categories |
+| 2 | All 11 drift categories scanned | grep for D1-D11 in report | Scan missing categories |
 | 3 | Drift score computed | grep for "Drift Score:" | Compute it |
 | 4 | No placeholder markers remain | `grep -c 'TODO\|TKTK\|???\|PLACEHOLDER'` = 0 | Remove or resolve |
 | 5 | HANDOFF block present at footer | grep `handoff:` at end | Add it |
 | 6 | Impact radius matrix present | grep "Impact Radius" or "Raio de Impacto" | Generate it |
 | 7 | Roadmap review section present | grep "Revisao do Roadmap" | Generate it |
+| 8 | Stale L1 nodes from Phase 1b each have a resolution (re-exec, inline patch, or deferred with rationale) | grep "Staleness Resolution" section rows match Phase 1b count | Record resolution per node |
 
 **Tier 2 — Scorecard for human reviewer:**
 

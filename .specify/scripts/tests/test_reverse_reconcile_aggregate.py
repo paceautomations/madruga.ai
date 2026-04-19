@@ -273,6 +273,70 @@ def test_candidate_docs_fallback_when_all_missing(tmp_path, mock_binding):
 
 
 @pytest.mark.slow
+def test_candidate_docs_for_manifest_triggers_research_and_adr(tmp_path, mock_binding):
+    """pyproject.toml / package.json changes → research/tech-alternatives.md + ADR sentinel.
+
+    The ADR sentinel must survive the existence filter even though no matching file exists,
+    so the skill can surface it under "ADR Candidates" in its report.
+    """
+    import reverse_reconcile_aggregate as mod
+
+    repo = _init_repo(tmp_path, [("chore: add redis dep", {"pyproject.toml": "[deps]\nredis=5\n"})])
+    mock_binding(repo)
+    shas = _list_shas(repo, "develop")
+    triage = {
+        "triage": {
+            "doc_self_edits": [],
+            "clusters": {"code": [{"sha": shas[0], "message": "chore: add redis dep", "files": ["pyproject.toml"]}]},
+        }
+    }
+    result = mod.aggregate("prosauai", triage)
+    cand = result["code_items"][0]["candidate_docs"]
+    assert any(c.endswith("research/tech-alternatives.md") for c in cand)
+    assert any(c.endswith(mod.ADR_CANDIDATE_SENTINEL) for c in cand)
+
+
+@pytest.mark.slow
+def test_candidate_docs_for_feature_path_triggers_business_docs(tmp_path, mock_binding):
+    """features/ and use-cases/ paths carry scope signal → business/solution-overview first."""
+    import reverse_reconcile_aggregate as mod
+
+    repo = _init_repo(
+        tmp_path, [("feat: add orders feature", {"src/features/orders/create.py": "def create(): ...\n"})]
+    )
+    mock_binding(repo)
+    shas = _list_shas(repo, "develop")
+    triage = {
+        "triage": {
+            "doc_self_edits": [],
+            "clusters": {"code": [{"sha": shas[0], "message": "feat", "files": ["src/features/orders/create.py"]}]},
+        }
+    }
+    result = mod.aggregate("prosauai", triage)
+    cand = result["code_items"][0]["candidate_docs"]
+    assert cand[0].endswith("business/solution-overview.md")
+    assert any(c.endswith("business/process.md") for c in cand)
+    assert any(c.endswith("engineering/domain-model.md") for c in cand)
+
+
+@pytest.mark.slow
+def test_candidate_docs_adr_sentinel_preserved_even_when_not_on_disk(tmp_path, mock_binding):
+    """The ADR sentinel path ends in `__ADR_CANDIDATE__` — it is NOT a real file.
+
+    Existence filter must NOT drop it, otherwise the skill loses the signal to propose
+    a new ADR. Verified independently of manifest/infra rules via direct call.
+    """
+    import reverse_reconcile_aggregate as mod
+
+    # Direct unit test — no git repo needed
+    cand = mod._candidate_docs("pyproject.toml", "prosauai")
+    assert any(c.endswith(mod.ADR_CANDIDATE_SENTINEL) for c in cand)
+    # Also confirm the sentinel path is NOT a real file on disk
+    sentinel_paths = [c for c in cand if c.endswith(mod.ADR_CANDIDATE_SENTINEL)]
+    assert not (mod.REPO_ROOT / sentinel_paths[0]).exists()
+
+
+@pytest.mark.slow
 def test_head_snippet_truncates_large_file(tmp_path, mock_binding):
     import reverse_reconcile_aggregate as mod
 

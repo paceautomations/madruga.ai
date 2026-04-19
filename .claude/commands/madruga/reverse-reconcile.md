@@ -145,10 +145,24 @@ For each `code_item`:
 
 **ADR contradiction detection**: for any code_item whose HEAD state contradicts an existing ADR (e.g., ADR-019 says "Postgres", HEAD code uses SQLite), flag it in the "ADR Contradictions" section. Do NOT generate supersede patches. User decides.
 
+**Sentinel handling — ADR Candidates and Research Gaps**:
+
+The aggregator (`reverse_reconcile_aggregate.py`) injects two kinds of signals into `candidate_docs` that are NOT valid patch targets:
+
+- Any path ending in `__ADR_CANDIDATE__` (e.g., `platforms/<name>/decisions/__ADR_CANDIDATE__`) means the file's change pattern suggests a new architectural decision is implicit in the code. Manifest changes (`pyproject.toml`, `package.json`) and new infra layouts trigger this.
+- Any candidate whose path resolves under `platforms/<name>/research/tech-alternatives.md` represents a tech-stack drift signal — new dependency, new runtime, new service.
+
+For these two cases:
+- **NEVER emit a patch** with `file` pointing to `__ADR_CANDIDATE__` — apply script will FileNotFound.
+- **DO NOT auto-patch** `research/tech-alternatives.md` even though it is a real file — manifest edits rarely yield anchorable diffs, and proposing content requires human context.
+- Instead, route these code_items to the **"ADR Candidates"** and **"Research Gaps"** sections of the Phase 9 report with a one-line summary (HEAD file, commits, suggested action).
+- Still mark the SHAs reconciled in Phase 8 — they are documented as deferred decisions, not as drift awaiting patches.
+
 **NEVER**:
 - Use `git show <sha>` per commit to decide patch content (only for intent clarification).
 - Emit separate patches per SHA on the same doc section — use 1 patch with N sha_refs.
 - Document features absent from HEAD (don't mention section X if HEAD doesn't have X).
+- Emit patches against sentinel paths (`__ADR_CANDIDATE__`) or auto-patch `research/tech-alternatives.md` from manifest diffs.
 
 Emit JSON matching the [apply script format](/home/gabrielhamu/repos/paceautomations/madruga.ai/.specify/scripts/reverse_reconcile_apply.py):
 
@@ -241,6 +255,8 @@ auto_noise: M
 patches_proposed: P
 patches_applied: A
 adr_contradictions: C
+adr_candidates: AC
+research_gaps: RG
 ---
 
 ## Summary
@@ -249,6 +265,7 @@ adr_contradictions: C
 - Auto-marked Y commits as noise (trivial / lockfiles / empty)
 - Z commits clustered across layers: {business: ..., engineering: ..., decisions: ..., planning: ..., code: ...}
 - Applied N patches across M docs
+- Flagged AC ADR candidates and RG research gaps for human review
 
 ## Applied Patches
 
@@ -260,6 +277,20 @@ adr_contradictions: C
 
 - Commit `abc123` appears to contradict **ADR-019** (agent-config-versioning) — author shipped in-memory cache that bypasses the versioned config. User action required: open supersede ADR or revert.
 
+## ADR Candidates (implicit architectural decisions without an ADR)
+
+Routed here by the `__ADR_CANDIDATE__` sentinel in `candidate_docs`. Not auto-patched.
+
+- Commit `abc123` introduced `apps/<name>/workers/stream_processor.py` — event-driven pattern not covered by any existing ADR. Suggested action: `/madruga:adr <name>` with input "stream processing backbone".
+- Commit `def456` (pyproject.toml) added `redis[hiredis]>=5.0` — new runtime dependency, no ADR for caching/queue strategy. Suggested action: `/madruga:adr <name>` or amend ADR-003.
+
+## Research Gaps (tech stack drift)
+
+Detected from dependency manifests and new service layouts. `research/tech-alternatives.md` is NOT auto-patched — a proper entry requires comparative analysis.
+
+- `pyproject.toml` (commits def456, ghi789) adopted `redis[hiredis]>=5.0`. `research/tech-alternatives.md` does not list Redis as an evaluated alternative. Suggested action: update tech-alternatives.md with pros/cons of Redis vs in-memory + pub-sub, or open a small research epic.
+- `package.json` (commit jkl012) replaced `tanstack-query` with a custom hook. `research/tech-alternatives.md` still lists TanStack as the chosen state lib. Suggested action: decide whether to amend ADR-010 or revert.
+
 ## Skipped / Deferred
 
 - Commit `def456` (code cluster) — no clear doc impact, no layer proposed. Marked as reconciled=false for next run review.
@@ -267,6 +298,8 @@ adr_contradictions: C
 ## Next Steps
 
 - Consider opening epic `reconcile-drift-<date>` for ADR contradictions (if any).
+- Address ADR Candidates via `/madruga:adr <name>` before the next reverse-reconcile cycle.
+- Revisit Research Gaps during the next planning slice — treat as debt, not blockers.
 - Rerun after N commits accumulate (trigger via portal "drift" badge).
 ```
 
@@ -288,6 +321,8 @@ python3 .specify/scripts/post_save.py --platform <name> --node reverse-reconcile
 | 4 | Every applied patch's SHAs are passed to mark script | Compute union of `sha_refs` across applied patches |
 | 5 | Report saved in `platforms/<name>/reconcile-reports/` with timestamp | Rename if wrong path |
 | 6 | `source='external-fetch'` commits appear in the Changes tab filter | Verify by hitting `/api/commits?platform_id=<name>&reconciled=false` |
+| 7 | Zero patches target `__ADR_CANDIDATE__` sentinel paths | Move those items to "ADR Candidates" report section |
+| 8 | Zero patches target `research/tech-alternatives.md` from manifest diffs | Move those items to "Research Gaps" report section |
 
 ## Error Handling
 

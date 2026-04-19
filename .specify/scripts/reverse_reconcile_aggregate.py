@@ -48,43 +48,90 @@ def _is_platform_owned(path: str) -> bool:
     return bool(_PLATFORM_OWNED_RE.match(path))
 
 
+# Sentinel: candidate is NOT a real file — flags an "ADR Candidate" note for the skill to
+# surface in its report (Phase 5 / Phase 9 of reverse-reconcile.md). Never patched, never
+# filtered out by the existence check.
+ADR_CANDIDATE_SENTINEL = "__ADR_CANDIDATE__"
+
 # Path → doc candidates heuristic. Ordered by precedence (first match wins).
-# Each rule: (regex, [top_candidate, secondary, ...])
-_DOC_CANDIDATE_RULES: list[tuple[re.Pattern, list[str]]] = [
+# Each rule: (regex, [(layer, basename), ...]). `basename` may be the sentinel
+# `__ADR_CANDIDATE__` to flag a pending architectural decision. Layers map to the
+# `platforms/<name>/<layer>/` subtree.
+_DOC_CANDIDATE_RULES: list[tuple[re.Pattern, list[tuple[str, str]]]] = [
+    # Dependency manifests — strongest tech-stack signal + candidate ADR.
+    # Matched before feature/domain rules because manifests are file-root literals.
+    (
+        re.compile(
+            r"^(pyproject\.toml|package\.json|package-lock\.json|requirements.*\.txt|Cargo\.toml|go\.(mod|sum))$"
+        ),
+        [
+            ("research", "tech-alternatives.md"),
+            ("decisions", ADR_CANDIDATE_SENTINEL),
+            ("engineering", "blueprint.md"),
+        ],
+    ),
+    # Feature/use-case paths: strong scope signal → business docs first, then domain.
+    (
+        re.compile(r"(^|/)(features?|use[-_]?cases?)/"),
+        [
+            ("business", "solution-overview.md"),
+            ("business", "process.md"),
+            ("engineering", "domain-model.md"),
+        ],
+    ),
     # Domain / entities — match at any depth
-    (re.compile(r"(^|/)(models|entities|domain|schemas?)/"), ["domain-model.md", "blueprint.md"]),
+    (
+        re.compile(r"(^|/)(models|entities|domain|schemas?)/"),
+        [("engineering", "domain-model.md"), ("engineering", "blueprint.md")],
+    ),
     # Migrations / schema DDL
-    (re.compile(r"^(migrations|alembic)/|(^|/)schema/"), ["data-model.md", "domain-model.md"]),
+    (
+        re.compile(r"^(migrations|alembic)/|(^|/)schema/"),
+        [("engineering", "data-model.md"), ("engineering", "domain-model.md")],
+    ),
     # Database modules (sqlite/postgres helpers in any script dir)
-    (re.compile(r"(^|/)db[_/]|(^|/)database[_/]"), ["data-model.md", "domain-model.md"]),
+    (
+        re.compile(r"(^|/)db[_/]|(^|/)database[_/]"),
+        [("engineering", "data-model.md"), ("engineering", "domain-model.md")],
+    ),
     # API / routing / controllers / webhooks / handlers
     (
         re.compile(r"(^|/)(api|routers?|controllers?|endpoints?|webhooks?|handlers?)(/|\.[a-z]+$)"),
-        ["context-map.md", "containers.md"],
+        [("engineering", "context-map.md"), ("engineering", "containers.md")],
     ),
     # Orchestrators / daemons / background workers (key container concern)
     (
         re.compile(r"(easter|daemon|scheduler|worker|executor|orchestrator|dispatcher)\.(py|ts|js)$"),
-        ["containers.md", "blueprint.md"],
+        [("engineering", "containers.md"), ("engineering", "blueprint.md")],
     ),
-    # Container / infra files
+    # Container / infra files — also trigger ADR candidate (infra is decision-heavy).
     (
         re.compile(r"(^|/)(docker|k8s|kubernetes|deploy|infra)/|^(Dockerfile|docker-compose)|^\.github/workflows/"),
-        ["containers.md", "blueprint.md"],
+        [
+            ("engineering", "containers.md"),
+            ("engineering", "blueprint.md"),
+            ("decisions", ADR_CANDIDATE_SENTINEL),
+        ],
     ),
-    # Build / packaging manifests
+    # Build tooling (less decision-laden than manifests)
     (
-        re.compile(r"^(Makefile|pyproject\.toml|package\.json|go\.mod|Cargo\.toml|tsconfig\.json)"),
-        ["containers.md", "blueprint.md"],
+        re.compile(r"^(Makefile|tsconfig\.json)"),
+        [("engineering", "containers.md"), ("engineering", "blueprint.md")],
     ),
     # Portal / frontend layout
-    (re.compile(r"^portal/src/components/"), ["containers.md", "context-map.md"]),
-    (re.compile(r"^portal/src/pages/"), ["context-map.md", "containers.md"]),
-    (re.compile(r"^portal/src/"), ["containers.md", "blueprint.md"]),
+    (re.compile(r"^portal/src/components/"), [("engineering", "containers.md"), ("engineering", "context-map.md")]),
+    (re.compile(r"^portal/src/pages/"), [("engineering", "context-map.md"), ("engineering", "containers.md")]),
+    (re.compile(r"^portal/src/"), [("engineering", "containers.md"), ("engineering", "blueprint.md")]),
     # Generic script/tooling dirs (madruga-ai style)
-    (re.compile(r"^\.specify/scripts/|^scripts/"), ["blueprint.md", "containers.md"]),
+    (
+        re.compile(r"^\.specify/scripts/|^scripts/"),
+        [("engineering", "blueprint.md"), ("engineering", "containers.md")],
+    ),
     # Generic app code fallback
-    (re.compile(r"^(src|app|apps|services|lib)/"), ["blueprint.md", "containers.md"]),
+    (
+        re.compile(r"^(src|app|apps|services|lib)/"),
+        [("engineering", "blueprint.md"), ("engineering", "containers.md")],
+    ),
 ]
 
 # Repo-level authored docs (for self-ref platforms these are the docs themselves, not targets)
@@ -152,24 +199,27 @@ def _head_content_snippet(repo_path: Path, ref: str, path: str) -> str:
 
 
 def _candidate_docs(file_path: str, platform_id: str) -> list[str]:
-    """Return ordered list of platform doc candidates, filtered to those that exist.
+    """Return ordered list of platform doc candidates across all L1 layers.
 
-    Heuristic picks 2-3 names; we drop any that don't exist in the madruga-ai
-    filesystem (the platform's doc tree). LLM downstream never receives paths
-    that would make `reverse_reconcile_apply.py` fail with FileNotFound.
-    If all candidates are missing, fall back to blueprint.md unconditionally —
-    the skill instructs LLM to `operation: append` a new section there.
+    Rules map file paths to `(layer, basename)` tuples so candidates can span
+    business/, engineering/, research/, planning/, decisions/. Non-existent
+    files are dropped — LLM downstream never receives paths that would make
+    `reverse_reconcile_apply.py` fail with FileNotFound. The ADR sentinel is
+    preserved verbatim (it's a flag for the skill, not a patch target).
+
+    If all concrete candidates are missing, fall back to blueprint.md — the
+    skill instructs the LLM to `operation: append` a new section there.
     """
     for regex, candidates in _DOC_CANDIDATE_RULES:
         if regex.search(file_path):
-            raw = [f"platforms/{platform_id}/engineering/{c}" for c in candidates]
+            raw = [f"platforms/{platform_id}/{layer}/{basename}" for (layer, basename) in candidates]
             break
     else:
         raw = [
             f"platforms/{platform_id}/engineering/blueprint.md",
             f"platforms/{platform_id}/engineering/containers.md",
         ]
-    existing = [p for p in raw if (REPO_ROOT / p).exists()]
+    existing = [p for p in raw if p.endswith(ADR_CANDIDATE_SENTINEL) or (REPO_ROOT / p).exists()]
     if existing:
         return existing
     return [f"platforms/{platform_id}/engineering/blueprint.md"]
