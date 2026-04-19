@@ -371,12 +371,12 @@
 
 ## Phase 12: Deployment Smoke
 
-- [ ] T1000 Executar `docker compose build` no diretório da plataforma — build sem erros
-- [ ] T1001 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --start --platform prosauai` — todos os health_checks respondem dentro do ready_timeout (120s)
-- [ ] T1002 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --validate-env --platform prosauai` — zero required_env vars ausentes no .env (JWT_SECRET, ADMIN_BOOTSTRAP_EMAIL, ADMIN_BOOTSTRAP_PASSWORD, DATABASE_URL)
-- [ ] T1003 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --validate-urls --platform prosauai` — todas as URLs acessíveis com status esperado (/health 200, /api/auth/login 200|401, /, /login)
-- [ ] T1004 Capturar screenshot de cada URL `type: frontend` declarada em `testing.urls` (/, /login) — conteúdo não é placeholder; /login contém campos email/password
-- [ ] T1005 Executar Journey J-001 (Admin Login Happy Path) declarado em `testing/journeys.md` — todos os steps com assertions OK
+- [x] T1000 Executar `docker compose build` no diretório da plataforma — build sem erros
+- [x] T1001 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --start --platform prosauai` — todos os health_checks respondem dentro do ready_timeout (120s)
+- [x] T1002 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --validate-env --platform prosauai` — zero required_env vars ausentes no .env (JWT_SECRET, ADMIN_BOOTSTRAP_EMAIL, ADMIN_BOOTSTRAP_PASSWORD, DATABASE_URL)
+- [x] T1003 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --validate-urls --platform prosauai` — todas as URLs acessíveis com status esperado (/health 200, /api/auth/login 200|401, /, /login)
+- [x] T1004 Capturar screenshot de cada URL `type: frontend` declarada em `testing.urls` (/, /login) — conteúdo não é placeholder; /login contém campos email/password
+- [x] T1005 Executar Journey J-001 (Admin Login Happy Path) declarado em `testing/journeys.md` — todos os steps com assertions OK
 
 ---
 

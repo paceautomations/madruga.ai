@@ -1,0 +1,34 @@
+{
+  "patches": [
+    {
+      "file": "platforms/prosauai/engineering/containers.md",
+      "operation": "insert_after",
+      "anchor_before": "asyncpg (pool_admin), Redis (cache + rate) |",
+      "new_content": "\n| 13 | dbmate-migrate | — (infra) | `ghcr.io/amacneil/dbmate:2` | Migration runner one-shot. Executa `dbmate --wait up` contra `apps/api/db/migrations/*.sql`. Saida 0 permite que `api` suba (`depends_on: service_completed_successfully`). Volumes read-only em prod. Dispara em `docker compose up` | — | PostgreSQL (DATABASE_URL) |",
+      "reason": "Compose adicionou servico `migrate` (dbmate) como etapa one-shot antes do `api`. Container nao estava listado na Container Matrix apesar de estar em producao (epic 006 — production readiness).",
+      "sha_refs": [
+        "23c92ff38809540a1158bcc85de711df5601c663",
+        "2aea1c87d553a12201c322ba77c8ca4b8bdbf1be",
+        "859c64bb4a8e93692e68adc75e3de9155e33057d",
+        "88a88b506ac484f6fb4d35714b946dc0b37cba37",
+        "ce17469fbab637eb1cce66e1b672d43602b49f66"
+      ],
+      "layer": "engineering"
+    },
+    {
+      "file": "platforms/prosauai/engineering/domain-model.md",
+      "operation": "insert_after",
+      "anchor_before": "10. **`last_message_preview` maximo 200 char** — truncado no insert; sem PII unmasked (passa por guard de output)",
+      "new_content": "\n\n### Tabelas admin-only (epic 008 — ADR-027)\n\nAlem das 3 tabelas de trace (`traces`, `trace_steps`, `routing_decisions`), o epic 008 adicionou infraestrutura de autenticacao admin e auditoria em `public.*` (sem RLS, acessadas via `pool_admin`):\n\n```sql\n-- Admin auth (migration 20260415000002)\nCREATE TABLE public.admin_users (\n    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n    email CITEXT UNIQUE NOT NULL,\n    password_hash TEXT NOT NULL,\n    role TEXT NOT NULL CHECK (role IN ('owner', 'operator', 'viewer')),\n    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),\n    last_login_at TIMESTAMPTZ\n);\n\n-- Audit log (migration 20260415000003) — imutavel, INSERT-only\nCREATE TABLE public.audit_log (\n    id BIGSERIAL PRIMARY KEY,\n    admin_user_id UUID REFERENCES public.admin_users(id),\n    action TEXT NOT NULL,\n    target_type TEXT,\n    target_id TEXT,\n    metadata_jsonb JSONB,\n    created_at TIMESTAMPTZ NOT NULL DEFAULT now()\n);\n\n-- Schema-level grants (migration 20260415000001)\n-- pool_admin = BYPASSRLS | pool_app = RLS-enforced\n```\n\nEm `trace_steps`, a migration `20260420000005_trace_steps_add_span_id.sql` adicionou coluna `span_id TEXT` para correlacao com o span OTel no Phoenix (waterfall UI).\n\nInvariantes:\n\n11. **`admin_users.role`** em 3 niveis — `owner` cria/edita outros admins; `operator` gerencia tenants e agentes; `viewer` apenas le.\n12. **`audit_log` imutavel** — INSERT-only; nenhum path aplicacional faz UPDATE/DELETE. Retention em [ADR-018](../decisions/ADR-018-data-retention-lgpd/) (LGPD).\n13. **Roles Postgres (`pool_admin`, `pool_app`)** provisionados pela migration `20260415000001_create_roles_and_grants.sql` — sem eles, aplicacao falha fail-fast no startup.",
+      "reason": "Epic 008 introduziu public.admin_users, public.audit_log, roles/grants e coluna trace_steps.span_id via migrations 20260415* e 20260420*. Nenhuma delas estava descrita em domain-model.md.",
+      "sha_refs": [
+        "0554cd70b453a6fc4c21a651a61fa012cb17ed33",
+        "23c92ff38809540a1158bcc85de711df5601c663",
+        "41a035f9ace3b86fd7402b6180d5e5080c473a56",
+        "59b19038da06b48014727615ec235f2784a50678",
+        "9e41fec7d5818d7bfd602d0b542a7390baa293d0"
+      ],
+      "layer": "engineering"
+    }
+  ]
+}

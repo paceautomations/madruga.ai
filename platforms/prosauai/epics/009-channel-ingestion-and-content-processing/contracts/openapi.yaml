@@ -1,0 +1,445 @@
+openapi: 3.1.0
+info:
+  title: ProsaUAI — Channel Ingestion Webhooks (Epic 009)
+  version: "1.0.0"
+  description: |
+    Webhooks HTTP de ingestão de mensagens. Cada canal (Evolution API, Meta Cloud API)
+    tem um handler dedicado que delega a `ChannelAdapter.verify_webhook()` +
+    `ChannelAdapter.normalize()`. O alias legado `/webhook/whatsapp/{instance_name}`
+    é mantido por retrocompat (FR-005) e encaminha ao handler Evolution.
+
+    Auth, parsing, idempotência e debounce são policies aplicadas APÓS normalização —
+    não estão em `openapi.yaml` (vivem em `core/*` como middleware / steps).
+
+  contact:
+    name: ProsaUAI Platform Team
+    email: platform@prosauai.com
+
+servers:
+  - url: https://api.prosauai.com
+    description: Production
+  - url: http://localhost:8050
+    description: Local dev
+
+tags:
+  - name: evolution
+    description: Evolution API webhook (legacy + new paths)
+  - name: meta_cloud
+    description: Meta Cloud API webhook (WhatsApp Business Platform)
+
+paths:
+  /webhook/evolution/{instance_name}:
+    post:
+      operationId: evolution_webhook_receive
+      tags: [evolution]
+      summary: Evolution API webhook entrypoint
+      description: |
+        Recebe payloads de `messages.upsert` (e outros eventos configurados) da
+        Evolution API. Autenticação por header `X-Webhook-Secret` (valor definido
+        em `tenants.yaml::tenants[instance_name].webhook_secret`).
+
+        Comportamento em eventos NÃO-mensagem (ex: `presence.update`, `connection.update`,
+        `messages.delete`): retorna 204 sem invocar pipeline.
+      parameters:
+        - in: path
+          name: instance_name
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 128
+          description: Nome da instância Evolution (ex: "ariel", "resenhai").
+        - in: header
+          name: X-Webhook-Secret
+          required: true
+          schema:
+            type: string
+          description: Segredo pré-compartilhado (constant-time compare).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EvolutionWebhookPayload'
+      responses:
+        '202':
+          description: Mensagem aceita (enfileirada no debounce).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AcceptedResponse'
+        '204':
+          description: Evento não-mensagem descartado silenciosamente.
+        '400':
+          description: Payload inválido.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '401':
+          description: Autenticação inválida.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '429':
+          description: Rate limit (retry after).
+        '500':
+          description: Erro interno (retry expected).
+
+  /webhook/whatsapp/{instance_name}:
+    post:
+      operationId: legacy_whatsapp_alias
+      tags: [evolution]
+      summary: Alias legado → encaminha para `/webhook/evolution/{instance_name}`
+      description: |
+        Preservado por retrocompat (FR-005). Zero-break deploy: nenhum cliente
+        Evolution precisa reconfigurar webhooks. Remoção planejada em epic futuro
+        após métricas confirmarem zero tráfego por 30 dias.
+      parameters:
+        - in: path
+          name: instance_name
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-Webhook-Secret
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EvolutionWebhookPayload'
+      responses:
+        '202': {$ref: '#/components/responses/Accepted'}
+        '204': {description: Evento não-mensagem descartado}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+
+  /webhook/meta_cloud/{tenant_slug}:
+    get:
+      operationId: meta_cloud_webhook_verify
+      tags: [meta_cloud]
+      summary: Meta Cloud webhook verification (one-time handshake)
+      description: |
+        Chamado uma única vez pelo Meta Business quando o webhook é configurado.
+        Retorna `hub.challenge` se `hub.verify_token` bate com o configurado.
+      parameters:
+        - in: path
+          name: tenant_slug
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 64
+        - in: query
+          name: hub.mode
+          required: true
+          schema:
+            type: string
+            enum: [subscribe]
+        - in: query
+          name: hub.verify_token
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: hub.challenge
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Verify token válido — echo do challenge.
+          content:
+            text/plain:
+              schema:
+                type: string
+        '403':
+          description: Verify token inválido.
+
+    post:
+      operationId: meta_cloud_webhook_receive
+      tags: [meta_cloud]
+      summary: Meta Cloud webhook entrypoint
+      description: |
+        Recebe payloads de mensagens do Meta Cloud API. Autenticação por header
+        `X-Hub-Signature-256 = 'sha256=' + HMAC-SHA256(raw_body, app_secret)`.
+        Verificação em **constant-time compare** para evitar timing attacks.
+      parameters:
+        - in: path
+          name: tenant_slug
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-Hub-Signature-256
+          required: true
+          schema:
+            type: string
+            pattern: "^sha256=[0-9a-f]{64}$"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MetaCloudWebhookPayload'
+      responses:
+        '202':
+          description: Mensagem(ns) aceita(s).
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AcceptedResponse'}
+        '204':
+          description: Evento não-mensagem (status, delivery receipt).
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+
+components:
+  responses:
+    Accepted:
+      description: Aceito.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/AcceptedResponse'}
+    BadRequest:
+      description: Payload inválido.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/ErrorResponse'}
+    Unauthorized:
+      description: Auth inválida.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/ErrorResponse'}
+
+  schemas:
+    AcceptedResponse:
+      type: object
+      required: [accepted, count]
+      properties:
+        accepted:
+          type: boolean
+          const: true
+        count:
+          type: integer
+          minimum: 1
+          description: Número de CanonicalInboundMessage produzidas pelo adapter.
+        idempotency_keys:
+          type: array
+          items: {type: string, pattern: "^[0-9a-f]{64}$"}
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          enum: [invalid_payload, unauthorized, rate_limited, internal]
+        field:
+          type: string
+          description: Campo específico que falhou validação (apenas error=invalid_payload).
+        message:
+          type: string
+
+    EvolutionWebhookPayload:
+      type: object
+      description: |
+        Schema permissivo — Evolution API evolui o formato frequentemente.
+        Adapter consome subset; campos extras são preservados em raw_payload.
+      required: [event, data]
+      properties:
+        event:
+          type: string
+          examples: [messages.upsert, presence.update, connection.update]
+        instance:
+          type: string
+          description: Nome da instância (redundante com path param, preservado para audit).
+        data:
+          type: object
+          properties:
+            key:
+              type: object
+              required: [id, remoteJid]
+              properties:
+                id:
+                  type: string
+                  description: external_message_id
+                remoteJid:
+                  type: string
+                  description: "jid do remetente. Ex: '5511999999999@s.whatsapp.net' (direct) ou '120363...@g.us' (group)"
+                fromMe:
+                  type: boolean
+                participant:
+                  type: string
+                  description: jid do participante em mensagem de grupo.
+            messageType:
+              type: string
+              examples:
+                - conversation
+                - extendedTextMessage
+                - audioMessage
+                - imageMessage
+                - documentMessage
+                - stickerMessage
+                - locationMessage
+                - contactMessage
+                - reactionMessage
+                - videoMessage
+                - pollMessage
+            message:
+              type: object
+              description: Payload tipado variável por messageType.
+              additionalProperties: true
+            messageTimestamp:
+              type: [integer, string]
+              description: Epoch seconds (Evolution envia int ou str indistintamente).
+            pushName:
+              type: string
+
+    MetaCloudWebhookPayload:
+      type: object
+      description: |
+        Schema oficial WhatsApp Business Platform v22.0.
+        Adapter extrai `entry[*].changes[*].value.messages[*]`.
+      required: [object, entry]
+      properties:
+        object:
+          type: string
+          const: whatsapp_business_account
+        entry:
+          type: array
+          items:
+            type: object
+            required: [id, changes]
+            properties:
+              id:
+                type: string
+                description: WABA ID
+              changes:
+                type: array
+                items:
+                  type: object
+                  required: [value, field]
+                  properties:
+                    field:
+                      type: string
+                      enum: [messages]
+                    value:
+                      type: object
+                      required: [messaging_product, metadata]
+                      properties:
+                        messaging_product:
+                          type: string
+                          const: whatsapp
+                        metadata:
+                          type: object
+                          required: [display_phone_number, phone_number_id]
+                          properties:
+                            display_phone_number: {type: string}
+                            phone_number_id:
+                              type: string
+                              description: Usado como source_instance pelo adapter.
+                        contacts:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              profile:
+                                type: object
+                                properties:
+                                  name: {type: string}
+                              wa_id: {type: string}
+                        messages:
+                          type: array
+                          items:
+                            $ref: '#/components/schemas/MetaCloudMessage'
+                        statuses:
+                          type: array
+                          description: Delivery/read receipts — não geram CanonicalInboundMessage.
+                          items:
+                            type: object
+
+    MetaCloudMessage:
+      type: object
+      required: [id, from, timestamp, type]
+      properties:
+        id:
+          type: string
+          description: external_message_id
+        from:
+          type: string
+          description: E.164 phone number (ex: "5511999999999")
+        timestamp:
+          type: string
+          description: Epoch seconds as string
+        type:
+          type: string
+          enum:
+            - text
+            - audio
+            - image
+            - document
+            - sticker
+            - location
+            - contacts
+            - reaction
+            - interactive
+            - video
+            - order
+            - system
+            - unsupported
+        context:
+          type: object
+          description: Presente em respostas e replies.
+          properties:
+            from: {type: string}
+            id: {type: string}
+        text:
+          type: object
+          properties:
+            body: {type: string}
+        audio:
+          type: object
+          properties:
+            id: {type: string, description: Media ID (requer download separado)}
+            mime_type: {type: string}
+        image:
+          type: object
+          properties:
+            id: {type: string}
+            mime_type: {type: string}
+            sha256: {type: string}
+            caption: {type: string}
+        document:
+          type: object
+          properties:
+            id: {type: string}
+            mime_type: {type: string}
+            filename: {type: string}
+            caption: {type: string}
+        sticker:
+          type: object
+          properties:
+            id: {type: string}
+            mime_type: {type: string}
+        location:
+          type: object
+          properties:
+            latitude: {type: number}
+            longitude: {type: number}
+            name: {type: string}
+            address: {type: string}
+        contacts:
+          type: array
+          items:
+            type: object
+        reaction:
+          type: object
+          properties:
+            message_id: {type: string}
+            emoji: {type: string}
+        interactive:
+          type: object
+          description: button_reply, list_reply — adapter normaliza para kind=TEXT.
