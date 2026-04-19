@@ -112,9 +112,9 @@
 ### 2.11 Regression + latency gate
 
 - [X] T050 Full suite run: `cd apps/api && pytest -x tests/ -k "not (slow or e2e)"` — MUST pass 173 (epic 005) + 191 (epic 008) = 364 tests unchanged (SC-010 gate)
-- [ ] T051 Create `apps/api/tests/benchmarks/test_text_latency.py` — runs 1000 text-only requests through the refactored pipeline and reports p95. Compares against `baselines/pre-epic-009.json`. Fails if p95 > baseline + 5ms (SC-009 gate)
-- [ ] T052 [P] Draft ADR-030 at `platforms/prosauai/decisions/ADR-030-canonical-inbound-message.md` — Nygard format: Context (Evolution coupling in InboundMessage), Decision (CanonicalInboundMessage + frozen + discriminated-via-kind via attrs-flattened), Consequences (phased PR-A1/A2/A3 migration, compat shim lifetime), Alternatives rejected (Discriminated Union Pydantic per kind — data-model.md §9.2)
-- [ ] T053 [P] Draft ADR-031 at `platforms/prosauai/decisions/ADR-031-multi-source-channel-adapter.md` — Nygard format: adapter-as-pure-translator policy, registry lookup, validation gate SC-013
+- [X] T051 Create `apps/api/tests/benchmarks/test_text_latency.py` — runs 1000 text-only requests through the refactored pipeline and reports p95. Compares against `baselines/pre-epic-009.json`. Fails if p95 > baseline + 5ms (SC-009 gate)
+- [X] T052 [P] Draft ADR-030 at `platforms/prosauai/decisions/ADR-030-canonical-inbound-message.md` — Nygard format: Context (Evolution coupling in InboundMessage), Decision (CanonicalInboundMessage + frozen + discriminated-via-kind via attrs-flattened), Consequences (phased PR-A1/A2/A3 migration, compat shim lifetime), Alternatives rejected (Discriminated Union Pydantic per kind — data-model.md §9.2)
+- [X] T053 [P] Draft ADR-031 at `platforms/prosauai/decisions/ADR-031-multi-source-channel-adapter.md` — Nygard format: adapter-as-pure-translator policy, registry lookup, validation gate SC-013
 
 **Checkpoint (PR-A Merge Gate)**: `apps/api/tests/ -x` PASS ×364 (SC-010), text latency p95 ≤ baseline+5ms (SC-009), `/webhook/whatsapp/{instance_name}` alias returns 202, trace waterfall shows 14 steps with `content_process` containing `{"providers":["text-placeholder"],"kind":"text|fallback"}` for media payloads (plan.md PR-A gate). **MERGE PR-A TO `develop` BEFORE STARTING PHASE 3.**
 
