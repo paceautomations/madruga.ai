@@ -100,7 +100,7 @@
 
 ### 2.9 Core module refactor (facts + debounce)
 
-- [ ] T045 Edit `apps/api/prosauai/core/router/facts.py::_derive_content_kind` — replace the Evolution-specific `message.media_type` check with `canonical_message.content[0].kind == ContentKind.X`. Preserve the exact ContentKind→RouteFact output (no behavioral change). Reference data-model.md §6
+- [X] T045 Edit `apps/api/prosauai/core/router/facts.py::_derive_content_kind` — replace the Evolution-specific `message.media_type` check with `canonical_message.content[0].kind == ContentKind.X`. Preserve the exact ContentKind→RouteFact output (no behavioral change). Reference data-model.md §6
 - [ ] T046 Edit `apps/api/prosauai/core/debounce.py` — update serialization of buffered messages to `CanonicalInboundMessage.model_dump_json()`. Update flush to return `list[CanonicalInboundMessage]` (not `str`). Preserve Redis key format (`buf:{sender_key}`) unchanged
 - [ ] T047 [P] Unit test `apps/api/tests/unit/core/test_debounce_canonical_shape.py` — buffer serialization round-trips; flush returns list
 
