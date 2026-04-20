@@ -1,6 +1,6 @@
 ---
 title: "Solution Overview"
-updated: 2026-04-12
+updated: 2026-04-20
 sidebar:
   order: 2
 ---
@@ -14,59 +14,73 @@ A partir da documentacao, o arquiteto especifica funcionalidades como ciclos aut
 
 Tudo vive em um unico lugar, versionado, consultavel por qualquer membro do time em um portal com diagramas interativos onde da pra clicar, dar zoom e navegar pela arquitetura. Quando implementacao e documentacao divergem, o sistema detecta e alerta.
 
----
-
-## Implementado — Funcional hoje
-
-| Feature | Descricao | Por que é importante |
-|---------|-----------|---------------------|
-| **Criacao rapida de plataformas** | Nova plataforma pronta em minutos com toda a estrutura de documentacao pre-configurada | Elimina setup manual e garante que toda plataforma nasce com a mesma qualidade |
-| **Diagramas interativos de arquitetura** | Diagramas navegaveis onde voce clica, da zoom e explora como os componentes se conectam | Qualquer pessoa entende a arquitetura sem precisar ler codigo |
-| **Estrutura padronizada** | Toda plataforma herda a mesma organizacao de documentos. Atualizacoes estruturais se propagam automaticamente | Zero divergencia entre plataformas — evolui uma, evolui todas |
-| **Portal unificado com dashboard** | Portal navegavel com todas as plataformas, sidebar dinamica, e dashboard visual de progresso por etapa | Um unico lugar para consultar arquitetura, decisoes e status de qualquer plataforma |
-| **Fluxo guiado da documentacao ao codigo** | Fluxo continuo de 24 etapas: da visao de negocio ate o codigo. Cada etapa gera um artefato e valida antes de seguir | Nada e pulado, nada e esquecido. O sistema garante a sequencia |
-| **Rastreabilidade de progresso e decisoes** | Cada etapa e decisao fica registrada com data e contexto. Dashboard mostra o que falta, o que esta desatualizado, e decisoes sao pesquisaveis por texto livre | Visibilidade total — sabe onde cada plataforma esta e por que cada decisao foi tomada |
-| **Mapeamento de processos de negocio** | Fluxos de negocio documentados com diagramas visuais navegaveis | Entende como o negocio funciona antes de decidir o que construir |
-| **Implementacao em repositorios externos** | Ciclos de implementacao operam diretamente no repositorio de codigo da plataforma-alvo, criando PRs automaticamente | Documentacao e codigo vivem conectados mesmo quando estao em lugares diferentes |
-| **Execucao autonoma do pipeline** | DAG executor processa pipeline L1/L2 automaticamente: topological sort, phase-based dispatch (agrupa implement tasks por phase com --max-turns dinamico), same-error circuit breaker (classifica erros deterministicos/transientes para retry inteligente), human gates com pause/resume. Operador executa via CLI | O arquiteto foca em decisoes estrategicas — pipeline executa sozinho entre gates, com custo ~45% menor por phase dispatch |
-| **Notificacoes via Telegram** | Bot Telegram com inline keyboard para aprovar/rejeitar human gates do pipeline. Health check, backoff exponencial, offset persistence | Operador nunca perde uma decisao critica — notificacao chega em segundos |
-| **Revisao multi-perspectiva automatica** | Especificacoes revisadas por 4 personas paralelas (Architecture Reviewer, Bug Hunter, Simplifier, Stress Tester) + 1 juiz que filtra por Accuracy/Actionability/Severity | Pega problemas que uma unica perspectiva nao ve — sem overhead manual |
-| **Deteccao e correcao de divergencias** | Apos implementacao, o sistema compara codigo com documentacao em 9 categorias de drift e propoe correcoes concretas com diffs side-by-side | Documentacao nunca vira ficcao — o ciclo se fecha sozinho |
-| **Processamento continuo 24/7** | Easter FastAPI + asyncio opera ininterruptamente: DAG scheduler, Telegram polling, health checks com degradation state machine, watchdog systemd | Trabalho nao para quando voce para — pipeline processa epics autonomamente |
-| **Governanca automatica de decisoes** | Sistema classifica decisoes em 1-way door (irreversivel, requer humano) e 2-way door (reversivel, auto-aprovavel). Gera ADRs automaticamente para decisoes 1-way | Decisoes criticas nunca passam sem revisao; divergencias detectadas automaticamente |
-| **Modos de operacao do pipeline** | Tres modos via MADRUGA_MODE: manual (pausa em gates, aprovacao via CLI/Telegram), interactive (prompt y/n no terminal), auto (aprova tudo, execucao end-to-end) | Flexibilidade — do controle total ao modo autonomo completo |
-| **Planejamento antecipado de epics** | Epic-context --draft cria artefatos de planejamento em main sem criar branch. Permite planejar multiplos epics enquanto outro executa | Planejamento nao bloqueia execucao — pensa no futuro enquanto entrega o presente |
+> Personas e jornadas detalhadas → ver [Vision](./vision/).
 
 ---
 
-## Implementado (cont.) — Epics 017-021
+## Mapa de Features
 
-| Feature | Descricao | Por que é importante |
-|---------|-----------|---------------------|
-| **Observabilidade e tracing** | Traces hierarquicos por pipeline run, eval scoring em 4 dimensoes (quality, adherence, completeness, cost_efficiency), dashboard no portal com 4 tabs (Runs, Traces, Evals, Cost), API REST, export CSV, cleanup 90 dias | Visibilidade total sobre custo, performance e qualidade de cada execucao |
-| **Qualidade de codigo e DX** | db.py dividido em 4 modulos (db_core, db_pipeline, db_decisions, db_observability), error hierarchy tipada, structured logging (log_utils), 644 testes automatizados em 29 arquivos | Base de codigo sustentavel — cada modulo tem responsabilidade unica, erros sao tipados, logs parseados por CI |
-| **Pipeline intelligence** | Cost tracking (tokens_in/out, cost_usd por run), hallucination guard (detecta outputs sem tool calls), quick-fix skill (fast lane L2 para bug fixes: specify→implement→judge) | Custo visivel, outputs fabricados bloqueados, bug fixes sem overhead de 11 passos |
-| **Governanca de AI infrastructure** | CODEOWNERS (review obrigatorio em .claude/), CONTRIBUTING.md, SECURITY.md, PR template, skill-lint extensivel com blast radius detection | Mudancas em AI instructions nunca passam sem review — governanca minima estabelecida |
+> Catalogo de funcionalidades user-facing. Cada feature carrega **Status** (✅ live · 🔄 em progresso · 📋 planejado · 🧪 beta), **Para quem** (arquiteto / operador / time) e, quando aplicavel, **Limites** observaveis.
+
+### Criacao e estrutura de documentacao
+
+| Feature | Status | Para | Valor |
+|---------|--------|------|-------|
+| **Criacao rapida de plataformas** | ✅ epic 001 | arquiteto | Nova plataforma pronta em minutos com toda a estrutura de documentacao pre-configurada. Zero setup manual — toda plataforma nasce com a mesma qualidade. |
+| **Estrutura padronizada** | ✅ epic 001 + 007 | arquiteto | Toda plataforma herda a mesma organizacao de documentos. Atualizacoes estruturais se propagam automaticamente — evolui uma, evolui todas. |
+| **Portal unificado com dashboard** | ✅ epic 010 | arquiteto + time | Portal navegavel com todas as plataformas, navegacao dinamica e painel visual de progresso por etapa. Um unico lugar para consultar arquitetura, decisoes e status de qualquer plataforma. |
+| **Diagramas interativos de arquitetura** | ✅ epic 022 | arquiteto + time | Diagramas navegaveis embutidos nos proprios documentos — da pra clicar, dar zoom e explorar como os componentes se conectam. Qualquer pessoa entende a arquitetura sem ler codigo. |
+| **Mapeamento de processos de negocio** | ✅ epic 001 | arquiteto | Fluxos de negocio documentados com diagramas visuais navegaveis. Entende como o negocio funciona antes de decidir o que construir. |
+
+### Fluxo guiado de documentacao ao codigo
+
+| Feature | Status | Para | Valor |
+|---------|--------|------|-------|
+| **Fluxo continuo de 24 etapas** | ✅ epic 007 | arquiteto | Fluxo da visao de negocio ate o codigo. Cada etapa gera um artefato e valida antes de seguir — nada e pulado, nada e esquecido. |
+| **Planejamento antecipado de epics** | ✅ epic 024 | arquiteto | Prepara artefatos de planejamento de multiplos epics enquanto outro esta em execucao. Pensa no futuro sem bloquear o presente. |
+| **Revisao multi-perspectiva automatica** | ✅ epic 015 | arquiteto | Especificacoes revisadas por 4 personas paralelas (revisor de arquitetura, cacador de bugs, simplificador, testador de estresse) + 1 juiz que filtra problemas reais. Pega problemas que uma unica perspectiva nao ve, sem overhead manual. |
+| **Governanca automatica de decisoes** | ✅ epic 015 | arquiteto | Sistema classifica decisoes em irreversiveis (requer aprovacao humana) e reversiveis (auto-aprovaveis). Decisoes criticas nunca passam sem revisao. |
+| **Deteccao e correcao de divergencias** | ✅ epic 008 | arquiteto | Apos implementacao, o sistema compara codigo com documentacao em multiplas categorias de divergencia e propoe correcoes concretas com antes/depois. Documentacao nunca vira ficcao — o ciclo se fecha sozinho. |
+
+### Execucao autonoma do pipeline
+
+| Feature | Status | Para | Valor |
+|---------|--------|------|-------|
+| **Execucao autonoma com phase dispatch** | ✅ epic 013 + 025 | operador | Pipeline processado automaticamente entre gates humanos, agrupando tarefas por fase — ~45% mais barato por execucao. Arquiteto foca em decisoes estrategicas; sistema executa entre aprovacoes. |
+| **Modos de operacao do pipeline** | ✅ epic 016 | operador | Tres modos — manual (pausa em gates, aprovacao via CLI/Telegram), interativo (prompt no terminal), autonomo (aprova tudo, execucao fim a fim). Flexibilidade do controle total ao modo autonomo completo. |
+| **Notificacoes via Telegram** | ✅ epic 014 | operador | Bot com botoes aprovar/rejeitar para gates humanos. Operador nunca perde uma decisao critica — notificacao chega em segundos. |
+| **Processamento continuo 24/7** | ✅ epic 016 | operador | Servico operando ininterruptamente: agenda o pipeline, recebe aprovacoes, monitora saude, reinicia sozinho em falha. Trabalho nao para quando voce para. |
+| **Fila de epics e cascata de branches** | ✅ epic 024 | arquiteto + operador | Enfileira multiplos epics; sistema promove o mais antigo automaticamente quando libera slot. Novo epic parte do codigo do anterior — elimina handoff manual. |
+| **Companion de observacao em tempo real** | ✅ epic 024 | operador | Observer classifica cada execucao como saudavel/oportunidade/critica. Intervem cirurgicamente so em problemas criticos — supervisao sem overhead de atencao constante. |
+| **Circuit breaker inteligente** | ✅ epic 025 | operador | Classifica erros como deterministicos, transientes ou desconhecidos. Erros deterministicos escalam rapido; erros transientes recebem retry completo. Evita loops de falha repetida. |
+
+### Integracao com repositorios de codigo
+
+| Feature | Status | Para | Valor |
+|---------|--------|------|-------|
+| **Implementacao em repositorios externos** | ✅ epic 012 | arquiteto | Ciclos de implementacao operam diretamente no repositorio de codigo da plataforma-alvo, criando PRs automaticamente. Documentacao e codigo vivem conectados mesmo quando estao em lugares diferentes. |
+| **Rastreabilidade de commits** | ✅ epic 023 | arquiteto + time | Cada commit e ligado automaticamente a plataforma e epic que o originou, com painel de historico filtravel. Responde "quais mudancas compoem o epic N?" sem investigacao manual. |
+| **Verificacao automatica de cada mudanca** | ✅ epic 011 | arquiteto | Validacoes automaticas de cada alteracao (estilo de codigo, testes, geracao do portal) antes de aceitar no tronco. Nada quebra silenciosamente. |
+
+### Rastreabilidade, observabilidade e qualidade
+
+| Feature | Status | Para | Valor |
+|---------|--------|------|-------|
+| **Rastreabilidade de progresso e decisoes** | ✅ epic 009 + 010 | arquiteto + time | Cada etapa e decisao registrada com data e contexto. Painel mostra o que falta, o que esta desatualizado; decisoes sao pesquisaveis por texto livre. Visibilidade total do estado de cada plataforma. |
+| **Observabilidade e avaliacao de qualidade** | ✅ epic 017 | arquiteto + operador | Historico hierarquico por execucao, pontuacao em 4 dimensoes (qualidade, aderencia, completude, eficiencia de custo), painel de consulta + exportacao, limpeza automatica de dados antigos. | Retencao 90 dias |
+| **Inteligencia de pipeline: custo e qualidade** | ✅ epic 021 | arquiteto + operador | Custo por execucao medido; detector de alucinacao (output sem acoes concretas) bloqueia progressao; fast-lane para bugs pequenos (so 3 etapas vs 11). Custo visivel, outputs fabricados bloqueados, correcoes sem overhead. |
+| **Governanca de AI infrastructure** | ✅ epic 019 | arquiteto | Review obrigatorio em instrucoes de AI, guia de contribuicao, politica de seguranca, template de PR, deteccao de raio de impacto em mudancas. Governanca minima — mudancas arriscadas nunca passam sem revisao. |
+| **Qualidade de codigo e base de testes** | ✅ epic 020 | arquiteto + time | Base de codigo modular com responsabilidades unicas, erros tipados, logs estruturados, +600 testes automatizados. Base sustentavel — cada modulo e compreensivel, erros sao especificos, logs sao consumidos pelas verificacoes automaticas. |
 
 ---
 
-## Implementado (cont.) — Epics 022-024
+## Proximos ciclos e visao de longo prazo
 
-| Feature | Descricao | Por que é importante |
-|---------|-----------|---------------------|
-| **Mermaid inline migration** | Removida toda infraestrutura LikeC4 (8 arquivos .likec4, VitePlugin, componentes React dedicados, 5 paginas .astro). Diagramas Mermaid inline nos proprios .md de arquitetura. ADR-020 supersede ADR-001 | Zero tooling extra para diagramas. GitHub, Starlight e qualquer viewer Markdown renderiza. Reducao de ~50% em configuracao do portal |
-| **Commit traceability** | Post-commit hook automatico: detecta platform e epic de cada commit por branch/file path, persiste na tabela `commits`. Portal tab Changes com filtros por epic, stats ad-hoc vs epic-bound. Backfill retroativo do historico completo | Ponte entre rastreabilidade de artefatos (skills) e mudancas de codigo (git). Responde "quais commits compoem o epic N?" sem CLI manual |
-| **Queue promotion e branch checkout** | CLI `queue/dequeue/queue-list` para enfileirar epics. Easter auto-promove o mais antigo (FIFO) quando slot libera. Branch checkout direto no clone (sem worktree). Cascade branch: novo epic parte do tip do anterior | "Enfileira 3 epics sexta-feira, confere resultados segunda." Elimina handoff manual entre epics sequenciais. Developer ve branch ativo no editor sem navegar para worktree |
-| **Pair-program companion** | Skill `/madruga:pair-program` — observer em tempo real de easter runs. Classifica ticks como healthy/opportunity/critical. Registra melhorias em easter-tracking.md. Intervem cirurgicamente so em issues criticos | Supervisao automatica de execucao autonoma sem overhead de atencao constante |
-
----
-
-## Next — Candidatos para proximos ciclos
-
-| Feature | Descricao | Por que é importante |
-|---------|-----------|---------------------|
-| **ProsaUAI end-to-end** | Primeiro epic completo processado pelo Easter em repo externo ProsaUAI — validacao real do pipeline autonomo pitch-to-PR | Prova que o sistema funciona fora do self-ref — valor real entregue |
-| **Roadmap auto-atualizado** | Roadmap gerado automaticamente do estado real dos ciclos, com drift score e status de milestones | Planejamento sempre reflete a realidade — nunca desatualizado |
+| Feature | Horizonte | Valor |
+|---------|-----------|-------|
+| **Piramide de testes runtime** | Proximo — epic 026 | Testes automatizados em todos os niveis do pipeline (unidade, integracao, smoke, regressao). Reduz chance de regressao silenciosa em mudancas futuras. |
+| **ProsaUAI end-to-end autonomo** | Proximo | Primeiro epic completo processado pelo pipeline autonomo em repositorio externo real. Prova que o sistema funciona fora do self-ref — valor real entregue a outra plataforma. |
+| **Roadmap auto-atualizado** | Longo prazo | Roadmap gerado automaticamente do estado real dos ciclos, com pontuacao de divergencia e status de marcos. Planejamento sempre reflete a realidade — nunca desatualizado. |
 
 ---
 
@@ -84,16 +98,11 @@ Tudo vive em um unico lugar, versionado, consultavel por qualquer membro do time
 
 | NAO e... | Porque |
 |----------|--------|
-| **NAO e editor de codigo** | Documenta, especifica e valida — nao substitui onde voce escreve codigo. |
-| **NAO faz deploy** | Nao gerencia infraestrutura, nao publica em producao, nao substitui ferramentas de entrega. |
-| **NAO e gerenciador de projetos** | Nao substitui ferramentas de tracking operacional como boards de tarefas ou sprints. |
-| **NAO e catalogo de servicos** | Nao compete com portais de servicos internos. Foco e documentacao arquitetural ativa, nao inventario. |
+| **Editor de codigo** | Documenta, especifica e valida — nao substitui onde voce escreve codigo. |
+| **Ferramenta de deploy** | Nao gerencia infraestrutura, nao publica em producao, nao substitui ferramentas de entrega. |
+| **Gerenciador de projetos** | Nao substitui ferramentas de tracking operacional como boards de tarefas ou sprints. |
+| **Catalogo de servicos** | Nao compete com portais de servicos internos. Foco e documentacao arquitetural ativa, nao inventario. |
 
 ---
-handoff:
-  from: solution-overview
-  to: business-process
-  context: "Feature map priorizado. Business process deve mapear fluxos core."
-  blockers: []
-  confidence: Alta
-  kill_criteria: "Vision muda fundamentalmente o escopo do produto"
+
+> **Proximo passo:** `/madruga:business-process madruga-ai` — mapear fluxos core a partir do feature map priorizado.

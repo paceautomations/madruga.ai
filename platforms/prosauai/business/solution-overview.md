@@ -1,6 +1,6 @@
 ---
 title: "Solution Overview"
-updated: 2026-04-17
+updated: 2026-04-20
 sidebar:
   order: 2
 ---
@@ -16,122 +16,66 @@ Em grupos WhatsApp, o agente participa quando mencionado — publica ranking, re
 
 ---
 
-## Implementado — Funcional hoje
+## Mapa de Features
 
-### Epic 001 — Channel Pipeline
+> Catalogo de funcionalidades user-facing. Linguagem de negocio — o "o que" e o "por que", nao o "como". Cada feature carrega **Status** (✅ live · 🔄 em progresso · 📋 planejado), **Para quem** (end-user / tenant / admin) e, quando relevante, **Limites** observaveis pelo usuario.
 
-| Feature | Descricao | Epic |
-|---------|-----------|------|
-| **Recepcao de mensagens** | Webhook FastAPI recebe mensagens WhatsApp via Evolution API | 001 |
-| **Debounce** | Agrupa mensagens rapidas (janela 3s + jitter) via Redis Lua script atomico | 001 |
-| **Echo response** | Responde com echo do texto recebido (sem IA — fundacao para epic 005) | 001 |
-| **Health check** | Endpoint `/health` com status do Redis e degradacao graciosa | 001 |
+### Entrega de conversas
 
-### Epic 002 — Observability
+| Feature | Status | Para | Valor |
+|---------|--------|------|-------|
+| **Recepcao WhatsApp** | ✅ epic 001 | end-user | Cliente envia mensagem no WhatsApp e ela e recebida, interpretada e registrada sem intervencao humana. |
+| **Debounce de mensagens rapidas** | ✅ epic 001 | end-user | Quando o cliente manda varias mensagens em sequencia, o agente agrupa e responde uma unica vez — conversa natural, sem respostas quebradas. |
+| **Multi-tenant isolado** | ✅ epic 003 | tenant | Cada tenant tem suas conversas, agentes, precos e configuracoes isolados. Zero chance de um tenant enxergar dados de outro. |
+| **Roteamento por persona (multi-agente)** | ✅ epic 004 | tenant | Cada tenant pode ter multiplos agentes com personas diferentes (atendimento geral, rankings, ajuda com conta). Regras declarativas escolhem qual agente responde — sem codigo. |
+| **Resposta com IA contextualizada** | ✅ epic 005 | end-user + tenant | O agente lembra das ultimas mensagens da conversa, aplica a persona do tenant e gera resposta com qualidade auditada (score por resposta). Custo por mensagem rastreado. |
 
-| Feature | Descricao | Epic |
-|---------|-----------|------|
-| **Tracing distribuido** | OpenTelemetry SDK com spans manuais por etapa do pipeline (webhook, classify, decide) | 002 |
-| **Phoenix (Arize)** | UI de observabilidade self-hosted (:6006) + ingestao OTLP gRPC (:4317). Substitui LangFuse | 002 |
-| **structlog bridge** | Correlacao log↔trace: `trace_id`/`span_id` injetados em todo log estruturado | 002 |
-| **Exporter health** | `ExporterHealthTracker` monitora status de exportacao OTel (thread-safe). Health endpoint reflete estado | 002 |
+### Conteudo de midia
 
-### Epic 003 — Multi-Tenant Foundation
+| Feature | Status | Para | Valor | Limites |
+|---------|--------|------|-------|---------|
+| **Transcricao de audio** | 🔄 epic 009 · previsao 2026-04-29 | end-user + tenant | Cliente envia audio (PTT ou arquivo) e recebe resposta coerente com o conteudo falado — nao precisa digitar, e o agente nao trava com "so entendo texto". | pt-BR prioritario; ingles suportado; ate 10 min por audio |
+| **Descricao de imagem** | 🔄 epic 009 · previsao 2026-04-29 | end-user + tenant | Cliente envia foto (print de erro, comprovante, produto, documento escaneado) e o agente descreve em linguagem natural e responde com base nela. Reduz handoff em 30-50% dos casos. | JPG/PNG/WEBP ate 20 MB; caption do cliente e usada como contexto adicional |
+| **Extracao de texto de documentos** | 🔄 epic 009 · previsao 2026-04-29 | end-user + tenant | Cliente envia PDF ou DOCX e o agente responde perguntas sobre o conteudo — "qual o valor", "qual a data de vencimento", termos de contrato. | PDF texto nativo + DOCX; ate 25 MB, 10 paginas. PDF escaneado fica para o proximo ciclo |
+| **Stickers, localizacao, contatos e reacoes** | 🔄 epic 009 | end-user | Sticker vira texto descritivo, localizacao vira endereco em linguagem natural, contato compartilhado vira descricao, reacao (❤️/👍) conta como feedback explicito. Nenhum tipo de conteudo faz o agente travar. | — |
+| **Suporte a Meta Cloud API (WhatsApp oficial)** | 📋 epic 009 PR-C · previsao 2026-05-10 | tenant | Tenant pode conectar o ProsaUAI via Meta Cloud (oficial) alem do gateway atual. Destrava funcionalidades oficiais (botoes, listas, templates aprovados) e elimina dependencia do gateway para quem prefere pagar a Meta direto. | Retrocompativel — tenants atuais continuam funcionando sem alteracao |
+| **Fallback tonalizado por persona** | 🔄 epic 009 | end-user | Quando qualquer feature de midia falha (orcamento estourado, provider fora, arquivo corrompido, formato nao suportado), o cliente recebe mensagem humanizada pela persona do tenant ("Opa, hoje estou sem energia para audios longos, pode me resumir por texto?") — nunca um erro tecnico cru. | — |
 
-| Feature | Descricao | Epic |
-|---------|-----------|------|
-| **Multi-tenant auth** | `X-Webhook-Secret` per-tenant com constant-time compare. Substitui HMAC imaginario que rejeitava 100% dos webhooks reais | 003 |
-| **TenantStore** | `Tenant` frozen dataclass (10 campos) + `TenantStore` file-backed YAML com interpolacao `${ENV_VAR}`. 2 tenants reais: Ariel + ResenhAI | 003 |
-| **Parser Evolution v2.3.0** | 13 tipos de mensagem suportados: text, image, video, audio (PTT), document, sticker, contact, location, live_location, poll, reaction, event, group_metadata. 12 correcoes contra 26 fixtures capturadas reais | 003 |
-| **Idempotency** | Redis SETNX per `(tenant_id, message_id)` com TTL 24h. Neutraliza retries agressivos da Evolution API | 003 |
-| **Deploy isolado** | Tailscale (dev) + Docker network privada `pace-net` (prod). Zero porta publica exposta | 003 |
+### Controle operacional (Admin)
 
-### Epic 004 — Router MECE
+| Feature | Status | Para | Valor |
+|---------|--------|------|-------|
+| **Painel Admin (login + navegacao)** | ✅ epic 007 | admin | Area administrativa com login por cookie e sidebar de navegacao entre as abas operacionais. |
+| **Overview por tenant** | 🔄 epic 008 | admin | Conversas ativas hoje, volume de mensagens, taxa de handoff, custo acumulado e distribuicao por intent. |
+| **Trace Explorer** | 🔄 epic 008 | admin | Waterfall completo de cada resposta do pipeline com input/output de cada etapa. Inclui transcripts de audio e descricoes de imagem na integra. |
+| **Performance AI** | 🔄 epic 008 | admin + Pace (ops) | Custo por modelo ao longo do tempo + custo por midia/dia (epic 009), latencia p50/p95/p99 por etapa e quality score medio por agente. |
+| **Conversas e Inbox** | 🔄 epic 008 | admin | Listagem cross-tenant com busca (nome do cliente + conteudo) e filtros por status e tenant. Listagem em <100 ms em volumes de 10k+ conversas. |
+| **Handoff para atendente humano** | 📋 epic 014 | tenant + end-user | Quando a IA decide (score baixo, topico critico, cliente pede) ou quando um atendente pega a conversa, o handoff e transparente — SLA configuravel, timeout retorna para bot. |
 
-| Feature | Descricao | Epic |
-|---------|-----------|------|
-| **classify() puro** | Funcao pura (sem I/O) que deriva `MessageFacts` a partir da mensagem + estado pre-carregado. Enums: `Channel` (individual/group), `EventKind` (message/group_membership/group_metadata/protocol/unknown), `ContentKind` (text/media/structured/reaction/empty) | 004 |
-| **RoutingEngine declarativo** | Avalia regras por prioridade (menor = maior), first-match wins. 5 tipos de acao: RESPOND, LOG_ONLY, DROP, BYPASS_AI, EVENT_HOOK | 004 |
-| **Config YAML per-tenant** | Regras de roteamento em `config/routing/{tenant}.yaml`. Cada tenant tem suas proprias regras com prioridades e condicoes | 004 |
-| **MentionMatchers** | Deteccao de mencao com 3 estrategias: opaque @lid, phone number, keywords configurados por tenant | 004 |
-| **Agent resolution** | Resolucao de agente: rule.agent > tenant.default_agent_id > AgentResolutionError. Validacao fail-fast no startup | 004 |
-| **MECE 4 camadas** | Garantias de exaustividade: (1) tipo (enums), (2) schema (pydantic validates overlaps), (3) runtime (discriminated union), (4) CI (property-based testing) | 004 |
-| **CLI verification** | `prosauai router verify` e `prosauai router explain` para validar regras de roteamento | 004 |
+### Compliance e privacidade
 
-### Epic 005 — Conversation Core
-
-| Feature | Descricao | Epic |
-|---------|-----------|------|
-| **Customer lifecycle** | Lookup/create customer por phone hash (SHA-256, ADR-018). Persistencia em Supabase com RLS per-tenant | 005 |
-| **Conversation management** | Ciclo active → closed com timeout por inatividade (24h default). Unique index garante 1 conversa ativa por customer/channel | 005 |
-| **Sliding context window** | Ultimas N=10 mensagens, budget 8000 tokens (chars/4 heuristic). Truncamento automatico de mensagens antigas | 005 |
-| **Intent classification** | LLM structured output com confidence 0-1. Fallback para "general" se <0.7. Modelo configuravel por agente | 005 |
-| **LLM agent (pydantic-ai)** | Geracao de resposta via pydantic-ai v1.70+ com OpenAI (gpt-4o-mini default). Semaforo de concorrencia (10), timeout 60s, 1 retry | 005 |
-| **Input safety guard** | Deteccao PII (CPF, telefone, email — 7 regex patterns), length check (4K chars), deteccao de prompt injection (7 patterns). PII hasheado em logs | 005 |
-| **Output safety guard** | Mascaramento de PII antes da entrega. Texto sanitizado em traces e logs | 005 |
-| **Tool registry** | Catalogo central de tools com `@register_tool` decorator. Whitelist enforcement via `PromptConfig.tools_enabled`. Max 20 tool calls/conversa. ResenhAI rankings tool implementado | 005 |
-| **Response evaluation** | Score heuristico 0-1 (length, coherence, safety). APPROVE (>0.8) / RETRY (0.5-0.8, max 1x) / ESCALATE (<0.5). Persistencia async em eval_scores | 005 |
-| **DB migrations** | 7 arquivos SQL, 6 tabelas core (customers, conversations, conversation_states, messages, agents, prompts) + eval_scores. RLS em todas as tabelas. Migration runner automatico no startup | 005 |
-
-### Epic 006 — Production Readiness
-
-| Feature | Descricao | Epic |
-|---------|-----------|------|
-| **Schema isolation** | 4 schemas Supabase: `prosauai` (negocio), `prosauai_ops` (infra), `observability` (Phoenix), `admin` (reservado). Zero conflito com `auth`/`public`. [ADR-024](../decisions/ADR-024-schema-isolation.md) | 006 |
-| **Migration runner** | Python asyncpg com advisory lock, checksum SHA-256, fail-fast no startup. Forward-only, idempotente. CLI: `python -m prosauai.ops.migrate` | 006 |
-| **Data retention LGPD** | Cron diario: DROP PARTITION messages (expirados), batch DELETE conversations/eval_scores/traces >90d. `--dry-run` default. audit_log nunca tocado. [ADR-018](../decisions/ADR-018-data-retention-lgpd.md) | 006 |
-| **Log persistence** | Docker json-file driver com rotation (max-size 50m, max-file 5). Max 1.25GB total stack | 006 |
-| **Host monitoring** | Netdata :19999 (bind 127.0.0.1, acesso via SSH tunnel). CPU, RAM, disco, containers Docker. Temporario ate Prometheus+Grafana (epic 013) | 006 |
-| **Message partitioning** | Tabela `messages` particionada por mes (PARTITION BY RANGE created_at). Purge via DROP PARTITION (<100ms). Particoes futuras criadas 3 meses a frente | 006 |
-| **Phoenix Postgres backend** | SQLite em dev, Postgres em prod (`PHOENIX_SQL_DATABASE_SCHEMA=observability`). [ADR-020](../decisions/ADR-020-phoenix-observability.md) | 006 |
-
-### Epic 007 — Admin Front Foundation
-
-| Feature | Descricao | Epic |
-|---------|-----------|------|
-| **Sidebar + login Next.js 15** | Layout App Router com sidebar de navegacao + login por cookie JWT (`admin_token`) | 007 |
-| **pool_admin (BYPASSRLS)** | Pool Postgres dedicado para queries cross-tenant sem RLS; dbmate como migration tool | 007 |
-| **Dashboard inicial** | Overview com KPI de volume diario de mensagens + lista rapida de conversas recentes | 007 |
-| **Tailwind v4 + shadcn/ui** | Stack UI estabelecida (dark mode forcado — principio 5); Recharts para graficos; TanStack Query para data-fetching | 007 |
-
-### Epic 008 — Admin Evolution
-
-| Feature | Descricao | Epic |
-|---------|-----------|------|
-| **8 abas operacionais** | Overview enriquecido · Conversas · Trace Explorer · Performance AI · Agentes · Roteamento · Tenants · Auditoria | 008 |
-| **Pipeline instrumentado (fire-and-forget)** | 12 etapas canonicas do pipeline capturadas em `public.traces` + `public.trace_steps`. Zero impacto no caminho critico ([ADR-028](../decisions/ADR-028-pipeline-fire-and-forget-persistence.md)) | 008 |
-| **Routing decisions persistidas** | Todas as decisoes MECE (incluindo `DROP`/`LOG_ONLY` antes invisiveis) em `public.routing_decisions` — 90d retention | 008 |
-| **Denormalizacao inbox** | `conversations.last_message_{id,at,preview}` para listagem <100ms em 10k+ conversas | 008 |
-| **~25 endpoints Admin API** | FastAPI montado sob `/admin` no `prosauai-api`; tipos TypeScript gerados via `openapi-typescript` | 008 |
-| **Custo por modelo** | `traces.cost_usd` calculado via `MODEL_PRICING` hardcoded em `pricing.py` ([ADR-029](../decisions/ADR-029-cost-pricing-constant.md)) | 008 |
-| **Retention estendido** | Cron diario (epic 006) estendido para purgar `traces` (30d) + `routing_decisions` (90d). Configuravel via env | 008 |
-| **Acesso cross-tenant sem RLS** | 3 tabelas admin em `public.*` acessadas exclusivamente via `pool_admin` (BYPASSRLS); `pool_app` nao tem permissao ([ADR-027](../decisions/ADR-027-admin-tables-no-rls.md)) | 008 |
+| Feature | Status | Para | Valor |
+|---------|--------|------|-------|
+| **Retencao LGPD-first** | ✅ epic 006 + 009 | tenant + end-user | Conversas 90 dias default (configuravel 30-365 d). Midia bruta nunca persistida — bytes ficam em memoria e sao descartados apos processamento. Transcript e metadata retidos 90 d. Purga diaria automatica. |
+| **Consent no primeiro contato** | ✅ epic 003 | end-user | Cliente novo recebe a politica de privacidade e escolhe prosseguir. Sem aceite → apenas fallback generico, zero processamento de dado pessoal. |
+| **SAR (Subject Access Request)** | ✅ epic 006 | tenant | Exportacao completa dos dados de um end-user em 15 dias uteis. Inclui transcripts de audio e descricoes de imagem dentro da janela de 90 d. |
 
 ---
 
-## Next — Candidatos para proximos ciclos
+## Proximos ciclos e visao de longo prazo
 
-| Feature | Descricao | Por que e importante |
-|---------|-----------|---------------------|
-| **Conversa inteligente com IA** | Agente entende contexto, historico e responde com precisao em portugues | Core da proposta de valor — atendimento que realmente resolve |
-| **Consultas em tempo real** | Agente consulta dados do negocio (ranking, stats, agenda, estoque) para dar respostas uteis | Respostas relevantes, nao genericas |
-| **Transferencia para humano** | Quando a IA nao resolve, transfere para atendente com resumo e contexto completo | Rede de seguranca — cliente nunca fica sem resposta |
-| **Mensagens automaticas** | Notificacoes por eventos: lembrete de agendamento, pedido enviado, boas-vindas | Engajamento proativo, nao so reativo |
-| **Painel de controle** | Dashboard com conversas, metricas de resolucao, configuracao de agentes | Dono da PME gerencia tudo sozinho |
-| **Fila de atendimento humano** | Operador ve e gerencia conversas escaladas em tempo real | Atendimento humano organizado, sem perder conversa |
-
----
-
-## Later — Visao de longo prazo
-
-| Feature | Descricao | Por que e importante |
-|---------|-----------|---------------------|
-| **Medicao de qualidade** | Score automatico por conversa, deteccao de respostas ruins | Melhoria continua — saber o que funciona e o que nao |
-| **Melhoria continua** | Ciclo semanal: identificar respostas fracas, revisar, aprovar e publicar melhoria | Agente fica melhor toda semana sem esforco do dono |
-| **Cadastro self-service** | Novo cliente se cadastra, configura agente e conecta WhatsApp sozinho | Escala sem equipe de onboarding |
-| **Base de conhecimento** | Agente busca em documentos, FAQs e manuais do negocio para responder | Respostas especializadas por cliente |
-| **Cobranca automatica** | Billing integrado com tiers de preco e consumo medido | Monetizacao automatica |
-| **Formularios no WhatsApp** | Cadastro, pesquisa de satisfacao e coleta de dados dentro do chat | Interacao estruturada sem sair do WhatsApp |
+| Feature | Horizonte | Valor |
+|---------|-----------|-------|
+| **PDF escaneado (OCR automatico)** | Proximo — epic 011 | Hoje o agente retorna aviso claro de que nao conseguiu ler. OCR remoto destrava PDFs de boletos, contratos e documentos fotografados. |
+| **Instagram DM + Telegram** | Proximo — epic 010 | Mesmo agente passa a responder em outros canais reusando o adaptador do epic 009 — validacao de que integrar novo canal nao muda o core da plataforma. |
+| **Agent tools (APIs externas)** | Proximo — epic 013 | Agente consulta dados reais do tenant (estoque, ranking, agenda), chama APIs e cria registros em nome do cliente. |
+| **Triggers proativos** | Proximo — epic 015 | Plataforma inicia conversa com o cliente (lembrete de agendamento, follow-up de pedido, boas-vindas) em vez de so reagir. |
+| **Streaming transcription** | Proximo — epic 012 | Audios transcritos em tempo real durante a fala. Ganho marginal em pt-BR curto — avaliar demanda antes de priorizar. |
+| **Medicao e melhoria continua de qualidade** | Longo prazo | Score automatico por conversa, deteccao de respostas fracas, ciclo semanal de revisao e aprovacao de melhoria com gate humano. |
+| **Cadastro self-service** | Longo prazo | Novo cliente se cadastra, configura agente e conecta WhatsApp sozinho — escala sem equipe de onboarding. |
+| **Base de conhecimento por tenant** | Longo prazo | Agente busca em documentos, FAQs e manuais do tenant para respostas especializadas. |
+| **Cobranca automatica** | Longo prazo | Billing integrado com tiers de preco e consumo medido. |
+| **Formularios no WhatsApp** | Longo prazo | Cadastro, pesquisa de satisfacao e coleta de dados dentro do chat, sem sair do WhatsApp. |
 
 ---
 
