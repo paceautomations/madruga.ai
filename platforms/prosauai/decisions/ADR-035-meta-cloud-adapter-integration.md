@@ -2,21 +2,24 @@
 title: 'ADR-035: Meta Cloud adapter integration (architectural proof of the
   channel abstraction, test-first)'
 status: Accepted
-decision: Implement the second inbound channel — WhatsApp via Meta Cloud API
+decision: >-
+  Implement the second inbound channel — WhatsApp via Meta Cloud API
   (Graph API v19.0) — as a new ``MetaCloudAdapter`` implementing the
   ``ChannelAdapter`` Protocol (ADR-031). The adapter is written
   **test-first** against captured real payloads **before** PR-A is merged,
-  and PR-C's merge gate is a binary check: **zero diff** in
+  and PR-C's merge gate is a binary check — **zero diff** in
   ``apps/api/prosauai/pipeline.py``, ``apps/api/prosauai/processors/**``
   and ``apps/api/prosauai/core/router/**``. If any of those files change,
   the adapter Protocol (ADR-031) is considered leaky and must be revised
   before the epic closes.
-alternatives: Evolution-only v1 with a "shim" for future channels; merge
+alternatives: >-
+  Evolution-only v1 with a "shim" for future channels; merge
   Meta Cloud directly into ``prosauai.api.webhooks`` with ad-hoc branching;
   separate microservice gateway (Go / Node) that normalises inbound
   webhooks to a gRPC call to prosauai; postpone Meta Cloud entirely and
   validate the abstraction with a synthetic "FakeChannelAdapter" in tests.
-rationale: ADR-031 formalises the abstraction, but an abstraction that is
+rationale: >-
+  ADR-031 formalises the abstraction, but an abstraction that is
   only exercised by one real caller cannot prove it holds. Meta Cloud is
   the natural second caller — it is fundamentally different from Evolution
   in payload shape (batch of messages, ``entry[*].changes[*].value``),

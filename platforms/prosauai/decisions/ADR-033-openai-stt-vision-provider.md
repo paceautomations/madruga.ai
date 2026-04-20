@@ -1,26 +1,29 @@
 ---
 title: 'ADR-033: OpenAI (Whisper + gpt-4o-mini) as default STT & vision provider (v1)'
 status: Accepted
-decision: Use OpenAI ``whisper-1`` for PT-BR audio transcription and OpenAI
+decision: >-
+  Use OpenAI ``whisper-1`` for PT-BR audio transcription and OpenAI
   ``gpt-4o-mini`` (Responses API) for image description as the default
   providers in epic 009 v1. Both are wired behind the ``STTProvider`` /
   ``VisionProvider`` protocols defined in ``prosauai.processors.base``,
   and are injected through ``ProcessorContext.providers``. Swapping to
   another vendor is a one-file change (provider wrapper) with zero impact
   on processors, pipeline, router or observability.
-alternatives: Deepgram (STT — Nova-2 / Whisper hosted); Azure AI Speech
+alternatives: >-
+  Deepgram (STT — Nova-2 / Whisper hosted); Azure AI Speech
   (STT); Google Cloud Speech-to-Text (STT); OpenAI
   ``gpt-4o-mini-transcribe`` (newer unified audio endpoint); Anthropic
   Claude Haiku 3.5 (vision only — no STT); self-hosted faster-whisper
   on GPU.
-rationale: The prosauai stack already consumes OpenAI via Bifrost for the
+rationale: >-
+  The prosauai stack already consumes OpenAI via Bifrost for the
   conversation generator (ADR-002) and for gpt-5-mini pricing (ADR-025,
   ADR-029). Reusing the same vendor for STT/vision minimises ops cost
   (1 key, 1 dashboard, 1 invoice), gives strong PT-BR quality out of the
   box, ships with an official Python SDK that is OTel-friendly via
   ``opentelemetry-instrumentation-httpx``, and keeps the v1 surface
   small enough that we can validate the ``ContentProcessor`` Protocol
-  abstraction (SC-013 gate). Swap is planned to be trivial: every
+  abstraction (SC-013 gate). Swap is planned to be trivial — every
   processor only depends on the Protocol, not on ``openai.AsyncClient``
   directly.
 ---

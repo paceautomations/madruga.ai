@@ -1,7 +1,8 @@
 ---
 title: 'ADR-034: Media retention policy (raw never, URL 14d, transcript 90d)'
 status: Accepted
-decision: Never persist raw media bytes (audio/image/document) — bytes exist
+decision: >-
+  Never persist raw media bytes (audio/image/document) — bytes exist
   only in memory during processing and are discarded after
   ``ContentProcessor.process()`` returns. Persist provider-signed URLs in
   ``public.media_analyses.source_url`` for a maximum of 14 days (aligned with
@@ -10,12 +11,14 @@ decision: Never persist raw media bytes (audio/image/document) — bytes exist
   daily retention cron (introduced in ADR-018 + epic 006) grows a new step
   that nulls ``source_url`` + ``raw_response`` at day 14 and deletes the row
   at day 90. Raw bytes NEVER hit object storage, disk or logs.
-alternatives: Persist raw bytes in S3/MinIO (replay on demand); Persist base64
+alternatives: >-
+  Persist raw bytes in S3/MinIO (replay on demand); Persist base64
   inline in media_analyses.raw_response; Persist only text_result (drop
   source_url entirely); Per-tenant retention override (like
   ADR-018 message retention); Encrypt-at-rest raw bytes in Supabase.
-rationale: LGPD Art. 6º (minimização) + Art. 9º (transparência) + ADR-018
-  (principle: no PII plain-text in logs beyond retention purpose). Raw media
+rationale: >-
+  LGPD Art. 6º (minimização) + Art. 9º (transparência) + ADR-018
+  (principle — no PII plain-text in logs beyond retention purpose). Raw media
   has no ongoing purpose after transcript/description is extracted — storing
   it would be retention without necessity. 14d URL retention matches the
   natural provider expiration window, so we do not *extend* exposure. 90d
