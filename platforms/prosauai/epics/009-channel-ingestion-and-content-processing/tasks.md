@@ -317,7 +317,7 @@
 - [x] T205 [US6] Register `MetaCloudAdapter` in `main.py` startup: `register(MetaCloudAdapter(config=settings.meta_cloud))`
 - [x] T206 [P] [US6] Create `apps/api/scripts/sign_meta_webhook.py` — CLI helper that takes `payload_path` + `app_secret` and prints `X-Hub-Signature-256: sha256=...`. Used in dev (quickstart.md §3.3)
 - [x] T207 [P] [US6] Draft ADR-035 at `platforms/prosauai/decisions/ADR-035-meta-cloud-adapter-integration.md` — Nygard: Context (prove abstraction), Decision (implement adapter test-first per pitch decision D21), Consequences (SC-013 gate, zero pipeline change), Alternatives rejected (Evolution-only + shim)
-- [ ] T208 [P] [US6] Create `apps/api/prosauai/channels/README.md` — playbook "How to add a new inbound channel in 4 steps": 1) implement ChannelAdapter, 2) implement auth, 3) add webhook handler, 4) register in main + add fixtures + contract test row. Links to ADR-031 and ADR-035
+- [x] T208 [P] [US6] Create `apps/api/prosauai/channels/README.md` — playbook "How to add a new inbound channel in 4 steps": 1) implement ChannelAdapter, 2) implement auth, 3) add webhook handler, 4) register in main + add fixtures + contract test row. Links to ADR-031 and ADR-035
 
 **Checkpoint (PR-C Merge Gate)**: T195 asserts zero diff in core files (SC-013). T193 passes end-to-end. T194 asserts cross-source IDs do not collide.
 
