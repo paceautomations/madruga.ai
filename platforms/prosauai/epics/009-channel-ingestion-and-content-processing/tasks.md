@@ -351,7 +351,7 @@
 
 **Purpose**: Validate the running system against `platforms/prosauai/platform.yaml::testing` (docker startup). Gate ALL tasks above must be complete and merged before Smoke runs.
 
-- [ ] T1100 Executar `docker compose build` no diretório da plataforma — build sem erros
+- [x] T1100 Executar `docker compose build` no diretório da plataforma — build sem erros
 - [ ] T1101 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --start --platform prosauai` — todos os health_checks respondem dentro do ready_timeout
 - [ ] T1102 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --validate-env --platform prosauai` — zero required_env vars ausentes no .env
 - [ ] T1103 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --validate-urls --platform prosauai` — todas as URLs acessíveis com status esperado
