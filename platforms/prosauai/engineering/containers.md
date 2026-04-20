@@ -122,6 +122,7 @@ graph LR
 | 10 | Netdata :19999 | — (infra) | Docker (self-hosted) | Host monitoring: CPU, RAM, disco, containers Docker. Dashboard web. Bind `127.0.0.1` only (acesso via SSH tunnel) | — | HTTP :19999 (dashboard) |
 | 11 | retention-cron | Operations | Python 3.12 (same image as API) | Purge diario de dados expirados: DROP PARTITION (messages), batch DELETE (conversations, eval_scores, traces, trace_steps, routing_decisions — epic 008). LGPD compliance | asyncpg SQL | Logs (structlog JSON) |
 | 12 | Admin API (FastAPI) | Admin / Observability | Python 3.12 + FastAPI (montado em `prosauai-api` sob prefixo `/admin`) | Superficie de **~25 endpoints** REST consumidos pelo `prosauai-admin` (epic 008). Auth via cookie JWT `admin_token` (epic 007). Todas as queries usam `pool_admin` (BYPASSRLS — cross-tenant por design). Filtro global `?tenant=<slug>` como unica fonte de verdade. Cache Redis em `/admin/metrics/performance` (TTL 300 s ± jitter 30 s) e `/admin/metrics/activity-feed` (TTL 10 s). OpenAPI 3.1 em `epics/008-admin-evolution/contracts/openapi.yaml` | HTTPS + cookie JWT | asyncpg (pool_admin), Redis (cache + rate) |
+| 13 | dbmate-migrate | — (infra) | `ghcr.io/amacneil/dbmate:2` | Migration runner one-shot. Executa `dbmate --wait up` contra `apps/api/db/migrations/*.sql`. Saida 0 permite que `api` suba (`depends_on: service_completed_successfully`). Volumes read-only em prod. Dispara em `docker compose up` | — | PostgreSQL (DATABASE_URL) |
 
 ### Admin API — superficie por dominio (epic 008)
 

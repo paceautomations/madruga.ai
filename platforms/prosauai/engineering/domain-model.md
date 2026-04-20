@@ -1335,6 +1335,44 @@ Atualizadas no hot path do `save_inbound`/`save_outbound` do pipeline. Invariant
 9. **`last_message_*` eventualmente consistente** — update assincrono, tolera lag de 1-2s em relacao a `messages`
 10. **`last_message_preview` maximo 200 char** — truncado no insert; sem PII unmasked (passa por guard de output)
 
+### Tabelas admin-only (epic 008 — ADR-027)
+
+Alem das 3 tabelas de trace (`traces`, `trace_steps`, `routing_decisions`), o epic 008 adicionou infraestrutura de autenticacao admin e auditoria em `public.*` (sem RLS, acessadas via `pool_admin`):
+
+```sql
+-- Admin auth (migration 20260415000002)
+CREATE TABLE public.admin_users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email CITEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    role TEXT NOT NULL CHECK (role IN ('owner', 'operator', 'viewer')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    last_login_at TIMESTAMPTZ
+);
+
+-- Audit log (migration 20260415000003) — imutavel, INSERT-only
+CREATE TABLE public.audit_log (
+    id BIGSERIAL PRIMARY KEY,
+    admin_user_id UUID REFERENCES public.admin_users(id),
+    action TEXT NOT NULL,
+    target_type TEXT,
+    target_id TEXT,
+    metadata_jsonb JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Schema-level grants (migration 20260415000001)
+-- pool_admin = BYPASSRLS | pool_app = RLS-enforced
+```
+
+Em `trace_steps`, a migration `20260420000005_trace_steps_add_span_id.sql` adicionou coluna `span_id TEXT` para correlacao com o span OTel no Phoenix (waterfall UI).
+
+Invariantes:
+
+11. **`admin_users.role`** em 3 niveis — `owner` cria/edita outros admins; `operator` gerencia tenants e agentes; `viewer` apenas le.
+12. **`audit_log` imutavel** — INSERT-only; nenhum path aplicacional faz UPDATE/DELETE. Retention em [ADR-018](../decisions/ADR-018-data-retention-lgpd/) (LGPD).
+13. **Roles Postgres (`pool_admin`, `pool_app`)** provisionados pela migration `20260415000001_create_roles_and_grants.sql` — sem eles, aplicacao falha fail-fast no startup.
+
 ---
 
 > **Navegacao**: [← Blueprint (L1/L2)](../blueprint/) | [→ Business Process (L5)](../business/process/) — fluxo completo do pipeline com sequenceDiagrams por fase.
