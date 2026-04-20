@@ -355,7 +355,7 @@
 - [x] T1101 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --start --platform prosauai` — todos os health_checks respondem dentro do ready_timeout
 - [x] T1102 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --validate-env --platform prosauai` — zero required_env vars ausentes no .env
 - [ ] T1103 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --validate-urls --platform prosauai` — todas as URLs acessíveis com status esperado
-- [ ] T1104 Capturar screenshot de cada URL `type: frontend` declarada em `testing.urls` — conteúdo não é placeholder
+- [x] T1104 Capturar screenshot de cada URL `type: frontend` declarada em `testing.urls` — conteúdo não é placeholder
 - [ ] T1105 Executar Journey J-001 (happy path) declarado em `testing/journeys.md` — todos os steps com assertions OK
 
 **Checkpoint**: System boots cleanly in Docker, all env vars + URLs valid, frontend renders real content, happy-path journey green.
