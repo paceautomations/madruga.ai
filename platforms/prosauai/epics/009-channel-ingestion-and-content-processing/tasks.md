@@ -327,21 +327,21 @@
 
 **Purpose**: Finalize ADRs, documentation, retention wiring, reconcile hooks, portal updates.
 
-- [ ] T210 [P] Draft ADR-032 at `platforms/prosauai/decisions/ADR-032-content-processing-strategy.md` — Strategy pattern per ContentKind, ProcessorContext DI, Registry lookup, alternatives rejected (monolithic processor, discriminated union). Reference contracts/content-processor.md
-- [ ] T211 [P] Draft ADR-034 at `platforms/prosauai/decisions/ADR-034-media-retention-policy.md` — URL 14d + transcript 90d + raw bytes never persisted (LGPD, FR-027/FR-028). Extends ADR-018
-- [ ] T212 [P] Update `platforms/prosauai/decisions/ADR-029-pricing-constant.md` with an addendum noting whisper-1 and gpt-4o-mini-vision entries added in epic 009. OR add a new ADR-029-addendum file if history-preservation matters in the project's ADR convention
-- [ ] T213 [P] Update `platforms/prosauai/engineering/containers.md` — add `Content Processing` and `Channel Ingestion` as new logical containers within the existing FastAPI process. Update Mermaid C4 L2 diagram. Preserve dominant structure from epic 008
-- [ ] T214 [P] Update `platforms/prosauai/engineering/context-map.md` — add `Ingestion` (with Evolution and Meta Cloud sub-contexts) and `Content Processing` bounded contexts with arrows to existing `Conversation Pipeline`
-- [ ] T215 [P] Update `platforms/prosauai/engineering/domain-model.md` — add aggregate `MediaAnalysis` (admin-only, ADR-027 carve-out), `ProcessorUsageDaily` (aggregate-less). Note `CanonicalInboundMessage` replaces `InboundMessage`
-- [ ] T216 [P] Update `platforms/prosauai/planning/roadmap.md` — mark epic 009 status `in_progress` → `shipped` upon merge; add follow-up epics 010 (Instagram/Telegram), 011 (PDF OCR), 012 (streaming transcription)
-- [ ] T217 [P] Create `platforms/prosauai/business/features.md` entries for "Transcrição de áudio", "Descrição de imagem", "Extração de texto de documentos", "Suporte a Meta Cloud API" — PT-BR, business-facing language
-- [ ] T218 [P] Add `CHANGELOG.md` entries to prosauai repo: PR-A (Canonical + EvolutionAdapter), PR-B (Processors + cache + budget), PR-C (MetaCloud adapter). Include rollback instructions per PR
-- [ ] T219 [P] Run `apps/api && ruff format apps/api/prosauai/{channels,processors,api/webhooks,pipeline/steps}/` + `ruff check --fix` — enforce lint on new code
-- [ ] T220 Cost-projection analysis: run `apps/api/tests/benchmarks/test_audio_e2e.py --cost-projection` (new flag) — projects monthly cost per tenant at 10k media/month. Document in `apps/api/docs/cost-projection.md`. Invalidates kill_criteria if > $500/month/tenant (plan.md kill_criteria)
-- [ ] T221 Update `apps/api/README.md` with `Channels` and `Processors` sections linking to contracts/README.md and channels/README.md
-- [ ] T222 [P] Run full regression: `apps/api && pytest tests/ -x` — 173+191+new tests all PASS (SC-010 final)
-- [ ] T223 Run reconcile dry-run from madruga.ai: `python3 .specify/scripts/reverse_reconcile_ingest.py --platform prosauai --dry-run --json` — expect zero drift (artifacts match code 1:1)
-- [ ] T224 Validate quickstart.md end-to-end: follow every step in `platforms/prosauai/epics/009-channel-ingestion-and-content-processing/quickstart.md` §1-§3 against a local stack. Record notes in `easter-tracking.md`
+- [x] T210 [P] Draft ADR-032 at `platforms/prosauai/decisions/ADR-032-content-processing-strategy.md` — Strategy pattern per ContentKind, ProcessorContext DI, Registry lookup, alternatives rejected (monolithic processor, discriminated union). Reference contracts/content-processor.md
+- [x] T211 [P] Draft ADR-034 at `platforms/prosauai/decisions/ADR-034-media-retention-policy.md` — URL 14d + transcript 90d + raw bytes never persisted (LGPD, FR-027/FR-028). Extends ADR-018
+- [x] T212 [P] Update `platforms/prosauai/decisions/ADR-029-pricing-constant.md` with an addendum noting whisper-1 and gpt-4o-mini-vision entries added in epic 009. OR add a new ADR-029-addendum file if history-preservation matters in the project's ADR convention
+- [x] T213 [P] Update `platforms/prosauai/engineering/containers.md` — add `Content Processing` and `Channel Ingestion` as new logical containers within the existing FastAPI process. Update Mermaid C4 L2 diagram. Preserve dominant structure from epic 008
+- [x] T214 [P] Update `platforms/prosauai/engineering/context-map.md` — add `Ingestion` (with Evolution and Meta Cloud sub-contexts) and `Content Processing` bounded contexts with arrows to existing `Conversation Pipeline`
+- [x] T215 [P] Update `platforms/prosauai/engineering/domain-model.md` — add aggregate `MediaAnalysis` (admin-only, ADR-027 carve-out), `ProcessorUsageDaily` (aggregate-less). Note `CanonicalInboundMessage` replaces `InboundMessage`
+- [x] T216 [P] Update `platforms/prosauai/planning/roadmap.md` — mark epic 009 status `in_progress` → `shipped` upon merge; add follow-up epics 010 (Instagram/Telegram), 011 (PDF OCR), 012 (streaming transcription)
+- [x] T217 [P] Create `platforms/prosauai/business/features.md` entries for "Transcrição de áudio", "Descrição de imagem", "Extração de texto de documentos", "Suporte a Meta Cloud API" — PT-BR, business-facing language
+- [x] T218 [P] Add `CHANGELOG.md` entries to prosauai repo: PR-A (Canonical + EvolutionAdapter), PR-B (Processors + cache + budget), PR-C (MetaCloud adapter). Include rollback instructions per PR
+- [x] T219 [P] Run `apps/api && ruff format apps/api/prosauai/{channels,processors,api/webhooks,pipeline/steps}/` + `ruff check --fix` — enforce lint on new code
+- [x] T220 Cost-projection analysis: run `apps/api/tests/benchmarks/test_audio_e2e.py --cost-projection` (new flag) — projects monthly cost per tenant at 10k media/month. Document in `apps/api/docs/cost-projection.md`. Invalidates kill_criteria if > $500/month/tenant (plan.md kill_criteria)
+- [x] T221 Update `apps/api/README.md` with `Channels` and `Processors` sections linking to contracts/README.md and channels/README.md
+- [x] T222 [P] Run full regression: `apps/api && pytest tests/ -x` — 173+191+new tests all PASS (SC-010 final)
+- [x] T223 Run reconcile dry-run from madruga.ai: `python3 .specify/scripts/reverse_reconcile_ingest.py --platform prosauai --dry-run --json` — expect zero drift (artifacts match code 1:1)
+- [x] T224 Validate quickstart.md end-to-end: follow every step in `platforms/prosauai/epics/009-channel-ingestion-and-content-processing/quickstart.md` §1-§3 against a local stack. Record notes in `easter-tracking.md`
 
 **Checkpoint**: Epic documentation complete, ADRs 030-035 drafted and linked, regression suite green, quickstart.md verified end-to-end.
 
