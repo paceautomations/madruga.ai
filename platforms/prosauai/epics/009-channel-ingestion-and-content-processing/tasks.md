@@ -193,19 +193,19 @@
 
 ### Tests for User Story 2
 
-- [ ] T110 [P] [US2] Contract test parametrized row: `ImageProcessor` implements `ContentProcessor`; 5xx → `[provider_unavailable]`; timeout → `[timeout]`; `image_enabled=false` → `[feature_disabled: image]`; budget exceeded → `[budget_exceeded]`
-- [ ] T111 [P] [US2] Unit test `apps/api/tests/unit/processors/test_image.py` — (a) happy with/without caption, (b) `detail="high"` honored when `tenant_config.processor_config.image.detail="high"`, (c) PII mask applied before text_representation is returned (Acceptance Scenario 4 / FR-026), (d) cache hit on repeat sha256
-- [ ] T112 [P] [US2] Integration test `apps/api/tests/integration/test_image_end_to_end.py` — webhook → vision mock returns "Red shoe on white background" → LLM response references the shoe. Uses `evolution_image_with_caption.input.json`
-- [ ] T113 [P] [US2] Unit test `apps/api/tests/unit/processors/test_image_pii_masking.py` — description containing CPF pattern → masked to `[REDACTED_CPF]` before trace/logs (FR-026)
+- [x] T110 [P] [US2] Contract test parametrized row: `ImageProcessor` implements `ContentProcessor`; 5xx → `[provider_unavailable]`; timeout → `[timeout]`; `image_enabled=false` → `[feature_disabled: image]`; budget exceeded → `[budget_exceeded]`
+- [x] T111 [P] [US2] Unit test `apps/api/tests/unit/processors/test_image.py` — (a) happy with/without caption, (b) `detail="high"` honored when `tenant_config.processor_config.image.detail="high"`, (c) PII mask applied before text_representation is returned (Acceptance Scenario 4 / FR-026), (d) cache hit on repeat sha256
+- [x] T112 [P] [US2] Integration test `apps/api/tests/integration/test_image_end_to_end.py` — webhook → vision mock returns "Red shoe on white background" → LLM response references the shoe. Uses `evolution_image_with_caption.input.json`
+- [x] T113 [P] [US2] Unit test `apps/api/tests/unit/processors/test_image_pii_masking.py` — description containing CPF pattern → masked to `[REDACTED_CPF]` before trace/logs (FR-026)
 
 ### Implementation for User Story 2
 
-- [ ] T120 [P] [US2] Create `apps/api/prosauai/processors/providers/openai_vision.py` — `OpenAIVisionProvider.describe(image_bytes, mime_type, detail, prompt) -> (text, raw)` using `AsyncOpenAI.responses.create(model="gpt-4o-mini", input=[{role:"user", content:[{type:"input_image", image_url:"data:{mime};base64,{b64}", detail:detail}, {type:"input_text", text:prompt}]}])` per contracts/content-processor.md §2. Timeout 12s
-- [ ] T121 [US2] Create `apps/api/prosauai/processors/image.py` — `ImageProcessor(ContentProcessor)` class: `kind=IMAGE`, `version="1.0.0"`, `prompt_version="v1"`. Constant prompt: `"Descreva brevemente o conteúdo desta imagem em português. Inclua objetos visíveis, texto relevante, e contexto aparente."`. Reads `detail` from `tenant_config.processor_config.image.detail` default `"low"`. Same skeleton as AudioProcessor (feature flag → sha256 → cache → budget → breaker → download → vision.describe → PII mask → cache.set)
-- [ ] T122 [US2] Wire `PIIMasker` from existing `apps/api/prosauai/core/output_guard.py` (epic 004) on `text_representation` BEFORE caching and returning. Add test confirming mask runs
-- [ ] T123 [US2] Register `ImageProcessor` in `main.py` startup. Wire image path in `pipeline/steps/content_process.py`
-- [ ] T124 [P] [US2] Emit OTel spans `processor.image.describe` and `openai.vision.responses.create` with attrs including `detail`
-- [ ] T125 [P] [US2] Add PII mask unit coverage at `apps/api/tests/unit/core/test_output_guard_image_flow.py` — feeds image descriptions containing CPF/card/email; asserts masking before return
+- [x] T120 [P] [US2] Create `apps/api/prosauai/processors/providers/openai_vision.py` — `OpenAIVisionProvider.describe(image_bytes, mime_type, detail, prompt) -> (text, raw)` using `AsyncOpenAI.responses.create(model="gpt-4o-mini", input=[{role:"user", content:[{type:"input_image", image_url:"data:{mime};base64,{b64}", detail:detail}, {type:"input_text", text:prompt}]}])` per contracts/content-processor.md §2. Timeout 12s
+- [x] T121 [US2] Create `apps/api/prosauai/processors/image.py` — `ImageProcessor(ContentProcessor)` class: `kind=IMAGE`, `version="1.0.0"`, `prompt_version="v1"`. Constant prompt: `"Descreva brevemente o conteúdo desta imagem em português. Inclua objetos visíveis, texto relevante, e contexto aparente."`. Reads `detail` from `tenant_config.processor_config.image.detail` default `"low"`. Same skeleton as AudioProcessor (feature flag → sha256 → cache → budget → breaker → download → vision.describe → PII mask → cache.set)
+- [x] T122 [US2] Wire `PIIMasker` from existing `apps/api/prosauai/core/output_guard.py` (epic 004) on `text_representation` BEFORE caching and returning. Add test confirming mask runs
+- [x] T123 [US2] Register `ImageProcessor` in `main.py` startup. Wire image path in `pipeline/steps/content_process.py`
+- [x] T124 [P] [US2] Emit OTel spans `processor.image.describe` and `openai.vision.responses.create` with attrs including `detail`
+- [x] T125 [P] [US2] Add PII mask unit coverage at `apps/api/tests/unit/core/test_output_guard_image_flow.py` — feeds image descriptions containing CPF/card/email; asserts masking before return
 
 **Checkpoint**: US2 verifiable via T112; US1+US2 both work independently; PII never leaks into trace per T125.
 
@@ -219,21 +219,21 @@
 
 ### Tests for User Story 4
 
-- [ ] T130 [P] [US4] E2E Playwright test `apps/admin/tests/e2e/trace_explorer_content_process.spec.ts` — seed trace with audio content_process step → open Trace Explorer → expand trace → assert 14 rows in waterfall, row 6 label="content_process", expand row → modal shows full transcript (>1000 chars without ellipsis)
-- [ ] T131 [P] [US4] E2E Playwright test `apps/admin/tests/e2e/performance_ai_media_cost.spec.ts` — seed `processor_usage_daily` with 3 days × (audio, image, document) → open Performance AI → assert stacked bar has 3 segments, legend shows 3 kinds, hover tooltip shows USD per kind per day
-- [ ] T132 [P] [US4] Unit test `apps/api/tests/unit/admin/test_media_cost_query.py` — `GET /api/admin/performance/media-cost?from=X&to=Y&tenant_id=Z` returns aggregated rows from `processor_usage_daily`; uses `pool_admin`
-- [ ] T133 [P] [US4] Unit test `apps/api/tests/unit/observability/test_media_analyses_persist.py` — fire-and-forget insert (ADR-028): DB failure does NOT propagate; structured log emitted with `error.type=persist_failed`
+- [x] T130 [P] [US4] E2E Playwright test `apps/admin/tests/e2e/trace_explorer_content_process.spec.ts` — seed trace with audio content_process step → open Trace Explorer → expand trace → assert 14 rows in waterfall, row 6 label="content_process", expand row → modal shows full transcript (>1000 chars without ellipsis)
+- [x] T131 [P] [US4] E2E Playwright test `apps/admin/tests/e2e/performance_ai_media_cost.spec.ts` — seed `processor_usage_daily` with 3 days × (audio, image, document) → open Performance AI → assert stacked bar has 3 segments, legend shows 3 kinds, hover tooltip shows USD per kind per day
+- [x] T132 [P] [US4] Unit test `apps/api/tests/unit/admin/test_media_cost_query.py` — `GET /api/admin/performance/media-cost?from=X&to=Y&tenant_id=Z` returns aggregated rows from `processor_usage_daily`; uses `pool_admin`
+- [x] T133 [P] [US4] Unit test `apps/api/tests/unit/observability/test_media_analyses_persist.py` — fire-and-forget insert (ADR-028): DB failure does NOT propagate; structured log emitted with `error.type=persist_failed`
 
 ### Implementation for User Story 4
 
-- [ ] T140 [US4] Create `apps/api/prosauai/observability/media_analyses_repo.py::async_insert_fire_and_forget(analysis: ProcessedContent, tenant_id, message_id, content_sha256, prompt_version)` — dispatches to event loop via `asyncio.create_task`, wraps with try/except that logs but never raises. Called from `pipeline/steps/content_process.py` after each processor.process() returns
-- [ ] T141 [US4] Create API endpoint `apps/api/prosauai/api/admin/performance.py::GET /api/admin/performance/media-cost` — params `from`, `to`, `tenant_id` (admin auth enforced via existing middleware from epic 008). Query `processor_usage_daily` aggregating by `(day, kind)`. Returns JSON `[{day, kind, cost_usd_sum, count, cache_hits, cache_misses}, ...]`
-- [ ] T142 [US4] Extend OpenAPI codegen: regenerate `apps/admin/src/lib/api-types.ts` via `openapi-typescript` (existing tooling from epic 008) to include the new endpoint
-- [ ] T143 [P] [US4] Create React component `apps/admin/src/components/performance/MediaCostChart.tsx` — Recharts `<ResponsiveContainer><BarChart stackId="kind"><Bar dataKey="audio"/><Bar dataKey="image"/><Bar dataKey="document"/>`. Uses TanStack Query v5 (`useQuery({queryKey: ["media-cost", range, tenant]})`). Hover tooltip shows per-kind USD + count
-- [ ] T144 [US4] Insert `<MediaCostChart/>` into `apps/admin/src/app/performance-ai/page.tsx` below existing charts. Respect tenant filter from the existing page state
-- [ ] T145 [P] [US4] Update `apps/admin/src/components/trace-explorer/StepAccordion.tsx` — confirm it already renders arbitrary `input_jsonb`/`output_jsonb` (epic 008 generic behavior); add a conditional "Open full transcript" button when `output.kind in {audio, image, document}` and `output.text_representation.length > 500`, opens Dialog with untruncated text (reads from `media_analyses` via new `GET /api/admin/traces/{trace_id}/media-analysis/{step_id}`)
-- [ ] T146 [P] [US4] Add `GET /api/admin/traces/{trace_id}/media-analysis/{step_id}` returning the matching `media_analyses` row (by `message_id + kind + prompt_version`, latest). Admin auth only
-- [ ] T147 [P] [US4] Emit inbox-bubble icon by `content.kind` — update `apps/admin/src/components/inbox/MessageBubble.tsx` to show 🎤/📷/📎/📍 prefix next to message preview when `conversations.last_message_kind` is media (re-use denormalized column from epic 008; no DB change needed)
+- [x] T140 [US4] Create `apps/api/prosauai/observability/media_analyses_repo.py::async_insert_fire_and_forget(analysis: ProcessedContent, tenant_id, message_id, content_sha256, prompt_version)` — dispatches to event loop via `asyncio.create_task`, wraps with try/except that logs but never raises. Called from `pipeline/steps/content_process.py` after each processor.process() returns
+- [x] T141 [US4] Create API endpoint `apps/api/prosauai/api/admin/performance.py::GET /api/admin/performance/media-cost` — params `from`, `to`, `tenant_id` (admin auth enforced via existing middleware from epic 008). Query `processor_usage_daily` aggregating by `(day, kind)`. Returns JSON `[{day, kind, cost_usd_sum, count, cache_hits, cache_misses}, ...]`
+- [x] T142 [US4] Extend OpenAPI codegen: regenerate `apps/admin/src/lib/api-types.ts` via `openapi-typescript` (existing tooling from epic 008) to include the new endpoint
+- [x] T143 [P] [US4] Create React component `apps/admin/src/components/performance/MediaCostChart.tsx` — Recharts `<ResponsiveContainer><BarChart stackId="kind"><Bar dataKey="audio"/><Bar dataKey="image"/><Bar dataKey="document"/>`. Uses TanStack Query v5 (`useQuery({queryKey: ["media-cost", range, tenant]})`). Hover tooltip shows per-kind USD + count
+- [x] T144 [US4] Insert `<MediaCostChart/>` into `apps/admin/src/app/performance-ai/page.tsx` below existing charts. Respect tenant filter from the existing page state
+- [x] T145 [P] [US4] Update `apps/admin/src/components/trace-explorer/StepAccordion.tsx` — confirm it already renders arbitrary `input_jsonb`/`output_jsonb` (epic 008 generic behavior); add a conditional "Open full transcript" button when `output.kind in {audio, image, document}` and `output.text_representation.length > 500`, opens Dialog with untruncated text (reads from `media_analyses` via new `GET /api/admin/traces/{trace_id}/media-analysis/{step_id}`)
+- [x] T146 [P] [US4] Add `GET /api/admin/traces/{trace_id}/media-analysis/{step_id}` returning the matching `media_analyses` row (by `message_id + kind + prompt_version`, latest). Admin auth only
+- [x] T147 [P] [US4] Emit inbox-bubble icon by `content.kind` — update `apps/admin/src/components/inbox/MessageBubble.tsx` to show 🎤/📷/📎/📍 prefix next to message preview when `conversations.last_message_kind` is media (re-use denormalized column from epic 008; no DB change needed)
 
 **Checkpoint**: US4 verifiable via T130+T131 Playwright. Admin can observe cost/latency/cache in real time; full transcripts visible without truncation.
 
@@ -247,17 +247,17 @@
 
 ### Tests for User Story 3
 
-- [ ] T150 [P] [US3] Contract test parametrized row: `DocumentProcessor` implements `ContentProcessor`; scanned PDF → `[pdf_scanned]`; encrypted PDF → `[pdf_encrypted]`; timeout → `[timeout]`; `document_enabled=false` → `[feature_disabled: document]`
-- [ ] T151 [P] [US3] Unit test `apps/api/tests/unit/processors/test_document.py` — (a) 3-page PDF with selectable text → transcript contains key phrases, (b) scanned PDF (empty extract) → `[pdf_scanned]`, (c) encrypted PDF → `[pdf_encrypted]`, (d) DOCX → python-docx extracts paragraphs, (e) cache hit on repeat
-- [ ] T152 [P] [US3] Integration test `apps/api/tests/integration/test_document_end_to_end.py` — PDF fixture → pipeline response references content. Uses `evolution_document_pdf.input.json` (create fixture if absent from captured/)
-- [ ] T153 [P] [US3] Add scanned + encrypted PDF fixtures to `apps/api/tests/fixtures/captured/`: `evolution_document_pdf_scanned.input.json`, `evolution_document_pdf_encrypted.input.json` — small synthetic PDFs
+- [x] T150 [P] [US3] Contract test parametrized row: `DocumentProcessor` implements `ContentProcessor`; scanned PDF → `[pdf_scanned]`; encrypted PDF → `[pdf_encrypted]`; timeout → `[timeout]`; `document_enabled=false` → `[feature_disabled: document]`
+- [x] T151 [P] [US3] Unit test `apps/api/tests/unit/processors/test_document.py` — (a) 3-page PDF with selectable text → transcript contains key phrases, (b) scanned PDF (empty extract) → `[pdf_scanned]`, (c) encrypted PDF → `[pdf_encrypted]`, (d) DOCX → python-docx extracts paragraphs, (e) cache hit on repeat
+- [x] T152 [P] [US3] Integration test `apps/api/tests/integration/test_document_end_to_end.py` — PDF fixture → pipeline response references content. Uses `evolution_document_pdf.input.json` (create fixture if absent from captured/)
+- [x] T153 [P] [US3] Add scanned + encrypted PDF fixtures to `apps/api/tests/fixtures/captured/`: `evolution_document_pdf_scanned.input.json`, `evolution_document_pdf_encrypted.input.json` — small synthetic PDFs
 
 ### Implementation for User Story 3
 
-- [ ] T160 [P] [US3] Create `apps/api/prosauai/processors/providers/local_document.py` — `LocalDocumentExtractor.extract(doc_bytes, mime_type, max_pages=20) -> (text, raw)`. Uses `pypdf.PdfReader` for PDFs; raises `PDFEncryptedError` if encrypted, returns empty+raise `PDFScannedError` if extracted string is empty. Uses `python-docx.Document` for DOCX. Returns combined pages text separated by `\n\n`
-- [ ] T161 [US3] Create `apps/api/prosauai/processors/document.py` — `DocumentProcessor(ContentProcessor)`: `kind=DOCUMENT`, `version="1.0.0"`, `prompt_version="v1"`. Skipping budget check (local cost trivial — note in code comment referencing contracts/content-processor.md §5). Flow: feature flag → sha256 → cache → download (or base64) → `provider.document_extractor.extract` → cache.set → return. Error mapping: `PDFEncryptedError` → `[pdf_encrypted]`, `PDFScannedError` → `[pdf_scanned]`, empty text → `[pdf_scanned]`
-- [ ] T162 [US3] Register `DocumentProcessor` in `main.py` startup. Wire document path in `pipeline/steps/content_process.py`
-- [ ] T163 [P] [US3] Emit OTel span `processor.document.extract` with attrs `{processor.kind, processor.provider="internal/pypdf|python-docx", pages_extracted}`
+- [x] T160 [P] [US3] Create `apps/api/prosauai/processors/providers/local_document.py` — `LocalDocumentExtractor.extract(doc_bytes, mime_type, max_pages=20) -> (text, raw)`. Uses `pypdf.PdfReader` for PDFs; raises `PDFEncryptedError` if encrypted, returns empty+raise `PDFScannedError` if extracted string is empty. Uses `python-docx.Document` for DOCX. Returns combined pages text separated by `\n\n`
+- [x] T161 [US3] Create `apps/api/prosauai/processors/document.py` — `DocumentProcessor(ContentProcessor)`: `kind=DOCUMENT`, `version="1.0.0"`, `prompt_version="v1"`. Skipping budget check (local cost trivial — note in code comment referencing contracts/content-processor.md §5). Flow: feature flag → sha256 → cache → download (or base64) → `provider.document_extractor.extract` → cache.set → return. Error mapping: `PDFEncryptedError` → `[pdf_encrypted]`, `PDFScannedError` → `[pdf_scanned]`, empty text → `[pdf_scanned]`
+- [x] T162 [US3] Register `DocumentProcessor` in `main.py` startup. Wire document path in `pipeline/steps/content_process.py`
+- [x] T163 [P] [US3] Emit OTel span `processor.document.extract` with attrs `{processor.kind, processor.provider="internal/pypdf|python-docx", pages_extracted}`
 
 **Checkpoint**: US3 independently verifiable via T152. All three P1/P2 media kinds (audio, image, document) work end-to-end.
 
@@ -271,22 +271,22 @@
 
 ### Tests for User Story 7
 
-- [ ] T170 [P] [US7] Contract test parametrized rows: `StickerProcessor`, `LocationProcessor`, `ContactProcessor`, `ReactionProcessor`, `UnsupportedProcessor` all implement `ContentProcessor`
-- [ ] T171 [P] [US7] Unit test `apps/api/tests/unit/processors/test_sticker.py` — `text_representation` = `"[sticker: {alt_text or 'emoji'}]"`, no provider call
-- [ ] T172 [P] [US7] Unit test `apps/api/tests/unit/processors/test_location.py` — `text_representation` includes `latitude,longitude` + optional `location_name`. Format: `"[localização: {name or 'sem nome'}] ({lat:.5f}, {lng:.5f})"`
-- [ ] T173 [P] [US7] Unit test `apps/api/tests/unit/processors/test_contact.py` — `text_representation` = `"[contato compartilhado: {name} — {phone}]"` parsed from vCard
-- [ ] T174 [P] [US7] Unit test `apps/api/tests/unit/processors/test_reaction.py` — `text_representation` = `"[reação: {emoji} à mensagem {target_id}]"`
-- [ ] T175 [P] [US7] Unit test `apps/api/tests/unit/processors/test_unsupported.py` — for each `sub_type ∈ {video, poll, payment, call_notification, edited, system}` returns marker `[content_unsupported: {sub_type}]` and `text_representation="[conteúdo não suportado: {sub_type} — por favor, envie texto]"` (FR-011 exact string)
-- [ ] T176 [P] [US7] Integration test `apps/api/tests/integration/test_light_kinds_flow.py` — 5 payloads in sequence, each trace has `content_process` step with `cost_usd=0, latency_ms<10`
+- [x] T170 [P] [US7] Contract test parametrized rows: `StickerProcessor`, `LocationProcessor`, `ContactProcessor`, `ReactionProcessor`, `UnsupportedProcessor` all implement `ContentProcessor`
+- [x] T171 [P] [US7] Unit test `apps/api/tests/unit/processors/test_sticker.py` — `text_representation` = `"[sticker: {alt_text or 'emoji'}]"`, no provider call
+- [x] T172 [P] [US7] Unit test `apps/api/tests/unit/processors/test_location.py` — `text_representation` includes `latitude,longitude` + optional `location_name`. Format: `"[localização: {name or 'sem nome'}] ({lat:.5f}, {lng:.5f})"`
+- [x] T173 [P] [US7] Unit test `apps/api/tests/unit/processors/test_contact.py` — `text_representation` = `"[contato compartilhado: {name} — {phone}]"` parsed from vCard
+- [x] T174 [P] [US7] Unit test `apps/api/tests/unit/processors/test_reaction.py` — `text_representation` = `"[reação: {emoji} à mensagem {target_id}]"`
+- [x] T175 [P] [US7] Unit test `apps/api/tests/unit/processors/test_unsupported.py` — for each `sub_type ∈ {video, poll, payment, call_notification, edited, system}` returns marker `[content_unsupported: {sub_type}]` and `text_representation="[conteúdo não suportado: {sub_type} — por favor, envie texto]"` (FR-011 exact string)
+- [x] T176 [P] [US7] Integration test `apps/api/tests/integration/test_light_kinds_flow.py` — 5 payloads in sequence, each trace has `content_process` step with `cost_usd=0, latency_ms<10`
 
 ### Implementation for User Story 7
 
-- [ ] T180 [P] [US7] Create `apps/api/prosauai/processors/sticker.py` — `StickerProcessor(ContentProcessor)`: deterministic `text_representation` from `block.attrs.get("alt_text")` or emoji; `status=OK`, no cache, no budget
-- [ ] T181 [P] [US7] Create `apps/api/prosauai/processors/location.py` — `LocationProcessor`: format lat/lng to 5 decimals; include optional name
-- [ ] T182 [P] [US7] Create `apps/api/prosauai/processors/contact.py` — `ContactProcessor`: parse vCard (stdlib `email.parser` or simple regex) to extract FN + TEL
-- [ ] T183 [P] [US7] Create `apps/api/prosauai/processors/reaction.py` — `ReactionProcessor`: interprets emoji + `reaction_target_external_id`
-- [ ] T184 [P] [US7] Create `apps/api/prosauai/processors/unsupported.py` — `UnsupportedProcessor`: always returns marker `[content_unsupported: {sub_type}]` with `status=UNSUPPORTED` (not ERROR — per ProcessorStatus enum)
-- [ ] T185 [US7] Register all 5 processors in `main.py` startup. Wire branches in `pipeline/steps/content_process.py`
+- [x] T180 [P] [US7] Create `apps/api/prosauai/processors/sticker.py` — `StickerProcessor(ContentProcessor)`: deterministic `text_representation` from `block.attrs.get("alt_text")` or emoji; `status=OK`, no cache, no budget
+- [x] T181 [P] [US7] Create `apps/api/prosauai/processors/location.py` — `LocationProcessor`: format lat/lng to 5 decimals; include optional name
+- [x] T182 [P] [US7] Create `apps/api/prosauai/processors/contact.py` — `ContactProcessor`: parse vCard (stdlib `email.parser` or simple regex) to extract FN + TEL
+- [x] T183 [P] [US7] Create `apps/api/prosauai/processors/reaction.py` — `ReactionProcessor`: interprets emoji + `reaction_target_external_id`
+- [x] T184 [P] [US7] Create `apps/api/prosauai/processors/unsupported.py` — `UnsupportedProcessor`: always returns marker `[content_unsupported: {sub_type}]` with `status=UNSUPPORTED` (not ERROR — per ProcessorStatus enum)
+- [x] T185 [US7] Register all 5 processors in `main.py` startup. Wire branches in `pipeline/steps/content_process.py`
 
 **Checkpoint**: All 9 ContentKinds covered end-to-end. Zero silent drops (SC-004).
 
@@ -300,23 +300,23 @@
 
 ### Tests for User Story 6
 
-- [ ] T190 [P] [US6] Contract test parametrized row: `MetaCloudAdapter` implements `ChannelAdapter`; `verify_webhook` GET handshake + POST HMAC validation; `normalize` handles text/audio/image/interactive/video/unsupported types
-- [ ] T191 [P] [US6] Unit test `apps/api/tests/unit/channels/test_meta_cloud_adapter.py` — `test_normalize_text_payload`, `test_normalize_audio`, `test_normalize_image`, `test_normalize_interactive_button_reply` maps to TEXT, `test_normalize_video` maps to UNSUPPORTED with `sub_type="video"`
-- [ ] T192 [P] [US6] Unit test `apps/api/tests/unit/channels/test_meta_cloud_auth.py` — (a) GET `hub.verify_token` match → returns `hub.challenge`, (b) GET mismatch → 403, (c) POST valid `X-Hub-Signature-256` → pass, (d) POST invalid signature → AuthError
-- [ ] T193 [P] [US6] Integration test `apps/api/tests/integration/test_meta_cloud_end_to_end.py` — POST a Meta Cloud audio payload with valid HMAC → trace completes with 14 steps, response delivered. Uses existing AudioProcessor without modification (validates SC-013 at runtime)
-- [ ] T194 [P] [US6] Cross-source idempotency test `apps/api/tests/integration/test_cross_source_idempotency.py` — same `external_message_id` delivered via both Evolution (source=evolution, instance=ariel) and Meta Cloud (source=meta_cloud, instance=phone_number_id_123) — both processed as distinct messages (decision D11, Acceptance Scenario 2)
-- [ ] T195 [P] [US6] SC-013 zero-core-change gate test `apps/api/tests/ci/test_pr_c_scope.py` — runs `git diff develop..HEAD --stat apps/api/prosauai/pipeline.py apps/api/prosauai/processors/ apps/api/prosauai/core/router/` and asserts empty output. Runs in CI as PR-C merge gate
+- [x] T190 [P] [US6] Contract test parametrized row: `MetaCloudAdapter` implements `ChannelAdapter`; `verify_webhook` GET handshake + POST HMAC validation; `normalize` handles text/audio/image/interactive/video/unsupported types
+- [x] T191 [P] [US6] Unit test `apps/api/tests/unit/channels/test_meta_cloud_adapter.py` — `test_normalize_text_payload`, `test_normalize_audio`, `test_normalize_image`, `test_normalize_interactive_button_reply` maps to TEXT, `test_normalize_video` maps to UNSUPPORTED with `sub_type="video"`
+- [x] T192 [P] [US6] Unit test `apps/api/tests/unit/channels/test_meta_cloud_auth.py` — (a) GET `hub.verify_token` match → returns `hub.challenge`, (b) GET mismatch → 403, (c) POST valid `X-Hub-Signature-256` → pass, (d) POST invalid signature → AuthError
+- [x] T193 [P] [US6] Integration test `apps/api/tests/integration/test_meta_cloud_end_to_end.py` — POST a Meta Cloud audio payload with valid HMAC → trace completes with 14 steps, response delivered. Uses existing AudioProcessor without modification (validates SC-013 at runtime)
+- [x] T194 [P] [US6] Cross-source idempotency test `apps/api/tests/integration/test_cross_source_idempotency.py` — same `external_message_id` delivered via both Evolution (source=evolution, instance=ariel) and Meta Cloud (source=meta_cloud, instance=phone_number_id_123) — both processed as distinct messages (decision D11, Acceptance Scenario 2)
+- [x] T195 [P] [US6] SC-013 zero-core-change gate test `apps/api/tests/ci/test_pr_c_scope.py` — runs `git diff develop..HEAD --stat apps/api/prosauai/pipeline.py apps/api/prosauai/processors/ apps/api/prosauai/core/router/` and asserts empty output. Runs in CI as PR-C merge gate
 
 ### Implementation for User Story 6
 
-- [ ] T200 [P] [US6] Capture 4 real Meta Cloud fixtures to `apps/api/tests/fixtures/captured/`: `meta_cloud_text.input.json`, `meta_cloud_audio.input.json`, `meta_cloud_image.input.json`, `meta_cloud_interactive.input.json`. Use sandbox account, scrub PII; retain the official payload shape
-- [ ] T201 [P] [US6] Generate canonical outputs: for each fixture above, run `MetaCloudAdapter.normalize` and commit `meta_cloud_*.canonical.json` under `tests/fixtures/canonical/`
-- [ ] T202 [US6] Create `apps/api/prosauai/channels/inbound/meta_cloud/auth.py` — `verify_meta_cloud_webhook(request, config)`: GET → compare `hub.verify_token` with `config.meta_cloud.verify_token` (constant-time), return `hub.challenge` string; POST → `hmac.new(app_secret, body_bytes, sha256)` and compare with header `X-Hub-Signature-256` (strip `sha256=` prefix), constant-time (FR-029)
-- [ ] T203 [US6] Create `apps/api/prosauai/channels/inbound/meta_cloud/adapter.py` — `MetaCloudAdapter` class with `source="meta_cloud"`, `source_version="1.0.0"`. `normalize(payload, source_instance=phone_number_id)`: iterate `entry[*].changes[*].value.messages[*]`, map per contracts/channel-adapter.md §2.2 (text/audio/image/document/sticker/location/contacts/reaction/interactive/video/order/system/unsupported). Compute `idempotency_key = sha256(f"meta_cloud:{source_instance}:{message.id}")`
-- [ ] T204 [US6] Create `apps/api/prosauai/api/webhooks/meta_cloud.py` — routes `GET /webhook/meta_cloud/{tenant_slug}` (handshake) and `POST /webhook/meta_cloud/{tenant_slug}` (auth → normalize → dispatch). Register router in `main.py`
-- [ ] T205 [US6] Register `MetaCloudAdapter` in `main.py` startup: `register(MetaCloudAdapter(config=settings.meta_cloud))`
-- [ ] T206 [P] [US6] Create `apps/api/scripts/sign_meta_webhook.py` — CLI helper that takes `payload_path` + `app_secret` and prints `X-Hub-Signature-256: sha256=...`. Used in dev (quickstart.md §3.3)
-- [ ] T207 [P] [US6] Draft ADR-035 at `platforms/prosauai/decisions/ADR-035-meta-cloud-adapter-integration.md` — Nygard: Context (prove abstraction), Decision (implement adapter test-first per pitch decision D21), Consequences (SC-013 gate, zero pipeline change), Alternatives rejected (Evolution-only + shim)
+- [x] T200 [P] [US6] Capture 4 real Meta Cloud fixtures to `apps/api/tests/fixtures/captured/`: `meta_cloud_text.input.json`, `meta_cloud_audio.input.json`, `meta_cloud_image.input.json`, `meta_cloud_interactive.input.json`. Use sandbox account, scrub PII; retain the official payload shape
+- [x] T201 [P] [US6] Generate canonical outputs: for each fixture above, run `MetaCloudAdapter.normalize` and commit `meta_cloud_*.canonical.json` under `tests/fixtures/canonical/`
+- [x] T202 [US6] Create `apps/api/prosauai/channels/inbound/meta_cloud/auth.py` — `verify_meta_cloud_webhook(request, config)`: GET → compare `hub.verify_token` with `config.meta_cloud.verify_token` (constant-time), return `hub.challenge` string; POST → `hmac.new(app_secret, body_bytes, sha256)` and compare with header `X-Hub-Signature-256` (strip `sha256=` prefix), constant-time (FR-029)
+- [x] T203 [US6] Create `apps/api/prosauai/channels/inbound/meta_cloud/adapter.py` — `MetaCloudAdapter` class with `source="meta_cloud"`, `source_version="1.0.0"`. `normalize(payload, source_instance=phone_number_id)`: iterate `entry[*].changes[*].value.messages[*]`, map per contracts/channel-adapter.md §2.2 (text/audio/image/document/sticker/location/contacts/reaction/interactive/video/order/system/unsupported). Compute `idempotency_key = sha256(f"meta_cloud:{source_instance}:{message.id}")`
+- [x] T204 [US6] Create `apps/api/prosauai/api/webhooks/meta_cloud.py` — routes `GET /webhook/meta_cloud/{tenant_slug}` (handshake) and `POST /webhook/meta_cloud/{tenant_slug}` (auth → normalize → dispatch). Register router in `main.py`
+- [x] T205 [US6] Register `MetaCloudAdapter` in `main.py` startup: `register(MetaCloudAdapter(config=settings.meta_cloud))`
+- [x] T206 [P] [US6] Create `apps/api/scripts/sign_meta_webhook.py` — CLI helper that takes `payload_path` + `app_secret` and prints `X-Hub-Signature-256: sha256=...`. Used in dev (quickstart.md §3.3)
+- [x] T207 [P] [US6] Draft ADR-035 at `platforms/prosauai/decisions/ADR-035-meta-cloud-adapter-integration.md` — Nygard: Context (prove abstraction), Decision (implement adapter test-first per pitch decision D21), Consequences (SC-013 gate, zero pipeline change), Alternatives rejected (Evolution-only + shim)
 - [ ] T208 [P] [US6] Create `apps/api/prosauai/channels/README.md` — playbook "How to add a new inbound channel in 4 steps": 1) implement ChannelAdapter, 2) implement auth, 3) add webhook handler, 4) register in main + add fixtures + contract test row. Links to ADR-031 and ADR-035
 
 **Checkpoint (PR-C Merge Gate)**: T195 asserts zero diff in core files (SC-013). T193 passes end-to-end. T194 asserts cross-source IDs do not collide.
