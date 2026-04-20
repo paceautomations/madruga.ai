@@ -11,6 +11,8 @@ GasTown - https://github.com/gastownhall/gastown
 everything claude - https://github.com/affaan-m/everything-claude-code
 agent scope - https://github.com/agentscope-ai/agentscope
 
+transforma para md - https://github.com/microsoft/markitdown
+
 Bench tech
 Arquitetura e Engenharia
 Building Microservices: https://samnewman.io/books/building_microservices/

@@ -20,11 +20,39 @@ sidebar:
 ## 0. Visão Geral — o fluxo inteiro em uma tela
 
 ```mermaid
+flowchart LR
+    IN["① Canais<br/>Evolution ✅<br/>Meta Cloud ✅"]
+    NORM["② Normalização<br/>Canonical + idempotência<br/>+ debounce"]
+    ROUTE{"③ Roteamento MECE<br/>5 ações"}
+    PROC["④ Content Processing<br/>9 kinds · fan-out"]
+    PIPE["⑤ Pipeline IA<br/>13 steps"]
+    EVAL{"⑥ Evaluator<br/>heurístico"}
+    OUT["⑦ Saída<br/>MESMO canal da entrada<br/>Evolution ✅ · Meta Cloud 📋"]
+    OBS[("⑧ Admin + Observabilidade<br/>traces + Phoenix<br/>fire-and-forget")]
+
+    IN --> NORM --> ROUTE
+    ROUTE -->|RESPOND| PROC --> PIPE --> EVAL
+    ROUTE -->|LOG_ONLY / DROP<br/>EVENT_HOOK| OBS
+    EVAL -->|approve/truncado| OUT
+    EVAL -->|retry / fallback| PIPE
+    OUT --> OBS
+    PROC -.-> OBS
+    PIPE -.-> OBS
+
+    style ROUTE fill:#f9f
+    style EVAL fill:#f9f
+    style OBS fill:#eee
+```
+
+<details>
+<summary>🔍 Ver diagrama interno expandido (componentes de cada fase)</summary>
+
+```mermaid
 flowchart TD
     subgraph canais["① Canais de entrada"]
         direction LR
-        EVO[/"Evolution API<br/>(WhatsApp não-oficial)"/]
-        META[/"Meta Cloud API<br/>(WhatsApp oficial)"/]
+        EVO[/"Evolution"/]
+        META[/"Meta Cloud"/]
     end
 
     subgraph normaliza["② Normalização"]
@@ -36,33 +64,33 @@ flowchart TD
 
     subgraph rot["③ Roteamento MECE"]
         direction LR
-        CLASS["classify()<br/>→ MessageFacts"]
+        CLASS["classify()"]
         DEC{"decide()<br/>5 ações"}
     end
 
-    subgraph proc["④ Content Processing (step 6) — fan-out por block"]
+    subgraph proc["④ Content Processing — fan-out por block"]
         direction LR
-        TXT["💬 text<br/>→ passa direto"]
-        AUDIO["🎙️ audio<br/>→ Whisper"]
-        IMG["🖼️ image<br/>→ GPT-4o-mini vision"]
-        DOC["📄 document<br/>→ pypdf/docx local"]
-        LIGHT["✨ sticker/location/<br/>contact/reaction/<br/>unsupported<br/>→ converter determinístico"]
+        TXT["💬 text"]
+        AUDIO["🎙️ audio<br/>Whisper"]
+        IMG["🖼️ image<br/>GPT-4o-mini vision"]
+        DOC["📄 document<br/>pypdf/docx"]
+        LIGHT["✨ sticker/location/<br/>contact/reaction/<br/>unsupported<br/>determinístico"]
     end
 
-    subgraph pipe["⑤ Pipeline IA"]
+    subgraph pipe["⑤ Pipeline IA (13 steps)"]
         direction LR
         CTX["build_context"]
         GIN["input_guard"]
         INT["classify_intent"]
-        AG["generate_response<br/>pydantic-ai"]
-        EVAL{"evaluate<br/>heurístico"}
+        AG["generate_response"]
+        EV{"evaluate"}
         GOUT["output_guard"]
     end
 
     subgraph saida["⑥ Saída — MESMO canal da entrada"]
         direction LR
-        OUT_E[/"✅ send via Evolution<br/>(se entrada=evolution)"/]
-        OUT_M[/"📋 send via Meta Cloud<br/>(se entrada=meta_cloud)<br/>pendência PR-C 009"/]
+        OUT_E[/"✅ Evolution"/]
+        OUT_M[/"📋 Meta Cloud<br/>pendência PR-C 009"/]
     end
 
     canais --> normaliza --> rot --> proc --> pipe --> saida
@@ -70,21 +98,22 @@ flowchart TD
     subgraph obs["⑦ Admin + Observabilidade (fire-and-forget)"]
         direction LR
         TRACES[("traces + trace_steps<br/>routing_decisions<br/>media_analyses")]
-        PHX[/"Phoenix (Arize)<br/>OTLP gRPC"/]
-        UI[/"Admin 8 abas<br/>Next.js 15"/]
+        PHX[/"Phoenix (Arize)"/]
+        UI[/"Admin 8 abas"/]
     end
 
-    pipe -.->|StepRecord| TRACES
-    proc -.->|MediaAnalysis| TRACES
-    pipe -.->|OTLP spans| PHX
-    proc -.->|OTLP spans| PHX
+    pipe -.-> TRACES
+    proc -.-> TRACES
+    pipe -.-> PHX
     TRACES --> UI
 
     style IDEM fill:#ffd
     style DEC fill:#f9f
-    style EVAL fill:#f9f
+    style EV fill:#f9f
     style OUT_M fill:#eee,stroke:#999,stroke-dasharray: 5 5
 ```
+
+</details>
 
 **O que entra**: mensagens WhatsApp via Evolution (gateway não-oficial) ou Meta Cloud API (oficial). 9 modalidades de conteúdo — texto, áudio (PTT ou arquivo), imagem, documento (PDF/DOCX), sticker, localização, contato, reação (emoji), e "unsupported" (vídeo, poll, call, edited, system).
 
@@ -105,6 +134,9 @@ O ProsaUAI recebe mensagens de duas fontes hoje. Cada canal implementa o protoco
 ### 1.1 Evolution API (WhatsApp não-oficial) ✅
 
 Gateway Evolution API self-hosted (ou cloud) que conecta a uma conta WhatsApp via Baileys. Primeiro canal implementado (epic 001), em produção com 2 tenants.
+
+<details>
+<summary>📊 Diagrama de fluxo — recepção, auth e normalização</summary>
 
 ```mermaid
 sequenceDiagram
@@ -138,6 +170,8 @@ sequenceDiagram
     end
 ```
 
+</details>
+
 **Descarta** (retorna 204 No Content):
 - Webhook de bot próprio — `from_me: true` (echo prevention)
 - Eventos não-mensagem que não mapeiam para ContentKind (`connection.update`, `presence.update`)
@@ -146,6 +180,9 @@ sequenceDiagram
 ### 1.2 Meta Cloud API (WhatsApp oficial) ✅ — epic 009 PR-C
 
 Adapter oficial Meta Cloud (WhatsApp Business Platform). Segundo canal implementado — prova que a abstração `ChannelAdapter` suporta fonte independente sem tocar no core.
+
+<details>
+<summary>📊 Sequência — 1.2 Meta Cloud API (WhatsApp oficial) ✅ — epic 009 PR-C</summary>
 
 ```mermaid
 sequenceDiagram
@@ -191,6 +228,8 @@ sequenceDiagram
     end
 ```
 
+</details>
+
 **Diferenças vs. Evolution**:
 - URLs de mídia signed com TTL **5 minutos** (vs. URLs Evolution mais longevas) — cache sha256 reduz misses
 - WhatsApp IDs (`wa_id`) têm formato diferente de JIDs — idempotency key agnóstica via `sha256(source+instance+external_id)` já cobre
@@ -199,6 +238,9 @@ sequenceDiagram
 **Limite atual**: outbound para Meta Cloud ainda **NÃO implementado**. Toda resposta sai por Evolution. Para tenants multi-canal, é necessário que exista Evolution configurado — follow-up do PR-C.
 
 ### 1.3 Canais planejados 📋
+
+<details>
+<summary>📊 Fluxograma — 1.3 Canais planejados 📋</summary>
 
 ```mermaid
 flowchart LR
@@ -218,6 +260,8 @@ flowchart LR
     next -.-> longo
 ```
 
+</details>
+
 | Canal | Epic | Observação |
 |-------|------|------------|
 | Instagram DM | 010 | Reusa padrão `ChannelAdapter`; meta = "diff zero em pipeline/processors/router" |
@@ -231,6 +275,9 @@ flowchart LR
 Tudo que entra vira o mesmo shape antes de qualquer decisão de negócio. Contrato único para o resto do pipeline — isolamento total de particularidades de cada fonte.
 
 ### 2.1 CanonicalInboundMessage ✅ ([ADR-030](../decisions/ADR-030-canonical-inbound-message.md))
+
+<details>
+<summary>📊 Estrutura — 2.1 CanonicalInboundMessage ✅ ([ADR-030](../decisions/ADR-030-canonical-inbound-message.md))</summary>
 
 ```mermaid
 classDiagram
@@ -281,6 +328,8 @@ classDiagram
     ContentBlock -- ContentKind
 ```
 
+</details>
+
 **9 ContentKinds** e o que cada uma carrega:
 
 | Kind | Fields específicos | Exemplos |
@@ -309,8 +358,8 @@ classDiagram
 flowchart TD
     M["CanonicalInboundMessage"] --> H["Calcula key:<br/>sha256(source + instance + external_id)"]
     H --> R{"Redis SETNX<br/>idem:{hash}<br/>EX 86400 (24h)"}
-    R -->|NOT SET (único)| OK["Continua para debounce"]
-    R -->|ALREADY SET (duplicata)| DROP["DropDecision<br/>reason='duplicate'"]
+    R -->|NOT SET = único| OK["Continua para debounce"]
+    R -->|ALREADY SET = duplicata| DROP["DropDecision<br/>reason='duplicate'"]
     DROP --> TR[("Persiste em<br/>routing_decisions<br/>para audit")]
     DROP --> END["Retorna 200 OK,<br/>não dispara pipeline"]
     style OK fill:#d4f4dd
@@ -322,6 +371,9 @@ flowchart TD
 ### 2.3 Debounce — agrupamento de mensagens rápidas ✅
 
 **Por que existe**: usuário manda 3 mensagens em 2s ("oi" / "quero saber" / "sobre o pedido 123"). Sem debounce: pipeline roda 3x, custa 3x LLM, resposta à primeira chega antes das outras 2 serem lidas pelo bot. Contexto quebrado.
+
+<details>
+<summary>📊 Sequência — 2.3 Debounce — agrupamento de mensagens rápidas ✅</summary>
 
 ```mermaid
 sequenceDiagram
@@ -357,6 +409,8 @@ sequenceDiagram
     P-->>W: pipeline completo → resposta única
 ```
 
+</details>
+
 **Detalhes**:
 - Lua script atômico: buffer + timer numa operação — sem race condition
 - **Jitter aleatório 0-1s**: 100 clientes digitando ao mesmo tempo? TTLs espalhados, flushes não-sincronizados (evita avalanche)
@@ -376,6 +430,9 @@ sequenceDiagram
 ## 3. Roteamento MECE (2 camadas) ✅ — epic 004
 
 Epic 004 estabeleceu um router **declarativo** que substitui ifs hardcoded. Duas camadas garantem que a decisão é **pura** (testável) e o *despacho* é **data-driven** (config YAML por tenant).
+
+<details>
+<summary>📊 Fluxograma — 3. Roteamento MECE (2 camadas) ✅ — epic 004</summary>
 
 ```mermaid
 flowchart TD
@@ -407,6 +464,8 @@ flowchart TD
     style ACTION fill:#ffd
     style BYP fill:#eee,stroke:#999,stroke-dasharray: 5 5
 ```
+
+</details>
 
 ### 3.1 Layer 1 — `classify()` (função pura)
 
@@ -500,6 +559,9 @@ default:
 
 ### 4.1 Despacho por kind (diagrama central — o que acontece com cada tipo de conteúdo)
 
+<details>
+<summary>📊 Fluxograma — 4.1 Despacho por kind (diagrama central — o que acontece com cada tipo de conteúdo)</summary>
+
 ```mermaid
 flowchart TD
     B["ContentBlock<br/>(kind: ContentKind)"] --> REG["processors.registry.get(kind)"]
@@ -557,6 +619,8 @@ flowchart TD
     style OUT1 fill:#d4f4dd
 ```
 
+</details>
+
 ### 4.2 Tabela consolidada dos 9 processors
 
 Dois grupos distintos: **providers externos** (podem falhar → fallback tonalizado) vs **conversores determinísticos locais** (input já tem tudo que o processor precisa → não existe "falhar").
@@ -581,13 +645,16 @@ Dois grupos distintos: **providers externos** (podem falhar → fallback tonaliz
 
 **Sim, em conversa 1:1 — e a decisão do conteúdo fica com o LLM, não com o processor.** O fluxo é:
 
+<details>
+<summary>📊 Fluxograma — "Então o bot responde quando recebe só um sticker?"</summary>
+
 ```mermaid
 flowchart TD
     S["Sticker chega isolado"] --> R{"Router §3<br/>5 ações MECE"}
     R -->|"1:1 (individual)"| RESP["RESPOND → pipeline roda"]
     R -->|grupo SEM @mention| LOG["LOG_ONLY → sem resposta"]
     R -->|grupo COM @mention| RESP
-    R -->|from_me=true<br/>(bot próprio)| D1["DROP → sem resposta"]
+    R -->|"from_me=true<br/>(bot próprio)"| D1["DROP → sem resposta"]
     R -->|duplicata pós-idempotência| D2["DROP → sem resposta"]
 
     RESP --> S6["Step 6 converte:<br/>'[sticker: animated]'"]
@@ -606,6 +673,8 @@ flowchart TD
     style D2 fill:#eee
     style REPLY fill:#d4f4dd
 ```
+
+</details>
 
 **Mesmo princípio para location/contact/reaction/unsupported**: o marker vai para o LLM, que interpreta e responde. Exemplos:
 - **Localização** enviada → LLM pode responder "Anotei sua localização! Como posso ajudar?"
@@ -641,6 +710,9 @@ flowchart LR
 
 ### 4.4 Budget per-tenant + Circuit Breaker
 
+<details>
+<summary>📊 Fluxograma — 4.4 Budget per-tenant + Circuit Breaker</summary>
+
 ```mermaid
 flowchart TD
     START["Content Processor start"] --> QB["Query processor_usage_daily<br/>WHERE tenant_id=? AND kind=? AND date=today"]
@@ -667,6 +739,8 @@ flowchart TD
     style OPEN fill:#f4d4d4
 ```
 
+</details>
+
 **`processor_usage_daily`**: tabela admin-only (sem RLS — [ADR-027](../decisions/ADR-027-admin-tables-no-rls.md)). Agregação diária por `(tenant_id, kind, provider, date)`.
 **Check pré-run**: single-row query (`SELECT cost_usd FROM processor_usage_daily WHERE ...`) — <1ms.
 **Enforcement**: acima do budget → mensagem tonalizada pela persona. **NUNCA** erro técnico cru para o end-user.
@@ -680,6 +754,9 @@ O debounce (§2.3) pode agrupar **N CanonicalInboundMessages** do mesmo sender e
 1. 📸 **Foto** do problema (sem caption)
 2. 🎙️ **Áudio** explicando o que está acontecendo (15s)
 3. 💬 **Texto** "número do pedido 12345"
+
+<details>
+<summary>📊 Sequência — 4.5 Multi-message merge — o caso "foto + áudio + texto em 3s"</summary>
 
 ```mermaid
 sequenceDiagram
@@ -731,6 +808,8 @@ sequenceDiagram
     S6->>S6: concatenated_text = "\n\n".join([t0, t1, t2])
     S6->>S7: ContentProcessOutcome.concatenated_text
 ```
+
+</details>
 
 **Output consolidado** entregue ao pipeline IA:
 
@@ -796,6 +875,9 @@ content_processing:
 Orquestrado em `prosauai.conversation.pipeline.process_conversation()`. Cada step emite 1 OTel span + 1 row em `public.trace_steps` (admin-only, fire-and-forget — [ADR-028](../decisions/ADR-028-pipeline-fire-and-forget-persistence.md)). **Timeout end-to-end**: 28s (SLA 30s menos margem para deliver).
 
 ### 5.1 Sequência completa
+
+<details>
+<summary>📊 Sequência — 5.1 Sequência completa</summary>
 
 ```mermaid
 sequenceDiagram
@@ -914,6 +996,8 @@ sequenceDiagram
     P->>T: persist_trace_fire_and_forget(trace, [13 steps])<br/>batch INSERT via pool_admin
 ```
 
+</details>
+
 ### 5.2 Tabela dos 13 steps
 
 | # | Step | Propósito | Entra | Sai | Skip quando |
@@ -949,12 +1033,15 @@ flowchart LR
 
 ### 5.4 Safety — input_guard (step 8) + output_guard (step 12)
 
+<details>
+<summary>📊 Fluxograma — 5.4 Safety — input_guard (step 8) + output_guard (step 12)</summary>
+
 ```mermaid
 flowchart TD
     IN["texto"] --> G1{"input_guard<br/>safety/input_guard.py"}
-    G1 -->|PII detectada<br/>(CPF/tel/email)| FLAG["FLAG<br/>loga + passa"]
+    G1 -->|"PII detectada<br/>(CPF/tel/email)"| FLAG["FLAG<br/>loga + passa"]
     G1 -->|length >4000| BLOCK_L["BLOCK<br/>retorna: 'Sua mensagem é<br/>muito longa'"]
-    G1 -->|injection pattern<br/>(system override, roleplay)| BLOCK_I["BLOCK<br/>retorna: FALLBACK_MESSAGE"]
+    G1 -->|"injection pattern<br/>(system override, roleplay)"| BLOCK_I["BLOCK<br/>retorna: FALLBACK_MESSAGE"]
     G1 -->|PASS| STEP9["→ step 9"]
     FLAG --> STEP9
     BLOCK_L --> END1["pula para step 13 deliver"]
@@ -973,7 +1060,12 @@ flowchart TD
     style BLOCK_I fill:#f4d4d4
 ```
 
+</details>
+
 ### 5.5 Agent run — pydantic-ai (step 10)
+
+<details>
+<summary>📊 Fluxograma — 5.5 Agent run — pydantic-ai (step 10)</summary>
 
 ```mermaid
 flowchart LR
@@ -996,6 +1088,8 @@ flowchart LR
     style HF fill:#eee,stroke:#999,stroke-dasharray: 5 5
 ```
 
+</details>
+
 - **Modelo default**: `gpt-5-mini` ([ADR-025](../decisions/ADR-025-gpt5-4-mini-default-model.md)), configurável por agente via `agents.model`
 - **Single call default**: um `agent.run()` por conversa ativa
 - **Pipeline steps configuráveis por agente** (classifier → clarifier → resolver → specialist): **PLANEJADO epic 022** — hoje só single call
@@ -1017,6 +1111,9 @@ flowchart LR
 
 **Checks executados** (ordem): empty/whitespace → too-short (<10 chars) → bad-encoding (C0/C1 proibido) → too-long (trunca em sentence boundary, score=0.5).
 
+<details>
+<summary>📊 Fluxograma — 5.6 Evaluator — decision tree (step 11)</summary>
+
 ```mermaid
 flowchart TD
     GR["GenerationResult<br/>(response_text)"] --> EV["evaluator.py<br/>HEURÍSTICO DETERMINÍSTICO<br/>(zero LLM, <1ms)"]
@@ -1035,7 +1132,7 @@ flowchart TD
 
     F --> RT{"retry_count == 0?"}
     RT -->|sim| RETRY["action='retry'<br/>volta para step 10<br/>com retry_count=1"]
-    RT -->|não (já retentou)| FB["action='fallback'<br/>retorna FALLBACK_MESSAGE<br/>canned em PT-BR"]
+    RT -->|"não (já retentou)"| FB["action='fallback'<br/>retorna FALLBACK_MESSAGE<br/>canned em PT-BR"]
     RETRY --> STEP10["→ step 10 (retry)"]
     FB --> STEP12C["→ step 12 (msg canned)"]
 
@@ -1044,6 +1141,8 @@ flowchart TD
     style F fill:#f4d4d4
     style FB fill:#f4d4d4
 ```
+
+</details>
 
 **O que o evaluator de hoje NÃO faz** (e que se espera confundir com ele):
 - ❌ Não avalia "fit à intent" — isso é trabalho do LLM de geração (step 10)
@@ -1062,6 +1161,9 @@ flowchart TD
 
 - Entrou por **Evolution** (`source="evolution"`) → `EvolutionProvider.send_text(instance, jid, text)` ✅
 - Entrou por **Meta Cloud** (`source="meta_cloud"`) → `MetaCloudProvider.send_text(phone_number_id, wa_id, text)` **📋 não implementado**
+
+<details>
+<summary>📊 Fluxograma — 5.7 Delivery (step 13) — regra de ouro + retry</summary>
 
 ```mermaid
 flowchart TD
@@ -1082,6 +1184,8 @@ flowchart TD
     style R_M fill:#eee,stroke:#999,stroke-dasharray: 5 5
 ```
 
+</details>
+
 **Status atual (gap)**:
 - ✅ `apps/api/prosauai/channels/outbound/evolution.py` existe e implementa `MessagingProvider.send_text` + `send_media`
 - ❌ `apps/api/prosauai/channels/outbound/meta_cloud.py` **não existe**
@@ -1089,6 +1193,9 @@ flowchart TD
 - Workaround temporário: tenants multi-canal (que também têm Evolution) respondem via Evolution mesmo recebendo via Meta Cloud — subideal porque o cliente pode notar a inconsistência (ex.: número diferente aparecendo no WhatsApp)
 
 **Retry policy (aplicável a ambos os providers quando implementados)**:
+
+<details>
+<summary>📊 Sequência — 5.7 Delivery (step 13) — regra de ouro + retry</summary>
 
 ```mermaid
 sequenceDiagram
@@ -1128,6 +1235,8 @@ sequenceDiagram
     P->>DB: UPDATE conversations.last_activity_at
     P->>DB: UPDATE conversation_states<br/>message_count++, token_count+=N
 ```
+
+</details>
 
 **Por que manter o canal de origem importa** (business reason):
 - Cliente enxerga um **número/identidade consistente** — se recebe resposta de número diferente, desconfia
@@ -1193,6 +1302,9 @@ Entregáveis do epic 014:
 
 ### 7.1 O que epic 015 entregará 📋
 
+<details>
+<summary>📊 Sequência — 7.1 O que epic 015 entregará 📋</summary>
+
 ```mermaid
 sequenceDiagram
     autonumber
@@ -1228,6 +1340,8 @@ sequenceDiagram
     end
 ```
 
+</details>
+
 Entregáveis:
 - PG LISTEN/NOTIFY em eventos (INSERT em `games`, `group_members`, ou tabelas custom per-tenant)
 - Rules per-tenant + template Jinja2 **SEM LLM** (templates estáticos)
@@ -1238,6 +1352,9 @@ Entregáveis:
 ---
 
 ## 8. Admin (epic 008 — shipped) ✅
+
+<details>
+<summary>📊 Fluxograma — 8. Admin (epic 008 — shipped) ✅</summary>
 
 ```mermaid
 flowchart LR
@@ -1286,6 +1403,8 @@ flowchart LR
     style POOL_ADM fill:#ffd
     style POOL_APP fill:#ddf
 ```
+
+</details>
 
 ### 8.1 8 abas operacionais
 
@@ -1349,6 +1468,9 @@ flowchart LR
 
 Arquitetura: **OpenTelemetry SDK + Phoenix (Arize) + structlog bridge**. Fire-and-forget — falhas não bloqueiam.
 
+<details>
+<summary>📊 Fluxograma — 9. Observabilidade ✅</summary>
+
 ```mermaid
 flowchart LR
     subgraph app["apps/api (FastAPI)"]
@@ -1382,6 +1504,8 @@ flowchart LR
     BSP -.->|force_flush<br/>no shutdown| EXP
 ```
 
+</details>
+
 **Phoenix (Arize) self-hosted** ([ADR-020](../decisions/ADR-020-phoenix-observability.md)) — substitui LangFuse. Single container, Postgres backend, sem ClickHouse.
 
 **Attributes padronizados** ([observability/conventions.py](../../../apps/api/prosauai/observability/conventions.py)):
@@ -1400,6 +1524,9 @@ flowchart LR
 Plataforma multi-tenant **por construção** desde epic 003. Cada mensagem carrega `instance_name`/`tenant_slug` → `Tenant` resolvido **antes de qualquer outra etapa**. Três fases de onboarding planejadas, atualmente na **Fase 1**.
 
 ### 10.1 Fase 1 — Onboarding manual YAML ✅ (HOJE)
+
+<details>
+<summary>📊 Sequência — 10.1 Fase 1 — Onboarding manual YAML ✅ (HOJE)</summary>
 
 ```mermaid
 sequenceDiagram
@@ -1427,12 +1554,17 @@ sequenceDiagram
     API-->>Dev: Tenant ativo
 ```
 
+</details>
+
 - 100% manual, aceitável para 2-5 tenants internos
 - **Tenants ativos hoje**: Ariel (Pace-internal), ResenhAI (Resenha-internal)
 - Hot reload via `config_poller` — mudanças em `tenants.yaml` aplicadas em 60s sem restart
 - Sem rollback automatizado, sem auditoria de criação, sem self-service
 
 ### 10.2 Fase 2 — Admin API 📋 (planejado)
+
+<details>
+<summary>📊 Sequência — 10.2 Fase 2 — Admin API 📋 (planejado)</summary>
 
 ```mermaid
 sequenceDiagram
@@ -1457,6 +1589,8 @@ sequenceDiagram
     API-->>Cl: Echo (tenant validado)
 ```
 
+</details>
+
 - Vendas/admin Pace cria tenant via API
 - Cliente faz a integração do lado dele (sem acesso ao código Pace)
 - Caddy + Let's Encrypt fornece TLS público
@@ -1465,6 +1599,9 @@ sequenceDiagram
 - **Trigger**: **primeiro cliente externo pagante**
 
 ### 10.3 Fase 3 — Self-service + Postgres + Stripe 📋 (planejado)
+
+<details>
+<summary>📊 Sequência — 10.3 Fase 3 — Self-service + Postgres + Stripe 📋 (planejado)</summary>
 
 ```mermaid
 sequenceDiagram
@@ -1494,6 +1631,8 @@ sequenceDiagram
     Ops->>Cl: Email + investigação
 ```
 
+</details>
+
 - Zero intervenção manual no happy path
 - Postgres como source of truth ([ADR-023](../decisions/ADR-023-tenant-store-postgres-migration.md)) — RLS, audit trail, backup
 - Circuit breaker per-tenant — 1 cliente não derruba outros
@@ -1503,6 +1642,9 @@ sequenceDiagram
 - **Trigger**: ≥5 tenants reais OU dor operacional documentada
 
 ### 10.4 RLS + Schema Isolation ([ADR-024](../decisions/ADR-024-schema-isolation.md))
+
+<details>
+<summary>📊 Fluxograma — 10.4 RLS + Schema Isolation ([ADR-024](../decisions/ADR-024-schema-isolation.md))</summary>
 
 ```mermaid
 flowchart TD
@@ -1526,8 +1668,10 @@ flowchart TD
     ADMIN["pool_admin<br/>BYPASSRLS"] --> PUB
     ADMIN --> PROS
     ADMIN --> OPS
-    X1 -.->|RLS policy:<br/>tenant_id = public.tenant_id()| PF
+    X1 -.->|"RLS policy:<br/>tenant_id = public.tenant_id()"| PF
 ```
+
+</details>
 
 - **4 schemas**: `auth` (Supabase), `public` (admin-only + helper), `prosauai` (business + RLS), `prosauai_ops` (operações)
 - Toda tabela business tem `tenant_id UUID NOT NULL` + RLS policy `USING (tenant_id = public.tenant_id())`
@@ -1538,6 +1682,9 @@ flowchart TD
 ---
 
 ## 11. Retenção & LGPD ([ADR-018](../decisions/ADR-018-data-retention-lgpd.md) + [ADR-034](../decisions/ADR-034-media-retention-policy.md))
+
+<details>
+<summary>📊 Timeline — 11. Retenção & LGPD ([ADR-018](../decisions/ADR-018-data-retention-lgpd.md) + [ADR-034](../decisions/ADR-034-media-retention-policy.md))</summary>
 
 ```mermaid
 gantt
@@ -1558,6 +1705,8 @@ gantt
     section Bytes brutos
     bytes de áudio/imagem/doc (NÃO persistidos — só em memória)  :active, raw, 0, 1
 ```
+
+</details>
 
 | Dado | Retenção | Mecanismo |
 |------|----------|-----------|
@@ -1602,6 +1751,9 @@ flowchart LR
 
 Roadmap pós-009 (renumerado). Ver [planning/roadmap.md](../planning/roadmap.md) para tabela completa com dependências.
 
+<details>
+<summary>📊 Fluxograma — 12. O que NÃO está entregue ainda 📋</summary>
+
 ```mermaid
 flowchart LR
     DONE["HOJE (epics 001-009) ✅"] --> NEXT["NEXT (próximos ciclos)"]
@@ -1619,6 +1771,8 @@ flowchart LR
     LATER --> E21["📋 021<br/>WhatsApp Flows"]
     LATER --> E22["📋 022<br/>Agent pipeline<br/>steps configuráveis"]
 ```
+
+</details>
 
 | Epic | Feature | Trigger |
 |------|---------|---------|
