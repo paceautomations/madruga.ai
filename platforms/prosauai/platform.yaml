@@ -42,6 +42,14 @@ testing:
       type: frontend
       label: Login page
       expect_contains: ["email", "password"]
+    - url: http://localhost:8050/webhook/evolution/smoke-instance
+      type: api
+      label: "Evolution webhook (POST-only — GET probe confirms route registered)"
+      expect_status: [404, 405, 401]
+    - url: http://localhost:8050/webhook/meta_cloud/smoke-tenant
+      type: api
+      label: "Meta Cloud verify (GET handshake — missing/invalid token returns 400/403)"
+      expect_status: [400, 403, 404, 422]
   required_env:
     - JWT_SECRET
     - ADMIN_BOOTSTRAP_EMAIL

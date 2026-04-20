@@ -296,7 +296,7 @@
 
 **Goal**: Plug Meta Cloud API as second canal without touching pipeline/processors/router (SC-013 gate). Validates the ChannelAdapter abstraction was not Evolution-shaped.
 
-**Independent Test**: Feed a real Meta Cloud payload fixture → pipeline produces a trace structurally identical to Evolution (same 14 steps). Diff of the PR touches zero bytes in `apps/api/prosauai/pipeline.py`, `apps/api/prosauai/processors/`, `apps/api/prosauai/core/router/`.
+**Independent Test**: Feed a real Meta Cloud payload fixture → pipeline produces a trace structurally identical to Evolution (same 14 steps). Diff of the PR touches zero bytes in `apps/api/prosauai/pipeline/`, `apps/api/prosauai/processors/`, `apps/api/prosauai/core/router/`.
 
 ### Tests for User Story 6
 
@@ -305,7 +305,7 @@
 - [x] T192 [P] [US6] Unit test `apps/api/tests/unit/channels/test_meta_cloud_auth.py` — (a) GET `hub.verify_token` match → returns `hub.challenge`, (b) GET mismatch → 403, (c) POST valid `X-Hub-Signature-256` → pass, (d) POST invalid signature → AuthError
 - [x] T193 [P] [US6] Integration test `apps/api/tests/integration/test_meta_cloud_end_to_end.py` — POST a Meta Cloud audio payload with valid HMAC → trace completes with 14 steps, response delivered. Uses existing AudioProcessor without modification (validates SC-013 at runtime)
 - [x] T194 [P] [US6] Cross-source idempotency test `apps/api/tests/integration/test_cross_source_idempotency.py` — same `external_message_id` delivered via both Evolution (source=evolution, instance=ariel) and Meta Cloud (source=meta_cloud, instance=phone_number_id_123) — both processed as distinct messages (decision D11, Acceptance Scenario 2)
-- [x] T195 [P] [US6] SC-013 zero-core-change gate test `apps/api/tests/ci/test_pr_c_scope.py` — runs `git diff develop..HEAD --stat apps/api/prosauai/pipeline.py apps/api/prosauai/processors/ apps/api/prosauai/core/router/` and asserts empty output. Runs in CI as PR-C merge gate
+- [x] T195 [P] [US6] SC-013 zero-core-change gate test `apps/api/tests/ci/test_pr_c_scope.py` — runs `git diff develop..HEAD --stat apps/api/prosauai/pipeline/ apps/api/prosauai/processors/ apps/api/prosauai/core/router/` and asserts empty output. Runs in CI as PR-C merge gate
 
 ### Implementation for User Story 6
 
@@ -494,7 +494,7 @@ With 3 developers:
 - PR commit messages MUST include trailer `Epic: 009-channel-ingestion-and-content-processing` for reverse-reconcile attribution (see CLAUDE.md reverse-reconcile loop invariants)
 - Stop at each Checkpoint to validate story independently
 - Avoid: vague tasks, same-file parallel conflicts, cross-story dependencies that break independence
-- SC-013 gate (zero diff in `pipeline.py` / `processors/` / `core/router/` for PR-C) is automated in T195 — run in CI as required status check
+- SC-013 gate (zero diff in `pipeline/` / `processors/` / `core/router/` for PR-C) is automated in T195 — run in CI as required status check
 
 ---
 
