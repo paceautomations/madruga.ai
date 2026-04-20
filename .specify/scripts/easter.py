@@ -731,6 +731,15 @@ async def lifespan(app: FastAPI):
                         return
                     await handle_freetext(message, adapter, chat_id, conn)
 
+                # Clear stale webhook + pending updates before polling to avoid
+                # TelegramConflictError from a previous instance's lingering
+                # getUpdates session on Telegram's side (ADR-018).
+                try:
+                    await bot.delete_webhook(drop_pending_updates=True)
+                    logger.info("telegram_webhook_reset")
+                except Exception:
+                    logger.exception("delete_webhook_failed")
+
                 tg.create_task(dp.start_polling(bot, offset=offset))
                 tg.create_task(tg_gate_poller(adapter, chat_id, conn))
                 tg.create_task(gate_reminder(conn, adapter, chat_id, _shutdown_event))
@@ -759,6 +768,15 @@ async def lifespan(app: FastAPI):
         for exc in eg.exceptions:
             logger.exception("taskgroup_error", error=str(exc))
     finally:
+        # Close aiogram HTTP session so Telegram releases the long-poll
+        # connection server-side. Avoids TelegramConflictError on the next
+        # easter restart.
+        if bot is not None:
+            try:
+                await bot.session.close()
+                logger.info("telegram_session_closed")
+            except Exception:
+                logger.exception("telegram_session_close_failed")
         try:
             conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
             logger.info("wal_checkpoint_done")

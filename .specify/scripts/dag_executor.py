@@ -2119,10 +2119,11 @@ async def dispatch_node_async(
         max_turns_override=max_turns_override,
     )
     log.info(
-        "Dispatching node '%s' async (skill: %s, timeout: %ds%s)",
+        "Dispatching node '%s' async (skill: %s, timeout: %ds, cwd=%s%s)",
         node.id,
         node.skill,
         timeout,
+        str(cwd),
         f", resume={resume_session_id[:12]}" if resume_session_id else "",
     )
 

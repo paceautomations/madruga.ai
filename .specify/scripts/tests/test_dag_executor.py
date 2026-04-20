@@ -322,6 +322,35 @@ async def test_dispatch_node_async_no_claude():
     assert "claude CLI not found" in error
 
 
+@pytest.mark.asyncio
+async def test_dispatch_node_async_propagates_cwd():
+    """create_subprocess_exec receives the cwd passed in.
+
+    Pins the external-repo dispatch invariant — if this breaks, implement
+    nodes would run in the wrong working directory.
+    """
+    from dag_executor import dispatch_node_async
+
+    mock_proc = _mock_async_proc(stdout=b"ok", stderr=b"", returncode=0)
+    captured: dict = {}
+
+    async def capturing_exec(*args, **kwargs):
+        captured.update(kwargs)
+        return mock_proc
+
+    with (
+        patch("dag_executor.shutil.which", return_value="/usr/bin/claude"),
+        patch("dag_executor.asyncio.create_subprocess_exec", side_effect=capturing_exec),
+    ):
+        await dispatch_node_async(
+            _make_node(node_id="implement:phase-1", skill="speckit.implement"),
+            "/tmp/external-repo",
+            "test prompt",
+        )
+
+    assert captured.get("cwd") == "/tmp/external-repo"
+
+
 # --- T005: Tests for dispatch_with_retry_async ---
 
 
