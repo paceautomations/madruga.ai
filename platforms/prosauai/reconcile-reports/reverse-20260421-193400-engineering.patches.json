@@ -1,0 +1,30 @@
+{
+  "patches": [
+    {
+      "file": "platforms/prosauai/engineering/containers.md",
+      "operation": "replace",
+      "anchor_before": "| prosauai-api | ✅ Operacional | 001-006 | Webhook + health + debounce + multi-tenant auth (X-Webhook-Secret) + MECE router + idempotency + **conversation pipeline 12-step** (customer lifecycle, context window, intent classifier, LLM agent pydantic-ai, safety guards 3-layer, tool registry, evaluator) + **DB migrations** (7 files, asyncpg pool, RLS on all tables) + **schema isolation** (`prosauai` + `prosauai_ops`). OTel SDK + structlog bridge. Port 8050. **Nota:** LLM orchestration atualmente roda inline na API (sem worker separado) |\n",
+      "anchor_after": "| prosauai-worker | ⏳ Planejado (arquitetura target) |",
+      "new_content": "| prosauai-api | ✅ Operacional | 001-006, 009 | Webhook + health + debounce + multi-tenant auth (X-Webhook-Secret) + MECE router + idempotency + **conversation pipeline 13-step** (customer lifecycle, context window, **content_process** step 6 — Whisper STT + gpt-4o-mini vision via `run_content_process` orquestrador — ADR-032, intent classifier, LLM agent pydantic-ai, safety guards 3-layer, tool registry, evaluator) + **RedisProcessorCache + PgBudgetTracker** instanciados no startup (`main.py` lifespan) + **DB migrations** (7 files, asyncpg pool com `pool_tenant`=`authenticated`/NOBYPASSRLS + `pool_admin`=`service_role`/BYPASSRLS — ADR-011 + ADR-027) + **schema isolation** (`prosauai` + `prosauai_ops`). OTel SDK + structlog bridge. Port 8050. **Nota:** LLM orchestration atualmente roda inline na API (sem worker separado); content processing roda pre-debounce quando `ProcessorContext` disponivel, com fallback para texto bruto caso contrario |\n",
+      "reason": "Commits c45f658 (wirou run_content_process pre-debounce + RedisProcessorCache/PgBudgetTracker no startup) e f48cf35 (timeout ImageProcessor 12s->30s) mostram que o pipeline agora e 13-step em producao (step 6 content_process da ADR-032). Doc dizia '12-step' pre-epic-009. Epic tag epic:009 nao foi usada nesses fixes, entao ficaram como drift.",
+      "sha_refs": [
+        "c45f658455ae2b7c1e8b4b61e671465b162d6f97",
+        "f48cf35afa0fe989cb9605b0ca27f0a3863aed31"
+      ],
+      "layer": "engineering"
+    },
+    {
+      "file": "platforms/prosauai/engineering/blueprint.md",
+      "operation": "replace",
+      "anchor_before": "│   ├── conversation/          # Epic 005: Conversation Core (LLM pipeline)\n│   │   ├── pipeline.py        # 12-step orchestrated conversation flow\n",
+      "anchor_after": "│   │   ├── agent.py           # pydantic-ai agent generation + response",
+      "new_content": "│   ├── conversation/          # Epic 005: Conversation Core (LLM pipeline) + Epic 009 (content_process)\n│   │   ├── pipeline.py        # 13-step orchestrated conversation flow (step 6 content_process — ADR-032)\n",
+      "reason": "Commits c45f658 + f48cf35 confirmam step 6 content_process ativo em producao. Blueprint ainda listava '12-step'.",
+      "sha_refs": [
+        "c45f658455ae2b7c1e8b4b61e671465b162d6f97",
+        "f48cf35afa0fe989cb9605b0ca27f0a3863aed31"
+      ],
+      "layer": "engineering"
+    }
+  ]
+}

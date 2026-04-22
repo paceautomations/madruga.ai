@@ -140,8 +140,8 @@ prosauai/
 │   │       ├── matchers.py    # MentionMatchers (3-strategy: @lid, phone, keywords)
 │   │       ├── errors.py      # Custom exceptions
 │   │       └── verify.py      # MECE overlap verification CLI
-│   ├── conversation/          # Epic 005: Conversation Core (LLM pipeline)
-│   │   ├── pipeline.py        # 12-step orchestrated conversation flow
+│   ├── conversation/          # Epic 005: Conversation Core (LLM pipeline) + Epic 009 (content_process)
+│   │   ├── pipeline.py        # 13-step orchestrated conversation flow (step 6 content_process — ADR-032)
 │   │   ├── agent.py           # pydantic-ai agent generation + response
 │   │   ├── classifier.py      # Intent classification (LLM structured output, 0.7 threshold)
 │   │   ├── context.py         # Sliding context window (N=10 msgs, 8K token budget)
