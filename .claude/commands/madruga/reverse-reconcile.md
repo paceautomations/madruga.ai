@@ -45,17 +45,9 @@ Save the patch bundles (per layer) to `platforms/<name>/reconcile-reports/revers
 
 ## Instructions
 
-### Phase 1. Detect unreconciled commits
+### Phase 1. Ingest missing commits from `base_branch`
 
-Run the count via the mark script:
-
-```bash
-python3 .specify/scripts/reverse_reconcile_mark.py --platform <name> --count-unreconciled --json
-```
-
-If `unreconciled == 0`, STOP and report "no drift".
-
-### Phase 2. Ingest missing commits from `base_branch`
+**Always ingest first** — `reconciled_at IS NULL` only counts what the DB already knows about. Commits newly pushed to `origin/<base_branch>` must be ingested before any counting, or Phase 2 will falsely report "no drift".
 
 ```bash
 python3 .specify/scripts/reverse_reconcile_ingest.py --platform <name> --json
@@ -63,13 +55,23 @@ python3 .specify/scripts/reverse_reconcile_ingest.py --platform <name> --json
 
 **Branch scope**: the script reads `platform.yaml → repo.base_branch` (e.g., `develop` for prosauai, `main` for most) and walks **only `origin/<base_branch>`**. Feature branches, epic branches, and abandoned branches are excluded — only commits that shipped to the production branch count as drift. Idempotent.
 
-The result JSON's `branch` field tells you which branch was walked. **Echo it to the user in Phase 1 output** so mismatches with expectations are caught early.
+Echo the result JSON to the user: `branch`, `remote_total`, `inserted`, `auto_marked_on_insert`, `retroactively_marked`. The `branch` field surfaces mismatches with expectations early.
 
 **Backlog shortcut** — if this is the first run on a repo with hundreds of pre-existing commits, ask the user if they want to skip inspection of everything before a cutoff SHA:
 
 ```bash
 python3 .specify/scripts/reverse_reconcile_ingest.py --platform <name> --assume-reconciled-before <sha>
 ```
+
+### Phase 2. Count remaining unreconciled commits
+
+After ingest, count the residue:
+
+```bash
+python3 .specify/scripts/reverse_reconcile_mark.py --platform <name> --count-unreconciled --json
+```
+
+If `unreconciled == 0`, STOP and report "no drift". Otherwise continue to triage.
 
 ### Phase 3. Deterministic triage
 
