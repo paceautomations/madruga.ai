@@ -197,19 +197,19 @@ Se PR-B estourar semana 2 → **PR-C sacrificavel** (Phases 5, 7, 8 viram follow
 
 ### Tests for User Story 3
 
-- [ ] T400 [P] [US3] Criar `apps/api/tests/unit/api/admin/test_conversations_handoff.py` cobrindo: (a) POST mute sem auth → 401; (b) admin tenant A toga conversa tenant B → 403; (c) Pace ops BYPASSRLS toga cross-tenant → 200; (d) mute persiste `ai_muted_by_user_id=<JWT.sub>`; (e) unmute limpa `ai_auto_resume_at`
-- [ ] T401 [P] [US3] E2E Playwright `apps/admin/tests/e2e/handoff-toggle.spec.ts`: login → abrir conversa → ver badge → clicar Silenciar → badge atualiza → clicar Retomar → badge atualiza
+- [x] T400 [P] [US3] Criar `apps/api/tests/unit/api/admin/test_conversations_handoff.py` cobrindo: (a) POST mute sem auth → 401; (b) admin tenant A toga conversa tenant B → 403; (c) Pace ops BYPASSRLS toga cross-tenant → 200; (d) mute persiste `ai_muted_by_user_id=<JWT.sub>`; (e) unmute limpa `ai_auto_resume_at`
+- [x] T401 [P] [US3] E2E Playwright `apps/admin/tests/e2e/handoff-toggle.spec.ts`: login → abrir conversa → ver badge → clicar Silenciar → badge atualiza → clicar Retomar → badge atualiza
 
 ### Implementation for User Story 3
 
-- [ ] T410 [US3] Em `apps/api/prosauai/api/admin/conversations.py` adicionar `POST /admin/conversations/{id}/mute` recebendo `{reason?: string}` → chama `state.mute_conversation(reason='manual_toggle', source='manual_toggle', muted_by_user_id=<JWT.sub>)`
-- [ ] T411 [US3] Em `apps/api/prosauai/api/admin/conversations.py` adicionar `POST /admin/conversations/{id}/unmute` → chama `state.resume_conversation(source='manual_toggle', resumed_by_user_id=<JWT.sub>)` + limpa `ai_auto_resume_at`
-- [ ] T412 [US3] Validar autorizacao: admin comum restrito ao proprio tenant (via JWT.tenant_id); Pace ops com role `pace_admin` usa `pool_admin` BYPASSRLS (ADR-027)
-- [ ] T413 [US3] Estender `apps/api/prosauai/api/admin/conversations.py` GET list/detail para retornar `ai_active`, `ai_muted_reason`, `ai_muted_at` no payload (sem regressao de latencia — indice ja cobre)
-- [ ] T414 [P] [US3] Em `apps/admin/src/app/admin/(authenticated)/conversations/page.tsx` adicionar coluna/badge "AI ativa" (verde) / "AI silenciada por: {reason} desde {time}" (vermelho) em cada linha da lista — validar <100ms p95
-- [ ] T415 [US3] Em `apps/admin/src/app/admin/(authenticated)/conversations/[id]/page.tsx` adicionar botao contextual "Silenciar AI" (quando `ai_active=true`) / "Retomar AI" (quando false) → chama mute/unmute endpoint via TanStack Query mutation
-- [ ] T416 [P] [US3] Criar componente compartilhado `apps/admin/src/components/handoff-badge.tsx` renderizando badge com reason+timestamp (reuso lista+detalhe)
-- [ ] T417 [US3] Audit log: `handoff_events.metadata` inclui `admin_user_id=<JWT.sub>` para toggle manual; entry correspondente em `audit_logs` existente
+- [x] T410 [US3] Em `apps/api/prosauai/api/admin/conversations.py` adicionar `POST /admin/conversations/{id}/mute` recebendo `{reason?: string}` → chama `state.mute_conversation(reason='manual_toggle', source='manual_toggle', muted_by_user_id=<JWT.sub>)`
+- [x] T411 [US3] Em `apps/api/prosauai/api/admin/conversations.py` adicionar `POST /admin/conversations/{id}/unmute` → chama `state.resume_conversation(source='manual_toggle', resumed_by_user_id=<JWT.sub>)` + limpa `ai_auto_resume_at`
+- [x] T412 [US3] Validar autorizacao: admin comum restrito ao proprio tenant (via JWT.tenant_id); Pace ops com role `pace_admin` usa `pool_admin` BYPASSRLS (ADR-027)
+- [x] T413 [US3] Estender `apps/api/prosauai/api/admin/conversations.py` GET list/detail para retornar `ai_active`, `ai_muted_reason`, `ai_muted_at` no payload (sem regressao de latencia — indice ja cobre)
+- [x] T414 [P] [US3] Em `apps/admin/src/app/admin/(authenticated)/conversations/page.tsx` adicionar coluna/badge "AI ativa" (verde) / "AI silenciada por: {reason} desde {time}" (vermelho) em cada linha da lista — validar <100ms p95
+- [x] T415 [US3] Em `apps/admin/src/app/admin/(authenticated)/conversations/[id]/page.tsx` adicionar botao contextual "Silenciar AI" (quando `ai_active=true`) / "Retomar AI" (quando false) → chama mute/unmute endpoint via TanStack Query mutation
+- [x] T416 [P] [US3] Criar componente compartilhado `apps/admin/src/components/handoff-badge.tsx` renderizando badge com reason+timestamp (reuso lista+detalhe)
+- [x] T417 [US3] Audit log: `handoff_events.metadata` inclui `admin_user_id=<JWT.sub>` para toggle manual; entry correspondente em `audit_logs` existente
 
 **Checkpoint US3**: admin UI staging mostra badges em todas as conversas; toggle manual flipa bit + UI atualiza em <2s (SC-013); Playwright E2E verde.
 
@@ -223,19 +223,19 @@ Se PR-B estourar semana 2 → **PR-C sacrificavel** (Phases 5, 7, 8 viram follow
 
 ### Tests for User Story 4
 
-- [ ] T500 [P] [US4] Criar `apps/api/tests/unit/handoff/test_none.py` (≥95% coverage) cobrindo: (a) `fromMe:true` nao-matched → mute com `reason='fromMe_detected'` e `auto_resume_at = now + human_pause_minutes`; (b) `fromMe:true` matched em `bot_sent_messages` (sent_at <10s) → NAO muta; (c) `fromMe:true` matched com `sent_at >10s` → mute (humano respondeu depois); (d) segundo `fromMe` nao-matched enquanto ja mutado → atualiza `ai_auto_resume_at` renovando timer; (e) `is_group=true` → skip + log `noneadapter_group_skip`
-- [ ] T501 [P] [US4] Unit test para cron `bot_sent_messages_cleanup_cron` em `test_scheduler.py`: singleton via advisory lock; deleta entradas com `sent_at < now - 48h`; cadencia 12h
-- [ ] T502 [P] [US4] Integration test em `apps/api/tests/integration/test_handoff_flow_none_adapter.py`: (1) tenant `helpdesk.type: none` + bot envia → bot_sent_messages gravado; (2) Evolution webhook `fromMe:true` nao-matched → mute + auto_resume_at setado; (3) wait + scheduler iteration → resume; (4) replay webhook com matched → no-op; (5) grupo `is_group=true` → skip silencioso
+- [x] T500 [P] [US4] Criar `apps/api/tests/unit/handoff/test_none.py` (≥95% coverage) cobrindo: (a) `fromMe:true` nao-matched → mute com `reason='fromMe_detected'` e `auto_resume_at = now + human_pause_minutes`; (b) `fromMe:true` matched em `bot_sent_messages` (sent_at <10s) → NAO muta; (c) `fromMe:true` matched com `sent_at >10s` → mute (humano respondeu depois); (d) segundo `fromMe` nao-matched enquanto ja mutado → atualiza `ai_auto_resume_at` renovando timer; (e) `is_group=true` → skip + log `noneadapter_group_skip`
+- [x] T501 [P] [US4] Unit test para cron `bot_sent_messages_cleanup_cron` em `test_scheduler.py`: singleton via advisory lock; deleta entradas com `sent_at < now - 48h`; cadencia 12h
+- [x] T502 [P] [US4] Integration test em `apps/api/tests/integration/test_handoff_flow_none_adapter.py`: (1) tenant `helpdesk.type: none` + bot envia → bot_sent_messages gravado; (2) Evolution webhook `fromMe:true` nao-matched → mute + auto_resume_at setado; (3) wait + scheduler iteration → resume; (4) replay webhook com matched → no-op; (5) grupo `is_group=true` → skip silencioso
 
 ### Implementation for User Story 4
 
-- [ ] T510 [US4] Criar `apps/api/prosauai/handoff/none.py` com `NoneAdapter` implementando `HelpdeskAdapter` Protocol. `on_conversation_assigned`/`on_conversation_resolved` sao no-op (helpdesk nao tem webhook). `push_private_note`/`send_operator_reply` levantam `HelpdeskAdapterError('no_helpdesk_configured')` para composer falhar 409. `verify_webhook_signature` retorna True trivial (nao tem webhook proprio)
-- [ ] T511 [US4] Em `handoff/none.py` adicionar metodo `handle_evolution_fromme(payload, tenant_config, conversation)`: (a) se `is_group=true` → log `noneadapter_group_skip` + return no-op; (b) query `bot_sent_messages WHERE tenant_id=$1 AND message_id=$2` → se match e `sent_at >= now - 10s` → echo, no-op; (c) caso contrario → `state.mute_conversation(reason='fromMe_detected', source='fromMe_detected', auto_resume_at=now+human_pause_minutes)`
-- [ ] T512 [US4] Estender `apps/api/prosauai/api/webhooks/evolution.py` para, apos o pipeline normal, invocar `NoneAdapter.handle_evolution_fromme` quando payload tem `fromMe:true` E tenant helpdesk_type==`none` E conversation resolved
-- [ ] T513 [US4] Em `handoff/scheduler.py` adicionar task `bot_sent_messages_cleanup_cron`: cadencia 12h, singleton via `pg_try_advisory_lock(hashtext('bsm_cleanup_cron'))`, `DELETE FROM bot_sent_messages WHERE sent_at < now() - interval '48 hours'` em batches
-- [ ] T514 [US4] Em `apps/api/prosauai/main.py` registrar `NoneAdapter` no registry (alias `none`)
-- [ ] T515 [US4] Rascunhar `platforms/prosauai/decisions/ADR-038-fromme-auto-detection-semantics.md` — `bot_sent_messages` tracking + 10s echo tolerance window + group chat skip + 48h retention trade-off
-- [ ] T516 [US4] Adicionar campo `inbound.is_group` ao canonical payload Evolution (se nao existe) — check fixture `tests/fixtures/captured/` e estender normalizer se necessario
+- [x] T510 [US4] Criar `apps/api/prosauai/handoff/none.py` com `NoneAdapter` implementando `HelpdeskAdapter` Protocol. `on_conversation_assigned`/`on_conversation_resolved` sao no-op (helpdesk nao tem webhook). `push_private_note`/`send_operator_reply` levantam `HelpdeskAdapterError('no_helpdesk_configured')` para composer falhar 409. `verify_webhook_signature` retorna True trivial (nao tem webhook proprio)
+- [x] T511 [US4] Em `handoff/none.py` adicionar metodo `handle_evolution_fromme(payload, tenant_config, conversation)`: (a) se `is_group=true` → log `noneadapter_group_skip` + return no-op; (b) query `bot_sent_messages WHERE tenant_id=$1 AND message_id=$2` → se match e `sent_at >= now - 10s` → echo, no-op; (c) caso contrario → `state.mute_conversation(reason='fromMe_detected', source='fromMe_detected', auto_resume_at=now+human_pause_minutes)`
+- [x] T512 [US4] Estender `apps/api/prosauai/api/webhooks/evolution.py` para, apos o pipeline normal, invocar `NoneAdapter.handle_evolution_fromme` quando payload tem `fromMe:true` E tenant helpdesk_type==`none` E conversation resolved
+- [x] T513 [US4] Em `handoff/scheduler.py` adicionar task `bot_sent_messages_cleanup_cron`: cadencia 12h, singleton via `pg_try_advisory_lock(hashtext('bsm_cleanup_cron'))`, `DELETE FROM bot_sent_messages WHERE sent_at < now() - interval '48 hours'` em batches
+- [x] T514 [US4] Em `apps/api/prosauai/main.py` registrar `NoneAdapter` no registry (alias `none`)
+- [x] T515 [US4] Rascunhar `platforms/prosauai/decisions/ADR-038-fromme-auto-detection-semantics.md` — `bot_sent_messages` tracking + 10s echo tolerance window + group chat skip + 48h retention trade-off
+- [x] T516 [US4] Adicionar campo `inbound.is_group` ao canonical payload Evolution (se nao existe) — check fixture `tests/fixtures/captured/` e estender normalizer se necessario
 
 **Checkpoint US4**: NoneAdapter valida abstracao `HelpdeskAdapter` com shape radicalmente diferente do ChatwootAdapter; false positives <1% validado em teste de carga (SC-006).
 
