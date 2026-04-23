@@ -249,14 +249,14 @@ Se PR-B estourar semana 2 → **PR-C sacrificavel** (Phases 5, 7, 8 viram follow
 
 ### Tests for User Story 5
 
-- [ ] T600 [P] [US5] Em `test_conversations_handoff.py` adicionar: (a) POST reply com helpdesk chatwoot → delega adapter + metric `handoff_events_total{event_type='admin_reply_sent'}`; (b) POST reply em tenant `helpdesk.type=none` → 409 `{error: 'no_helpdesk_configured'}`; (c) circuit breaker aberto → 503; (d) metadata.admin_user_id persistido no event
-- [ ] T601 [P] [US5] Integration test `apps/api/tests/integration/test_handoff_composer_admin.py`: admin Pace → POST reply → respx mock Chatwoot API → assert call com `sender_name=<email>` + body correto
-- [ ] T602 [P] [US5] E2E Playwright `apps/admin/tests/e2e/handoff-composer.spec.ts`: login Pace → abrir conversa Ariel → digitar texto no composer → enviar → verificar mensagem aparece no thread
+- [x] T600 [P] [US5] Em `test_conversations_handoff.py` adicionar: (a) POST reply com helpdesk chatwoot → delega adapter + metric `handoff_events_total{event_type='admin_reply_sent'}`; (b) POST reply em tenant `helpdesk.type=none` → 409 `{error: 'no_helpdesk_configured'}`; (c) circuit breaker aberto → 503; (d) metadata.admin_user_id persistido no event
+- [x] T601 [P] [US5] Integration test `apps/api/tests/integration/test_handoff_composer_admin.py`: admin Pace → POST reply → respx mock Chatwoot API → assert call com `sender_name=<email>` + body correto
+- [x] T602 [P] [US5] E2E Playwright `apps/admin/tests/e2e/handoff-composer.spec.ts`: login Pace → abrir conversa Ariel → digitar texto no composer → enviar → verificar mensagem aparece no thread
 
 ### Implementation for User Story 5
 
-- [ ] T610 [US5] Em `handoff/chatwoot.py` implementar `send_operator_reply(conversation_id, content, sender_name)` chamando Chatwoot API v1 `POST /conversations/{id}/messages` com `message_type=outgoing` + `private=false` e headers configurando nome de exibicao para `sender_name`
-- [ ] T611 [US5] Em `apps/api/prosauai/api/admin/conversations.py` adicionar `POST /admin/conversations/{id}/reply` aceitando `{content: string, attachments?: [...]}`:
+- [x] T610 [US5] Em `handoff/chatwoot.py` implementar `send_operator_reply(conversation_id, content, sender_name)` chamando Chatwoot API v1 `POST /conversations/{id}/messages` com `message_type=outgoing` + `private=false` e headers configurando nome de exibicao para `sender_name`
+- [x] T611 [US5] Em `apps/api/prosauai/api/admin/conversations.py` adicionar `POST /admin/conversations/{id}/reply` aceitando `{content: string, attachments?: [...]}`:
   1. resolver tenant da conversa
   2. `adapter = get_adapter(tenant.helpdesk.type)`
   3. se `adapter` e `NoneAdapter` → return 409 `{error: 'no_helpdesk_configured'}`
@@ -264,10 +264,10 @@ Se PR-B estourar semana 2 → **PR-C sacrificavel** (Phases 5, 7, 8 viram follow
   5. `adapter.send_operator_reply(conversation_id, content, sender_name=<JWT.email>)`
   6. `persist_event(event_type='admin_reply_sent', source='manual_toggle', metadata={'admin_user_id': <JWT.sub>, 'message_id': ..., 'helpdesk_conversation_id': ...})`
   7. return 200
-- [ ] T612 [US5] Audit `handoff_events.metadata.admin_user_id=<JWT.sub>` registrado mas `admin_user_email` NAO persistido (apenas usado como `sender_name` transient)
-- [ ] T613 [US5] Em `apps/admin/src/app/admin/(authenticated)/conversations/[id]/page.tsx` adicionar componente composer: textarea + botao "Enviar como Pace ops" — visivel apenas quando `tenant.helpdesk.type != 'none'`; tenant sem helpdesk exibe disclaimer "tenant nao tem helpdesk configurado"
-- [ ] T614 [US5] UI tratar 503 (breaker aberto) exibindo "helpdesk indisponivel, tente em alguns minutos"; tratar 409 exibindo disclaimer
-- [ ] T615 [US5] UX: mostrar badge no composer "Enviando como: {admin.email}" para deixar identidade explicita (trade-off aceito Q4-A)
+- [x] T612 [US5] Audit `handoff_events.metadata.admin_user_id=<JWT.sub>` registrado mas `admin_user_email` NAO persistido (apenas usado como `sender_name` transient)
+- [x] T613 [US5] Em `apps/admin/src/app/admin/(authenticated)/conversations/[id]/page.tsx` adicionar componente composer: textarea + botao "Enviar como Pace ops" — visivel apenas quando `tenant.helpdesk.type != 'none'`; tenant sem helpdesk exibe disclaimer "tenant nao tem helpdesk configurado"
+- [x] T614 [US5] UI tratar 503 (breaker aberto) exibindo "helpdesk indisponivel, tente em alguns minutos"; tratar 409 exibindo disclaimer
+- [x] T615 [US5] UX: mostrar badge no composer "Enviando como: {admin.email}" para deixar identidade explicita (trade-off aceito Q4-A)
 
 **Checkpoint US5**: composer emergencia funcional; latencia admin → outbound <2s p95 (SC-003); tenant NoneAdapter retorna 409 corretamente.
 
@@ -281,19 +281,19 @@ Se PR-B estourar semana 2 → **PR-C sacrificavel** (Phases 5, 7, 8 viram follow
 
 ### Tests for User Story 6
 
-- [ ] T700 [P] [US6] Criar `apps/api/tests/unit/admin/test_performance_handoff_metrics.py` validando queries agregadas: (a) taxa `(distinct conversations with mute event) / total conversations`; (b) duracao media `avg(resumed_at - muted_at)` excluindo eventos shadow; (c) breakdown por `source` (counts); (d) SLA breaches (count de events `source=timeout`)
-- [ ] T701 [P] [US6] E2E Playwright `apps/admin/tests/e2e/performance-handoff.spec.ts`: login → Performance AI → range=7d → 4 cards renderizam + numeros batem com SQL
+- [x] T700 [P] [US6] Criar `apps/api/tests/unit/admin/test_performance_handoff_metrics.py` validando queries agregadas: (a) taxa `(distinct conversations with mute event) / total conversations`; (b) duracao media `avg(resumed_at - muted_at)` excluindo eventos shadow; (c) breakdown por `source` (counts); (d) SLA breaches (count de events `source=timeout`)
+- [x] T701 [P] [US6] E2E Playwright `apps/admin/tests/e2e/performance-handoff.spec.ts`: login → Performance AI → range=7d → 4 cards renderizam + numeros batem com SQL
 
 ### Implementation for User Story 6
 
-- [ ] T710 [US6] Em `apps/api/prosauai/admin/metrics/performance.py` adicionar 4 queries agregadas sobre `handoff_events` respeitando filtro `created_at BETWEEN $from AND $to` + `tenant_id` scope; queries ignoram `shadow=true` por default (query param `include_shadow` opcional)
-- [ ] T711 [US6] Expor endpoint `GET /admin/performance/handoff?tenant=...&from=...&to=...&include_shadow=false` retornando `{rate, avg_duration_seconds, breakdown: {source: count}, sla_breaches}`
-- [ ] T712 [P] [US6] Em `apps/admin/src/app/admin/(authenticated)/performance/page.tsx` adicionar linha "Handoff" acima/abaixo das linhas existentes com 4 cards: (1) Taxa (%), (2) Duracao media (formatted min/hours), (3) Breakdown por origem (Recharts PieChart), (4) SLA breaches (count + link filtrado pro Trace Explorer)
-- [ ] T713 [US6] Eventos shadow renderizam em cor distinta (cinza/hachurado) se `include_shadow=true` — permite comparar "quanto seria mutado"
-- [ ] T714 [US6] Garantir range de datas existente do epic 008 e compartilhado — cards recalculam via TanStack Query invalidate ao mudar range
-- [ ] T715 [US6] Tenant sem eventos → cards mostram "N/A" ou 0 sem quebrar layout
-- [ ] T716 [US6] Em `handoff/scheduler.py` adicionar task `handoff_events_cleanup_cron`: cadencia 24h, singleton via `pg_try_advisory_lock(hashtext('handoff_events_cleanup'))`, `DELETE FROM handoff_events WHERE created_at < now() - interval '90 days'` em batches de 1000 — FR-047a retention
-- [ ] T717 [US6] Index em `handoff_events (tenant_id, created_at DESC)` ja existe (T011); adicionar EXPLAIN ANALYZE em teste para garantir <3s em 10k events (SC-010)
+- [x] T710 [US6] Em `apps/api/prosauai/admin/metrics/performance.py` adicionar 4 queries agregadas sobre `handoff_events` respeitando filtro `created_at BETWEEN $from AND $to` + `tenant_id` scope; queries ignoram `shadow=true` por default (query param `include_shadow` opcional)
+- [x] T711 [US6] Expor endpoint `GET /admin/performance/handoff?tenant=...&from=...&to=...&include_shadow=false` retornando `{rate, avg_duration_seconds, breakdown: {source: count}, sla_breaches}`
+- [x] T712 [P] [US6] Em `apps/admin/src/app/admin/(authenticated)/performance/page.tsx` adicionar linha "Handoff" acima/abaixo das linhas existentes com 4 cards: (1) Taxa (%), (2) Duracao media (formatted min/hours), (3) Breakdown por origem (Recharts PieChart), (4) SLA breaches (count + link filtrado pro Trace Explorer)
+- [x] T713 [US6] Eventos shadow renderizam em cor distinta (cinza/hachurado) se `include_shadow=true` — permite comparar "quanto seria mutado"
+- [x] T714 [US6] Garantir range de datas existente do epic 008 e compartilhado — cards recalculam via TanStack Query invalidate ao mudar range
+- [x] T715 [US6] Tenant sem eventos → cards mostram "N/A" ou 0 sem quebrar layout
+- [x] T716 [US6] Em `handoff/scheduler.py` adicionar task `handoff_events_cleanup_cron`: cadencia 24h, singleton via `pg_try_advisory_lock(hashtext('handoff_events_cleanup'))`, `DELETE FROM handoff_events WHERE created_at < now() - interval '90 days'` em batches de 1000 — FR-047a retention
+- [x] T717 [US6] Index em `handoff_events (tenant_id, created_at DESC)` ja existe (T011); adicionar EXPLAIN ANALYZE em teste para garantir <3s em 10k events (SC-010)
 
 **Checkpoint US6**: dataset 10k events renderiza <3s; metrics auditaveis vs SQL direto.
 
