@@ -316,7 +316,7 @@ Se PR-B estourar semana 2 → **PR-C sacrificavel** (Phases 5, 7, 8 viram follow
 - [x] T811 [US7] Documentar em `platforms/prosauai/epics/010-handoff-engine-inbox/rollout-runbook.md` o trajeto `off → shadow (7d) → on` + criterios de sucesso (false-mute rate ≤X%, SC-012 ≤10% erro predito vs real)
 - [x] T812 [US7] Performance AI render shadow events com estilo visual distinto (cinza hachurado) — ja coberto em T713 ✓ verificado em `apps/admin/src/components/performance/handoff-metrics.tsx` L260-263 (hatched stripe wrapper via `bg-[repeating-linear-gradient(...)]` quando `isShadow=true`) e L353-354 (pie slices com `fillOpacity=0.45` em shadow mode). `data-include-shadow` attribute exposto para E2E.
 - [x] T813 [US7] Adicionar metric `handoff_shadow_events_total{tenant, source}` separada do counter principal para facilitar comparacao pos-flip
-- [ ] T814 [US7] Documentar em `decisions.md` que codigo de shadow mode pode ser removido em epic follow-up apos validacao do primeiro tenant (A13 spec)
+- [x] T814 [US7] Documentar em `decisions.md` que codigo de shadow mode pode ser removido em epic follow-up apos validacao do primeiro tenant (A13 spec)
 
 **Checkpoint US7**: rollout reversivel 100% validado (SC-011); shadow mode prediz realidade com erro ≤10% (SC-012).
 
