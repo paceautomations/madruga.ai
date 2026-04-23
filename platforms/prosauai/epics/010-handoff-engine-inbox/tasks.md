@@ -133,17 +133,17 @@ Se PR-B estourar semana 2 → **PR-C sacrificavel** (Phases 5, 7, 8 viram follow
 
 ### Tests for User Story 1 (TDD — write FIRST, ensure FAIL)
 
-- [ ] T200 [P] [US1] Criar `apps/api/tests/unit/api/webhooks/test_helpdesk_chatwoot.py` cobrindo: HMAC valido → 200, HMAC invalido → 401, payload desconhecido (ex: `message_created`) → 200 no-op + log `event_type=unhandled`, `assignee_id` null→non-null dispara `on_conversation_assigned`, `conversation_status_changed` status=resolved dispara `on_conversation_resolved`
-- [ ] T201 [P] [US1] Criar `apps/api/tests/unit/api/webhooks/test_helpdesk_chatwoot_idempotency.py` (duplicata mesmo `chatwoot_event_id` → 200 no-op, Redis SETNX `handoff:wh:{id}` TTL 24h)
-- [ ] T202 [P] [US1] Criar `apps/api/tests/integration/test_handoff_flow_chatwoot.py` (testcontainers-postgres + fakeredis + respx): (1) webhook assigned → `ai_active=false` + event `muted` source=`chatwoot_assigned`; (2) inbound cliente → pipeline skip + step `ai_muted_skip`; (3) webhook resolved → `ai_active=true` + event `resumed` source=`helpdesk_resolved`; (4) inbound cliente → bot responde novamente
-- [ ] T203 [P] [US1] Criar `apps/api/tests/benchmarks/test_webhook_latency.py` medindo p95 webhook → mute commit (SC-002: <500ms p95) — **gate de merge PR-B**
+- [x] T200 [P] [US1] Criar `apps/api/tests/unit/api/webhooks/test_helpdesk_chatwoot.py` cobrindo: HMAC valido → 200, HMAC invalido → 401, payload desconhecido (ex: `message_created`) → 200 no-op + log `event_type=unhandled`, `assignee_id` null→non-null dispara `on_conversation_assigned`, `conversation_status_changed` status=resolved dispara `on_conversation_resolved`
+- [x] T201 [P] [US1] Criar `apps/api/tests/unit/api/webhooks/test_helpdesk_chatwoot_idempotency.py` (duplicata mesmo `chatwoot_event_id` → 200 no-op, Redis SETNX `handoff:wh:{id}` TTL 24h)
+- [x] T202 [P] [US1] Criar `apps/api/tests/integration/test_handoff_flow_chatwoot.py` (testcontainers-postgres + fakeredis + respx): (1) webhook assigned → `ai_active=false` + event `muted` source=`chatwoot_assigned`; (2) inbound cliente → pipeline skip + step `ai_muted_skip`; (3) webhook resolved → `ai_active=true` + event `resumed` source=`helpdesk_resolved`; (4) inbound cliente → bot responde novamente
+- [x] T203 [P] [US1] Criar `apps/api/tests/benchmarks/test_webhook_latency.py` medindo p95 webhook → mute commit (SC-002: <500ms p95) — **gate de merge PR-B**
 
 ### Implementation for User Story 1
 
-- [ ] T210 [US1] Em `apps/api/prosauai/handoff/chatwoot.py` implementar `on_conversation_assigned(payload)` que resolve conversa via `external_refs->'chatwoot'->>'conversation_id'` (ou fallback reverso via Chatwoot API `GET /conversations/{id}` para correlacionar sender) e chama `state.mute_conversation(reason='chatwoot_assigned', source='chatwoot_assigned', metadata={'assignee_id': ..., 'chatwoot_event_id': ...})`
-- [ ] T211 [US1] Em `apps/api/prosauai/handoff/chatwoot.py` implementar `on_conversation_resolved(payload)` chamando `state.resume_conversation(source='helpdesk_resolved', metadata={'chatwoot_event_id': ...})`
-- [ ] T212 [US1] Criar pasta `apps/api/prosauai/api/webhooks/helpdesk/` com `__init__.py` vazio
-- [ ] T213 [US1] Criar `apps/api/prosauai/api/webhooks/helpdesk/chatwoot.py` — endpoint `POST /webhook/helpdesk/chatwoot/{tenant_slug}`:
+- [x] T210 [US1] Em `apps/api/prosauai/handoff/chatwoot.py` implementar `on_conversation_assigned(payload)` que resolve conversa via `external_refs->'chatwoot'->>'conversation_id'` (ou fallback reverso via Chatwoot API `GET /conversations/{id}` para correlacionar sender) e chama `state.mute_conversation(reason='chatwoot_assigned', source='chatwoot_assigned', metadata={'assignee_id': ..., 'chatwoot_event_id': ...})`
+- [x] T211 [US1] Em `apps/api/prosauai/handoff/chatwoot.py` implementar `on_conversation_resolved(payload)` chamando `state.resume_conversation(source='helpdesk_resolved', metadata={'chatwoot_event_id': ...})`
+- [x] T212 [US1] Criar pasta `apps/api/prosauai/api/webhooks/helpdesk/` com `__init__.py` vazio
+- [x] T213 [US1] Criar `apps/api/prosauai/api/webhooks/helpdesk/chatwoot.py` — endpoint `POST /webhook/helpdesk/chatwoot/{tenant_slug}`:
   1. resolver tenant via slug; se tenant `handoff.mode=off` → return 200 no-op (FR-041)
   2. adquirir adapter via `get_adapter('chatwoot')`; se tenant nao tem helpdesk chatwoot → 200 no-op com log `tenant_no_helpdesk`
   3. `verify_webhook_signature` com secret per-tenant (HMAC-SHA256 sobre raw body)
@@ -154,10 +154,10 @@ Se PR-B estourar semana 2 → **PR-C sacrificavel** (Phases 5, 7, 8 viram follow
      - `conversation_status_changed` status=resolved → `adapter.on_conversation_resolved(payload)`
      - outros eventos → 200 + log `event_type=unhandled` (FR-017a)
   6. return 200 sempre (FR-019) — mesmo em payload malformado
-- [ ] T214 [US1] Em `apps/api/prosauai/main.py` registrar o router `/webhook/helpdesk/chatwoot` no FastAPI app
-- [ ] T215 [US1] Configurar fixture `tenants.yaml` em `apps/api/tests/fixtures/` para tenant teste com `helpdesk.type: chatwoot` + credentials
-- [ ] T216 [US1] Em `apps/api/prosauai/handoff/chatwoot.py` garantir que primeiro webhook sem linkage em `external_refs.chatwoot` faz lookup reverso via `GET /conversations/{id}` do Chatwoot (FR-022a fallback) e popula o campo; se falhar → 200 no-op + metric `chatwoot_webhook_unlinked_total{tenant}`
-- [ ] T217 [US1] Instrumentar OTel baggage: webhook handler propaga `conversation_id` + `tenant_id` em baggage desde entry point (FR-051)
+- [x] T214 [US1] Em `apps/api/prosauai/main.py` registrar o router `/webhook/helpdesk/chatwoot` no FastAPI app
+- [x] T215 [US1] Configurar fixture `tenants.yaml` em `apps/api/tests/fixtures/` para tenant teste com `helpdesk.type: chatwoot` + credentials
+- [x] T216 [US1] Em `apps/api/prosauai/handoff/chatwoot.py` garantir que primeiro webhook sem linkage em `external_refs.chatwoot` faz lookup reverso via `GET /conversations/{id}` do Chatwoot (FR-022a fallback) e popula o campo; se falhar → 200 no-op + metric `chatwoot_webhook_unlinked_total{tenant}`
+- [x] T217 [US1] Instrumentar OTel baggage: webhook handler propaga `conversation_id` + `tenant_id` em baggage desde entry point (FR-051)
 - [ ] T218 [US1] Adicionar metrics Prometheus: `handoff_events_total{tenant, event_type, source}`, `helpdesk_webhook_latency_seconds{tenant, helpdesk}` (FR-052)
 
 **Checkpoint US1**: webhook Chatwoot real (staging Pace) → Ariel em `handoff.mode=on` forcado manualmente → atribui conversa → bot silencia em <500ms; bot resume on resolve. Valor core entregue.
