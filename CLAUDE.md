@@ -109,7 +109,7 @@ Subagent prompt: @.claude/rules/plan-review-prompt.md
 - **Planned epics** live only in `planning/roadmap.md` — no files created
 - **Active epics** (entering L2) get `epics/NNN-slug/` with pitch.md, spec, plan, tasks
 - Epic branches mandatory: `epic/<platform>/<NNN-slug>` — merge to main via PR only
-- `/madruga:epic-breakdown` for roadmap candidates; `/madruga:epic-context` to start
+- `/madruga:roadmap` defines + sequences epics (1-way-door); `/madruga:epic-context` materialises the pitch.md from the roadmap entry and starts the L2 cycle
 
 ## Skill & knowledge editing policy
 
@@ -134,7 +134,9 @@ Direct edits bypass validation (frontmatter, handoff chains, archetype complianc
 - PostgreSQL 15 (Docker container) com RLS per-transaction (ADR-011), Redis 7 (existente — debounce + idempotency) (main)
 - Next.js 15 App Router + shadcn/ui + Tailwind v4 + Recharts + **TanStack Query v5** + **openapi-typescript** (dev-only) + lucide-react + Playwright (epic/prosauai/008-admin-evolution)
 - Novas tabelas admin-only em `public.*` (sem RLS — ADR-027): `traces`, `trace_steps`, `routing_decisions`; denormalização de `conversations.last_message_*` para inbox <100 ms (epic/prosauai/008-admin-evolution)
+- Zero novas deps Python; novo módulo `prosauai/handoff/` (Protocol + registry + state + events + breaker + ChatwootAdapter + NoneAdapter + scheduler); `respx` para Chatwoot API mocks nos testes; 2 tabelas admin-only em `public.*`: `handoff_events` (append-only, retention 90d) + `bot_sent_messages` (tracking 48h); HMAC inbound webhook `/webhook/helpdesk/chatwoot/{tenant}`; 3 schedulers no lifespan FastAPI (auto_resume + 2 cleanup crons via `pg_try_advisory_lock` singleton); feature flag `handoff.mode: off|shadow|on` per tenant em `tenants.yaml`, hot reload ≤60s (epic/prosauai/010-handoff-engine-inbox)
 
 ## Recent Changes
+- epic/prosauai/010-handoff-engine-inbox: Handoff engine + multi-helpdesk integration — `conversations.ai_active` single bit (ADR-036); `HelpdeskAdapter` Protocol + registry (ADR-037); `ChatwootAdapter` (HMAC + idempotency Redis + 2 event types) + `NoneAdapter` (fromMe + `bot_sent_messages` echo check — ADR-038); pipeline `generate` safety net com `SELECT ai_active FOR UPDATE`; admin composer (`POST /admin/conversations/{id}/reply`) delega ao adapter; Performance AI +4 cards (taxa, duração, breakdown, SLA breaches); OTel baggage lift-through no structlog bridge; Prometheus metrics via structlog facade (`handoff_events_total`, `handoff_duration_seconds`, `handoff_shadow_events_total`, `helpdesk_webhook_latency_seconds`, `helpdesk_breaker_open`); rollout `off → shadow (7d) → on` per tenant; 3 PRs sequenciais (data model + scheduler + admin UI), PR-C sacrificável se PR-B estourar semana 2.
 - epic/prosauai/008-admin-evolution: Admin evolution — 8 abas (Overview enriquecido, Conversas, Trace Explorer, Performance AI, Agentes, Roteamento, Tenants, Auditoria); 3 tabelas admin-only (traces, trace_steps, routing_decisions) com retention 30 d/90 d; pipeline instrumentation fire-and-forget (ADR-028) com zero impacto no caminho crítico; pool_admin BYPASSRLS para cross-tenant (ADR-027). TanStack Query v5 + openapi-typescript para tipos gerados.
 - epic/madruga-ai/017-observability-tracing-evals: Added Python 3.11+ (backend), TypeScript/React (portal) + sqlite3 (stdlib), structlog, FastAPI (easter), React + @xyflow/react (portal existente), Astro Starlight
