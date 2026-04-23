@@ -312,7 +312,7 @@ Se PR-B estourar semana 2 → **PR-C sacrificavel** (Phases 5, 7, 8 viram follow
 
 ### Implementation for User Story 7
 
-- [ ] T810 [US7] Em `handoff/state.py` `mute_conversation` ja implementado no T031 com branch por `tenant.handoff.mode` — confirmar branch shadow grava event com `shadow=true` sem UPDATE
+- [x] T810 [US7] Em `handoff/state.py` `mute_conversation` ja implementado no T031 com branch por `tenant.handoff.mode` — confirmar branch shadow grava event com `shadow=true` sem UPDATE ✓ verificado em state.py L213-238 (`mute_conversation`) e L392-417 (`resume_conversation`); branch emite `HandoffEvent(shadow=True)` via `asyncio.create_task(persist_event(...))` e retorna `MuteResult(was_shadow=True)` sem tocar `pool.acquire()`. Coberto por tests `test_mute_mode_shadow_no_db_mutation`, `test_resume_mode_shadow_no_db_mutation`, `test_shadow_mute_persists_event_without_db_mutation` (T800) e integration `test_shadow_ten_webhooks_no_mute_all_events_recorded` (T801).
 - [ ] T811 [US7] Documentar em `platforms/prosauai/epics/010-handoff-engine-inbox/rollout-runbook.md` o trajeto `off → shadow (7d) → on` + criterios de sucesso (false-mute rate ≤X%, SC-012 ≤10% erro predito vs real)
 - [ ] T812 [US7] Performance AI render shadow events com estilo visual distinto (cinza hachurado) — ja coberto em T713
 - [x] T813 [US7] Adicionar metric `handoff_shadow_events_total{tenant, source}` separada do counter principal para facilitar comparacao pos-flip
