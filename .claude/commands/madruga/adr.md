@@ -80,9 +80,12 @@ Wait for answers BEFORE generating ADRs.
 title: "ADR-NNN: Decision Title"
 status: accepted
 date: YYYY-MM-DD
-decision: "<1-2 sentence summary of the decision made>"
-alternatives: "<comma-separated list of rejected alternatives>"
-rationale: "<1-2 sentence primary reason for choosing this alternative>"
+decision: >
+  1-2 sentence summary of the decision made.
+alternatives: >
+  Comma-separated list of rejected alternatives.
+rationale: >
+  1-2 sentence primary reason for choosing this alternative.
 ---
 # ADR-NNN: Decision Title
 

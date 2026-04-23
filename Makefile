@@ -20,8 +20,9 @@ coverage: ## Run tests with coverage report
 	MADRUGA_DISPATCH=0 python3 -m pytest .specify/scripts/tests/ -v --cov --cov-report=term-missing --cov-report=html
 	@echo "HTML report at htmlcov/index.html"
 
-lint: ## Lint all platforms
+lint: ## Lint all platforms + validate YAML frontmatter in platform docs
 	python3 $(PLATFORM) lint --all
+	python3 .specify/scripts/validate_frontmatter.py
 
 ruff: ## Run ruff check on Python scripts
 	python3 -m ruff check .specify/scripts/
