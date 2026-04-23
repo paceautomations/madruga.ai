@@ -308,7 +308,7 @@ Se PR-B estourar semana 2 → **PR-C sacrificavel** (Phases 5, 7, 8 viram follow
 ### Tests for User Story 7
 
 - [x] T800 [P] [US7] Em `test_state.py` adicionar: (a) `mute_conversation` em `mode=shadow` persiste evento `shadow=true` + `ai_active` permanece `true`; (b) mesmo cenario em `mode=on` muta; (c) pipeline `generate` safety net ignora conversa com apenas shadow events (nao le flag shadow; le `ai_active` que permanece true)
-- [ ] T801 [P] [US7] Integration test: tenant shadow + 10 webhooks assigned → 10 eventos shadow gravados + bot continua respondendo em todos os 10 inbounds subsequentes
+- [x] T801 [P] [US7] Integration test: tenant shadow + 10 webhooks assigned → 10 eventos shadow gravados + bot continua respondendo em todos os 10 inbounds subsequentes
 
 ### Implementation for User Story 7
 
