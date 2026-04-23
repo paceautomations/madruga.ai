@@ -110,7 +110,7 @@ Se PR-B estourar semana 2 → **PR-C sacrificavel** (Phases 5, 7, 8 viram follow
 ### ADR PR-A
 
 - [x] T110 [P] Rascunhar `platforms/prosauai/decisions/ADR-036-ai-active-unified-mute-state.md` (Nygard format) — substitui discussao `pending_handoff`/enum multi-step (decisao 1 pitch); supersedes referencias em `core/router/facts.py:66` + `db/queries/conversations.py:16`
-- [ ] T111 [P] Rascunhar `platforms/prosauai/decisions/ADR-037-helpdesk-adapter-pattern.md` — Protocol + registry, espelha ADR-031 (ChannelAdapter); aceita trade-off de 5 metodos ao inves de 2 porque cobre write+read+webhook
+- [x] T111 [P] Rascunhar `platforms/prosauai/decisions/ADR-037-helpdesk-adapter-pattern.md` — Protocol + registry, espelha ADR-031 (ChannelAdapter); aceita trade-off de 5 metodos ao inves de 2 porque cobre write+read+webhook
 
 ### Benchmark gate PR-A
 
