@@ -158,7 +158,7 @@ Se PR-B estourar semana 2 → **PR-C sacrificavel** (Phases 5, 7, 8 viram follow
 - [x] T215 [US1] Configurar fixture `tenants.yaml` em `apps/api/tests/fixtures/` para tenant teste com `helpdesk.type: chatwoot` + credentials
 - [x] T216 [US1] Em `apps/api/prosauai/handoff/chatwoot.py` garantir que primeiro webhook sem linkage em `external_refs.chatwoot` faz lookup reverso via `GET /conversations/{id}` do Chatwoot (FR-022a fallback) e popula o campo; se falhar → 200 no-op + metric `chatwoot_webhook_unlinked_total{tenant}`
 - [x] T217 [US1] Instrumentar OTel baggage: webhook handler propaga `conversation_id` + `tenant_id` em baggage desde entry point (FR-051)
-- [ ] T218 [US1] Adicionar metrics Prometheus: `handoff_events_total{tenant, event_type, source}`, `helpdesk_webhook_latency_seconds{tenant, helpdesk}` (FR-052)
+- [x] T218 [US1] Adicionar metrics Prometheus: `handoff_events_total{tenant, event_type, source}`, `helpdesk_webhook_latency_seconds{tenant, helpdesk}` (FR-052)
 
 **Checkpoint US1**: webhook Chatwoot real (staging Pace) → Ariel em `handoff.mode=on` forcado manualmente → atribui conversa → bot silencia em <500ms; bot resume on resolve. Valor core entregue.
 
@@ -172,18 +172,18 @@ Se PR-B estourar semana 2 → **PR-C sacrificavel** (Phases 5, 7, 8 viram follow
 
 ### Tests for User Story 2
 
-- [ ] T300 [P] [US2] Criar `apps/api/tests/unit/handoff/test_scheduler.py` cobrindo: (a) cron rodando retoma conversas com `ai_auto_resume_at < now()`; (b) singleton via `pg_try_advisory_lock` — replica perdedora dorme; (c) shutdown graceful aguarda iteration via `asyncio.wait(timeout=5s)`; (d) freezegun time-travel para validar cadencia 60s
-- [ ] T301 [P] [US2] Integration test `apps/api/tests/integration/test_handoff_flow_none_adapter.py` (parcial — US2 cobre timeout): setar `ai_auto_resume_at` no passado → aguardar 1 iteration cron → assert `ai_active=true`, event `resumed` source=`timeout`
-- [ ] T302 [P] [US2] Unit test em `test_scheduler.py` para priorizacao: `helpdesk_resolved` webhook chegando durante execucao do cron → webhook prevalece (advisory lock por conversation_id serializa); outros dois tentam e observam estado ja retomado
+- [x] T300 [P] [US2] Criar `apps/api/tests/unit/handoff/test_scheduler.py` cobrindo: (a) cron rodando retoma conversas com `ai_auto_resume_at < now()`; (b) singleton via `pg_try_advisory_lock` — replica perdedora dorme; (c) shutdown graceful aguarda iteration via `asyncio.wait(timeout=5s)`; (d) freezegun time-travel para validar cadencia 60s
+- [x] T301 [P] [US2] Integration test `apps/api/tests/integration/test_handoff_flow_none_adapter.py` (parcial — US2 cobre timeout): setar `ai_auto_resume_at` no passado → aguardar 1 iteration cron → assert `ai_active=true`, event `resumed` source=`timeout`
+- [x] T302 [P] [US2] Unit test em `test_scheduler.py` para priorizacao: `helpdesk_resolved` webhook chegando durante execucao do cron → webhook prevalece (advisory lock por conversation_id serializa); outros dois tentam e observam estado ja retomado
 
 ### Implementation for User Story 2
 
-- [ ] T310 [US2] Criar `apps/api/prosauai/handoff/scheduler.py` com classe `HandoffScheduler` que aceita lista de periodic tasks e roda cada uma em asyncio task no lifespan
-- [ ] T311 [US2] Em `handoff/scheduler.py` implementar task `handoff_auto_resume_cron`: cadencia 60s, tenta `pg_try_advisory_lock(hashtext('handoff_resume_cron'))` — se nao pegar, dorme 60s e retry; se pegar, SELECT conversas com `ai_active=false AND ai_auto_resume_at < now() AND ai_auto_resume_at IS NOT NULL` em batches de 100 e chama `resume_conversation(source='timeout')` para cada
-- [ ] T312 [US2] Em `apps/api/prosauai/main.py` lifespan startup → `HandoffScheduler.start()`; shutdown → `HandoffScheduler.stop()` com `asyncio.wait(timeout=5s)` em iterations correntes
-- [ ] T313 [US2] Garantir que bot nao envia mensagem proativa on resume — `resume_conversation` apenas flipa bit; nao enfileira outbound (FR-016)
-- [ ] T314 [US2] Adicionar env var `HANDOFF_AUTO_RESUME_ENABLED=1` (default) + `HANDOFF_AUTO_RESUME_INTERVAL_SECONDS=60` em `config.py` para kill switch emergencial
-- [ ] T315 [US2] Validar priorizacao de gatilhos de retorno: em `state.resume_conversation`, registrar `source` + `priority_index` em `metadata` para auditoria (`helpdesk_resolved=1, manual_toggle=2, timeout=3`)
+- [x] T310 [US2] Criar `apps/api/prosauai/handoff/scheduler.py` com classe `HandoffScheduler` que aceita lista de periodic tasks e roda cada uma em asyncio task no lifespan
+- [x] T311 [US2] Em `handoff/scheduler.py` implementar task `handoff_auto_resume_cron`: cadencia 60s, tenta `pg_try_advisory_lock(hashtext('handoff_resume_cron'))` — se nao pegar, dorme 60s e retry; se pegar, SELECT conversas com `ai_active=false AND ai_auto_resume_at < now() AND ai_auto_resume_at IS NOT NULL` em batches de 100 e chama `resume_conversation(source='timeout')` para cada
+- [x] T312 [US2] Em `apps/api/prosauai/main.py` lifespan startup → `HandoffScheduler.start()`; shutdown → `HandoffScheduler.stop()` com `asyncio.wait(timeout=5s)` em iterations correntes
+- [x] T313 [US2] Garantir que bot nao envia mensagem proativa on resume — `resume_conversation` apenas flipa bit; nao enfileira outbound (FR-016)
+- [x] T314 [US2] Adicionar env var `HANDOFF_AUTO_RESUME_ENABLED=1` (default) + `HANDOFF_AUTO_RESUME_INTERVAL_SECONDS=60` em `config.py` para kill switch emergencial
+- [x] T315 [US2] Validar priorizacao de gatilhos de retorno: em `state.resume_conversation`, registrar `source` + `priority_index` em `metadata` para auditoria (`helpdesk_resolved=1, manual_toggle=2, timeout=3`)
 
 **Checkpoint US2**: cron retoma conversas dentro de SLA 60s (SC-008); 2 replicas em staging → so 1 executa iteration (advisory lock valida).
 
