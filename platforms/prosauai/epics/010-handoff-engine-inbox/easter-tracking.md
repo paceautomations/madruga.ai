@@ -1,0 +1,117 @@
+# Easter Tracking — prosauai 010-handoff-engine-inbox
+
+Started: 2026-04-23T11:16 -03
+
+## Melhoria — madruga.ai
+
+- Easter memory peak 698.7M (baseline ~471.5M steady) — provavelmente retendo output do subprocesso `claude` em memória durante dispatch; vale investigar se `output_lines` no DB acumula texto grande sem truncar
+- `plan` levou 17 min (1038898ms) — dentro do baseline de 30min, mas o nó mais custoso da fase de spec; candidato a split se crescer
+- **Phase dispatch prompt ~95KB por fase** (phase-1: 90.5KB, phase-2: 95.5KB) — plan.md (36KB) + data_model.md (29KB) = 65KB estáveis repetindo em cada fase. Cache-optimal ordering já ativo (MADRUGA_CACHE_ORDERED=1), mas candidato a compressão agressiva: plan.md poderia ter seção "per-phase-summary" (~8KB) no lugar do plano completo para fases implementando tasks leaf.
+- **analyze-report.md ausente do phase dispatch context** — sections do phase dispatch não incluem `analyze_report`; apenas plan/data_model/contracts/tasks/header. Findings HIGH do analyze (ex: I1 HMAC header, C1/C2 bridges) dependem do modelo ler o arquivo autonomamente via tool (Bash/Read) — não garantido. Melhor incluir `analyze-report.md` como seção explícita no phase header ou como doc scoped no `compose_phase_prompt`.
+
+## Melhoria — prosauai
+
+- **tasks.md T020/T021 conflito [P]**: ambas marcadas paralelas mas escrevem no mesmo arquivo `handoff/base.py`. Implement skill vai processar sequencialmente pelo nome do arquivo — não é bug blocker, mas confuso. Melhor T021 depender de T020 ou fundir as duas.
+- **tasks.md T512 condição ambígua**: "E conversation resolved" no final da task description parece typo — spec não exige conversa resolved para NoneAdapter detectar fromMe; a condição real é `fromMe:true` + `message_id NOT IN bot_sent_messages` + `helpdesk_type==none`. Vale corrigir antes do implement.
+- **FR-026 (10s echo window)**: fallback temporal pode suprimir mute legítimo se humano responde dentro de 10s do bot. Tracking por `message_id` deveria ser suficiente; a janela de tempo é redundante e cria falso negativo.
+- **T910 (cleanup Redis legacy) está em Phase 10** junto com tarefas pré-rollout — mas a condition é "apos 7d com zero leituras em produção". Sequencialmente deveria estar na fase pós-rollout, não no Polish pré-PR-C.
+
+## Analyze pré-implement (2026-04-23)
+
+Findings do `speckit.analyze` antes do implement. O implement deve ler `analyze-report.md` e aplicar fixes inline.
+
+**HIGH — requerem ação antes ou durante implement:**
+- **I1** (HMAC header): spec FR-017 diz `X-Webhook-Secret`, contrato `helpdesk-adapter.md` diz `X-Webhook-Signature`. Divergência silenciosa — se não corrigida antes de T051, ChatwootAdapter implementa header errado. Implement deve fixar FR-017 antes de T051.
+- **C1** (`rule_match` sem task): FR-038b define `handoff.rules[] → router emite mute`, mas nenhuma task implementa a ponte `rules.py → state.mute()`. Requer decisão: (a) adicionar T090b ou (b) marcar out-of-scope e remover `rule_match` de FR-007 v1. **Não foi resolvido automaticamente — usuário deve decidir.**
+- **C2** (`safety_trip` sem task): FR-007 lista `safety_trip` como 5ª origem de mute, mas safety guards do epic 005 não têm bridge para `state.mute()`. Mesmo dilema de C1. **Requer decisão do usuário.**
+- **G1** (5 endpoints ausentes em `platform.yaml testing.urls`): bloqueia Phase 11 Smoke T1103. Correção simples mas necessária antes do rollout.
+
+**MEDIUM — resolvíveis inline:**
+- I2: `parse_webhook_event()` ausente de FR-043 (existe no contrato mas não na spec)
+- I3: `get_helpdesk_adapter` vs `get_adapter` — nome diverge; preferência `get_adapter`
+- I4: T020/T021 ambas [P] mesmo arquivo — já registrado
+- U1: FR-026 echo window semântica — já registrado
+- U2: bloco `handoff:` ausente em tenants.yaml não testado como default `off`
+
+## Incidents críticos
+
+_(nenhum até agora)_
+
+## T912 — Audit final Polish & Cross-Cutting (2026-04-23)
+
+Revisão estática das 3 peças exigidas pela spec antes de rollout para produção.
+Checagem feita contra o código merged em `epic/prosauai/010-handoff-engine-inbox` do repo `prosauai`.
+
+### 1. `handoff_events` retention cron — PRESENTE ✅
+
+- **Arquivo**: `apps/api/prosauai/handoff/scheduler.py`
+- **Função**: `run_handoff_events_cleanup_once` + `build_handoff_events_cleanup_task`
+- **Lock label**: `handoff_events_cleanup` (advisory lock singleton via `pg_try_advisory_lock(hashtext('handoff_events_cleanup'))`)
+- **Retention**: 90d (alinhado com `trace_steps` do epic 008 — ADR-018 estendido)
+- **Cadence**: 1× por dia; batch size 1000 rows/tick (evita lock contention em tabelas grandes)
+- **Log hit**: `handoff_events_cleanup_tick` (structlog), `handoff_events_cleanup_lock_busy` quando outra replica detém o lock
+- **Gate em produção**: logs devem aparecer dentro de 24h do primeiro tick pós-deploy; zero `handoff_events_cleanup_query_failed` nas primeiras 72h
+
+### 2. `bot_sent_messages` cleanup cron — PRESENTE ✅
+
+- **Arquivo**: `apps/api/prosauai/handoff/scheduler.py`
+- **Função**: `run_bot_sent_messages_cleanup_once` + `build_bot_sent_messages_cleanup_task`
+- **Lock label**: `bsm_cleanup_cron`
+- **Retention**: 48h (prevenção false-positive fromMe echo no NoneAdapter — ADR-038)
+- **Cadence**: 2× por dia (12h); batch grande para limpar pico de ~100k rows/tenant sem bleed
+- **Log hit**: `bot_sent_messages_cleanup_tick`, `bsm_cleanup_lock_busy`
+- **Gate em produção**: primeiro tick deve rodar dentro de 12h do deploy; métrica `bot_sent_messages` row count deve estabilizar em platô (não crescer indefinidamente)
+
+### 3. Circuit breaker `helpdesk_breaker_open` metric — PRESENTE ✅
+
+- **Registro**: `apps/api/prosauai/observability/metrics.py` — constante `HELPDESK_BREAKER_OPEN`
+- **Emitter**: `observe_helpdesk_breaker_open(tenant, helpdesk)` counter; mantém o log structlog WARNING existente (`helpdesk_breaker_open`) para continuidade
+- **Escopo**: per-tenant + per-helpdesk (Chatwoot hoje; Blip/Zendesk futuros)
+- **Alerta recomendado (epic 014)**: `rate(helpdesk_breaker_open[5m]) > 0` → PagerDuty crítico; breaker aberto >5min seguidos indica falha estrutural no helpdesk
+- **Gate em produção**: smoke test pós-deploy deve forçar uma chamada com token inválido para Chatwoot e verificar que contador incrementa
+
+### Itens deferidos para pós-rollout
+
+- **T909** (quickstart end-to-end staging) — requer ambiente staging provisionado; faz parte do checklist de `rollout-runbook.md` antes de flipar Ariel para `mode: shadow`.
+- **T910** (remoção Redis legacy `handoff:*`) — aguarda gate operacional 7d com zero leituras do log `handoff_redis_legacy_read`; tarefa pós-rollout.
+- **T914** (Judge 1-way-door pós-merge PR-C) — executado quando PR-C for mergeado em `develop`; documentado abaixo.
+
+### Conclusão
+
+As 3 peças exigidas por T912 estão materializadas no código e nos artefatos de observabilidade. Não há gaps estáticos que bloqueiem o avanço para Phase 11 (Deployment Smoke) nem para o rollout de Ariel em `mode: shadow`. Próximo passo operacional: rodar smoke checklist de `apps/api/benchmarks/handoff_smoke.md` em staging.
+
+---
+
+## T913 — Lint + test madruga.ai (2026-04-23)
+
+Rodado na raiz do repo madruga.ai (cwd `/home/gabrielhamu/repos/paceautomations/madruga.ai`).
+
+- `make test` — resultado registrado abaixo; qualquer falha é bug de scripts da pipeline (não código da prosauai, que vive em repo externo)
+- `make lint` — ruff check em `.specify/scripts/`, `platforms/*/`, `portal/`
+- `make ruff` — ruff format check (idempotente)
+
+Objetivo: garantir que os artefatos do epic (ADRs novos 036-037-038, diagramas mermaid, YAML de `tenants.yaml` schema) não quebraram regras de lint do pipeline. Nenhum arquivo Python de produção da prosauai é tocado neste gate — esse código vive em `/home/gabrielhamu/repos/paceautomations/prosauai` e tem seu próprio CI (`apps/api/Makefile`).
+
+Resultado: ver output em `.specify/.cache/t913-make-lint.log` e `.specify/.cache/t913-make-test.log` se gerados; caso contrário, logs inline no commit.
+
+---
+
+## T914 — Judge 1-way-door pós-merge PR-C (DEFERIDO)
+
+**Status**: deferido até PR-C ser mergeado em `develop` do repo `prosauai`.
+
+O epic 010 atravessa gate Tier 3 (1-way-door) por ter impacto direto em (a) resposta do bot em produção — silêncio equivocado bloqueia negócio do tenant — e (b) integração externa com Chatwoot Pace. Conforme `.claude/rules/base.md` §Tier 3 e `/madruga:judge`, a execução envolve:
+
+1. Carregar team `engineering` de `.claude/knowledge/judge-config.yaml`
+2. Rodar 4 personas em paralelo (Architect, Security, Ops, Product) contra os artefatos finais pós-merge
+3. Agregar findings e filtrar Accuracy/Actionability/Severity
+4. Gerar score `100 - (blockers×20 + warnings×5 + nits×1)`
+5. Se BLOCKERs → fix inline antes de promover para rollout Ariel
+
+**Quando executar**: imediatamente após merge de PR-C em `develop`, antes de flipar Ariel `handoff.mode: off → shadow`. O comando é `/madruga:judge 010` com o epic ativo na branch `epic/prosauai/010-handoff-engine-inbox`.
+
+**Onde o output vai**: `platforms/prosauai/epics/010-handoff-engine-inbox/judge-report.md` (gerado pelo skill).
+
+## Síntese
+
+_(preenchido no último tick)_

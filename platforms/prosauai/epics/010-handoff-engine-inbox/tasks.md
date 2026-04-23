@@ -338,7 +338,7 @@ Se PR-B estourar semana 2 → **PR-C sacrificavel** (Phases 5, 7, 8 viram follow
 - [ ] T909 Rodar `quickstart.md` end-to-end validation em staging (validacao US1-US7 conforme documentado) — **DEFERIDO**: requer ambiente de staging com Chatwoot + Evolution + Supabase provisionados (pos-merge PR-C, antes do rollout Ariel)
 - [ ] T910 [P] Remover codigo Redis legacy key `handoff:*` do epic 004 placeholder apos 7d com zero leituras em producao — deletar em `core/router/facts.py` + remover log `handoff_redis_legacy_read` — **DEFERIDO**: aguarda gate operacional pos-rollout (7d zero reads); codigo legacy continua em producao para safety durante migration
 - [x] T911 [P] Criar runbook `apps/api/benchmarks/handoff_smoke.md` com checklist manual pre-rollout cada tenant (validacao Chatwoot webhook real + fromMe + composer + cards)
-- [ ] T912 Audit final: `handoff_events` retention cron rodou? `bot_sent_messages` cleanup cron rodou? circuit breaker `helpdesk_breaker_open` metric coletada? — marcar em `easter-tracking.md`
+- [x] T912 Audit final: `handoff_events` retention cron rodou? `bot_sent_messages` cleanup cron rodou? circuit breaker `helpdesk_breaker_open` metric coletada? — marcar em `easter-tracking.md`
 - [ ] T913 Rodar `make test` + `make lint` + `make ruff` do madruga.ai e garantir verde — lint dos ADRs e diagramas
 - [ ] T914 Pos-merge PR-C: executar `/madruga:judge 010` (gate 1-way-door conforme pipeline DAG) e aplicar blockers antes de mandar pra staging
 
