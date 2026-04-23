@@ -62,27 +62,27 @@ Se PR-B estourar semana 2 → **PR-C sacrificavel** (Phases 5, 7, 8 viram follow
 - [x] T031 Criar `apps/api/prosauai/handoff/state.py` com `mute_conversation(conn, conversation_id, tenant_id, reason, source, metadata, auto_resume_at=None, muted_by_user_id=None)` que (a) adquire `pg_advisory_xact_lock(hashtext(conversation_id))`, (b) checa modo `handoff.mode` do tenant (off→no-op; shadow→grava evento com `shadow=true` e retorna sem mutar; on→muta), (c) UPDATE `ai_active=false` + metadata, (d) chama `persist_event` fire-and-forget
 - [x] T032 Criar em `apps/api/prosauai/handoff/state.py` (mesmo arquivo) `resume_conversation(conn, conversation_id, tenant_id, source, metadata, resumed_by_user_id=None)` com mesma mecanica: advisory lock → UPDATE `ai_active=true` + clear metadata → event
 - [x] T033 [P] Criar `apps/api/tests/unit/handoff/test_state.py` com unit tests cobrindo mute→resume happy path, mute em `mode=off` no-op, mute em `mode=shadow` grava evento sem mutar (≥95% coverage state.py)
-- [ ] T034 [P] Criar `apps/api/tests/unit/handoff/test_events.py` (fire-and-forget persistence, erros logados + metric increment + nao levantam)
-- [ ] T035 Integration test `apps/api/tests/integration/test_handoff_concurrent_transitions.py` usando testcontainers-postgres: `asyncio.gather` com 10 calls concorrentes a `mute_conversation` na mesma conversa → apenas 1 prevalece (advisory lock serializa)
+- [x] T034 [P] Criar `apps/api/tests/unit/handoff/test_events.py` (fire-and-forget persistence, erros logados + metric increment + nao levantam)
+- [x] T035 Integration test `apps/api/tests/integration/test_handoff_concurrent_transitions.py` usando testcontainers-postgres: `asyncio.gather` com 10 calls concorrentes a `mute_conversation` na mesma conversa → apenas 1 prevalece (advisory lock serializa)
 
 ### Circuit breaker
 
-- [ ] T040 [P] Criar `apps/api/prosauai/handoff/breaker.py` reusando padrao `processors/breaker.py` do epic 009: `CircuitBreaker` per-helpdesk-per-tenant com estados closed/open/half-open, thresholds 5 falhas/60s, half-open apos 30s
-- [ ] T041 [P] Criar `apps/api/tests/unit/handoff/test_breaker.py` (transicoes de estado + metric `helpdesk_breaker_open` ao abrir)
+- [x] T040 [P] Criar `apps/api/prosauai/handoff/breaker.py` reusando padrao `processors/breaker.py` do epic 009: `CircuitBreaker` per-helpdesk-per-tenant com estados closed/open/half-open, thresholds 5 falhas/60s, half-open apos 30s
+- [x] T041 [P] Criar `apps/api/tests/unit/handoff/test_breaker.py` (transicoes de estado + metric `helpdesk_breaker_open` ao abrir)
 
 ### ChatwootAdapter — shell sem webhook (PR-A entrega mute manual via SQL)
 
-- [ ] T050 Criar `apps/api/prosauai/handoff/chatwoot.py` com `ChatwootAdapter` implementando `HelpdeskAdapter` Protocol: constructor recebe `tenant_config`, cliente httpx async, wraps em `CircuitBreaker`
-- [ ] T051 Em `apps/api/prosauai/handoff/chatwoot.py` implementar `verify_webhook_signature(headers, body)` usando stdlib `hmac` + `hashlib.sha256` com `tenant.helpdesk.credentials.webhook_secret`
-- [ ] T052 Em `apps/api/prosauai/handoff/chatwoot.py` implementar `push_private_note(conversation_id, text)` chamando Chatwoot API v1 `POST /conversations/{id}/messages` com `message_type=private` (fire-and-forget via breaker)
-- [ ] T053 [P] Criar `apps/api/tests/unit/handoff/test_chatwoot.py` (≥95% coverage) com `respx` mockando Chatwoot API: HMAC verify happy + tampered, push_private_note sucesso e falha (breaker abre)
+- [x] T050 Criar `apps/api/prosauai/handoff/chatwoot.py` com `ChatwootAdapter` implementando `HelpdeskAdapter` Protocol: constructor recebe `tenant_config`, cliente httpx async, wraps em `CircuitBreaker`
+- [x] T051 Em `apps/api/prosauai/handoff/chatwoot.py` implementar `verify_webhook_signature(headers, body)` usando stdlib `hmac` + `hashlib.sha256` com `tenant.helpdesk.credentials.webhook_secret`
+- [x] T052 Em `apps/api/prosauai/handoff/chatwoot.py` implementar `push_private_note(conversation_id, text)` chamando Chatwoot API v1 `POST /conversations/{id}/messages` com `message_type=private` (fire-and-forget via breaker)
+- [x] T053 [P] Criar `apps/api/tests/unit/handoff/test_chatwoot.py` (≥95% coverage) com `respx` mockando Chatwoot API: HMAC verify happy + tampered, push_private_note sucesso e falha (breaker abre)
 
 ### Registry bootstrap + config_poller extension
 
-- [ ] T060 Em `apps/api/prosauai/main.py` registrar `ChatwootAdapter` no `HelpdeskRegistry` durante `lifespan` startup (aditivo — nao remove nada)
-- [ ] T061 Estender `apps/api/prosauai/tenants/config_poller.py` aceitando blocos novos em `tenants.yaml`: `helpdesk: {type: chatwoot|none, credentials: {api_token, account_id, inbox_id, webhook_secret}}` e `handoff: {mode: off|shadow|on, auto_resume_after_hours: int|null (1..168), human_pause_minutes: int (1..1440), rules: [string]}`
-- [ ] T062 Em `tenants/config_poller.py` adicionar validacao: `handoff.auto_resume_after_hours` fora de range → rejeitar reload, manter config anterior, emitir metric `tenant_config_reload_failed{tenant}`
-- [ ] T063 [P] Criar `apps/api/tests/unit/tenants/test_config_poller_handoff.py` validando reload de 3 cenarios (off, shadow, on) + validacao range + reject hold-previous
+- [x] T060 Em `apps/api/prosauai/main.py` registrar `ChatwootAdapter` no `HelpdeskRegistry` durante `lifespan` startup (aditivo — nao remove nada)
+- [x] T061 Estender `apps/api/prosauai/tenants/config_poller.py` aceitando blocos novos em `tenants.yaml`: `helpdesk: {type: chatwoot|none, credentials: {api_token, account_id, inbox_id, webhook_secret}}` e `handoff: {mode: off|shadow|on, auto_resume_after_hours: int|null (1..168), human_pause_minutes: int (1..1440), rules: [string]}`
+- [x] T062 Em `tenants/config_poller.py` adicionar validacao: `handoff.auto_resume_after_hours` fora de range → rejeitar reload, manter config anterior, emitir metric `tenant_config_reload_failed{tenant}`
+- [x] T063 [P] Criar `apps/api/tests/unit/tenants/test_config_poller_handoff.py` validando reload de 3 cenarios (off, shadow, on) + validacao range + reject hold-previous
 
 ### Pipeline safety net + customer_lookup amortization
 
