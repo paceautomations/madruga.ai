@@ -160,8 +160,20 @@ prosauai/
 │   │   └── evolution.py       # EvolutionProvider (httpx async)
 │   ├── api/                   # FastAPI endpoints
 │   │   ├── webhooks.py        # POST /webhook/whatsapp/{instance_name}
+│   │   ├── webhooks/
+│   │   │   └── helpdesk/
+│   │   │       └── chatwoot.py # POST /webhook/helpdesk/chatwoot/{tenant_slug} (epic 010)
 │   │   ├── health.py          # GET /health (status + Redis + OTel)
 │   │   └── dependencies.py    # resolve_tenant_and_authenticate() (X-Webhook-Secret)
+│   ├── handoff/               # Epic 010: Handoff Engine + Multi-Helpdesk
+│   │   ├── base.py            # HelpdeskAdapter Protocol + error hierarchy (ADR-037)
+│   │   ├── registry.py        # register/get adapters by helpdesk_type
+│   │   ├── state.py           # mute_conversation / resume_conversation (advisory lock, ADR-036)
+│   │   ├── events.py          # HandoffEvent dataclass + persist_event fire-and-forget
+│   │   ├── breaker.py         # CircuitBreaker per (tenant, helpdesk)
+│   │   ├── chatwoot.py        # ChatwootAdapter (HMAC + API v1 + private notes + operator reply)
+│   │   ├── none.py            # NoneAdapter (fromMe hook + bot_sent_messages echo check, ADR-038)
+│   │   └── scheduler.py       # Periodic tasks: auto_resume + bot_sent_messages_cleanup + handoff_events_cleanup
 │   ├── db/                    # Epic 005: Database layer
 │   │   └── pool.py            # asyncpg pool (min=2, max=10, JSONB codec, search_path)
 │   ├── ops/                   # Epic 006: Operations tooling
@@ -199,7 +211,7 @@ prosauai/
 
 | Convencao | Regra |
 |-----------|-------|
-| Packages por concern | `core/` (dominio base), `conversation/` (LLM pipeline), `safety/` (guardrails), `tools/` (registry), `api/` (endpoints), `channels/` (adapters), `db/` (pool), `ops/` (migrations, retention), `observability/` (cross-cutting), `core/router/` (routing engine) |
+| Packages por concern | `core/` (dominio base), `conversation/` (LLM pipeline), `safety/` (guardrails), `tools/` (registry), `api/` (endpoints), `channels/` (adapters), `handoff/` (helpdesk integration — epic 010), `db/` (pool), `ops/` (migrations, retention), `observability/` (cross-cutting), `core/router/` (routing engine) |
 | Config per-tenant | `config/tenants.yaml` (identidade) + `config/routing/*.yaml` (regras de roteamento) |
 | RLS tests | Obrigatorios para toda nova tabela com tenant_id |
 | Secrets | Nunca em codigo; sempre via env vars (.env) — Infisical SDK em fase futura |
@@ -214,7 +226,7 @@ prosauai/
 |--------|----------|----------------|
 | `prosauai` | 7 tabelas de negocio: customers, conversations, conversation_states, messages (particionada), agents, prompts, eval_scores | Migrations da app (`migrations/*.sql`) |
 | `prosauai_ops` | `schema_migrations` (tracking de migrations aplicadas) | Migrations da app |
-| `public` | `tenant_id()` SECURITY DEFINER STABLE (funcao RLS helper). Usa `gen_random_uuid()` built-in — **sem extensoes adicionais**. **Epic 008**: tabelas admin-only sem RLS: `traces` (pipeline execution — 12 steps cada), `trace_steps` (FK CASCADE; JSONB input/output truncados 8 KB), `routing_decisions` (append-only, incluindo DROPs invisiveis no epic 004). Acessiveis exclusivamente via `pool_admin` (BYPASSRLS) — carve-out documentado em ADR-027 | Migrations da app (funcao) + Supabase (schema) |
+| `public` | `tenant_id()` SECURITY DEFINER STABLE (funcao RLS helper). Usa `gen_random_uuid()` built-in — **sem extensoes adicionais**. **Epic 008**: tabelas admin-only sem RLS: `traces` (pipeline execution — 12 steps cada), `trace_steps` (FK CASCADE; JSONB input/output truncados 8 KB), `routing_decisions` (append-only, incluindo DROPs invisiveis no epic 004). **Epic 010**: mais duas tabelas admin-only sob o mesmo carve-out: `handoff_events` (append-only, audit trail dos mutes/resumes/breakers, retention 90d via cron FR-047a) + `bot_sent_messages` (tracking 48h usado pelo NoneAdapter para evitar bot echo, retention 48h). Acessiveis exclusivamente via `pool_admin` (BYPASSRLS) — carve-out documentado em ADR-027 | Migrations da app (funcao) + Supabase (schema) |
 | `observability` | Tabelas Phoenix (traces, spans) | Phoenix auto-managed (`PHOENIX_SQL_DATABASE_SCHEMA`) |
 | `admin` | Reservado — tenants, audit_log (epic 013) | Futuro |
 | `auth` | Supabase-managed (GoTrue) — **NAO TOCAR** | Supabase |
@@ -296,6 +308,62 @@ Caracteristicas-chave:
 - **Retention cron** do epic 006 estendido com 3 DELETEs novos (ver `3d`).
 
 Detalhes de arquitetura: [epics/008-admin-evolution/](../epics/008-admin-evolution/) (spec + plan + research + data-model + contracts).
+
+---
+
+## 3f. Handoff Engine + Multi-Helpdesk (epic 010)
+
+O epic 010 materializa o bit `conversations.ai_active` (antes declarado
+mas inexistente, cf. comentario historico em
+`db/queries/conversations.py:16` "not yet materialised") e introduz um
+**Protocol `HelpdeskAdapter`** espelhando o padrao de `ChannelAdapter`
+do epic 009. Resultado pratico: quando um atendente humano assume a
+conversa no Chatwoot (ou digita direto do WhatsApp Business em tenants
+sem helpdesk), o bot ProsaUAI silencia na mesma conversa — e retoma
+automaticamente quando a conversa e resolvida ou apos timeout configuravel.
+
+Arquitetura consolidada:
+
+| Camada | Componente | Responsabilidade |
+|--------|-----------|------------------|
+| Schema | 6 colunas novas em `conversations` | `ai_active`, `ai_muted_reason`, `ai_muted_at`, `ai_muted_by_user_id`, `ai_auto_resume_at`, `external_refs JSONB` — tenant-scoped, herdam RLS |
+| Schema | `public.handoff_events` (admin-only, ADR-027) | Append-only audit: `muted`/`resumed`/`admin_reply_sent`/`breaker_open`/`breaker_closed`; retention 90d |
+| Schema | `public.bot_sent_messages` (admin-only, ADR-027) | Tracking 48h — NoneAdapter usa para evitar bot echo ao detectar `fromMe=true` |
+| Code | `prosauai/handoff/` | Novo modulo: Protocol + registry + state + events + breaker + ChatwootAdapter + NoneAdapter + scheduler |
+| Code | `api/webhooks/helpdesk/chatwoot.py` | Webhook inbound com HMAC + idempotency Redis + 2 event types (`conversation_updated` + `conversation_status_changed`) |
+| Config | `tenants.yaml` — blocos `helpdesk.*` + `handoff.*` | Per-tenant: tipo de helpdesk, credenciais, mode (`off`/`shadow`/`on`), `auto_resume_after_hours`, `human_pause_minutes` |
+| Admin UI | 3 endpoints + badges + composer | `POST /admin/conversations/{id}/{mute,unmute,reply}` — reply delega ao adapter para enviar mensagem via Chatwoot |
+| Admin UI | Performance AI: 4 cards novos | Taxa de handoff, duracao media, breakdown por source, SLA breaches |
+| Scheduler | 3 periodic tasks no lifespan | `handoff_auto_resume_cron` (60s) + `bot_sent_messages_cleanup_cron` (12h) + `handoff_events_cleanup_cron` (24h) — singleton via `pg_try_advisory_lock` |
+
+Invariantes obrigatorios:
+
+- **Advisory lock per-conversation** em toda transicao (`pg_advisory_xact_lock(hashtext(conversation_id))`) — serializa os 4 gatilhos possiveis (webhook, fromMe, manual, cron). Lock do cron (`handoff_resume_cron`) e **disjunto** do per-conversation — sem deadlock path.
+- **Fire-and-forget** para `handoff_events` insert, push de private note e sync de assignee — NUNCA antes do commit do bit (ADR-028).
+- **Ordenacao estrita**: commit DB → emissao evento → side effects.
+- **Single source of truth**: Postgres `ai_active`. Router le direto do PG (amortizado no `customer_lookup`). Redis legacy key `handoff:{tenant}:{sender_key}` deprecated em PR-A, removida em PR-B apos 7d zero leituras.
+- **Feature flag reload em <60s**: `config_poller` re-le `tenants.yaml` a cada 60s. Mudanca de `handoff.mode: on → off` reverte a feature em ate 1 minuto sem deploy.
+
+ADRs novos:
+
+- **ADR-036** — `ai_active` unified mute state (boolean single-bit, nao enum multi-step)
+- **ADR-037** — HelpdeskAdapter pattern (Protocol + registry, espelha ADR-031 ChannelAdapter)
+- **ADR-038** — fromMe auto-detection semantics (NoneAdapter `bot_sent_messages` + 10s tolerance + group skip)
+
+Observabilidade (FR-051/052/053):
+
+- Metricas Prometheus: `handoff_events_total{tenant, event_type, source, shadow}`, `handoff_shadow_events_total`, `handoff_duration_seconds{tenant, source}` (histogram), `helpdesk_webhook_latency_seconds{tenant, helpdesk}`, `helpdesk_breaker_open{tenant, helpdesk, reason}`. Emitidas via structlog facade (sem `prometheus_client` como dependencia nova).
+- OTel baggage propaga de ponta-a-ponta: webhook inbound attacha `tenant_id`, `chatwoot_conversation_id`, `chatwoot_event_id`, `helpdesk_type`; `add_otel_context` processor le baggage e insere como top-level fields em todos os logs downstream (state.mute, adapter, persist_event).
+- Logs structlog canonicos em todos os paths — `tenant_id`, `conversation_id`, `event_type`, `source`, `helpdesk_type`, `admin_user_id`.
+
+Rollout gradual (FR-012):
+
+1. Ariel: `off → shadow` (7d observacao) → `on` (48h validacao)
+2. ResenhAI replica mesmo trajeto 7d depois
+
+Shadow mode emite `handoff_events.shadow=true` mas NAO muta `ai_active` — permite medir "quantos mutes a pipeline teria feito" antes de confiar o real na producao (SC-012 ≤10% drift).
+
+Detalhes de arquitetura: [epics/010-handoff-engine-inbox/](../epics/010-handoff-engine-inbox/) (spec + plan + research + data-model + contracts + decisions).
 
 ---
 
@@ -400,6 +468,8 @@ Detalhes de arquitetura: [epics/008-admin-evolution/](../epics/008-admin-evoluti
 | Q11 | Guardrail latencia | Overhead de seguranca no pipeline | <260ms total (3 layers) | Layer A <5ms, B ~50ms, C ~200ms (so high-risk) | Should |
 | Q12 | Secret rotation | Compliance de rotacao | 100% no prazo | Infisical rotation schedules automatizados | Must |
 | Q13 | Routing rule evaluation | Latencia da resolucao de agente (M3 Fase B) | <10ms p99 | DB query + in-memory cache (TTL 30s) | Should |
+| Q14 | Handoff webhook latency | p95 webhook Chatwoot → mute efetivo (epic 010) | <500ms | HMAC + idempotency Redis + advisory lock | Must |
+| Q15 | Handoff rollback RTO | Tempo para desligar feature via tenants.yaml | <=60s | config_poller polling interval + hot reload | Must |
 
 ---
 

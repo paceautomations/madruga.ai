@@ -182,4 +182,65 @@ async def test_persist_trace_failure_does_not_propagate(monkeypatch):
 
 ---
 
+## Extensao — Epic 010 (Handoff Engine)
+
+O epic 010 aplica o **mesmo padrao** documentado aqui a tres novos side
+effects do dominio de handoff. A decisao nao muda; esta secao registra
+os novos consumidores para que a lista fique exaustiva e code review
+futura tenha onde olhar.
+
+| Side effect | Consumidor | Fonte | Quando dispara |
+|-------------|-----------|-------|---------------|
+| `public.handoff_events` insert | `prosauai.handoff.events.persist_event` | `prosauai.handoff.state.mute_conversation` / `resume_conversation` / `ChatwootAdapter.send_operator_reply` | **Apos** o commit da transicao em `conversations.ai_active` |
+| `ChatwootAdapter.push_private_note` | `prosauai.handoff.chatwoot` | pipeline step `content_process` (durante handoff) ou `handoff_sync` task | Fire-and-forget — push de transcripts/descricoes de midia para o atendente ver no Chatwoot |
+| Sync de assignee externo (futuro) | `prosauai.handoff.chatwoot` | webhook admin toggle manual | Fire-and-forget — quando admin do Pace altera estado no ProsaUAI, tenta sincronizar assignee no Chatwoot |
+
+Regras identicas a ADR-028 canonica:
+
+1. **Sempre pos-commit** do bit em `conversations.ai_active` — NUNCA antes.
+   Push de private note antes do commit deixa o atendente vendo mensagem do
+   cliente sem o bot estar de fato mutado, criando race onde o bot
+   responde enquanto o atendente ja esta digitando.
+2. **Swallow + log** — `handoff_event_persist_failed`, `chatwoot_push_note_failed`
+   com structlog. Metricas derivam do log shipping (sem `prometheus_client`
+   novo).
+3. **`asyncio.create_task(name="handoff_...")`** com nome explicito para audit
+   em debug mode.
+4. **Graceful shutdown** — o scheduler do epic 010 (`HandoffScheduler.stop`)
+   aguarda suas tarefas com `asyncio.wait(timeout=5s)` antes do pool close,
+   mesma politica do ADR-028 canonico.
+
+**Circuit breaker** (`prosauai.handoff.breaker`) protege os caminhos
+outbound Chatwoot: apos 5 falhas em 60s a ``push_private_note`` e
+``send_operator_reply`` levantam `HelpdeskAPIError` sem chamar a API, e
+emitem counter `helpdesk_breaker_open` + log WARNING. Isso evita que uma
+queda do Chatwoot derrube o pool de conexoes do app — o handoff state
+(``ai_active``) continua correto mesmo com o Chatwoot fora do ar, pois
+o mute nao depende da API externa, so o push do transcript depende.
+
+**Pool**: os tres novos side effects usam o mesmo `pool_admin` — as duas
+tabelas novas (`handoff_events`, `bot_sent_messages`) estao sob o
+carve-out ADR-027 (admin-only, BYPASSRLS).
+
+**Teste de regressao adicional** (`apps/api/tests/unit/handoff/test_state.py`):
+
+```python
+@pytest.mark.asyncio
+async def test_mute_commits_before_event_persist_fails(monkeypatch):
+    """Falha em handoff_events insert NAO reverte ai_active=false."""
+    async def boom(*args, **kwargs):
+        raise asyncpg.PostgresError("events table down")
+    monkeypatch.setattr("prosauai.handoff.events.persist_event", boom)
+
+    # mute_conversation commits normally; event insert fails silently.
+    result = await mute_conversation(pool, ...)
+    assert result.ai_active is False
+
+    # conversations.ai_active reflects the commit:
+    row = await pool.fetchrow("SELECT ai_active FROM conversations WHERE id = $1", cid)
+    assert row["ai_active"] is False
+```
+
+---
+
 > **Próximo passo:** PR 2 (T020–T030) implementa `trace_persist.py` + refactor do pipeline. Benchmark A/B em staging valida SC-006 antes do merge em prod.

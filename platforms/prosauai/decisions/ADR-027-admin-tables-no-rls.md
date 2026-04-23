@@ -129,4 +129,72 @@ O teste falha se por algum motivo `tenant_role` tiver `GRANT SELECT` na tabela �
 
 ---
 
+## Extensao — Epic 010 (Handoff Engine)
+
+O epic 010 adiciona **mais duas tabelas** sob o mesmo carve-out:
+
+| Tabela | Volume/ano estimado | Função |
+|--------|---------------------|--------|
+| `public.handoff_events` | ~12 k rows (2 tenants × 500 eventos/mes × 12 meses) | Audit append-only: mutes/resumes/breaker transitions/admin replies (retention 90d via cron FR-047a) |
+| `public.bot_sent_messages` | ~200 k rows (peak 100k/tenant) | Tracking 48h usado pelo NoneAdapter para evitar `fromMe` false-positive (retention 48h via cron) |
+
+A justificativa e identica a documentada nas secoes acima:
+
+- **Leitura cross-tenant por design** — Performance AI (epic 010 T710
+  `handoff_metrics`) e o Trace Explorer filtram por tenant via URL param,
+  mas a query executa via `pool_admin` (BYPASSRLS) para pagar o custo
+  zero de RLS em agregados.
+- **Escrita via `pool_admin`** — `prosauai.handoff.events.persist_event`
+  e `prosauai.handoff.state` usam exclusivamente o pool admin (o modulo
+  `handoff/` nao toca `pool_tenant` em nenhum caminho).
+- **Append-only** — `handoff_events` e `bot_sent_messages` nunca sao
+  atualizadas; `UPDATE` intencionalmente ausente do GRANT. Retention
+  via cron `DELETE` (ADR-018 estendido).
+
+Migrations criadas seguindo o mesmo template:
+
+```sql
+-- 20260501000002_create_handoff_events.sql (epic 010)
+-- ALTER TABLE public.handoff_events ENABLE ROW LEVEL SECURITY;  -- intencionalmente ausente
+REVOKE ALL ON public.handoff_events FROM PUBLIC;
+REVOKE ALL ON public.handoff_events FROM tenant_role;
+GRANT  SELECT, INSERT, DELETE ON public.handoff_events TO admin_role;
+COMMENT ON TABLE public.handoff_events IS
+  'Handoff audit trail (append-only). NO RLS — admin-only via pool_admin. See ADR-027 + ADR-036.';
+
+-- 20260501000003_create_bot_sent_messages.sql (epic 010)
+-- ALTER TABLE public.bot_sent_messages ENABLE ROW LEVEL SECURITY;  -- intencionalmente ausente
+REVOKE ALL ON public.bot_sent_messages FROM PUBLIC;
+REVOKE ALL ON public.bot_sent_messages FROM tenant_role;
+GRANT  SELECT, INSERT, DELETE ON public.bot_sent_messages TO admin_role;
+COMMENT ON TABLE public.bot_sent_messages IS
+  'Bot-sent message tracking (48h retention). NO RLS — admin-only via pool_admin. See ADR-027 + ADR-038.';
+```
+
+Teste de regressao equivalente em
+`apps/api/tests/integration/admin/test_rls_isolation_handoff.py`:
+
+```python
+@pytest.mark.asyncio
+async def test_pool_tenant_cannot_read_handoff_events(pool_tenant):
+    with pytest.raises(asyncpg.exceptions.InsufficientPrivilegeError):
+        async with pool_tenant.acquire() as conn:
+            await conn.fetch("SELECT id FROM public.handoff_events LIMIT 1")
+
+
+@pytest.mark.asyncio
+async def test_pool_tenant_cannot_read_bot_sent_messages(pool_tenant):
+    with pytest.raises(asyncpg.exceptions.InsufficientPrivilegeError):
+        async with pool_tenant.acquire() as conn:
+            await conn.fetch("SELECT message_id FROM public.bot_sent_messages LIMIT 1")
+```
+
+**Restricao operacional identica**: novas tabelas admin-only criadas
+fora do epic 010 exigem ADR nova (ou extensao desta), para impedir que
+a excecao vire regra. Esta extensao documenta apenas as tabelas do
+epic 010 — se o epic 011 precisar de mais carve-outs, deve justificar
+a necessidade em nova ADR ou secao.
+
+---
+
 > **Próximo passo:** migrations no PR 1 (T010–T013) criam as tabelas seguindo este template. Code review exige citação explícita a esta ADR ao revisar as DDLs.

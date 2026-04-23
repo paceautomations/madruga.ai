@@ -326,13 +326,13 @@ Se PR-B estourar semana 2 → **PR-C sacrificavel** (Phases 5, 7, 8 viram follow
 
 **Purpose**: observabilidade, documentacao, cleanup, validacao final antes de rollout em producao.
 
-- [ ] T900 [P] Adicionar metrics Prometheus faltantes: `handoff_duration_seconds_bucket{tenant}` (histogram) + `helpdesk_breaker_open{tenant, helpdesk}` — registrar em `apps/api/prosauai/observability/metrics.py` (FR-052)
-- [ ] T901 [P] Estruturar logs structlog em todos os paths: webhook handler, state.mute/resume, scheduler iterations, adapter calls — campos padrao `tenant_id`, `conversation_id`, `event_type`, `source`, `helpdesk_type`, `admin_user_id` (FR-053)
-- [ ] T902 [P] OTel baggage propagation end-to-end: webhook inbound → pipeline → POST Chatwoot API — validar via trace completo no Trace Explorer (FR-051)
-- [ ] T903 [P] Atualizar `platforms/prosauai/engineering/blueprint.md` com novo modulo `handoff/` + 2 tabelas admin + schedulers no lifespan (sem refatoracao, aditivo)
-- [ ] T904 [P] Atualizar `platforms/prosauai/decisions/ADR-028-pipeline-fire-and-forget-persistence.md` listando `handoff_events` insert + push private note + sync assignee como novos side effects fire-and-forget
-- [ ] T905 [P] Atualizar `platforms/prosauai/decisions/ADR-027-admin-tables-no-rls.md` listando `handoff_events` + `bot_sent_messages` como novas tabelas sob carve-out
-- [ ] T906 [P] Atualizar `platforms/prosauai/decisions/ADR-018-data-retention-lgpd.md` com retention policy `handoff_events=90d` + `bot_sent_messages=48h`
+- [x] T900 [P] Adicionar metrics Prometheus faltantes: `handoff_duration_seconds_bucket{tenant}` (histogram) + `helpdesk_breaker_open{tenant, helpdesk}` — registrar em `apps/api/prosauai/observability/metrics.py` (FR-052)
+- [x] T901 [P] Estruturar logs structlog em todos os paths: webhook handler, state.mute/resume, scheduler iterations, adapter calls — campos padrao `tenant_id`, `conversation_id`, `event_type`, `source`, `helpdesk_type`, `admin_user_id` (FR-053)
+- [x] T902 [P] OTel baggage propagation end-to-end: webhook inbound → pipeline → POST Chatwoot API — validar via trace completo no Trace Explorer (FR-051)
+- [x] T903 [P] Atualizar `platforms/prosauai/engineering/blueprint.md` com novo modulo `handoff/` + 2 tabelas admin + schedulers no lifespan (sem refatoracao, aditivo)
+- [x] T904 [P] Atualizar `platforms/prosauai/decisions/ADR-028-pipeline-fire-and-forget-persistence.md` listando `handoff_events` insert + push private note + sync assignee como novos side effects fire-and-forget
+- [x] T905 [P] Atualizar `platforms/prosauai/decisions/ADR-027-admin-tables-no-rls.md` listando `handoff_events` + `bot_sent_messages` como novas tabelas sob carve-out
+- [x] T906 [P] Atualizar `platforms/prosauai/decisions/ADR-018-data-retention-lgpd.md` com retention policy `handoff_events=90d` + `bot_sent_messages=48h`
 - [ ] T907 Rodar `apps/api/scripts/update-agent-context.sh claude` para refletir novo modulo handoff e 3 tabelas
 - [ ] T908 [P] Estender `CLAUDE.md` (root) com Active Technologies do epic 010 — zero libs novas, mas novo modulo `handoff/` + 2 tabelas admin
 - [ ] T909 Rodar `quickstart.md` end-to-end validation em staging (validacao US1-US7 conforme documentado)

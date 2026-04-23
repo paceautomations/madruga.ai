@@ -38,8 +38,30 @@ We will implementar data retention e compliance como parte core da plataforma, n
 | Phoenix traces | 90 dias | Sim | Postgres (Supabase) |
 | Application logs | 30 dias | Nao | Log rotation |
 | Audit trail (security) | 365 dias | Nao (compliance) | Supabase |
+| Handoff events (epic 010) | **90 dias** (FR-047a) | Sim (futuro) | Supabase `public.handoff_events` |
+| Bot sent messages tracking (epic 010) | **48 horas** | Nao (invariante da feature) | Supabase `public.bot_sent_messages` |
 
 Cron job diario para purge automatico de dados expirados. Tenant pode ajustar retention no admin panel (ADR-010).
+
+**Epic 010 — handoff data retention**:
+
+- `public.handoff_events` (audit append-only de `muted`/`resumed`/`admin_reply_sent`/`breaker_open`/`breaker_closed`):
+  90 dias full detail, alinhado com `trace_steps` do epic 008 para que
+  o admin possa correlacionar eventos de handoff com o pipeline trace
+  que causou o mute. Cron `handoff_events_cleanup_cron` (cadence 24h,
+  batch 1000, disjoint advisory lock) em `prosauai/handoff/scheduler.py`.
+- `public.bot_sent_messages` (ID + timestamp das mensagens enviadas pelo
+  bot, usado pelo NoneAdapter para evitar `fromMe` false-positive):
+  48 horas — corresponde a tolerancia maxima do caso "atendente respondeu
+  apos 24h no WhatsApp Business". Cron `bot_sent_messages_cleanup_cron`
+  (cadence 12h, batch 5000). Janela **nao** configuravel por tenant — e
+  invariante do algoritmo do NoneAdapter (decisao 9 do epic 010 pitch).
+
+Ambas as tabelas estao sob carve-out admin-only (ADR-027) e usam o mesmo
+padrao de retention cron do epic 006: loop singleton via
+`pg_try_advisory_lock`, batch `DELETE` com `LIMIT`, logging estruturado
+com `rows_deleted`, `retention_days`/`retention_hours`, `duration_ms`.
+Falha do cron e idempotente — a proxima iteracao drena o backlog.
 
 ### 2. Consent no Primeiro Contato
 
