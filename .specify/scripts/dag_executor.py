@@ -57,7 +57,7 @@ DEFAULT_TIMEOUT = int(os.environ.get("MADRUGA_EXECUTOR_TIMEOUT", "3000"))
 RETRY_BACKOFFS = [10, 30, 90]
 # Same-error circuit breaker: classify errors and escalate deterministic ones early.
 DETERMINISTIC_ERROR_PATTERNS = ("unfilled template", "exitcode", "output not found")
-TRANSIENT_ERROR_PATTERNS = ("rate_limit", "timeout", "context_length")
+TRANSIENT_ERROR_PATTERNS = ("rate_limit", "timeout", "context_length", "hit your limit")
 SAME_ERROR_MAX_DETERMINISTIC = 2  # escalate after 2nd identical deterministic error
 SAME_ERROR_MAX_UNKNOWN = 3  # escalate after 3rd identical unknown error
 CB_MAX_FAILURES = 5
@@ -99,7 +99,6 @@ SKILL_FILE_MAP: dict[str, str] = {
     "madruga:domain-model": ".claude/commands/madruga/domain-model.md",
     "madruga:containers": ".claude/commands/madruga/containers.md",
     "madruga:context-map": ".claude/commands/madruga/context-map.md",
-    "madruga:epic-breakdown": ".claude/commands/madruga/epic-breakdown.md",
     "madruga:roadmap": ".claude/commands/madruga/roadmap.md",
     # L2 — epic cycle
     "madruga:epic-context": ".claude/commands/madruga/epic-context.md",
@@ -138,7 +137,6 @@ NODE_TOOLS: dict[str, str] = {
     "containers": "Bash,Read,Write,Glob,Grep",
     "context-map": "Bash,Read,Write,Glob,Grep",
     # L1 — planning layer
-    "epic-breakdown": "Bash,Read,Write,Glob,Grep",
     "roadmap": "Bash,Read,Write,Glob,Grep",
     # L2 — epic cycle
     "epic-context": "Bash,Read,Write,Glob,Grep",
@@ -497,26 +495,34 @@ def group_tasks_by_phase(
     tasks: list[TaskItem],
     max_per_phase: int = PHASE_DISPATCH_MAX_TASKS,
 ) -> list[tuple[str, list[TaskItem]]]:
-    """Group pending tasks by phase, splitting large phases into sub-phases.
+    """Group tasks by phase, splitting large phases into sub-phases.
+
+    Includes ALL tasks (checked and unchecked) so phase indices are stable
+    across retries. _run_implement_phases filters per-phase via still_pending.
+    Sub-phase splitting uses total task count (not pending count) so part
+    numbers never shift after partial completion.
 
     Returns list of (phase_label, tasks) tuples in original phase order.
-    Only includes unchecked tasks.  If no phase headers exist (all tasks have
-    phase=""), returns an empty list — the caller falls back to task-by-task.
+    If no phase headers exist (all tasks have phase=""), returns an empty
+    list — the caller falls back to task-by-task.
     """
     from collections import OrderedDict
 
     phases: OrderedDict[str, list[TaskItem]] = OrderedDict()
     for t in tasks:
-        if t.checked:
-            continue
         phases.setdefault(t.phase, []).append(t)
 
     # Fallback: no phase headers → every task has phase=""
     if not phases or list(phases.keys()) == [""]:
         return []
 
+    # Nothing pending — no work to dispatch
+    if all(t.checked for t in tasks):
+        return []
+
     result: list[tuple[str, list[TaskItem]]] = []
     for phase_label, phase_tasks in phases.items():
+        # Split by total task count so sub-phase numbers are stable
         if len(phase_tasks) <= max_per_phase:
             result.append((phase_label, phase_tasks))
         else:
@@ -1398,6 +1404,14 @@ async def _run_implement_phases(
             complete_run(conn, run_id, status="failed", error=error)
             _run_eval_scoring(conn, platform_name, phase_id, run_id, trace_id, epic_slug, None, metrics)
             log.error("Phase '%s' failed with zero progress: %s", phase_label, error)
+            # Rate limit: break immediately — next phases would fail for the same reason,
+            # burning turns and inflating the circuit-breaker failure count pointlessly.
+            if _is_rate_limit_error(error):
+                log.warning(
+                    "Rate limit detected on phase '%s' — breaking phase loop immediately (not advancing to next phase)",
+                    phase_label,
+                )
+                break
 
         # Auto-commit after each phase with progress to avoid DirtyTreeError on restart
         if phase_completed > 0:
@@ -2251,6 +2265,17 @@ def _classify_error(error: str | None) -> str:
     if any(p in error_lower for p in TRANSIENT_ERROR_PATTERNS):
         return "transient"
     return "unknown"
+
+
+_RATE_LIMIT_PATTERNS = ("hit your limit", "rate limit exceeded", "resets")
+
+
+def _is_rate_limit_error(error: str | None) -> bool:
+    """Return True if error is a token/rate-limit exhaustion (not a code bug)."""
+    if not error:
+        return False
+    lower = error.lower()
+    return any(p in lower for p in _RATE_LIMIT_PATTERNS)
 
 
 async def dispatch_with_retry_async(

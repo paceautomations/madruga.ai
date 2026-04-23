@@ -1327,3 +1327,61 @@ async def test_dag_scheduler_blocks_epic_on_dirty_tree_error():
     from easter import _epic_fail_counts
 
     assert "016" not in _epic_fail_counts
+
+
+def test_is_rate_limit_error_str_matches_patterns():
+    """_is_rate_limit_error_str recognises all known token-limit messages."""
+    from easter import _is_rate_limit_error_str
+
+    assert _is_rate_limit_error_str("You've hit your limit · resets 3pm")
+    assert _is_rate_limit_error_str("rate limit exceeded, try again later")
+    assert _is_rate_limit_error_str("usage resets at midnight")
+    assert not _is_rate_limit_error_str("context_length exceeded")
+    assert not _is_rate_limit_error_str(None)
+    assert not _is_rate_limit_error_str("")
+
+
+@pytest.mark.asyncio
+async def test_dag_scheduler_rate_limit_cooldown_skips_dispatch():
+    """When the last failed run for an epic had a rate-limit error and the
+    cooldown has NOT expired, dag_scheduler must skip the dispatch and not
+    call run_pipeline_async."""
+    import time
+
+    from easter import dag_scheduler
+
+    shutdown = asyncio.Event()
+    mock_conn = MagicMock()
+
+    call_count = {"dispatches": 0, "sleeps": 0}
+
+    async def _fake_run(*args, **kwargs):
+        call_count["dispatches"] += 1
+        return 0
+
+    async def _fake_sleep(_event, _seconds):
+        call_count["sleeps"] += 1
+        shutdown.set()
+        return True
+
+    # Simulate a recent (5 s ago) failed run with a rate limit error
+    recent_ts = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(time.time() - 5))
+    last_failed_row = {"error": "hit your limit · resets 3pm", "completed_at": recent_ts}
+
+    with (
+        _mock_scheduler_db(mock_conn),
+        patch("db.get_conn", return_value=mock_conn),
+        patch(
+            "easter.poll_active_epics",
+            return_value=[{"epic_id": "010", "platform_id": "prosauai", "branch_name": None}],
+        ),
+        patch("easter._get_last_failed_run", return_value=last_failed_row),
+        patch("easter.run_pipeline_async", new=_fake_run),
+        patch("easter._running_epics", set()),
+        patch("easter._interruptible_sleep", new=_fake_sleep),
+        patch("easter.RATE_LIMIT_COOLDOWN_SECONDS", 600),
+    ):
+        await dag_scheduler(mock_conn, asyncio.Semaphore(3), shutdown, poll_interval=0.01)
+
+    assert call_count["dispatches"] == 0, "dispatch should be skipped during rate limit cooldown"
+    assert call_count["sleeps"] >= 1

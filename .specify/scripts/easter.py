@@ -75,7 +75,32 @@ _running_epics: set[str] = set()
 # Postmortem: prosauai/003 T031-T046 cascade retried ~22× before user noticed.
 _epic_fail_counts: dict[str, int] = {}
 MAX_EPIC_DISPATCH_FAILURES = int(os.environ.get("MADRUGA_MAX_EPIC_FAILS", "3"))
+RATE_LIMIT_COOLDOWN_SECONDS = int(os.environ.get("MADRUGA_RATE_LIMIT_COOLDOWN", "600"))
 _platform_filter: str | None = None
+
+_RATE_LIMIT_PATTERNS = ("hit your limit", "rate limit exceeded", "resets")
+
+
+def _is_rate_limit_error_str(error: str | None) -> bool:
+    if not error:
+        return False
+    lower = error.lower()
+    return any(p in lower for p in _RATE_LIMIT_PATTERNS)
+
+
+def _get_last_failed_run(conn, platform_id: str, epic_id: str) -> dict | None:
+    """Return the most recent failed pipeline_run for this epic, or None."""
+    row = conn.execute(
+        """
+        SELECT error, completed_at
+        FROM pipeline_runs
+        WHERE platform_id=? AND epic_id=? AND status='failed'
+        ORDER BY completed_at DESC
+        LIMIT 1
+        """,
+        (platform_id, epic_id),
+    ).fetchone()
+    return dict(row) if row else None
 
 
 # --- Epic Polling ---
@@ -242,6 +267,31 @@ async def dag_scheduler(conn, semaphore, shutdown_event, poll_interval=15, platf
                     if epic_pending:
                         logger.debug("gate_pending_skip", epic_id=epic_id, gate=epic_pending[0]["node_id"])
                         continue
+
+                    # Rate limit cooldown: if the last run failed with a token
+                    # limit error recently, hold off dispatching until cooldown
+                    # expires. This prevents rapid-fire retries that waste turns
+                    # against a limit that may take minutes/hours to reset.
+                    last_failed = _get_last_failed_run(poll_conn, epic_platform_id, epic_id)
+                    if last_failed and _is_rate_limit_error_str(last_failed["error"]):
+                        completed_at = last_failed["completed_at"]
+                        if completed_at:
+                            try:
+                                import datetime as _dt
+
+                                fail_ts = _dt.datetime.fromisoformat(completed_at).timestamp()
+                            except Exception:
+                                fail_ts = time.time() - RATE_LIMIT_COOLDOWN_SECONDS
+                            elapsed = time.time() - fail_ts
+                            if elapsed < RATE_LIMIT_COOLDOWN_SECONDS:
+                                remaining = int(RATE_LIMIT_COOLDOWN_SECONDS - elapsed)
+                                logger.info(
+                                    "rate_limit_cooldown_active",
+                                    epic_id=epic_id,
+                                    platform=epic_platform_id,
+                                    remaining_s=remaining,
+                                )
+                                continue
 
                     _running_epics.add(epic_id)
 

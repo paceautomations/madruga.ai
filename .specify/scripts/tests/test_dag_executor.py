@@ -2504,8 +2504,10 @@ def test_group_tasks_by_phase_splits_large():
     assert len(result[1][1]) == 3
 
 
-def test_group_tasks_by_phase_skips_checked():
-    """Only unchecked tasks are included in phase groups."""
+def test_group_tasks_by_phase_stable_numbering_with_checked():
+    """All tasks (checked+unchecked) are included so phase indices stay stable
+    across retries. The caller (_run_implement_phases) skips fully-done phases
+    via its own still_pending check."""
     from dag_executor import TaskItem, group_tasks_by_phase
 
     tasks = [
@@ -2514,9 +2516,13 @@ def test_group_tasks_by_phase_skips_checked():
         TaskItem("T003", "done", True, "Phase 2: B", False),
     ]
     result = group_tasks_by_phase(tasks)
-    assert len(result) == 1
+    # Both phases returned for stable numbering; Phase 2 contains only checked
+    # tasks but _run_implement_phases will skip it via still_pending.
+    assert len(result) == 2
     assert result[0][0] == "Phase 1: A"
-    assert [t.id for t in result[0][1]] == ["T002"]
+    assert [t.id for t in result[0][1]] == ["T001", "T002"]
+    assert result[1][0] == "Phase 2: B"
+    assert [t.id for t in result[1][1]] == ["T003"]
 
 
 def test_group_tasks_by_phase_no_phases_empty():
