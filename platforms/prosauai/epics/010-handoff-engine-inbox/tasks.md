@@ -86,30 +86,30 @@ Se PR-B estourar semana 2 → **PR-C sacrificavel** (Phases 5, 7, 8 viram follow
 
 ### Pipeline safety net + customer_lookup amortization
 
-- [ ] T070 Estender `apps/api/prosauai/conversation/pipeline/steps/customer_lookup.py` para amortizar leitura de `ai_active` junto com a resolucao do customer (single SELECT — `SELECT c.*, co.ai_active FROM customers c JOIN conversations co ON ...`)
-- [ ] T071 Em `customer_lookup.py` popular `conversations.external_refs.chatwoot.{conversation_id, inbox_id}` quando webhook Evolution carrega `chatwootConversationId` non-null e campo ainda nao tem esse ID — UPDATE atomico via `jsonb_set(external_refs, '{chatwoot}', $1::jsonb, true)`
-- [ ] T072 Estender `apps/api/prosauai/conversation/pipeline/steps/generate.py` com safety net: `SELECT ai_active FROM conversations WHERE id=$1 FOR UPDATE` imediatamente antes do call LLM; se false → skip + emite step `ai_muted_skip` no `observability/step_record.py`
-- [ ] T073 Estender `apps/api/prosauai/observability/step_record.py` para registrar novo step type `ai_muted_skip` com `ai_muted_reason` nos dados
-- [ ] T074 [P] Criar `apps/api/tests/unit/pipeline/test_generate_safety_net.py` (conversa com `ai_active=false` → pipeline skip + trace step `ai_muted_skip` emitido; race entre pipeline start e mute concurrent capturada pelo FOR UPDATE)
-- [ ] T075 [P] Criar `apps/api/tests/unit/pipeline/test_customer_lookup_amortized.py` (single SELECT confirmado via SQL trace; external_refs populado idempotente — update subsequente com mesmo chatwoot_conversation_id e no-op)
+- [x] T070 Estender `apps/api/prosauai/conversation/pipeline/steps/customer_lookup.py` para amortizar leitura de `ai_active` junto com a resolucao do customer (single SELECT — `SELECT c.*, co.ai_active FROM customers c JOIN conversations co ON ...`)
+- [x] T071 Em `customer_lookup.py` popular `conversations.external_refs.chatwoot.{conversation_id, inbox_id}` quando webhook Evolution carrega `chatwootConversationId` non-null e campo ainda nao tem esse ID — UPDATE atomico via `jsonb_set(external_refs, '{chatwoot}', $1::jsonb, true)`
+- [x] T072 Estender `apps/api/prosauai/conversation/pipeline/steps/generate.py` com safety net: `SELECT ai_active FROM conversations WHERE id=$1 FOR UPDATE` imediatamente antes do call LLM; se false → skip + emite step `ai_muted_skip` no `observability/step_record.py`
+- [x] T073 Estender `apps/api/prosauai/observability/step_record.py` para registrar novo step type `ai_muted_skip` com `ai_muted_reason` nos dados
+- [x] T074 [P] Criar `apps/api/tests/unit/pipeline/test_generate_safety_net.py` (conversa com `ai_active=false` → pipeline skip + trace step `ai_muted_skip` emitido; race entre pipeline start e mute concurrent capturada pelo FOR UPDATE)
+- [x] T075 [P] Criar `apps/api/tests/unit/pipeline/test_customer_lookup_amortized.py` (single SELECT confirmado via SQL trace; external_refs populado idempotente — update subsequente com mesmo chatwoot_conversation_id e no-op)
 
 ### Outbound tracking (bot_sent_messages)
 
-- [ ] T080 Estender `apps/api/prosauai/channels/outbound/evolution.py` para gravar `bot_sent_messages (tenant_id, message_id, conversation_id, sent_at)` apos cada `sendText` bem-sucedido (fire-and-forget — falha nao bloqueia outbound)
-- [ ] T081 [P] Criar `apps/api/tests/unit/channels/outbound/test_evolution_bot_sent_messages.py` (insert pos-send + tolerancia a falha de DB)
+- [x] T080 Estender `apps/api/prosauai/channels/outbound/evolution.py` para gravar `bot_sent_messages (tenant_id, message_id, conversation_id, sent_at)` apos cada `sendText` bem-sucedido (fire-and-forget — falha nao bloqueia outbound)
+- [x] T081 [P] Criar `apps/api/tests/unit/channels/outbound/test_evolution_bot_sent_messages.py` (insert pos-send + tolerancia a falha de DB)
 
 ### Deprecacao redis key legacy
 
-- [ ] T090 Estender `apps/api/prosauai/core/router/facts.py` para ler `conversation_in_handoff` de `conversations.ai_active` (amortizado em customer_lookup) E emitir log estruturado `handoff_redis_legacy_read` toda vez que algum path ainda le a chave Redis `handoff:{tenant}:{sender_key}` (telemetria de obsolescencia para rollout em PR-B)
-- [ ] T091 [P] Criar `apps/api/tests/unit/router/test_facts_ai_active.py` (fact derivado do PG + log estruturado quando read legacy ocorre)
+- [x] T090 Estender `apps/api/prosauai/core/router/facts.py` para ler `conversation_in_handoff` de `conversations.ai_active` (amortizado em customer_lookup) E emitir log estruturado `handoff_redis_legacy_read` toda vez que algum path ainda le a chave Redis `handoff:{tenant}:{sender_key}` (telemetria de obsolescencia para rollout em PR-B)
+- [x] T091 [P] Criar `apps/api/tests/unit/router/test_facts_ai_active.py` (fact derivado do PG + log estruturado quando read legacy ocorre)
 
 ### DB queries
 
-- [ ] T100 Estender `apps/api/prosauai/db/queries/conversations.py`: remover comment TODO `pending_handoff not yet materialised`; adicionar queries `fetch_ai_active(conversation_id)`, `update_ai_active(conversation_id, active, reason, muted_at, muted_by, auto_resume_at)` parametrizadas
+- [x] T100 Estender `apps/api/prosauai/db/queries/conversations.py`: remover comment TODO `pending_handoff not yet materialised`; adicionar queries `fetch_ai_active(conversation_id)`, `update_ai_active(conversation_id, active, reason, muted_at, muted_by, auto_resume_at)` parametrizadas
 
 ### ADR PR-A
 
-- [ ] T110 [P] Rascunhar `platforms/prosauai/decisions/ADR-036-ai-active-unified-mute-state.md` (Nygard format) — substitui discussao `pending_handoff`/enum multi-step (decisao 1 pitch); supersedes referencias em `core/router/facts.py:66` + `db/queries/conversations.py:16`
+- [x] T110 [P] Rascunhar `platforms/prosauai/decisions/ADR-036-ai-active-unified-mute-state.md` (Nygard format) — substitui discussao `pending_handoff`/enum multi-step (decisao 1 pitch); supersedes referencias em `core/router/facts.py:66` + `db/queries/conversations.py:16`
 - [ ] T111 [P] Rascunhar `platforms/prosauai/decisions/ADR-037-helpdesk-adapter-pattern.md` — Protocol + registry, espelha ADR-031 (ChannelAdapter); aceita trade-off de 5 metodos ao inves de 2 porque cobre write+read+webhook
 
 ### Benchmark gate PR-A
