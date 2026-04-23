@@ -114,7 +114,7 @@ Se PR-B estourar semana 2 → **PR-C sacrificavel** (Phases 5, 7, 8 viram follow
 
 ### Benchmark gate PR-A
 
-- [ ] T120 Criar `apps/api/tests/benchmarks/test_text_latency_no_regression.py` medindo p95 do pipeline de texto pre e pos-PR-A — **gate de merge**: pos ≤ baseline (epic 009) + 5ms (SC-004)
+- [x] T120 Criar `apps/api/tests/benchmarks/test_text_latency_no_regression.py` medindo p95 do pipeline de texto pre e pos-PR-A — **gate de merge**: pos ≤ baseline (epic 009) + 5ms (SC-004)
 
 ### PR-A merge gate summary
 
