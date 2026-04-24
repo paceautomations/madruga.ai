@@ -120,6 +120,59 @@ O epic 010 atravessa gate Tier 3 (1-way-door) por ter impacto direto em (a) resp
 
 **Onde o output vai**: `platforms/prosauai/epics/010-handoff-engine-inbox/judge-report.md` (gerado pelo skill).
 
+---
+
+## T909 — Quickstart end-to-end validation em staging (DEFERIDO)
+
+**Status**: deferido até ambiente de staging provisionado com Chatwoot + Evolution + Supabase — pos-merge PR-C, antes do flip `handoff.mode: off → shadow` do Ariel.
+
+**Motivo do deferral**: o fluxo do `quickstart.md` exige, para cada User Story:
+
+- **US1 / US2**: webhook Chatwoot real chegando ao tenant (HMAC assinado com secret do tenant) — depende de instance Chatwoot Pace apontando para o endpoint `/webhook/helpdesk/chatwoot/{tenant_slug}` do staging.
+- **US3**: admin UI renderizando badge + toggle contra backend que escreve em `public.conversations.ai_active` — depende de Supabase staging com as 3 migrations rodadas (`20260501000001`..`20260501000003`).
+- **US4**: Evolution API real emitindo payload com `fromMe:true` para um numero teste — depende de instance Evolution staging vinculada ao numero do tenant.
+- **US5**: composer admin delegando via Chatwoot API → Evolution → entregando a WhatsApp real.
+- **US6**: dataset de `handoff_events` com pelo menos algumas mutes/resumes reais (nao mockadas) para Performance AI renderizar numeros com sentido.
+- **US7**: shadow mode efetivamente comparando predicao vs realidade — exige trafego real.
+
+Nenhum destes pontos e exercivel no ambiente de dev local do autonomous agent — todos dependem de infraestrutura externa que so sera provisionada quando PR-C estiver mergeado em `develop` e a equipe Pace ops anunciar a janela de rollout.
+
+**Quando executar**: imediatamente apos (a) PR-C mergeado em `develop`, (b) staging deploy verde, (c) Chatwoot Pace + Evolution staging configurados com os tenants de teste. A execucao segue `quickstart.md` §1-7 ponto a ponto; cada US valida seu criterio de sucesso (SC-NNN). Falhas sao flagadas como BLOCKER de rollout.
+
+**Onde o output vai**: apendar secao "T909 — Staging validation report" neste mesmo `easter-tracking.md` listando PASS/FAIL por US + timestamp + operador responsavel.
+
+**Kill criteria**: se qualquer US falhar com regressao em feature previamente verde nos testes integration (ex: US1 webhook funciona em `pytest` mas falha em staging), abrir incident + reabrir task em Phase 10 antes de promover Ariel para shadow.
+
+---
+
+## T910 — Remocao do codigo Redis legacy `handoff:*` (DEFERIDO)
+
+**Status**: deferido ate 7 dias consecutivos com zero leituras do log `handoff_redis_legacy_read` em producao.
+
+**Motivo do deferral**: o codigo legacy em `apps/api/prosauai/api/webhooks/__init__.py` (linhas ~173-199) e `apps/api/prosauai/core/router/facts.py` (linhas ~66-112) continua lendo a key Redis `handoff:{tenant}:{sender_key}` como fallback paralelo ao novo `conversations.ai_active`. Este codigo:
+
+- **NAO escreve** mais na key legacy (escrita foi descontinuada em PR-A; confirmado por busca estatica no repo prosauai).
+- **Continua lendo** a key com log `handoff_redis_legacy_read` quando encontra valor — isto e intencional: serve como canary. Enquanto ha leituras, significa que algum caminho ainda esta populando a key ou algum processo antigo (deploy anterior ainda em fila de request) nao migrou.
+- **Remover antes do gate** criaria janela de risco: se algum processo legacy ainda escrever na key (ou um deploy rollback a reativar), o router nao veria handoff e o bot responderia em cima do humano. O custo de remover cedo > custo de manter o fallback.
+
+**Gate operacional para remover**:
+
+1. Rollout `off → shadow → on` completo para Ariel (minimo 7d apos flip `shadow → on`).
+2. Dashboard Grafana / Phoenix com contador `handoff_redis_legacy_read` per dia — 7 dias consecutivos com `count = 0`.
+3. Confirmar via `redis-cli --scan --pattern 'handoff:*'` em producao que nenhuma key existe mais (post-TTL natural).
+4. ResenhAI tambem flipado para `on` e observado por 7d (gate adicional: garantir que nao ha tenant "escondido" ainda na key legacy).
+
+**Quando executar**: apos satisfeitos todos os 4 criterios acima. Criar PR dedicado no `prosauai` removendo:
+
+- Bloco `# Load conversation state from Redis` em `apps/api/prosauai/api/webhooks/__init__.py` (~linhas 168-199) — substituir por leitura direta de `ai_active` via `customer_lookup` (ja amortizado em PR-A).
+- Campo `conversation_in_handoff_redis` e docstring legacy em `apps/api/prosauai/core/router/facts.py`.
+- Testes unitarios que exercitam o path legacy (`test_handoff_redis_legacy_read_emits_log` se existir).
+- Registrar a remocao em ADR-036 como "depreciacao concluida" (update `updated:` frontmatter).
+
+**Onde o output vai**: commit `chore(010): remove legacy redis handoff key fallback` no repo prosauai + secao "T910 — Legacy Redis cleanup" neste mesmo `easter-tracking.md` com data da remocao e link do PR.
+
+**Kill criteria**: se durante as 4 semanas pos-rollout algum incident no qual o bot falou em cima do humano for rastreado ate a ausencia do fallback legacy → reverter remocao imediatamente; reabrir task para investigar se o bug esta na transicao do `state.mute_conversation` e nao na remocao em si.
+
 ## Síntese
 
 _(preenchido no último tick)_
