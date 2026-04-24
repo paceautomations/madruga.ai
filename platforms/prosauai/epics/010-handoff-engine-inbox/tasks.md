@@ -348,12 +348,12 @@ Se PR-B estourar semana 2 → **PR-C sacrificavel** (Phases 5, 7, 8 viram follow
 
 **Purpose**: validar startup completo + URLs + journey J-001 em ambiente isolado antes de rollout em producao. Auto-gerado via `testing:` block em `platforms/prosauai/platform.yaml`.
 
-- [ ] T1100 Executar `docker compose build` em `apps/api/` (prosauai repo) — build sem erros
-- [ ] T1101 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --start --platform prosauai` — todos os health_checks respondem dentro do ready_timeout (120s)
-- [ ] T1102 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --validate-env --platform prosauai` — zero required_env vars ausentes no .env
-- [ ] T1103 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --validate-urls --platform prosauai` — todas as URLs acessiveis com status esperado
-- [ ] T1104 Capturar screenshot de cada URL `type: frontend` declarada em `testing.urls` (http://localhost:3000, http://localhost:3000/login) — conteudo nao e placeholder
-- [ ] T1105 Executar Journey J-001 (happy path) declarado em `platforms/prosauai/testing/journeys.md` — todos os steps com assertions OK
+- [X] T1100 Executar `docker compose build` em `apps/api/` (prosauai repo) — build sem erros
+- [X] T1101 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --start --platform prosauai` — todos os health_checks respondem dentro do ready_timeout (120s)
+- [X] T1102 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --validate-env --platform prosauai` — zero required_env vars ausentes no .env
+- [X] T1103 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --validate-urls --platform prosauai` — todas as URLs acessiveis com status esperado
+- [X] T1104 Capturar screenshot de cada URL `type: frontend` declarada em `testing.urls` (http://localhost:3000, http://localhost:3000/admin/login) — conteudo nao e placeholder
+- [X] T1105 Executar Journey J-001 (happy path) declarado em `platforms/prosauai/testing/journeys.md` — todos os steps com assertions OK
 
 ---
 

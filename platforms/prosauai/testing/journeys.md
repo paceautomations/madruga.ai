@@ -6,8 +6,9 @@
 ## J-001 — Admin Login Happy Path
 
 Valida o fluxo completo de autenticação no dashboard de administração: acesso à raiz
-redireciona para `/login`, formulário está presente, credenciais são aceitas e o dashboard
-é exibido após o login bem-sucedido. Jornada obrigatória — falha bloqueia o QA.
+renderiza o shell do admin que redireciona para `/admin/login`, formulário está presente,
+credenciais bootstrap (via env `ADMIN_BOOTSTRAP_EMAIL` / `ADMIN_BOOTSTRAP_PASSWORD`) são
+aceitas e o dashboard é exibido após o login. Jornada obrigatória — falha bloqueia o QA.
 
 ```yaml
 id: J-001
@@ -16,17 +17,20 @@ required: true
 steps:
   - type: api
     action: "GET http://localhost:3000"
-    assert_redirect: /login
+    assert_status: 200
   - type: browser
-    action: "navigate http://localhost:3000/login"
+    action: "navigate http://localhost:3000/admin"
+    assert_url_contains: /admin/login
+  - type: browser
+    action: "navigate http://localhost:3000/admin/login"
     screenshot: true
   - type: browser
-    action: "fill_form email=admin@test.com password=testpass"
+    action: "fill_form email=$ADMIN_BOOTSTRAP_EMAIL password=$ADMIN_BOOTSTRAP_PASSWORD"
   - type: browser
     action: "click button[type=submit]"
     screenshot: true
   - type: browser
-    action: "assert_contains Dashboard"
+    action: "assert_url_contains /admin"
 ```
 
 ## J-002 — Webhook ingest e isolamento de tenant

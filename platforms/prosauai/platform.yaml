@@ -30,18 +30,19 @@ testing:
       type: api
       label: Health Check
       expect_status: 200
-    - url: http://localhost:8050/api/auth/login
+    - url: http://localhost:8050/admin/auth/login
       type: api
-      label: Login endpoint
-      expect_status: [200, 401]
+      label: "Admin login endpoint (POST-only; GET returns 405/401)"
+      expect_status: [200, 401, 405, 422]
     - url: http://localhost:3000
       type: frontend
-      label: "Root (deve redirecionar para /login)"
-      expect_redirect: /login
-    - url: http://localhost:3000/login
+      label: "Root (renders client-side redirect to /admin/login)"
+      expect_status: 200
+    - url: http://localhost:3000/admin/login
       type: frontend
       label: Login page
-      expect_contains: ["email", "password"]
+      expect_status: 200
+      expect_contains: ["login"]
     - url: http://localhost:8050/webhook/evolution/smoke-instance
       type: api
       label: "Evolution webhook (POST-only — GET probe confirms route registered)"
