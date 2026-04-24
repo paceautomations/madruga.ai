@@ -27,7 +27,7 @@
 - [x] T002 [P] Rascunhar ADR-040 (Autonomous resolution operational definition) em `platforms/prosauai/decisions/ADR-040-autonomous-resolution-heuristic.md` fixando heurística A canônica (sem mute + regex escalation + 24h silêncio + `is_direct` filter em grupo) e rationale vs alternativas (LLM-as-judge, per-segment). Status: `proposed`.
 - [x] T003 [P] Estender `platforms/prosauai/decisions/ADR-008-eval-stack.md` com sub-seção "011 Confirmation" referenciando DeepEval+Promptfoo + AnswerRelevancy como substituto reference-less de Faithfulness.
 - [x] T004 [P] Estender `platforms/prosauai/decisions/ADR-027-admin-tables-no-rls.md` listando `public.golden_traces` no carve-out admin-only.
-- [ ] T005 [P] Estender `platforms/prosauai/decisions/ADR-028-pipeline-fire-and-forget-persistence.md` confirmando `persist_score` herda pattern (seção "Consumers").
+- [x] T005 [P] Estender `platforms/prosauai/decisions/ADR-028-pipeline-fire-and-forget-persistence.md` confirmando `persist_score` herda pattern (seção "Consumers").
 - [ ] T006 Adicionar env vars em `apps/api/prosauai/config.py` (classe `Settings`): `AUTONOMOUS_RESOLUTION_INTERVAL_SECONDS` (default 3600), `DEEPEVAL_BATCH_INTERVAL_SECONDS` (default 86400), `DEEPEVAL_MAX_SAMPLE_SIZE` (default 200), `EVAL_SCORES_RETENTION_INTERVAL_SECONDS` (default 86400), `EVAL_SCORES_RETENTION_DAYS` (default 90), `EVAL_SCORES_RETENTION_ENABLED` (default True kill-switch). Documentar em docstring.
 - [ ] T007 [P] Adicionar as mesmas vars em `.env.example` com comentários indicando defaults e impacto.
 - [ ] T008 Criar módulo base `apps/api/prosauai/evals/__init__.py` com docstring explicando escopo (online heuristic + offline DeepEval + golden curation + autonomous resolution) e referenciando ADR-039/040.

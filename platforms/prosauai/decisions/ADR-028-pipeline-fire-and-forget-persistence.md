@@ -243,4 +243,61 @@ async def test_mute_commits_before_event_persist_fails(monkeypatch):
 
 ---
 
+## Consumers — Epic 011 (Evals)
+
+O epic 011 (Evals) adiciona **mais um side effect** sob o mesmo padrao
+canonico documentado acima. A decisao nao muda; esta secao lista os
+novos consumidores para code review futura ter onde olhar.
+
+| Side effect | Consumidor | Fonte | Quando dispara |
+|-------------|-----------|-------|---------------|
+| `eval_scores` insert (heuristic online) | `prosauai.evals.persist.PoolPersister.persist` | `prosauai.evals.heuristic_online.persist_heuristic` | Apos `conversation/evaluator.py` retornar `EvalResult` no step `evaluate` do pipeline. Grava `evaluator_type='heuristic_v1'` + `metric='heuristic_composite'`. |
+| `eval_scores` insert (DeepEval offline) | `prosauai.evals.persist.PoolPersister.persist` | `prosauai.evals.deepeval_batch._process_message` (4 metric wrappers × N msgs × chunks paralelos) | Cron noturno `deepeval_batch_cron` (02:00 UTC). Falha isolada por metric — 1 falha nao aborta as outras 3 metricas da mesma msg nem as demais msgs do chunk. |
+| `eval_scores` insert (human curation) | `prosauai.evals.persist.PoolPersister.persist` | Endpoint admin futuro (nao em v1) | Reservado — curadoria humana explicita se decidida em 011.1. |
+
+Regras identicas ao padrao ADR-028 canonico:
+
+1. **Sempre fire-and-forget** — `persist_heuristic` retorna
+   `asyncio.create_task(persister.persist(record))`. O pipeline step
+   `evaluate` NUNCA aguarda. DeepEval batch tambem: cada metric task
+   internamente chama `persist_heuristic` em task separada quando
+   completa.
+2. **Swallow + log** — `eval_score_persist_failed` com canonical keys
+   (`tenant_id`, `conversation_id`, `message_id`, `evaluator`, `metric`,
+   `score`, `reason`). Contador `eval_scores_persisted_total{status='error'}`.
+3. **`asyncio.create_task(name="eval_score_persist:...")`** com nome
+   explicito para audit em debug mode.
+4. **Graceful shutdown** — `EvalsScheduler.stop()` aguarda suas tarefas
+   com `asyncio.wait(timeout=5s)` antes do pool close (mesma politica
+   do `HandoffScheduler`).
+
+**Pool**: heuristic online + DeepEval batch usam `pool_admin` (BYPASSRLS).
+`eval_scores` **mantem RLS** (tenant_isolation via epic 005) — `pool_admin`
+bypassa a policy; o caller e responsavel por `SET LOCAL app.tenant_id` se
+quiser scope explicito (opcional — o tenant vai na row).
+
+**Diferenca vs epic 008/010**: `eval_scores` **nao** e admin-only (tem
+RLS). `PoolPersister` poderia usar `pool_tenant` no fluxo online,
+mas o pipeline ja esta em contexto admin (trace persist usa
+pool_admin). Por consistencia, toda insercao em `eval_scores` do
+epic 011 usa `pool_admin` + `SET LOCAL app.tenant_id` explicito.
+
+**Teste de regressao adicional** (`apps/api/tests/unit/evals/test_persist.py`,
+T027):
+
+```python
+@pytest.mark.asyncio
+async def test_persist_score_failure_does_not_propagate(monkeypatch, pool, metrics):
+    """Fire-and-forget: falha no INSERT nao propaga para o caller."""
+    async def boom(*args, **kwargs):
+        raise asyncpg.PostgresError("eval_scores down")
+    monkeypatch.setattr("prosauai.db.queries.eval_scores.insert_score", boom)
+
+    persister = PoolPersister(pool, metrics)
+    # Caller NAO deve ver excecao.
+    await persister.persist(valid_record)  # MUST NOT raise
+```
+
+---
+
 > **Próximo passo:** PR 2 (T020–T030) implementa `trace_persist.py` + refactor do pipeline. Benchmark A/B em staging valida SC-006 antes do merge em prod.
