@@ -24,7 +24,7 @@
 **Purpose**: Deps, ADRs esboçados, env vars, schema de config. Bloqueia todas as demais fases.
 
 - [x] T001 Rascunhar ADR-039 (Eval metric bootstrap sem golden dataset) em `platforms/prosauai/decisions/ADR-039-eval-metric-bootstrap.md` cobrindo reference-less DeepEval metrics + incremental golden + rationale ADD COLUMN `metric` vs RENAME `eval_scores`. Status: `proposed`.
-- [ ] T002 [P] Rascunhar ADR-040 (Autonomous resolution operational definition) em `platforms/prosauai/decisions/ADR-040-autonomous-resolution-heuristic.md` fixando heurística A canônica (sem mute + regex escalation + 24h silêncio + `is_direct` filter em grupo) e rationale vs alternativas (LLM-as-judge, per-segment). Status: `proposed`.
+- [x] T002 [P] Rascunhar ADR-040 (Autonomous resolution operational definition) em `platforms/prosauai/decisions/ADR-040-autonomous-resolution-heuristic.md` fixando heurística A canônica (sem mute + regex escalation + 24h silêncio + `is_direct` filter em grupo) e rationale vs alternativas (LLM-as-judge, per-segment). Status: `proposed`.
 - [ ] T003 [P] Estender `platforms/prosauai/decisions/ADR-008-eval-stack.md` com sub-seção "011 Confirmation" referenciando DeepEval+Promptfoo + AnswerRelevancy como substituto reference-less de Faithfulness.
 - [ ] T004 [P] Estender `platforms/prosauai/decisions/ADR-027-admin-tables-no-rls.md` listando `public.golden_traces` no carve-out admin-only.
 - [ ] T005 [P] Estender `platforms/prosauai/decisions/ADR-028-pipeline-fire-and-forget-persistence.md` confirmando `persist_score` herda pattern (seção "Consumers").
