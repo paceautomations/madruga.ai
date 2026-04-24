@@ -197,4 +197,76 @@ a necessidade em nova ADR ou secao.
 
 ---
 
+## Extensao — Epic 011 (Evals)
+
+O epic 011 (Evals) adiciona **uma tabela** sob o mesmo carve-out:
+
+| Tabela | Volume/ano estimado | Funcao |
+|--------|---------------------|--------|
+| `public.golden_traces` | <1 k rows (curadoria manual pelo admin) | Admin estrela traces exemplares (verdict append-only: `positive\|negative\|cleared`). Promptfoo generator le essa tabela para produzir suite de CI incremental. |
+
+A justificativa e identica as tabelas dos epics 008 e 010:
+
+- **Leitura cross-tenant por design** — admin UI (Trace Explorer do
+  epic 008) mostra traces de qualquer tenant e permite estrelar.
+  Promptfoo generator (cron manual ou on-demand) le todas as rows
+  cross-tenant para produzir 1 YAML global (gate CI nao e per-tenant).
+- **Escrita via `pool_admin`** — endpoint admin
+  `POST /admin/traces/{trace_id}/golden` (epic 011 PR-B) grava via
+  `pool_admin`; operadores Pace sao os unicos escritores.
+- **Append-only** — tabela nunca sofre UPDATE. `verdict='cleared'` e
+  o "undo" append-only (ultima row por trace_id define o estado
+  efetivo). `UPDATE` intencionalmente fora do GRANT.
+- **FK a `public.traces`** — `golden_traces.trace_id REFERENCES
+  public.traces(trace_id) ON DELETE CASCADE` garante cleanup automatico
+  quando retention 30d (ADR-018) apaga o trace parent. Sem risco de
+  orphan. Requer `public.traces(trace_id)` UNIQUE (migration
+  `20260601000002_alter_traces_unique_trace_id.sql`, que promove
+  o indice nao-unique existente).
+
+Migration criada seguindo o mesmo template:
+
+```sql
+-- 20260601000005_create_golden_traces.sql (epic 011)
+-- ALTER TABLE public.golden_traces ENABLE ROW LEVEL SECURITY;  -- intencionalmente ausente
+CREATE TABLE IF NOT EXISTS public.golden_traces (
+    id                 UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    trace_id           TEXT          NOT NULL REFERENCES public.traces(trace_id) ON DELETE CASCADE,
+    verdict            TEXT          NOT NULL CHECK (verdict IN ('positive', 'negative', 'cleared')),
+    notes              TEXT,
+    created_by_user_id UUID,
+    created_at         TIMESTAMPTZ   NOT NULL DEFAULT now()
+);
+
+REVOKE ALL ON public.golden_traces FROM PUBLIC;
+REVOKE ALL ON public.golden_traces FROM tenant_role;
+GRANT  SELECT, INSERT ON public.golden_traces TO admin_role;
+-- UPDATE + DELETE intencionalmente ausentes — append-only.
+-- (DELETE automatico via ON DELETE CASCADE do FK.)
+
+COMMENT ON TABLE public.golden_traces IS
+  'Admin-curated exemplar traces. Append-only. NO RLS — admin-only via pool_admin. See ADR-027 + ADR-039.';
+```
+
+Teste de regressao equivalente em
+`apps/api/tests/integration/admin/test_rls_isolation_evals.py`:
+
+```python
+@pytest.mark.asyncio
+async def test_pool_tenant_cannot_read_golden_traces(pool_tenant):
+    with pytest.raises(asyncpg.exceptions.InsufficientPrivilegeError):
+        async with pool_tenant.acquire() as conn:
+            await conn.fetch("SELECT id FROM public.golden_traces LIMIT 1")
+```
+
+**Tabelas NAO admin-only no epic 011**: `eval_scores` (existe desde o
+epic 005 — mantem RLS `tenant_isolation`). `conversations.auto_resolved`
+e `messages.is_direct` sao **colunas novas em tabelas existentes** —
+herdam o RLS da tabela parent sem mudanca.
+
+**Restricao operacional identica** continua valendo: novas tabelas
+admin-only criadas fora dos epics 008/010/011 exigem nova ADR ou secao.
+
+---
+
 > **Próximo passo:** migrations no PR 1 (T010–T013) criam as tabelas seguindo este template. Code review exige citação explícita a esta ADR ao revisar as DDLs.
