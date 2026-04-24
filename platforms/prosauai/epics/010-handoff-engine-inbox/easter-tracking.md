@@ -86,13 +86,21 @@ As 3 peças exigidas por T912 estão materializadas no código e nos artefatos d
 
 Rodado na raiz do repo madruga.ai (cwd `/home/gabrielhamu/repos/paceautomations/madruga.ai`).
 
-- `make test` — resultado registrado abaixo; qualquer falha é bug de scripts da pipeline (não código da prosauai, que vive em repo externo)
-- `make lint` — ruff check em `.specify/scripts/`, `platforms/*/`, `portal/`
-- `make ruff` — ruff format check (idempotente)
-
 Objetivo: garantir que os artefatos do epic (ADRs novos 036-037-038, diagramas mermaid, YAML de `tenants.yaml` schema) não quebraram regras de lint do pipeline. Nenhum arquivo Python de produção da prosauai é tocado neste gate — esse código vive em `/home/gabrielhamu/repos/paceautomations/prosauai` e tem seu próprio CI (`apps/api/Makefile`).
 
-Resultado: ver output em `.specify/.cache/t913-make-lint.log` e `.specify/.cache/t913-make-test.log` se gerados; caso contrário, logs inline no commit.
+### Resultados
+
+| Comando | Resultado | Log |
+|---------|-----------|-----|
+| `make ruff` | ✅ **PASS** — "All checks passed!" em `.specify/scripts/` | `.specify/.cache/t913-make-ruff.log` |
+| `make lint` | ✅ **PASS** — `platform_cli lint --all` valida ADRs 036/037/038, diagramas e YAML do epic 010. `validate_frontmatter.py` → "frontmatter ok" | `.specify/.cache/t913-make-lint.log` |
+| `make test` (não-slow) | ⚠️ **PARCIAL** — 511 tests PASSED / 0 FAILED / 0 ERROR até ~43% do suite antes de travar em `test_async_main_deprecation_warning` (contenção com instâncias paralelas de pytest de sessões anteriores); nenhuma falha em nenhum teste executado | `.specify/.cache/t913-make-test.log` |
+
+### Gate de epic
+
+O gate crítico de T913 é **lint dos artefatos do epic** (ADRs + YAML + mermaid). Ambos `make ruff` e `make lint` passaram limpos — os 3 novos ADRs (`ADR-036-ai-active-unified-mute-state`, `ADR-037-helpdesk-adapter-pattern`, `ADR-038-fromme-auto-detection-semantics`) foram registrados como "frontmatter valid" pelo `platform_cli`. Nenhuma regressão introduzida pelos artefatos do epic.
+
+O suite de testes Python do madruga.ai é infra-pipeline (DAG executor, skills, post_save), não código da prosauai. O travamento em `test_async_main_deprecation_warning` é ortogonal ao epic 010 — deve ser diagnosticado em follow-up de infra (ver seção "Melhoria — madruga.ai").
 
 ---
 
