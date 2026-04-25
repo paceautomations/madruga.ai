@@ -1,0 +1,378 @@
+openapi: 3.1.0
+info:
+  title: prosauai — Admin Evals API
+  version: "0.11.0"
+  description: |
+    Epic 011 — endpoints admin para metricas de avaliacao, curadoria golden,
+    e toggle de modo per-tenant. Herda auth JWT + pool_admin BYPASSRLS
+    do epic 008.
+
+servers:
+  - url: http://localhost:8050
+    description: Local dev
+  - url: https://api.prosau.ai
+    description: Production
+
+security:
+  - BearerAuth: []
+
+tags:
+  - name: admin-metrics
+    description: Dashboards Performance AI
+  - name: admin-golden
+    description: Curadoria golden dataset
+  - name: admin-tenants
+    description: Feature flag evals.mode per-tenant
+
+paths:
+  /admin/metrics/evals:
+    get:
+      tags: [admin-metrics]
+      summary: Aggregated eval metrics for Performance AI dashboard
+      description: |
+        Retorna serie temporal de scores de avaliacao. Via pool_admin
+        BYPASSRLS quando `tenant=all`; per-tenant via pool_admin filtrado.
+      operationId: getAdminEvalMetrics
+      parameters:
+        - name: tenant
+          in: query
+          required: true
+          schema:
+            type: string
+            description: Tenant slug ou 'all' para cross-tenant aggregate
+            example: ariel
+        - name: evaluator
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [heuristic_v1, deepeval, human]
+            default: deepeval
+        - name: metric
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [heuristic_composite, answer_relevancy, toxicity, bias, coherence, human_verdict]
+            default: answer_relevancy
+        - name: window
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: ["1d", "7d", "30d"]
+            default: "7d"
+      responses:
+        "200":
+          description: Serie temporal agregada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EvalMetricsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /admin/traces/{trace_id}/golden:
+    post:
+      tags: [admin-golden]
+      summary: Star a trace as exemplar (positive/negative) or clear the star
+      description: |
+        Append-only insert em `public.golden_traces`. Verdict efetivo
+        e MAX(created_at) por trace_id. `cleared` = forma append-only de
+        des-estrelar (nao UPDATE nem DELETE). Alimenta Promptfoo CI.
+      operationId: starGoldenTrace
+      parameters:
+        - name: trace_id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[0-9a-f]{32}$'
+            description: OTel hex trace_id (32 chars)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GoldenVerdictRequest"
+      responses:
+        "201":
+          description: Verdict registrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GoldenVerdictResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Trace not found (FK validation)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/tenants/{tenant_id}/evals:
+    patch:
+      tags: [admin-tenants]
+      summary: Update evals.mode for a tenant (shadow|on|off)
+      description: |
+        Modifica bloco `evals.*` de `tenants.yaml` per-tenant.
+        Config poller relê em <=60s (RTO rollback).
+      operationId: updateTenantEvals
+      parameters:
+        - name: tenant_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TenantEvalsRequest"
+      responses:
+        "200":
+          description: Config atualizada (effective em <=60s)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TenantEvalsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    EvalMetricsResponse:
+      type: object
+      required: [tenant, evaluator, metric, window, points]
+      properties:
+        tenant:
+          type: string
+          description: Requested tenant slug or 'all'
+        evaluator:
+          type: string
+          enum: [heuristic_v1, deepeval, human]
+        metric:
+          type: string
+          enum: [heuristic_composite, answer_relevancy, toxicity, bias, coherence, human_verdict]
+        window:
+          type: string
+          enum: ["1d", "7d", "30d"]
+        points:
+          type: array
+          description: |
+            Day-bucketed AVG + sample size. Empty when no rows in
+            window — UI renders "Sem dados ainda…" empty state.
+          items:
+            $ref: "#/components/schemas/EvalMetricsPoint"
+        coverage:
+          $ref: "#/components/schemas/EvalCoverage"
+        autonomous_resolution:
+          $ref: "#/components/schemas/AutonomousResolutionPoint"
+
+    EvalMetricsPoint:
+      type: object
+      required: [day, avg_score, sample_size]
+      properties:
+        day:
+          type: string
+          format: date-time
+          example: "2026-04-24T00:00:00Z"
+        avg_score:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+        sample_size:
+          type: integer
+          minimum: 0
+
+    EvalCoverage:
+      type: object
+      required: [scored, outbound_total, ratio]
+      description: |
+        Coverage of one (evaluator, metric) over the window.
+        ``ratio = scored / outbound_total`` clamped at [0, 1]. Drives
+        the Eval Coverage card and SC-001 (≥99% online coverage in
+        mode=on).
+      properties:
+        scored:
+          type: integer
+          minimum: 0
+          description: Distinct messages with at least 1 row in eval_scores.
+        outbound_total:
+          type: integer
+          minimum: 0
+          description: Outbound messages in the same window (denominator).
+        ratio:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+
+    AutonomousResolutionPoint:
+      type: object
+      required: [resolved, total, ratio]
+      description: |
+        North-Star KPI — fraction of conversations the bot resolved
+        autonomously. ``total`` excludes rows with ``auto_resolved IS
+        NULL`` so freshly-closed traffic does not drag the number down
+        before the nightly cron catches up (FR-053).
+      properties:
+        resolved:
+          type: integer
+          minimum: 0
+        total:
+          type: integer
+          minimum: 0
+        ratio:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+
+    GoldenVerdictRequest:
+      type: object
+      required: [verdict]
+      properties:
+        verdict:
+          type: string
+          enum: [positive, negative, cleared]
+        notes:
+          type: string
+          nullable: true
+          maxLength: 2000
+
+    GoldenVerdictResponse:
+      type: object
+      required: [id, trace_id, verdict, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        trace_id:
+          type: string
+          pattern: '^[0-9a-f]{32}$'
+        verdict:
+          type: string
+          enum: [positive, negative, cleared]
+        notes:
+          type: string
+          nullable: true
+        created_by_user_id:
+          type: string
+          format: uuid
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    TenantEvalsRequest:
+      type: object
+      properties:
+        mode:
+          type: string
+          enum: [off, shadow, on]
+        offline_enabled:
+          type: boolean
+        online_sample_rate:
+          type: number
+          format: float
+          minimum: 0.0
+          maximum: 1.0
+        alerts:
+          $ref: "#/components/schemas/EvalAlerts"
+        deepeval:
+          $ref: "#/components/schemas/DeepEvalConfig"
+
+    TenantEvalsResponse:
+      type: object
+      required: [tenant_id, effective]
+      properties:
+        tenant_id:
+          type: string
+        effective:
+          $ref: "#/components/schemas/TenantEvalsRequest"
+        effective_at:
+          type: string
+          format: date-time
+          description: Approximate time config_poller will apply (≤60s from now)
+
+    EvalAlerts:
+      type: object
+      properties:
+        relevance_min:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          default: 0.6
+        toxicity_max:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          default: 0.05
+        autonomous_resolution_min:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          default: 0.3
+
+    DeepEvalConfig:
+      type: object
+      properties:
+        model:
+          type: string
+          enum: [gpt-4o-mini, gpt-4o, claude-haiku-3-5]
+          default: gpt-4o-mini
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+        detail:
+          type: string
+          nullable: true
+
+  responses:
+    BadRequest:
+      description: Validation failure
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: Missing or invalid JWT
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: Admin role required
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
