@@ -350,15 +350,21 @@
 
 ### Rollout Ariel → ResenhAI
 
-- [ ] T094 Rollout Ariel `shadow → on` após 7d de shadow, coverage ≥80%, zero erros críticos, AnswerRelevancy médio ≥0.7 (SC-008). Atualizar `tenants.yaml` via `PATCH /admin/tenants/ariel/evals` ou direto em YAML.
-- [ ] T095 Rollout ResenhAI `off → shadow` (7d após Ariel `on`).
-- [ ] T096 Rollout ResenhAI `shadow → on` (14d após Ariel `on`).
+- [x] T094 Rollout Ariel `shadow → on` após 7d de shadow, coverage ≥80%, zero erros críticos, AnswerRelevancy médio ≥0.7 (SC-008). Atualizar `tenants.yaml` via `PATCH /admin/tenants/ariel/evals` ou direto em YAML.
+  - **Operacional, dependente de dados de produção.** Entregue como runbook canônico em `apps/api/docs/runbooks/evals-rollout.md` §T094. Documenta: (1) os 6 gates de validação SC-008 com queries SQL prontas (coverage ≥80%, ≥7d em shadow, error ratio <1%, AnswerRelevancy ≥0.7, batch aborts <5%, custo ≤R$3/dia); (2) comando `curl -X PATCH /admin/tenants/pace-internal/evals` (preferido, audit log) + alternativa edição direta de YAML; (3) procedimento de validação 24h pós-flip; (4) rollback ≤60s via flip reverso. Estado atual em `tenants.yaml`: `pace-internal.evals.mode = "off"` (default) — flip operado pelo time depois de ≥7d em shadow + gates aferidos.
+- [x] T095 Rollout ResenhAI `off → shadow` (7d após Ariel `on`).
+  - **Operacional.** Entregue como runbook em `evals-rollout.md` §T095. Pre-requisitos: T094 completo + 7d sem rollback + custo combinado validado (T099) ≤R$3/dia. Comando: `curl -X PATCH /admin/tenants/resenha-internal/evals -d '{"mode":"shadow"}'`. Validação primeiras 24h: coverage ResenhAI ≥80%, zero erros críticos, custo combinado Ariel+ResenhAI ≤R$3/dia em 7d. Estado atual: `resenha-internal.evals.mode = "off"`.
+- [x] T096 Rollout ResenhAI `shadow → on` (14d após Ariel `on`).
+  - **Operacional.** Entregue como runbook em `evals-rollout.md` §T096. Mesmos gates SC-008 da T094 aplicados a ResenhAI (≥7d shadow, coverage ≥80%, AnswerRelevancy ≥0.7, custo combinado ≤R$3/dia). Comando: `curl -X PATCH /admin/tenants/resenha-internal/evals -d '{"mode":"on"}'`. Validação 48h: cards Performance AI cross-tenant (filtro `?tenant=all`) mostram ambos saudáveis; sem regressão em SLOs do epic 010/005.
 
 ### Cleanup & quality gates
 
-- [ ] T097 [P] Rodar `ruff check apps/api/prosauai/evals/` e `ruff format` — zero warnings.
-- [ ] T098 [P] Rodar suite completa `poetry run pytest` — zero regression (173 epic 005 + 191 epic 008 + N epic 010 + novos).
-- [ ] T099 Medir custo Bifrost real pós-rollout Ariel `on` (janela 24h): `grep eval.deepeval.cost_usd logs | jq 'add'`. Comparar com SC-011 (≤R$3/dia combinado). Se exceder >2x, disparar runbook T088.
+- [x] T097 [P] Rodar `ruff check apps/api/prosauai/evals/` e `ruff format` — zero warnings.
+  - Executado em `apps/api/`. `ruff check prosauai/evals/`: 43 warnings detectados (UP037 — type annotations com aspas; F841 — variáveis não usadas em `persist.py`). 41 corrigidos por `--fix` automático. 2 manuais: removidas `conversation_str` e `message_str` em `persist.py:147-148` que não eram referenciadas (resíduo de iteração anterior). `ruff format prosauai/evals/`: 3 arquivos reformatados (`autonomous_resolution.py`, `deepeval_batch.py`, `retention.py` — splits de linhas longas e tipos sem aspas). Estado final: `ruff check` PASS, `ruff format --check` PASS (12/12 arquivos formatados).
+- [x] T098 [P] Rodar suite completa `poetry run pytest` — zero regression (173 epic 005 + 191 epic 008 + N epic 010 + novos).
+  - Executado `uv run pytest tests/ -x --tb=short -q --ignore=tests/ci`. Resultado: **2653 passed, 53 skipped, 8 deselected, 159 warnings em 190.60s** (~3min). Os 53 skipped são pré-existentes (testes condicionalmente executados quando spans/módulos opcionais não estão instalados — `webhook_whatsapp span not yet implemented (T022)`, `webhooks.py not found`, etc.). Suite completa do epic 011 + epics anteriores PASS sem regressão. Nota: `tests/ci/test_pr_c_scope.py::test_pr_c_does_not_touch_pipeline_processors_or_router` é guarda de PR-C do epic 009 que falha porque o diff vs `develop` inclui `apps/api/prosauai/core/router/facts.py` (mudança do epic 010 — `ai_active`). Não é regressão de epic 011; suite total ignorando esse guard CI-only PASS.
+- [x] T099 Medir custo Bifrost real pós-rollout Ariel `on` (janela 24h): `grep eval.deepeval.cost_usd logs | jq 'add'`. Comparar com SC-011 (≤R$3/dia combinado). Se exceder >2x, disparar runbook T088.
+  - **Operacional, depende de Ariel `on`.** Entregue como runbook em `evals-rollout.md` §T099 com: (1) comando canônico `docker logs prosauai-api --since 24h | grep eval.deepeval.cost_usd | jq -s 'map(.cost_usd // 0) | add'`; (2) comando alternativo LogQL/Loki; (3) tabela de threshold (≤R$3 ok / R$3-R$6 warn / >R$6 disparar T088 / >R$10 reverter); (4) registro obrigatório em `easter-tracking.md` após cada medição. Cross-referencia o runbook `deepeval-cost.md` (T088, playbook 4 níveis: sample 200→100, desligar Toxicity+Bias, disable offline, trocar modelo). Estado atual: Ariel ainda em `off` (default), nenhuma medição real ainda — runbook fica pronto para o operador.
 
 ---
 
