@@ -311,13 +311,17 @@
 
 ### LGPD SAR integration
 
-- [ ] T082 Estender query SAR existente (epic 010) em `apps/api/prosauai/privacy/sar.py` ou similar: adicionar `DELETE FROM eval_scores WHERE tenant_id=$1 AND conversation_id IN (SELECT id FROM conversations WHERE customer_id=$2)` explicitamente. `golden_traces` herda via FK cascade — documentar em comentário. FR-047.
-- [ ] T083 [P] Atualizar testes SAR existentes para validar que `eval_scores` também é deletado ao processar SAR de um customer_id.
+- [x] T082 Estender query SAR existente (epic 010) em `apps/api/prosauai/privacy/sar.py` ou similar: adicionar `DELETE FROM eval_scores WHERE tenant_id=$1 AND conversation_id IN (SELECT id FROM conversations WHERE customer_id=$2)` explicitamente. `golden_traces` herda via FK cascade — documentar em comentário. FR-047.
+  - Created the privacy module from scratch (epic 010 never landed a SAR file). `apps/api/prosauai/privacy/sar.py` exposes `erase_customer(*, tenant_pool, admin_pool, tenant_id, customer_id) -> SarResult`. Tenant-scoped phase (RLS pool) deletes `eval_scores` first (children-first ordering), then `messages`, `conversation_states`, `conversations`, `customers`. Admin-scoped phase (BYPASSRLS pool) deletes `handoff_events`, `bot_sent_messages`, `trace_steps`, and `traces` — the last triggers `ON DELETE CASCADE` on `public.golden_traces` (documented inline). Per-table row counts come from the asyncpg command tag and are recorded in `SarResult.rows_deleted_per_table`, including the synthetic `golden_traces (cascade)` entry for the audit log. Failures propagate (no silent partial erasure).
+- [x] T083 [P] Atualizar testes SAR existentes para validar que `eval_scores` também é deletado ao processar SAR de um customer_id.
+  - Added `apps/api/tests/unit/privacy/test_sar.py` (13 cases). Guards: (a) `eval_scores` is in `_TENANT_SCOPED_STATEMENTS` and is deleted before `conversations` (FK ordering); (b) `golden_traces` is NOT in either fan-out — it relies on the FK cascade from `traces`; (c) `erase_customer` runs every DELETE in the documented order with `(tenant_id, customer_id)` parameters; (d) `SarResult.rows_deleted_per_table` reports the parsed counts including the synthetic cascade entry; (e) a Postgres failure on `messages` propagates and the admin pool is never touched. Parameterised tests for `_parse_command_tag` cover empty / malformed tags. All 13 tests pass.
 
 ### ADRs finalizados
 
-- [ ] T084 Finalizar ADR-039 (T001) — status `accepted`, data, referências cruzadas a eventuais tasks/decisões mudadas durante implementação.
-- [ ] T085 [P] Finalizar ADR-040 (T002) — status `accepted`.
+- [x] T084 Finalizar ADR-039 (T001) — status `accepted`, data, referências cruzadas a eventuais tasks/decisões mudadas durante implementação.
+  - Frontmatter `status: Accepted`. Header passa a "Accepted | 2026-04-24 (proposed) → 2026-04-25 (accepted)" + nota de aceite. Nova seção "Implementation notes (pos-aceite)" registra os 5 desvios menores entre o draft e o código (migration UNIQUE em `traces.trace_id` sem CONCURRENTLY no harness CI, default `metric='heuristic_composite'` com backfill explícito, `Coherence` via `GEval`, SAR fan-out para `eval_scores` em `prosauai/privacy/sar.py`, generator Promptfoo consumindo golden via `DISTINCT ON`). Seção "Referencias cruzadas" lista as tasks (T010/T015/T022/T023/T040..T051/T058..T065/T070/T082-T083) e os docs do epic (`spec.md`, `data-model.md`, `contracts/evaluator-persist.md`).
+- [x] T085 [P] Finalizar ADR-040 (T002) — status `accepted`.
+  - Frontmatter `status: Accepted`. Header passa a "Accepted | 2026-04-24 (proposed) → 2026-04-25 (accepted)" + nota de aceite. Implementation notes documentam: lock key disjunto via constante exportada (`AUTONOMOUS_RESOLUTION_LOCK_KEY`), `LIMIT 1000` por tick, `\y` POSIX word boundary, default `is_direct=TRUE` aceito + R6 link no runbook T086, reprocessamento via `UPDATE auto_resolved=NULL` + re-run. Referências cruzadas para T002/T012-T013/T032..T039/T070, ADR-039, ADR-036 e a vision.
 
 ### Runbooks (docs operacionais)
 

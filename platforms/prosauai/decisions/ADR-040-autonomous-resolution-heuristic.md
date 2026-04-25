@@ -1,6 +1,6 @@
 ---
 title: 'ADR-040: Autonomous resolution operational definition (heuristic A)'
-status: Proposed
+status: Accepted
 decision: Cron noturno `autonomous_resolution_cron` (03:00 UTC) popula
   `conversations.auto_resolved BOOLEAN` usando heuristica A canonica:
   (a) SEM mute em `handoff_events`, (b) SEM regex de escalacao
@@ -17,7 +17,13 @@ rationale: Heuristica deterministica e barata, auditavel linha a linha,
 ---
 # ADR-040: Autonomous resolution operational definition (heuristic A)
 
-**Status:** Proposed | **Data:** 2026-04-24 | **Relaciona:** [ADR-036](ADR-036-ai-active-unified-mute-state.md), [ADR-039](ADR-039-eval-metric-bootstrap.md), [ADR-028](ADR-028-pipeline-fire-and-forget-persistence.md), `../business/vision.md`
+**Status:** Accepted | **Data:** 2026-04-24 (proposed) → 2026-04-25 (accepted) | **Relaciona:** [ADR-036](ADR-036-ai-active-unified-mute-state.md), [ADR-039](ADR-039-eval-metric-bootstrap.md), [ADR-028](ADR-028-pipeline-fire-and-forget-persistence.md), `../business/vision.md`
+
+> **Aceite:** entregue como descrito. Implementacao do cron noturno
+> (`apps/api/prosauai/evals/autonomous_resolution.py`, T032..T039) e
+> migrations `conversations.auto_resolved` + `messages.is_direct`
+> (T012-T013) seguem a heuristica A canonica. Ajustes finos
+> registrados em "Implementation notes".
 
 > **Escopo:** Epic 011 (Evals). Aplica-se a `apps/api/prosauai/evals/autonomous_resolution.py`,
 > `apps/api/db/migrations/20260601000003_alter_conversations_auto_resolved.sql`,
@@ -249,6 +255,39 @@ async def test_group_non_direct_ignored(pool):
     row = await pool.fetchrow("SELECT auto_resolved FROM conversations WHERE id=$1", cid)
     assert row["auto_resolved"] is True
 ```
+
+## Implementation notes (pos-aceite)
+
+- **Lock key compartilhada via constante** — `apps/api/prosauai/evals/scheduler.py`
+  exporta `AUTONOMOUS_RESOLUTION_LOCK_KEY` para garantir disjuncao com
+  os outros dois crons do epic (`DEEPEVAL_BATCH_LOCK_KEY`,
+  `EVAL_SCORES_RETENTION_LOCK_KEY`). Mesmo `hashtext()` mas chaves
+  textuais distintas.
+- **Limite por iteracao** ficou em `LIMIT 1000` por tick (T034) para
+  evitar locks longos em janelas de catch-up. Conversas restantes
+  sao colhidas no proximo tick (cadencia 1h por config).
+- **Regex Postgres** — `\y` (word boundary) confirmado funcionando
+  em Postgres 15 com classe POSIX `~*`. Caso futuro desejemos
+  estender para portugues europeu/espanhol, abrir nova ADR.
+- **`is_direct` default TRUE** continua aceito. O risco R6 do plan
+  segue documentado no runbook
+  `apps/api/docs/runbooks/evals-thresholds.md` (T086).
+- **Reprocessamento** ainda e via `UPDATE conversations SET
+  auto_resolved = NULL ...` + nova execucao do cron — runbook
+  documenta o procedimento.
+
+## Referencias cruzadas
+
+- Tasks T002 (rascunho), T012-T013 (migrations), T032..T039 (cron +
+  testes), T070 (admin metrics aggregator), T085 (este ADR aceito).
+- Decisoes complementares: [ADR-039](ADR-039-eval-metric-bootstrap.md)
+  (metric bootstrap; AnswerRelevancy + heuristica andam juntos),
+  [ADR-036](ADR-036-ai-active-unified-mute-state.md) (`handoff_events.mute`
+  e fonte primaria da condicao (a)).
+- Epic docs: [011-evals/spec.md](../epics/011-evals/spec.md) §FR-013..FR-018,
+  [011-evals/data-model.md](../epics/011-evals/data-model.md) §2.3-2.4,
+  [011-evals/quickstart.md](../epics/011-evals/quickstart.md) §"Validar US2".
+- Vision: `../business/vision.md` "70% de resolucao autonoma em 18 meses".
 
 ---
 

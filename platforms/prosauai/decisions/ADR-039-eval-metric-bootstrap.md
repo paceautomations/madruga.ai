@@ -1,6 +1,6 @@
 ---
 title: 'ADR-039: Eval metric bootstrap sem golden dataset'
-status: Proposed
+status: Accepted
 decision: v1 do epic 011 usa 4 metricas DeepEval reference-less (AnswerRelevancy,
   Toxicity, Bias, Coherence) + heuristico online herdado do epic 005 — sem golden
   dataset curado upfront. Golden cresce incremental via admin star-button
@@ -16,7 +16,12 @@ rationale: Reference-less metrics permitem avaliacao diaria em producao sem
 ---
 # ADR-039: Eval metric bootstrap sem golden dataset
 
-**Status:** Proposed | **Data:** 2026-04-24 | **Relaciona:** [ADR-008](ADR-008-eval-stack.md), [ADR-027](ADR-027-admin-tables-no-rls.md), [ADR-028](ADR-028-pipeline-fire-and-forget-persistence.md), [ADR-040](ADR-040-autonomous-resolution-heuristic.md)
+**Status:** Accepted | **Data:** 2026-04-24 (proposed) → 2026-04-25 (accepted) | **Relaciona:** [ADR-008](ADR-008-eval-stack.md), [ADR-027](ADR-027-admin-tables-no-rls.md), [ADR-028](ADR-028-pipeline-fire-and-forget-persistence.md), [ADR-040](ADR-040-autonomous-resolution-heuristic.md)
+
+> **Aceite:** entregue como descrito. Validado durante a implementacao
+> dos PRs A/B/C (tasks T001..T093). Diferencas materiais entre o draft
+> e o codigo final estao registradas na secao "Implementation notes"
+> abaixo — nenhuma exigiu re-decisao.
 
 > **Escopo:** Epic 011 (Evals). Aplica-se a `apps/api/prosauai/evals/` (modulo novo),
 > `apps/api/db/migrations/20260601000001_alter_eval_scores_add_metric.sql` (PR-A),
@@ -271,6 +276,50 @@ async def test_deepeval_four_metrics_persisted(runner, pool, bifrost_mock):
     metrics = {r["metric"] for r in rows}
     assert metrics == {"answer_relevancy", "toxicity", "bias", "coherence"}
 ```
+
+## Implementation notes (pos-aceite)
+
+Pontos onde o codigo final divergiu do draft, todos sem reabrir a decisao:
+
+- **Migration de UNIQUE em `public.traces.trace_id`** (T011) acabou
+  rodando *sem* `CREATE UNIQUE INDEX CONCURRENTLY` no harness CI por
+  incompatibilidade do `transaction:false` da dbmate v2.32. A
+  migration usa o caminho transacional padrao + runbook manual em
+  prod (`apps/api/db/migrations/20260601000002_alter_traces_unique_trace_id.sql`).
+  Decisao registrada em `easter-tracking.md` 2026-04-24.
+- **`metric='heuristic_composite'`** ficou como default da coluna
+  recem-criada em `eval_scores` para preservar rows do epic 005 sem
+  reescrita. Backfill explicito pos-`ALTER TABLE` foi mantido para
+  garantir auditabilidade do estado pre-011.
+- **DeepEval wrapper para Coherence** terminou usando `GEval` com
+  rubrica custom (em vez de uma metrica nativa), conforme antecipado
+  na tabela §1. Implementado em
+  `apps/api/prosauai/evals/deepeval_batch.py` (T042).
+- **SAR fan-out (T082)** confirmou a invariante de que `golden_traces`
+  e reapeada exclusivamente via FK CASCADE em `public.traces`.
+  Documentacao detalhada em `apps/api/prosauai/privacy/sar.py`
+  (modulo introduzido por este epic, nao pelo 010 como o draft
+  inicialmente assumiu).
+- **Promptfoo generator (T055)** consome o golden via
+  `SELECT DISTINCT ON (trace_id) ... ORDER BY trace_id, created_at DESC`
+  filtrando `verdict != 'cleared'` — exatamente o invariante "ultima
+  row define o estado" descrito em §2.
+
+Estas notas existem para que o code review historico bata 1:1 com o
+codigo de producao sem reabrir a decisao.
+
+## Referencias cruzadas
+
+- Tasks T001 (rascunho), T010 (migration metric), T015 (Pydantic
+  models incl. Metric Literal), T022 (PoolPersister), T023
+  (heuristic_online), T040..T051 (DeepEval batch + wrappers),
+  T058..T065 (golden curation), T070 (admin metrics aggregator),
+  T082..T083 (SAR fan-out), T084 (este ADR aceito).
+- Decisoes complementares: [ADR-040](ADR-040-autonomous-resolution-heuristic.md)
+  (heuristica autonomous_resolution e gemea deste).
+- Epic docs: [011-evals/spec.md](../epics/011-evals/spec.md) §FR-001..FR-054,
+  [011-evals/data-model.md](../epics/011-evals/data-model.md) §2-5,
+  [011-evals/contracts/evaluator-persist.md](../epics/011-evals/contracts/evaluator-persist.md) §1-2.
 
 ---
 
