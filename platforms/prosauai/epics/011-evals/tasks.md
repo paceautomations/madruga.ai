@@ -376,7 +376,7 @@
 - [x] T101 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --start --platform prosauai` — todos os health_checks (API 8050/health, Admin 3000) respondem dentro de ready_timeout (120s).
 - [x] T102 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --validate-env --platform prosauai` — zero required_env vars ausentes em `.env` (JWT_SECRET, ADMIN_BOOTSTRAP_EMAIL, ADMIN_BOOTSTRAP_PASSWORD, DATABASE_URL).
 - [x] T103 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --validate-urls --platform prosauai` — todas as URLs acessíveis com status esperado (health 200, admin/login 200, webhooks 400/401/405).
-- [ ] T104 Capturar screenshot de cada URL `type: frontend` (`http://localhost:3000` e `http://localhost:3000/admin/login`) — conteúdo não é placeholder; login page contém "login".
+- [x] T104 Capturar screenshot de cada URL `type: frontend` (`http://localhost:3000` e `http://localhost:3000/admin/login`) — conteúdo não é placeholder; login page contém "login".
 - [ ] T105 Executar Journey J-001 (happy path) declarado em `platforms/prosauai/testing/journeys.md` — todos os steps com assertions OK.
 
 ---
