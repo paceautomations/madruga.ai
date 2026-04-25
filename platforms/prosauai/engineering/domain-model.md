@@ -675,16 +675,30 @@ CREATE TABLE prompts (
 CREATE INDEX idx_prompt_active ON prompts (slug, is_active) WHERE is_active = TRUE;
 
 -- M9: Eval scores (avaliacao de qualidade por mensagem)
+-- Schema canonico atual reflete o estado pos-epic 011 (ADR-039):
+--   * `evaluator_type` (nao `evaluator`) — column legacy do epic 005
+--   * `quality_score`  (nao `score`)     — column legacy do epic 005
+--   * `metric`         — adicionada em 011 (PR-A, migration 20260601000001)
+--     com DEFAULT 'heuristic_composite' + CHECK (metric IN
+--     ('heuristic_composite','answer_relevancy','toxicity','bias',
+--      'coherence','human_verdict')).
+-- Renomeacao das colunas legacy foi explicitamente rejeitada (R11/ADR-039)
+-- para preservar epic 005 + epic 008 sem migracao destrutiva.
 CREATE TABLE eval_scores (
     id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id         UUID NOT NULL REFERENCES tenants(id),
-    message_id        UUID NOT NULL REFERENCES messages(id),
+    message_id        UUID REFERENCES messages(id),  -- nullable: deepeval pode targetar conversation-level
     conversation_id   UUID NOT NULL REFERENCES conversations(id),
-    evaluator         TEXT NOT NULL,  -- 'deepeval', 'promptfoo', 'langfuse', 'human'
-    metric            TEXT NOT NULL,  -- 'relevance', 'faithfulness', 'toxicity', etc
-    score             NUMERIC(5,4) NOT NULL CHECK (score >= 0 AND score <= 1),
+    evaluator_type    TEXT NOT NULL,                  -- 'heuristic_v1','deepeval','human'
+    metric            VARCHAR(50) NOT NULL DEFAULT 'heuristic_composite',
+    quality_score     FLOAT NOT NULL CHECK (quality_score >= 0 AND quality_score <= 1),
     details           JSONB,
-    created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT chk_eval_scores_metric
+        CHECK (metric IN (
+            'heuristic_composite','answer_relevancy','toxicity',
+            'bias','coherence','human_verdict'
+        ))
 );
 
 ALTER TABLE eval_scores ENABLE ROW LEVEL SECURITY;
@@ -692,6 +706,44 @@ CREATE POLICY tenant_isolation ON eval_scores USING (tenant_id = public.tenant_i
 CREATE INDEX idx_eval_tenant ON eval_scores (tenant_id);
 CREATE INDEX idx_eval_message ON eval_scores (message_id);
 CREATE INDEX idx_eval_conversation ON eval_scores (tenant_id, conversation_id, metric);
+-- epic 011: aggregate query para Performance AI cards
+CREATE INDEX idx_eval_scores_tenant_evaluator_metric_created
+    ON eval_scores (tenant_id, evaluator_type, metric, created_at DESC);
+
+-- M9 Extension (epic 011, PR-A): tri-state KPI North Star.
+-- Cron `autonomous_resolution_cron` (03:00 UTC) popula a partir da
+-- heuristica A canonica (ADR-040). NULL = nao calculado, TRUE = passou,
+-- FALSE = explicitamente nao-autonoma. Nao sofre retention 90d
+-- (FR-053) — vision precisa janela 18m.
+ALTER TABLE conversations ADD COLUMN IF NOT EXISTS auto_resolved BOOLEAN NULL;
+CREATE INDEX IF NOT EXISTS idx_conversations_auto_resolved
+    ON conversations (tenant_id, auto_resolved, closed_at DESC)
+    WHERE auto_resolved IS NOT NULL;
+
+-- M5 Extension (epic 011, PR-A): direct-message discriminator para grupos.
+-- DEFAULT TRUE cobre 1:1 retroativamente; pipeline ingestion seta
+-- explicitamente para grupos (mention/reply ao bot). Usado pela
+-- heuristica A condicao (b) e (c).
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_direct BOOLEAN NOT NULL DEFAULT TRUE;
+CREATE INDEX IF NOT EXISTS idx_messages_conversation_inbound_direct
+    ON messages (conversation_id, created_at DESC)
+    WHERE direction = 'inbound' AND is_direct = TRUE;
+
+-- Admin-only carve-out (epic 011, PR-B). Sem RLS (ADR-027).
+-- Append-only: verdict efetivo = MAX(created_at) por trace_id.
+-- 'cleared' e o terceiro valor para "undo" sem deletar (FR-030).
+-- FK ON DELETE CASCADE em public.traces(trace_id) garante cleanup
+-- automatico via retention 90d + LGPD SAR.
+CREATE TABLE IF NOT EXISTS public.golden_traces (
+    id                 UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+    trace_id           TEXT         NOT NULL REFERENCES public.traces(trace_id) ON DELETE CASCADE,
+    verdict            TEXT         NOT NULL CHECK (verdict IN ('positive','negative','cleared')),
+    notes              TEXT,
+    created_by_user_id UUID,
+    created_at         TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_golden_traces_trace_created
+    ON public.golden_traces (trace_id, created_at DESC);
 ```
 
 ### Row-Level Security (RLS)
@@ -1253,6 +1305,18 @@ CREATE TABLE public.traces (
 CREATE INDEX idx_traces_tenant_time ON public.traces (tenant_id, started_at DESC);
 CREATE INDEX idx_traces_status ON public.traces (status, started_at DESC);
 CREATE INDEX idx_traces_conversation ON public.traces (conversation_id) WHERE conversation_id IS NOT NULL;
+
+-- Epic 011 (PR-A, migration 20260601000002): UNIQUE em trace_id e
+-- pre-requisito do FK `golden_traces.trace_id REFERENCES public.traces(trace_id)`.
+-- OTel garante unicidade global do hex 32-char, zero risco de
+-- duplicate em dados existentes. CONCURRENTLY evita lock em prod.
+ALTER TABLE public.traces ADD CONSTRAINT traces_trace_id_unique UNIQUE (trace_id);
+
+-- NOTA: o resto deste bloco SQL ainda reflete o draft pre-implementacao
+-- do epic 008 (trace_id como PRIMARY KEY UUID, colunas duration_ms/cost_usd
+-- nullable, etc). O schema real em producao usa `id UUID PRIMARY KEY` +
+-- `trace_id TEXT NOT NULL`. Reconcile completo dessa secao e topico
+-- aberto (track via reverse_reconcile no proximo cycle).
 
 -- public.trace_steps (ADR-027: sem RLS)
 CREATE TABLE public.trace_steps (
