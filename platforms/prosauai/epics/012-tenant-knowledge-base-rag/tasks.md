@@ -286,12 +286,12 @@
 
 **Purpose**: Validar que o stack completo sobe e responde apos as mudancas — gate ultimo antes de declarar epic shippable.
 
-- [ ] T1100 Executar `docker compose build` no diretorio da plataforma (`apps/`) — build sem erros (incluindo nova dep `tiktoken` se nao havia, e PyMuPDF reusada). Em caso de mismatch de dep python, atualizar lock file
-- [ ] T1101 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --start --platform prosauai` — todos os health_checks (`localhost:8050/health`, `localhost:3000`) respondem dentro do `ready_timeout: 120s`
-- [ ] T1102 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --validate-env --platform prosauai` — zero `required_env` vars ausentes em `.env` (`JWT_SECRET`, `ADMIN_BOOTSTRAP_EMAIL`, `ADMIN_BOOTSTRAP_PASSWORD`, `DATABASE_URL`)
-- [ ] T1103 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --validate-urls --platform prosauai` — todas as URLs em `testing.urls` acessiveis com status esperado
-- [ ] T1104 Capturar screenshot de `localhost:3000/admin/knowledge` (nova aba do epic) — verify renderiza tabela de documentos (mesmo que vazia) com botao "Adicionar documento"; conteudo nao e placeholder
-- [ ] T1105 Executar Journey J-001 (happy path) declarado em `platforms/prosauai/testing/journeys.md` — todos os steps com assertions OK
+- [x] T1100 Executar `docker compose build` no diretorio da plataforma (`apps/`) — build sem erros (incluindo nova dep `tiktoken` se nao havia, e PyMuPDF reusada). Em caso de mismatch de dep python, atualizar lock file
+- [x] T1101 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --start --platform prosauai` — todos os health_checks (`localhost:8050/health`, `localhost:3000`) respondem dentro do `ready_timeout: 120s`
+- [x] T1102 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --validate-env --platform prosauai` — zero `required_env` vars ausentes em `.env` (`JWT_SECRET`, `ADMIN_BOOTSTRAP_EMAIL`, `ADMIN_BOOTSTRAP_PASSWORD`, `DATABASE_URL`)
+- [x] T1103 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --validate-urls --platform prosauai` — todas as URLs em `testing.urls` acessiveis com status esperado
+- [x] T1104 Capturar screenshot de `localhost:3000/admin/knowledge` (nova aba do epic) — verify renderiza tabela de documentos (mesmo que vazia) com botao "Adicionar documento"; conteudo nao e placeholder
+- [x] T1105 Executar Journey J-001 (happy path) declarado em `platforms/prosauai/testing/journeys.md` — todos os steps com assertions OK
 
 ---
 
