@@ -72,8 +72,8 @@
 
 ### Observability + Audit
 
-- [ ] T025 [P] Estender `apps/api/prosauai/observability/metrics.py` adicionando 6 metricas Prometheus (FR-063, SC-011): counters `rag_documents_uploaded_total{tenant}`, `rag_uploads_rejected_total{reason}`, `rag_search_invocations_total{tenant,outcome}`, `rag_embedder_failures_total{provider,reason}`; gauges `rag_chunks_total{tenant}`, `rag_documents_total{tenant}`; histograms `rag_search_duration_seconds_bucket`, `rag_upload_duration_seconds_bucket`
-- [ ] T026 [P] Criar `apps/api/prosauai/rag/audit.py` (~50 LOC) com helpers structlog para 5 event_types canonicos (FR-076): `emit_document_uploaded(...)`, `emit_document_deleted(...)`, `emit_document_downloaded(...)`, `emit_search_executed(...)`, `emit_replace_detected(...)`. Schema obrigatorio: `tenant_id`, `actor_user_id`, `document_id`, `source_name`, `action_result`, `timestamp`, `request_id`. Tests em `apps/api/tests/rag/test_audit.py`
+- [x] T025 [P] Estender `apps/api/prosauai/observability/metrics.py` adicionando 6 metricas Prometheus (FR-063, SC-011): counters `rag_documents_uploaded_total{tenant}`, `rag_uploads_rejected_total{reason}`, `rag_search_invocations_total{tenant,outcome}`, `rag_embedder_failures_total{provider,reason}`; gauges `rag_chunks_total{tenant}`, `rag_documents_total{tenant}`; histograms `rag_search_duration_seconds_bucket`, `rag_upload_duration_seconds_bucket`
+- [x] T026 [P] Criar `apps/api/prosauai/rag/audit.py` (~50 LOC) com helpers structlog para 5 event_types canonicos (FR-076): `emit_document_uploaded(...)`, `emit_document_deleted(...)`, `emit_document_downloaded(...)`, `emit_search_executed(...)`, `emit_replace_detected(...)`. Schema obrigatorio: `tenant_id`, `actor_user_id`, `document_id`, `source_name`, `action_result`, `timestamp`, `request_id`. Tests em `apps/api/tests/rag/test_audit.py`
 
 **Checkpoint Phase 2 (PR-A complete)**: schema migrado em staging + bucket criado + Bifrost extension funcional + utilities com unit tests verdes (>=85% coverage `prosauai/rag/*`) + RLS isolation invariant verde. Pronto para iniciar US1+US2+US3 em paralelo.
 
