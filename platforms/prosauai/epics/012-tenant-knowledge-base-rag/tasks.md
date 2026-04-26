@@ -212,12 +212,12 @@
 
 ### Tests para US5
 
-- [ ] T070 [P] [US5] Escrever `apps/api/tests/rag/test_reembed_cli.py`: subprocess call com `--tenant X --target-model Y --dry-run`; verify output mostra plano (N docs, ~M chunks); `--target-model` com dim diferente de 1536 aborta com erro `dim_mismatch` (sem tocar dados); falha intermitente Bifrost faz retry 3x; falha persistente em doc N aborta apenas ele (docs anteriores ja completados ficam com novo modelo); `--from-document {id}` continua de onde parou
+- [x] T070 [P] [US5] Escrever `apps/api/tests/rag/test_reembed_cli.py`: subprocess call com `--tenant X --target-model Y --dry-run`; verify output mostra plano (N docs, ~M chunks); `--target-model` com dim diferente de 1536 aborta com erro `dim_mismatch` (sem tocar dados); falha intermitente Bifrost faz retry 3x; falha persistente em doc N aborta apenas ele (docs anteriores ja completados ficam com novo modelo); `--from-document {id}` continua de onde parou
 
 ### Implementacao US5
 
-- [ ] T071 [US5] Implementar `apps/api/prosauai/rag/reembed.py` (~150 LOC): `python -m prosauai.rag.reembed` via argparse com flags `--tenant`, `--target-model`, `--dry-run`, `--from-document {id}`. Loop por documento: (1) baixa raw via `storage.get(...)`; (2) re-extract + re-chunk; (3) embed batch via `embedder.embed_batch(...)`; (4) transaction `BEGIN; DELETE chunks WHERE document_id; INSERT new chunks; UPDATE documents SET embedding_model=$Y; COMMIT;`. Progress bar via stdlib (sem rich). Logs estruturados por doc. Retry exponencial 3x por batch
-- [ ] T072 [US5] Adicionar runbook ops em `apps/api/docs/runbooks/rag-reembed.md` (~30 LOC): pre-checks (Bifrost up, OpenAI quota), comando exato, monitoring de progresso, rollback (`dbmate rollback` nao serve — restaurar via re-embed para modelo antigo)
+- [x] T071 [US5] Implementar `apps/api/prosauai/rag/reembed.py` (~150 LOC): `python -m prosauai.rag.reembed` via argparse com flags `--tenant`, `--target-model`, `--dry-run`, `--from-document {id}`. Loop por documento: (1) baixa raw via `storage.get(...)`; (2) re-extract + re-chunk; (3) embed batch via `embedder.embed_batch(...)`; (4) transaction `BEGIN; DELETE chunks WHERE document_id; INSERT new chunks; UPDATE documents SET embedding_model=$Y; COMMIT;`. Progress bar via stdlib (sem rich). Logs estruturados por doc. Retry exponencial 3x por batch
+- [x] T072 [US5] Adicionar runbook ops em `apps/api/docs/runbooks/rag-reembed.md` (~30 LOC): pre-checks (Bifrost up, OpenAI quota), comando exato, monitoring de progresso, rollback (`dbmate rollback` nao serve — restaurar via re-embed para modelo antigo)
 
 **Checkpoint US5**: operacao operacional rara mas critica funcional. Cobre upgrade de modelo zero-touch para tenants.
 
@@ -231,14 +231,14 @@
 
 ### Tests para US6
 
-- [ ] T073 [P] [US6] Escrever `apps/api/tests/config/test_rag_config_reload.py`: simular edicao YAML + chamar `config_poller.reload_now()` -> verify estado in-memory atualizado; YAML invalido (`top_k=-1`, `max_upload_mb='abc'`) -> reload rejeitado, config anterior preservada (FR-045 fail-safe), log `tenant_config_reload_failed{tenant, reason}` emitido
-- [ ] T074 [P] [US6] Escrever Playwright test ou curl-based `apps/admin/tests/e2e/rag-flag-reload.spec.ts`: smoke de toggle via mudanca de YAML em staging branch + aguardar reload
+- [x] T073 [P] [US6] Escrever `apps/api/tests/config/test_rag_config_reload.py`: simular edicao YAML + chamar `config_poller.reload_now()` -> verify estado in-memory atualizado; YAML invalido (`top_k=-1`, `max_upload_mb='abc'`) -> reload rejeitado, config anterior preservada (FR-045 fail-safe), log `tenant_config_reload_failed{tenant, reason}` emitido
+- [x] T074 [P] [US6] Escrever Playwright test ou curl-based `apps/admin/tests/e2e/rag-flag-reload.spec.ts`: smoke de toggle via mudanca de YAML em staging branch + aguardar reload
 
 ### Implementacao US6
 
-- [ ] T075 [US6] Validar/estender `apps/api/prosauai/config_poller.py` para incluir validacao do bloco `rag` (RagConfig de T009) em cada reload. Em validation error, emit `tenant_config_reload_failed{tenant, reason}` + metric `tenant_config_reload_failed_total`. Mantem config anterior in-memory (fail-safe)
-- [ ] T076 [US6] Adicionar endpoint admin `GET /admin/config/tenants/{tenant_id}/rag` (read-only) que retorna config rag corrente in-memory para debug ops. Auth requer admin role
-- [ ] T077 [US6] Smoke Step 12 do `quickstart.md` (kill-switch via flag toggle) — validar que upload alterna entre 403 e 201 em <=60s sem deploy. Validar `tenant_config_reload_total` metric incrementa
+- [x] T075 [US6] Validar/estender `apps/api/prosauai/config_poller.py` para incluir validacao do bloco `rag` (RagConfig de T009) em cada reload. Em validation error, emit `tenant_config_reload_failed{tenant, reason}` + metric `tenant_config_reload_failed_total`. Mantem config anterior in-memory (fail-safe)
+- [x] T076 [US6] Adicionar endpoint admin `GET /admin/config/tenants/{tenant_id}/rag` (read-only) que retorna config rag corrente in-memory para debug ops. Auth requer admin role
+- [x] T077 [US6] Smoke Step 12 do `quickstart.md` (kill-switch via flag toggle) — validar que upload alterna entre 403 e 201 em <=60s sem deploy. Validar `tenant_config_reload_total` metric incrementa
 
 **Checkpoint US6**: kill-switch operacional <=60s confirmado. SC-007 atendido.
 
