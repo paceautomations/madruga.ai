@@ -1,0 +1,84 @@
+# Bifrost provider: OpenAI embeddings — epic 012 T021
+#
+# Drop into ``bifrost/config/providers/`` and reload (Bifrost watches the
+# directory). New endpoint surfaced: POST {bifrost_base_url}/v1/embeddings
+# (OpenAI-compatible).
+#
+# Spend tracking lands in ``bifrost_spend`` with endpoint=embeddings, so
+# admin Performance AI dashboards (epic 008) and SC-010 audits can include
+# embedding cost alongside chat completions.
+#
+# References:
+#   - spec.md FR-030, FR-032
+#   - plan.md §"Bifrost extension (PR-A)"
+#   - ADR-042 (proposed)
+
+[provider]
+name = "openai_embeddings"
+endpoint = "/v1/embeddings"
+target_url = "https://api.openai.com/v1/embeddings"
+api_key_env = "OPENAI_API_KEY"
+auth_header = "Authorization"
+auth_scheme = "Bearer"
+method = "POST"
+
+# ---------------------------------------------------------------------------
+# Rate limiting (FR-032)
+# ---------------------------------------------------------------------------
+# Aligned with OpenAI's published Tier-4 quotas for text-embedding-3-small.
+# Lower than chat completions because embedding cost per token is much smaller
+# but call frequency from re-embed CLI can spike briefly.
+
+[rate_limits]
+requests_per_minute = 3500
+tokens_per_minute = 5_000_000
+# Safety burst: short-window cap so a runaway re-embed cron does not exhaust
+# the per-minute quota in 5 seconds.
+burst_per_second = 60
+
+# ---------------------------------------------------------------------------
+# Cost tracking (FR-032, SC-010)
+# ---------------------------------------------------------------------------
+# OpenAI public price 2026-04: $0.020 per 1M tokens.
+# Stored in bifrost_spend.total_cost_usd (per call) keyed by tenant_id.
+
+[cost]
+cost_per_1k_tokens_usd = 0.00002
+spend_tracking_enabled = true
+spend_table = "bifrost_spend"
+endpoint_label = "embeddings"
+
+# ---------------------------------------------------------------------------
+# Circuit breaker (FR-033)
+# ---------------------------------------------------------------------------
+# 5 failures in 60 s opens the breaker for 30 s. Half-open then probes a
+# single request before re-closing.
+
+[circuit_breaker]
+failure_threshold = 5
+failure_window_seconds = 60
+open_duration_seconds = 30
+half_open_probes = 1
+
+# ---------------------------------------------------------------------------
+# Tenant attribution (FR-030)
+# ---------------------------------------------------------------------------
+# Every request MUST carry X-ProsaUAI-Tenant. Missing header returns
+# 400 fail-closed so spend tracking is never anonymous.
+
+[auth]
+require_tenant_header = true
+tenant_header_name = "X-ProsaUAI-Tenant"
+fail_closed = true
+fail_closed_status = 400
+fail_closed_body = '{"error":"missing_tenant_header","detail":"X-ProsaUAI-Tenant required"}'
+
+# ---------------------------------------------------------------------------
+# Retries (Bifrost-side, defence in depth — embedder also retries client-side)
+# ---------------------------------------------------------------------------
+# Conservative: at most 1 retry on 5xx; 4xx pass through immediately.
+
+[retries]
+max_attempts = 2
+backoff_base_ms = 250
+retry_on_status = [500, 502, 503, 504]
