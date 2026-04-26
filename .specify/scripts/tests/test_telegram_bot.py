@@ -635,3 +635,100 @@ class TestHandleFreetext:
         row = conn.execute("SELECT payload FROM events WHERE action='decision_resolved'").fetchone()
         assert "rejected" in row[0]
         assert "rejeitada" in callback.answer.call_args[0][0].lower()
+
+
+# --- Fix B: Auto-escalate fail alerts (autonomous mode visibility) ---
+
+
+def _insert_auto_escalate_event(conn, payload, platform="madruga-ai", entity_id="judge"):
+    import json as _json
+
+    conn.execute(
+        "INSERT INTO events (platform_id, entity_type, entity_id, action, actor, payload, created_at) "
+        "VALUES (?, 'pipeline_run', ?, 'auto_escalate_failed', 'system', ?, '2026-04-25T13:20:00Z')",
+        (platform, entity_id, _json.dumps(payload)),
+    )
+    conn.commit()
+    return conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+
+class TestPollPendingAutoEscalateAlerts:
+    def test_returns_unnotified_alert(self):
+        from telegram_bot import poll_pending_auto_escalate_alerts
+
+        conn = _make_conn_with_events()
+        _insert_auto_escalate_event(conn, {"node_id": "judge", "score": 50, "verdict": "fail"})
+        alerts = poll_pending_auto_escalate_alerts(conn)
+        assert len(alerts) == 1
+        assert alerts[0]["payload"]["score"] == 50
+
+    def test_skips_already_notified(self):
+        from telegram_bot import poll_pending_auto_escalate_alerts
+
+        conn = _make_conn_with_events()
+        original_id = _insert_auto_escalate_event(conn, {"node_id": "judge", "score": 50})
+        # Simulate prior notify
+        import json as _json
+
+        conn.execute(
+            "INSERT INTO events (platform_id, entity_type, entity_id, action, actor, payload, created_at) "
+            "VALUES ('madruga-ai', 'pipeline_run', 'judge', 'auto_escalate_failed_notified', "
+            "'system', ?, '2026-04-25T13:21:00Z')",
+            (_json.dumps({"alert_event_id": original_id, "message_id": 7}),),
+        )
+        conn.commit()
+
+        alerts = poll_pending_auto_escalate_alerts(conn)
+        assert alerts == []
+
+    def test_filters_by_platform(self):
+        from telegram_bot import poll_pending_auto_escalate_alerts
+
+        conn = _make_conn_with_events()
+        _insert_auto_escalate_event(conn, {"node_id": "judge"}, platform="prosauai")
+        _insert_auto_escalate_event(conn, {"node_id": "judge"}, platform="madruga-ai")
+        prosauai = poll_pending_auto_escalate_alerts(conn, platform_id="prosauai")
+        assert len(prosauai) == 1
+        assert prosauai[0]["platform_id"] == "prosauai"
+
+
+class TestNotifyAutoEscalateAlert:
+    def test_inserts_notified_event_with_alert_event_id(self):
+        from telegram_bot import notify_auto_escalate_alert, poll_pending_auto_escalate_alerts
+
+        conn = _make_conn_with_events()
+        _insert_auto_escalate_event(
+            conn,
+            {"node_id": "judge", "score": 50, "verdict": "fail", "report_path": "epics/011/judge-report.md"},
+        )
+        alert = poll_pending_auto_escalate_alerts(conn)[0]
+
+        adapter = AsyncMock()
+        adapter.alert.return_value = 1234
+
+        asyncio.run(notify_auto_escalate_alert(adapter, 555, alert, conn))
+
+        adapter.alert.assert_called_once()
+        # Subsequent poll must NOT return the same alert
+        assert poll_pending_auto_escalate_alerts(conn) == []
+
+    def test_alert_message_contains_score_and_verdict(self):
+        from telegram_bot import format_auto_escalate_alert
+
+        alert = {
+            "event_id": 1,
+            "platform_id": "prosauai",
+            "entity_id": "judge",
+            "payload": {
+                "node_id": "judge",
+                "epic_id": "011-evals",
+                "score": 50,
+                "verdict": "fail",
+                "report_path": "epics/011-evals/judge-report.md",
+            },
+        }
+        text = format_auto_escalate_alert(alert)
+        assert "50" in text
+        assert "fail" in text
+        assert "011-evals" in text
+        assert "judge-report.md" in text

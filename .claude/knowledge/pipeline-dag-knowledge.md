@@ -1,12 +1,12 @@
 # Pipeline DAG Knowledge
 
-Reference knowledge file for the madruga.ai pipeline — a **single continuous flow of 25 skills** (L1: 13 platform nodes + L2: 12 per-epic nodes) that takes a platform from conception to implemented, tested code.
+Reference knowledge file for the madruga.ai pipeline — a **single continuous flow of 24 skills** (L1: 12 platform nodes + L2: 12 per-epic nodes) that takes a platform from conception to implemented, tested code.
 
 Skills reference this file to understand node dependencies, gate types, personas, and the uniform contract.
 
 ---
 
-## 1. L1 — Platform Foundation (13 nodes, runs once per platform)
+## 1. L1 — Platform Foundation (12 nodes, runs once per platform)
 
 | ID | Skill | Outputs | Depends | Layer | Gate | Optional |
 |----|-------|---------|---------|-------|------|----------|
@@ -21,8 +21,9 @@ Skills reference this file to understand node dependencies, gate types, personas
 | domain-model | madruga:domain-model | engineering/domain-model.md | blueprint, business-process | engineering | human | no |
 | containers | madruga:containers | engineering/containers.md | domain-model, blueprint | engineering | human | no |
 | context-map | madruga:context-map | engineering/context-map.md | domain-model, containers | engineering | human | no |
-| epic-breakdown | madruga:epic-breakdown | epics/*/pitch.md (output_pattern) | domain-model, containers, context-map | planning | 1-way-door | no |
-| roadmap | madruga:roadmap | planning/roadmap.md | epic-breakdown | planning | human | no |
+| roadmap | madruga:roadmap | planning/roadmap.md | domain-model, containers, context-map | planning | 1-way-door | no |
+
+> **Epic definition (NNN, title, problem, appetite, deps, priority) lives inline as rows in `planning/roadmap.md`.** No standalone `epic-breakdown` node — `roadmap` is a 1-way-door gate because it locks epic scope for the rest of the project.
 
 ---
 
@@ -122,7 +123,7 @@ If the script fails, proceed normally (DB is additive, not blocking).
 |------|----------|-------------|----------|
 | human | Always pause for approval | Always | vision, blueprint, DDD |
 | auto | Never pause, proceed automatically | Never | codebase-map, checkpoint |
-| 1-way-door | Always pause, even in autonomous mode | Always, with per-decision confirmation | tech-research, adr, epic-breakdown |
+| 1-way-door | Always pause, even in autonomous mode | Always, with per-decision confirmation | tech-research, adr, roadmap |
 | auto-escalate | Auto if OK, escalate if blockers | Only when problems detected | verify |
 
 ### 1-way-door details
@@ -212,17 +213,11 @@ handoffs:
     agent: madruga/containers
     prompt: Define container architecture from domain model and blueprint
 
-# context-map -> epic-breakdown (with 1-way-door warning)
+# context-map -> roadmap (with 1-way-door warning)
 handoffs:
-  - label: Break into Epics (Shape Up)
-    agent: madruga/epic-breakdown
-    prompt: "Break project into epics. WARNING: This is a 1-way-door gate — epic scope decisions define everything downstream."
-
-# epic-breakdown -> roadmap
-handoffs:
-  - label: Build Roadmap
+  - label: Define Epics + Build Roadmap
     agent: madruga/roadmap
-    prompt: Sequence epics into delivery roadmap based on dependencies and risk
+    prompt: "Break project into epics and sequence them. WARNING: 1-way-door gate — epic scope + sequencing define everything downstream."
 ```
 
 ---

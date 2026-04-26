@@ -1,20 +1,20 @@
 ---
 title: "Roadmap"
-updated: 2026-04-17
+updated: 2026-04-22
 ---
 # ProsaUAI — Delivery Roadmap
 
-> Sequenciamento de epics, milestones e definicao de MVP. Atualizado: 2026-04-13 (MVP completo — todos 6 epics shipped).
+> Sequenciamento de epics, milestones e definicao de MVP. Atualizado: 2026-04-22 (MVP + Admin + Channel Ingestion shipped; roadmap pos-MVP reordenado).
 
 ---
 
 ## Status
 
-**Lifecycle:** building — **MVP completo** (6/6 epics shipped) + **Admin Evolution in-progress**. Proximo: merge epic 008 + primeiro deploy de producao VPS.
+**Lifecycle:** building — **MVP completo** (6/6 epics shipped) + **Admin shipped** (007+008) + **Channel Ingestion shipped** (009, merged 2026-04-20). Proximo: epic 010 Handoff Engine + Inbox.
 **L1 Pipeline:** 12/13 nodes completos. Revisao completa realizada em 2026-04-07.
 **L1 Pendente:** codebase-map (opcional — plataforma greenfield, sem valor agregado).
-**L2 Status:** Epic 001 shipped (52 tasks, 122 testes, judge 92%, QA 97%). Epic 002 shipped (Phoenix + OTel). Epic 003 shipped (multi-tenant auth + parser reality + deploy). Epic 004 shipped (MECE routing engine + agent resolution). Epic 005 shipped (conversation pipeline 12-step, LLM agent pydantic-ai, safety guards, tool registry, 52 test files). Epic 006 shipped (schema isolation, migration runner, data retention, log persistence, host monitoring — 34 tasks, 67 testes, judge 88%, QA 100%). **Epic 007 shipped** (admin front foundation — sidebar, login, pool_admin BYPASSRLS, dbmate migrations). **Epic 008 in-progress** (Admin Evolution — 8 abas operacionais, 3 tabelas admin-only [traces/trace_steps/routing_decisions], ~25 endpoints, pipeline instrumentation fire-and-forget, denorm inbox — 152/158 tasks, 5 BLOCKERs herdados no repo externo).
-**Proximo marco:** merge epic 008 para develop + primeiro deploy de producao VPS (2 vCPU, 4GB RAM, 40GB SSD).
+**L2 Status:** Epic 001 shipped (52 tasks, 122 testes, judge 92%, QA 97%). Epic 002 shipped (Phoenix + OTel). Epic 003 shipped (multi-tenant auth + parser reality + deploy). Epic 004 shipped (MECE routing engine + agent resolution). Epic 005 shipped (conversation pipeline 12-step, LLM agent pydantic-ai, safety guards, tool registry, 52 test files). Epic 006 shipped (schema isolation, migration runner, data retention, log persistence, host monitoring — 34 tasks, 67 testes, judge 88%, QA 100%). Epic 007 shipped (admin front foundation — sidebar, login, pool_admin BYPASSRLS, dbmate migrations). Epic 008 shipped (Admin Evolution — 8 abas operacionais, 3 tabelas admin-only, ~25 endpoints, pipeline instrumentation fire-and-forget). **Epic 009 shipped** (Channel Ingestion + Content Processing — Canonical schema, Evolution+Meta Cloud adapters, 9 processors audio/image/document/sticker/location/contact/reaction/unsupported/text, feature flags per-tenant, budget + cache + circuit breaker).
+**Proximo marco:** epic 010 (Handoff Engine + Inbox) — materializar `pending_handoff` no DB + UI atendente humano.
 
 ---
 
@@ -24,6 +24,7 @@ updated: 2026-04-17
 **MVP Criterion:** Agente recebe mensagem WhatsApp **multi-tenant** (>=2 instancias Evolution reais), parseia 100% dos payloads reais, responde com IA, persiste em BD, **com observabilidade total da jornada**, **router MECE provado em CI**, e **infra production-ready** (schema isolation, log persistence, data retention, host monitoring).
 **Total MVP Estimate:** ~7-8 semanas (realizado)
 **Progresso MVP:** **100%** (todos 6 epics shipped)
+**Post-MVP shipped:** 007 (Admin Foundation) + 008 (Admin Evolution) + 009 (Channel Ingestion + Content Processing — audio/imagem/documento funcionais end-to-end).
 
 ---
 
@@ -42,13 +43,22 @@ gantt
     006 Production Readiness (DONE) :done, a6, after a5, 1w
     section Admin
     007 Admin Front Foundation (DONE) :done, a7, after a6, 1w
-    008 Admin Evolution (IN PROGRESS) :active, a8, after a7, 6w
-    012 Admin Dashboard (absorvido por 008) :a12, after a8, 0d
-    013 Admin Handoff Inbox :a13, after a10, 1w
-    section Post-MVP
-    009 Agent Tools         :a9, after a6, 2w
-    010 Handoff Engine      :a10, after a6, 2w
-    011 Trigger Engine      :a11, after a10, 1w
+    008 Admin Evolution (DONE)     :done, a8, after a7, 6w
+    section Channel
+    009 Channel Ingestion + Content Processing (DONE) :done, a9, after a8, 5w
+    section Next
+    010 Handoff Engine + Inbox :a10, after a9, 3w
+    011 Evals (offline + online) :a11, after a10, 3w
+    012 Tenant Knowledge Base (RAG) :a12, after a11, 3w
+    013 Agent Tools v2 :a13, after a12, 2w
+    014 Alerting + WhatsApp Quality :a14, after a13, 2w
+    015 Agent Pipeline Steps :a15, after a14, 3w
+    016 Trigger Engine :a16, after a15, 2w
+    017 Tenant Self-Admin :a17, after a16, 3w
+    section Gated
+    018 Public API Fase 2 :a18, after a17, 2w
+    019 Billing Stripe :a19, after a18, 2w
+    020 TenantStore Postgres Fase 3 :a20, after a19, 3w
 ```
 
 ---
@@ -57,44 +67,49 @@ gantt
 
 > **Convencao:** apenas epics shipped/in-progress/drafted tem pitch file criado. Demais sao sugestoes — arquivos serao criados sob demanda quando o epic for iniciado via `/madruga:epic-context`.
 >
-> **Renumeracao 2026-04-10 (2a):** Slot 003 reservado para novo epic (escopo a definir pelo usuario). Router MECE movido de draft@003 para draft@004. Epics a partir do antigo 003 bumpados +2 (Conversation Core → 005, Configurable Routing → 006, etc.). Router MECE (004) reduz escopo do 006 drasticamente — engine declarativa ja entrega.
+> **Renumeracao 2026-04-10 (2a):** Slot 003 reservado para **Multi-Tenant Foundation**. Router MECE movido para 004. Epics antigos bumpados +2.
 >
-> **Definicao do slot 003 (2026-04-10):** epic 003 agora e **Multi-Tenant Foundation** (auth + parser reality fix + deploy isolado + tenant abstraction). Pre-requisito duro para 004+, baseado em [docs/prosauai/IMPLEMENTATION_PLAN.md](../../../docs/prosauai/IMPLEMENTATION_PLAN.md). Sequencia 003 + 004 e back-to-back, single prod deploy apos os dois mergerem. Fase 2 (Caddy + Admin API + rate limit) e Fase 3 (Postgres TenantStore + billing) **documentadas agora** em [ADR-021](../decisions/ADR-021-caddy-edge-proxy.md), [ADR-022](../decisions/ADR-022-admin-api.md), [ADR-023](../decisions/ADR-023-tenant-store-postgres-migration.md).
+> **Renumeracao 2026-04-12 (3a):** Slot 006 inserido para **Production Readiness**. Demais epics bumpados +1.
 >
-> **Renumeracao 2026-04-12 (3a):** Slot 006 inserido para **Production Readiness** (schema isolation, log persistence, data retention, particionamento, host monitoring, migration runner). Gaps identificados ao cruzar ADRs aprovados com estado real do codigo. Antigo 006 (Configurable Routing) → 007. Demais epics bumpados +1. Epics futuros re-referenciados.
+> **Renumeracao 2026-04-17 (4a):** Slot 008 adotado para **Admin Evolution**. Slot 007 preenchido com "Admin Front Foundation". "Admin Dashboard" absorvido por 008.
 >
-> **Renumeracao 2026-04-17 (4a):** Slot 008 adotado para **Admin Evolution** (plataforma operacional completa — 8 abas). Antigo "008 Agent Tools" → 009, "009 Handoff Engine" → 010, "010 Trigger Engine" → 011. Slot 007 preenchido com "Admin Front Foundation" (shipped — sidebar+login+pool_admin+dbmate, substituiu o antigo "Configurable Routing DB" que foi absorvido pelo epic 004). Slot "011 Admin Dashboard" absorvido por 008 (8 abas supera o escopo original). "012 Admin Handoff Inbox" → 013 (depende de 010 Handoff Engine). Ref: [epics/008-admin-evolution/decisions.md](../epics/008-admin-evolution/decisions.md) decisao 1.
+> **Renumeracao 2026-04-22 (5a — pos-MVP reorder):** com 009 shipped (Channel Ingestion + Content Processing mergeado 2026-04-20), revisao completa do roadmap pos-MVP. Decisoes travadas: (a) Evals offline + online **fundidos** em epic 011 unico; (b) **RAG antes de Agent Tools v2** (destrava onboarding self-service); (c) cortes do antigo 017 Flywheel / 021 Flows / 022 Agent Pipeline / streaming transcription foram **movidos para backlog someday-maybe** com triggers explicitos (nao descartados); (d) numeracao reconciliada entre `roadmap.md`, `solution-overview.md` e `vision.md`. Ver proxima tabela "Epics Futuros" abaixo.
 
 | Ordem | Epic | Deps | Risco | Milestone | Status |
 |-------|------|------|-------|-----------|--------|
 | 1 | 001: Channel Pipeline | — | baixo | MVP | **shipped** (52 tasks, 122 testes, judge 92%) |
 | 2 | 002: Observability (Phoenix + OTel) | 001 | medio | MVP | **shipped** (Phoenix + OTel SDK + structlog bridge) |
-| 3 | 003: Multi-Tenant Foundation (auth + parser reality + deploy) | 002 | medio | MVP | **shipped** (TenantStore YAML, X-Webhook-Secret auth, 26 fixtures, idempotency Redis) |
+| 3 | 003: Multi-Tenant Foundation | 002 | medio | MVP | **shipped** (TenantStore YAML, X-Webhook-Secret auth, 26 fixtures, idempotency Redis) |
 | 4 | 004: Router MECE | 003 | medio | MVP | **shipped** (classify() + RoutingEngine declarativa, MECE 4 camadas, config YAML per-tenant) |
-| 5 | 005: Conversation Core | 004 | medio | MVP | **shipped** (conversation pipeline 12-step, LLM agent pydantic-ai, safety guards 3-layer, tool registry, 52 test files) |
-| 6 | 006: Production Readiness | 005 | baixo | MVP | **shipped** (schema isolation, migration runner, data retention LGPD, log persistence, host monitoring Netdata — 34 tasks, 67 testes, judge 88%, QA 100%) |
-| 7 | 007: Admin Front Foundation | 006 | baixo | Admin | **shipped** (sidebar+login Next.js 15, pool_admin BYPASSRLS, dbmate migrations, dashboard inicial) |
-| 8 | **008: Admin Evolution** | 006, 007 | medio | Admin | **in-progress** (152/158 tasks — 8 abas, 3 tabelas admin-only, ~25 endpoints, pipeline instrumentation fire-and-forget, 5 BLOCKERs abertos no repo externo) |
-| 9 | 009: Agent Tools | 006 | medio | Post-MVP | sugerido |
-| 10 | 010: Handoff Engine | 006 | medio | Post-MVP | sugerido |
-| 11 | 011: Trigger Engine | 010 | baixo | Post-MVP | sugerido |
-| 12 | 012: Admin Dashboard | — | — | Admin | **absorvido por 008** (8 abas superam escopo original) |
-| 13 | 013: Admin Handoff Inbox | 010 | baixo | Admin | sugerido (depende de 010 Handoff Engine) |
+| 5 | 005: Conversation Core | 004 | medio | MVP | **shipped** (pipeline 12-step, LLM agent pydantic-ai, safety guards 3-layer, tool registry, 52 test files) |
+| 6 | 006: Production Readiness | 005 | baixo | MVP | **shipped** (schema isolation, migration runner, data retention LGPD, log persistence, Netdata) |
+| 7 | 007: Admin Front Foundation | 006 | baixo | Admin | **shipped** (sidebar+login Next.js 15, pool_admin BYPASSRLS, dbmate migrations) |
+| 8 | 008: Admin Evolution | 006, 007 | medio | Admin | **shipped** (8 abas, 3 tabelas admin-only, ~25 endpoints, pipeline instrumentation fire-and-forget) |
+| 9 | 009: Channel Ingestion + Content Processing | 008 | medio | Channel | **shipped** (Canonical schema, Evolution+Meta Cloud adapters, 9 processors, feature flags, budget, cache, circuit breaker — merged 2026-04-20) |
+| 10 | **010: Handoff Engine + Inbox** | 009 | medio | Next | **next** — materializa `pending_handoff`, UI atendente humano, SLA + timeout→bot, notificacao realtime. Funde antigo "010 Handoff Engine" + "013 Admin Handoff Inbox". |
+| 11 | 011: Evals (offline + online fundidos) | 002, 010 | medio | Next | suggested — faithfulness/relevance/toxicity por conversa + guardrails pre/pos-LLM em runtime. Funde antigo 015+016. |
+| 12 | 012: Tenant Knowledge Base (RAG pgvector) | 006 | medio | Next | suggested — upload FAQ/catalogo via admin, retrieval no pipeline. Destrava onboarding self-service + sobe baseline de resolucao autonoma. Antigo 019 promovido. |
+| 13 | 013: Agent Tools v2 | 011, 012 | medio | Next | suggested — conectores declarativos (estoque, agenda, CRM generico). Amplia `tools/registry.py` alem de `resenhai_rankings`. Antigo 009 renumerado. |
+| 14 | 014: Alerting + WhatsApp Quality | 006 | medio | Next | suggested — Prometheus+Alertmanager, quality score poller, warm-up per-number, circuit breaker de send. Gate de producao para 1o cliente externo. |
+| 15 | 015: Agent Pipeline Steps | 011, 014 | medio | Next | suggested — pipeline de processamento configuravel por agente (classifier → clarifier → resolver → specialist). Antigo 022 promovido. |
+| 16 | 016: Trigger Engine | 010 | baixo | Next | suggested — PG LISTEN/NOTIFY → mensagens proativas (lembretes, follow-ups). Antigo 011 renumerado. |
+| 17 | 017: Tenant Self-Admin | 008, 012 | medio | Next | suggested — scoped JWT + UI tenant-facing com subset das 8 abas + upload de KB. Pre-requisito real para billing e Fase 2 publica. |
+| 18 | 018: Public API Fase 2 | 003, 017 | medio | Gated | **gate: 1o cliente externo pagante** — Caddy edge proxy + admin API + rate-limit per-tenant + onboarding externo. Antigo 013 Futuros. |
+| 19 | 019: Billing Stripe | 017, 018 | medio | Gated | **gate: >=1 cliente pagando manualmente** — tiers + consumo medido. Antigo 020 Futuros. |
+| 20 | 020: TenantStore Postgres Fase 3 | 018 | alto | Gated | **gate: >=5 tenants reais OU dor operacional** — migracao YAML→Postgres, circuit breaker per-tenant, billing events. Antigo 014 Futuros. |
 
-### Epics Futuros (criados conforme necessidade)
+### Backlog someday-maybe (nao cortados — promovem sob trigger)
 
-| Epic | Descricao | Deps Provavel | Prioridade |
-|------|-----------|---------------|------------|
-| 013: Multi-Tenant Public API (Fase 2) | Caddy edge proxy + admin API (CRUD tenants) + rate limiting per-tenant + onboarding externo. **Trigger: primeiro cliente externo pagante.** | 003, 012 | Later |
-| 014: TenantStore Postgres + Ops (Fase 3) | Migracao YAML → Postgres com schema gerenciado; circuit breaker per-tenant; billing/usage tracking; alertas Prometheus. **Trigger: >=5 tenants reais ou dor operacional.** | 013, 018 | Later |
-| 015: Evals Offline | Score automatico por conversa (faithfulness, relevance, toxicity) — **fundacao em 002** | 006, 002 | Next |
-| 016: Evals Online | Guardrails pre/pos-LLM em tempo real — **traces em 002** | 006, 002 | Next |
-| 017: Data Flywheel | Ciclo semanal de melhoria com revisao humana | 015, 016 | Later |
-| 018: Multi-Tenant Self-Service | Cadastro self-service, onboarding autonomo (depende de Admin API do 013) | 013, 011 | Later |
-| 019: RAG pgvector | Base de conhecimento com embeddings por tenant | 006 | Later |
-| 020: Billing Stripe | Cobranca automatica com tiers e consumo medido | 014, 018 | Later |
-| 021: WhatsApp Flows | Formularios estruturados dentro do WhatsApp | 006 | Later |
-| 022: Agent Pipeline Steps | Pipeline de processamento configuravel por agente (classifier → clarifier → resolver → specialist) | 008 | Later |
+| Epic backlog | Descricao | Trigger para promover |
+|--------------|-----------|------------------------|
+| Data Flywheel | Ciclo semanal de melhoria com revisao humana; detecta respostas fracas via evals e sugere correcoes de prompt | >=20 tenants gerando volume suficiente de conversas para revisao manter custo de review < valor da melhoria |
+| WhatsApp Flows | Formularios estruturados (listas, botoes, templates aprovados) dentro do WhatsApp nativo | demanda real de cliente por captura estruturada OU tier Business exige Flows como diferencial |
+| Streaming Transcription | Audio transcrito em tempo real durante a fala (em vez de apos fim do PTT) | p95 Whisper > 5s sustentado por 30d OU demanda recorrente de audios longos (>2min) em PT-BR |
+| Multi-Tenant Self-Service Signup | Cadastro totalmente autonomo via web — sem onboarding humano | Public API Fase 2 estavel + admin manual virou gargalo (>=5 pedidos/semana) |
+| Instagram DM + Telegram (novos inbound channels) | Reusa `ChannelAdapter` do 009 para canais adicionais | cliente real demanda canal nao-WhatsApp OU validacao arquitetural de multi-source vira prioridade |
+| PDF Escaneado (OCR remoto) | OCR para PDFs digitalizados (boletos, contratos fotografados) — hoje retorna aviso | demanda de segmento Servicos/Juridico para leitura de documentos nao-texto-nativo |
+
+> **Disciplina do backlog:** nenhum epic backlog vira "next" sem o trigger correspondente ser observado. Evita expansao especulativa de escopo.
 
 ---
 
@@ -107,17 +122,22 @@ graph LR
   E003 --> E004[004 Router MECE]
   E004 --> E005[005 Conversation Core]
   E005 --> E006[006 Production Readiness]
-  E006 --> E007[007 Admin Front Foundation - DONE]
-  E007 --> E008[008 Admin Evolution - IN PROGRESS]
-  E006 --> E009[009 Agent Tools]
-  E006 --> E010[010 Handoff Engine]
-  E010 --> E011[011 Trigger Engine]
-  E010 --> E013[013 Admin Handoff Inbox]
-  E009 --> E022[022 Agent Pipeline Steps]
-  E003 -.-> E013[013 Public API Fase 2]
-  E013 -.-> E014[014 Postgres + Ops Fase 3]
-  E002 -.-> E015[015 Evals Offline]
-  E002 -.-> E016[016 Evals Online]
+  E006 --> E007[007 Admin Foundation - DONE]
+  E007 --> E008[008 Admin Evolution - DONE]
+  E008 --> E009[009 Channel Ingestion - DONE]
+  E009 --> E010[010 Handoff Engine + Inbox]
+  E010 --> E011[011 Evals online+offline]
+  E011 --> E012[012 RAG pgvector]
+  E012 --> E013[013 Agent Tools v2]
+  E006 --> E014[014 Alerting + WA Quality]
+  E011 --> E015[015 Agent Pipeline Steps]
+  E014 --> E015
+  E010 --> E016[016 Trigger Engine]
+  E012 --> E017[017 Tenant Self-Admin]
+  E008 --> E017
+  E017 -.-> E018[018 Public API Fase 2]
+  E018 -.-> E019[019 Billing Stripe]
+  E018 -.-> E020[020 Postgres Fase 3]
 ```
 
 ---
@@ -126,11 +146,12 @@ graph LR
 
 | Milestone | Epics | Criterio de Sucesso | Estimativa |
 |-----------|-------|---------------------|------------|
-| **MVP** | 001, 002, 003, 004, 005, 006 | ✅ **COMPLETO.** Agente responde mensagens WhatsApp **multi-tenant** com IA, parseia 100% dos payloads reais, persiste conversas, funciona em grupo, **com observabilidade total + router MECE provado em CI + infra production-ready** (schema isolation, logs, retention, monitoring) | realizado |
-| **Admin** | 007, 008, 013 | 007 ✅ shipped (foundation) · **008 in-progress** (Admin Evolution — 8 abas operacionais, 152/158 tasks) · 013 sugerido (Handoff Inbox, depende de 010) | ~8 semanas (007+008 realizadas) |
-| **Post-MVP** | 009, 010, 011 | Agent Tools, Handoff Engine, Trigger Engine (renumerados de 008-010 antigos) | ~6 semanas |
-| **Public API (Fase 2)** | 013 | Caddy + Admin API + onboarding de cliente externo. Trigger: primeiro cliente pagante. | ~2 semanas |
-| **Ops (Fase 3)** | 014 | TenantStore Postgres + circuit breaker + billing + alertas. Trigger: >=5 tenants reais ou dor operacional | ~3 semanas |
+| **MVP** | 001, 002, 003, 004, 005, 006 | ✅ **COMPLETO.** Agente responde mensagens WhatsApp **multi-tenant** com IA, parseia 100% dos payloads reais, persiste conversas, funciona em grupo, **com observabilidade total + router MECE provado em CI + infra production-ready** | realizado |
+| **Admin** | 007, 008 | ✅ **COMPLETO.** 007 (foundation) + 008 (Admin Evolution — 8 abas operacionais). | realizado |
+| **Channel** | 009 | ✅ **COMPLETO.** Canonical schema, Evolution+Meta Cloud adapters, 9 processors, feature flags per-tenant. | realizado |
+| **Next (Human loop + qualidade)** | 010, 011, 012, 013, 014, 015, 016 | Handoff Engine + Inbox (010), Evals fundidos (011), RAG (012), Agent Tools v2 (013), Alerting + WA Quality (014), Agent Pipeline Steps (015), Trigger Engine (016). Destrava "IA e copiloto" + 70% resolucao autonoma medida + self-service onboarding. | ~18 semanas (1 dev FT) |
+| **Tenant-facing** | 017 | Tenant Self-Admin (scoped JWT + UI tenant-facing). Pre-requisito para Public API e billing. | ~3 semanas |
+| **Gated (comercial)** | 018, 019, 020 | **018:** Public API Fase 2 (trigger: 1o cliente externo pagante) · **019:** Billing Stripe (trigger: >=1 cliente pagando manualmente) · **020:** TenantStore Postgres Fase 3 (trigger: >=5 tenants OU dor operacional) | on-demand |
 
 ---
 
@@ -157,15 +178,19 @@ graph LR
 | **`INSTRUMENTATION_ENABLED` kill switch ausente** | **ABERTO (epic 008 B1)** | Alto | Baixa | Adicionar env flag em `.env.example` + guard em `pipeline.py` e `trace_persist.py`; patch no repo externo |
 | **`activate_prompt` sem INSERT em `audit_log`** | **ABERTO (epic 008 B2)** | Alto | Media | Adicionar INSERT em `agents.py:427-454`; patch no repo externo |
 | **Phase 12 smoke (epic 008) nunca executado em container real** | **ABERTO (epic 008 B4)** | Alto | Certeza | Executar runbook `benchmarks/pipeline_instrumentation_smoke.md` no primeiro deploy staging |
-| **Cost sparkline O(N) round-trips em dashboard** | **Aberto (epic 008 W2)** | Medio | Alta (hit em qualquer dashboard view) | Consolidar em single JOIN ou VIEW materializada antes do epic 009 |
+| **Cost sparkline O(N) round-trips em dashboard** | **Aberto (epic 008 W2)** | Medio | Alta (hit em qualquer dashboard view) | Consolidar em single JOIN ou VIEW materializada; endereca em 010 ou patch dedicado |
 | **ILIKE sem trigram GIN index degrada inbox >10k conversas** | **Aberto (epic 008 W7)** | Medio | Media | Adicionar `pg_trgm` + GIN index antes de 10k conversas; SC-005 inbox <100ms nao garantido em escala |
+| **`pending_handoff` status existe no DB mas nao e materializado** | **Aberto — endereca em 010** | Alto | Certeza | Toda conversa que precisa de humano hoje fica em silencio. Epic 010 materializa engine + inbox para fechar o buraco |
+| **Sem medicao de 70% resolucao autonoma (North Star da vision)** | **Aberto — endereca em 011** | Alto | Certeza | Vision promete 70% mas nao ha evals. Epic 011 funde offline+online para provar ou refutar a tese |
+| **Onboarding <15 min impossivel sem RAG** | **Aberto — endereca em 012** | Alto | Alta | Cada tenant hoje exige YAML hand-crafted. Epic 012 (RAG pgvector) destrava upload FAQ/catalogo via admin |
+| **Ban de numero WhatsApp sem monitoring** | **Aberto — endereca em 014** | Alto | Media | Risco #4 da vision. Epic 014 adiciona quality score poller + warm-up + circuit breaker de send |
 
 ---
 
-*MVP completo: todos 6 epics shipped (001-006). Admin: 007 shipped, 008 in-progress (152/158 tasks). Proximo: merge 008 + primeiro deploy de producao VPS.*
+*MVP + Admin + Channel completos (001-009 shipped). Proximo foco: Human loop + qualidade (010-016) para provar 70% resolucao autonoma e fechar buraco de handoff antes do primeiro cliente externo.*
 
 ---
 
-> **Proximo passo:** Resolver 5 BLOCKERs herdados do epic 008 no repo externo `paceautomations/prosauai` (pool_admin size, UTF-8 truncation, kill switch, audit_log, smoke Phase 12) → merge `epic/prosauai/008-admin-evolution` para `develop` → primeiro deploy de producao VPS (2 vCPU, 4GB RAM, 40GB SSD) com `docker compose -f docker-compose.yml -f docker-compose.prod.yml up`. Post-MVP: epic 009 (Agent Tools) ou epic 010 (Handoff Engine) conforme prioridade.
+> **Proximo passo:** iniciar epic 010 (Handoff Engine + Inbox) via `/madruga:epic-context 010`. Funde antigo "010 Handoff Engine" + "013 Admin Handoff Inbox" em um bundle unico mergeavel em `develop`. Racional: `pending_handoff` status ja existe no schema mas nao e materializado — toda conversa que precisa de humano hoje fica em silencio. Epic 010 fecha esse buraco com UI atendente + SLA + timeout→bot + notificacao realtime.
 >
 > **Supabase deployment readiness (epic 006):** Migrations hardened (idempotent, `gen_random_uuid()`, sem `uuid-ossp`), tenants table (008) created, dual slug/UUID tenant identity implemented. Schema isolation (`prosauai` + `prosauai_ops`) pronto para Supabase managed.

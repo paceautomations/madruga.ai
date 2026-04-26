@@ -1,6 +1,6 @@
 ---
 title: "Vision"
-updated: 2026-04-12
+updated: 2026-04-22
 sidebar:
   order: 1
 ---
@@ -199,7 +199,7 @@ A vision multi-tenant nao e implementada num unico salto — segue 3 fases que m
 
 **Trigger de saida:** primeiro cliente externo pagando R$ 0/mes (free tier validado) ou R$ 197/mes (Starter). Sem cliente externo, nao avanca para Fase 2 — Fase 1 e suficiente para validar a tese com clientes internos.
 
-### Fase 2 — Public API Multi-Tenant (epic 012)
+### Fase 2 — Public API Multi-Tenant (epic 018)
 
 **Quando:** quando existir 1+ cliente externo disposto a configurar webhook na sua propria instancia Evolution.
 
@@ -223,7 +223,7 @@ A vision multi-tenant nao e implementada num unico salto — segue 3 fases que m
 
 **ADRs novos:** [ADR-021](../decisions/ADR-021-caddy-edge-proxy.md) (Caddy como edge proxy), [ADR-022](../decisions/ADR-022-admin-api.md) (Admin API).
 
-### Fase 3 — Operacao em Producao Multi-Tenant (epic 013)
+### Fase 3 — Operacao em Producao Multi-Tenant (epic 020)
 
 **Quando:** dor operacional real, nao antes. Trigger objetivo: >=5 tenants em producao OU primeiro incidente de "tenant noisy neighbor" derrubando outros.
 
@@ -249,11 +249,11 @@ A vision multi-tenant nao e implementada num unico salto — segue 3 fases que m
 | Fase | Epic | Trigger entrada | Output principal | Stakeholder |
 |------|------|----------------|------------------|-------------|
 | **1 — Fundacao** | 003 (**shipped**) | Bloqueio do servico em producao real | Codigo multi-tenant operando com 2 tenants internos + router MECE + observabilidade | Time interno Pace |
-| **2 — Public API** | 012 (later) | Primeiro cliente externo | Caddy + Admin API + rate limit + onboarding externo | Clientes externos + Pace |
-| **3 — Operacao** | 013 (later) | >=5 tenants OU dor operacional | Postgres + circuit breaker + billing + alertas | Ops + finance |
+| **2 — Public API** | 018 (gated) | Primeiro cliente externo | Caddy + Admin API + rate limit + onboarding externo | Clientes externos + Pace |
+| **3 — Operacao** | 020 (gated) | >=5 tenants OU dor operacional | Postgres + circuit breaker + billing + alertas | Ops + finance |
 
 Cada fase e independente — implementar Fase 2 sem cliente real seria overengineering. Implementar Fase 3 sem >=5 tenants seria desperdicio. **A disciplina e nao antecipar trigger.**
 
 ---
 
-> **Proximo passo:** epic 005 (Conversation Core) — ultimo epic MVP. Apos 005, primeiro deploy de producao com IA generativa real.
+> **Proximo passo:** MVP + Admin + Channel completos (001-009 shipped). Foco agora e fechar o buraco de handoff (epic 010) e provar os 70% de resolucao autonoma da vision (epic 011 Evals). Ver [roadmap.md](../planning/roadmap/) para sequenciamento completo pos-009.

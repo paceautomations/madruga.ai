@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://prosauai.com/schemas/tools/search_knowledge.schema.json",
+  "title": "search_knowledge tool — function calling schema",
+  "description": "Schema enviado ao LLM para function calling. tenant_id, agent_id, embedding_model NUNCA aparecem aqui — sao injetados server-side via pydantic-ai RunContext[ConversationDeps].",
+  "version": "0.1.0-epic012",
+  "tool": {
+    "name": "search_knowledge",
+    "description": "Search the tenant knowledge base for relevant chunks. Use when the customer asks about FAQ, regulamento, horarios, produtos, politicas, or any tenant-specific information that is not in the system prompt. Returns at most top_k chunks ordered by cosine distance (lower = more similar).",
+    "parameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Natural-language query that will be embedded and matched against the knowledge base. Use the customer's own words when possible.",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "top_k": {
+          "type": "integer",
+          "description": "Maximum number of chunks to return. Server-side hard cap is 20.",
+          "default": 5,
+          "minimum": 1,
+          "maximum": 20
+        }
+      },
+      "required": ["query"]
+    }
+  },
+  "result_schema": {
+    "type": "array",
+    "description": "List of chunks ordered by cosine distance (ascending). Empty list means no matches OR embedder unavailable (graceful degradation).",
+    "items": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text", "source_name", "source_type", "distance", "document_id"],
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "Chunk content (already validated by Safety Layer A — no prompt injection risk)."
+        },
+        "source_name": {
+          "type": "string",
+          "description": "Logical document name as uploaded by the tenant (e.g. faq.pdf, regulamento.md)."
+        },
+        "source_type": {
+          "type": "string",
+          "enum": ["md", "txt", "pdf"]
+        },
+        "distance": {
+          "type": "number",
+          "description": "Cosine distance (0 = identical, 2 = orthogonal). Lower = more similar.",
+          "minimum": 0.0,
+          "maximum": 2.0
+        },
+        "document_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "FK to documents table — useful for trace audit (not for LLM display)."
+        }
+      }
+    }
+  },
+  "server_side_injection": {
+    "description": "Fields that are injected by the executor (NOT by the LLM). pydantic-ai RunContext[ConversationDeps] provides them.",
+    "fields": {
+      "tenant_id": {
+        "source": "ConversationDeps.tenant_id",
+        "binding": "SQL parameter $1",
+        "rationale": "Multi-tenant isolation — RLS + injection defense in depth."
+      },
+      "agent_id": {
+        "source": "ConversationDeps.agent_id",
+        "binding": "SQL parameter $2 (in WHERE agent_id IS NULL OR agent_id=$2)",
+        "rationale": "Per-agent scoping — agent sees its own chunks + shared (agent_id IS NULL)."
+      },
+      "embedding_model": {
+        "source": "ConversationDeps.tenant_config.rag.current_embedding_model OR documents.embedding_model lookup",
+        "binding": "SQL parameter $3 (WHERE embedding_model=$3)",
+        "rationale": "Query isolation during model upgrades — only returns chunks matching the tenant's current embedding model."
+      }
+    }
+  },
+  "error_modes": {
+    "embedder_unavailable": {
+      "description": "Bifrost /v1/embeddings returns 5xx after 3 retries OR circuit breaker open.",
+      "behavior": "Tool returns [] (empty list). Logs structured WARN event 'rag_embedder_unavailable'. Pipeline does NOT raise — agent responds without context (graceful degradation, FR-038)."
+    },
+    "kb_empty": {
+      "description": "Tenant has zero chunks (no documents uploaded yet).",
+      "behavior": "SELECT returns []. Tool returns []. Logs INFO event 'rag_kb_empty'."
+    },
+    "chunk_rejected_by_safety": {
+      "description": "Chunk failed Safety Layer A regex (potential prompt injection).",
+      "behavior": "Chunk is silently dropped from the result list. Logs WARN event 'rag_chunk_rejected' with chunk_id + matched pattern (no chunk content in log to avoid leaking)."
+    }
+  },
+  "telemetry": {
+    "span_name": "rag.search",
+    "attributes": {
+      "rag.query_tokens": "tiktoken count of the query",
+      "rag.chunks_returned": "len(result) after Safety Layer filtering",
+      "rag.distance_top1": "result[0].distance if result else null",
+      "rag.cost_usd": "embedding cost (query embed call)",
+      "rag.embedding_model": "model used for the query embed",
+      "rag.tenant_id": "from baggage",
+      "rag.agent_id": "from baggage (nullable)"
+    }
+  }
+}

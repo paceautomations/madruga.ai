@@ -351,6 +351,93 @@ async def test_dispatch_node_async_propagates_cwd():
     assert captured.get("cwd") == "/tmp/external-repo"
 
 
+# --- A1: Tests for stream-to-file stdout handling ---
+
+
+@pytest.mark.asyncio
+async def test_dispatch_stream_to_file_success_cleans_up(tmp_path):
+    """On success, the stream file is created and then unlinked.
+
+    Regression: dispatch_node_async used a bytearray that retained the full
+    stdout in RAM for the lifetime of the subprocess. With verbose phase
+    dispatches this pushed Easter past 700 MB. Fix streams stdout to
+    ``.pipeline/stream/<node>_<ts>_<pid>.stdout`` and cleans up on success.
+    """
+    from dag_executor import dispatch_node_async
+
+    mock_proc = _mock_async_proc(stdout=b'{"result": "ok"}', stderr=b"", returncode=0)
+    mock_proc.pid = 12345
+
+    with (
+        patch("dag_executor.REPO_ROOT", tmp_path),
+        patch("dag_executor.shutil.which", return_value="/usr/bin/claude"),
+        patch("dag_executor.asyncio.create_subprocess_exec", return_value=mock_proc),
+    ):
+        success, error, stdout = await dispatch_node_async(_make_node(), "/tmp", "test prompt")
+
+    assert success is True
+    assert error is None
+    assert stdout == '{"result": "ok"}'
+    # Stream dir may exist (created during dispatch) but file must be gone.
+    stream_dir = tmp_path / ".pipeline" / "stream"
+    assert not list(stream_dir.glob("*.stdout")), "stream file should be cleaned up on success"
+
+
+@pytest.mark.asyncio
+async def test_dispatch_stream_to_file_timeout_preserves(tmp_path):
+    """On timeout, the partial stdout file is preserved as a diagnostic."""
+    from dag_executor import dispatch_node_async
+
+    mock_proc = _mock_async_proc(stdout=b"partial output before timeout", stderr=b"", returncode=0)
+    mock_proc.pid = 99999
+
+    async def _hang() -> None:
+        await asyncio.sleep(3600)
+
+    mock_proc.wait = AsyncMock(side_effect=_hang)
+
+    def _kill_effect() -> None:
+        mock_proc.wait = AsyncMock(return_value=-9)
+
+    mock_proc.kill = MagicMock(side_effect=_kill_effect)
+
+    with (
+        patch("dag_executor.REPO_ROOT", tmp_path),
+        patch("dag_executor.shutil.which", return_value="/usr/bin/claude"),
+        patch("dag_executor.asyncio.create_subprocess_exec", return_value=mock_proc),
+    ):
+        success, error, stdout = await dispatch_node_async(_make_node(), "/tmp", "test", timeout=1)
+
+    assert success is False
+    assert "timeout" in error
+    stream_dir = tmp_path / ".pipeline" / "stream"
+    preserved = list(stream_dir.glob("*.stdout"))
+    assert len(preserved) == 1, "exactly one stream file should remain after timeout"
+    assert preserved[0].read_text() == "partial output before timeout"
+
+
+@pytest.mark.asyncio
+async def test_dispatch_stream_to_file_failure_preserves(tmp_path):
+    """On non-zero exit, the stdout file is preserved for postmortem."""
+    from dag_executor import dispatch_node_async
+
+    mock_proc = _mock_async_proc(stdout=b'{"is_error": true, "subtype": "rate_limit"}', stderr=b"", returncode=1)
+    mock_proc.pid = 77777
+
+    with (
+        patch("dag_executor.REPO_ROOT", tmp_path),
+        patch("dag_executor.shutil.which", return_value="/usr/bin/claude"),
+        patch("dag_executor.asyncio.create_subprocess_exec", return_value=mock_proc),
+    ):
+        success, error, stdout = await dispatch_node_async(_make_node(), "/tmp", "test")
+
+    assert success is False
+    assert "rate_limit" in error
+    stream_dir = tmp_path / ".pipeline" / "stream"
+    preserved = list(stream_dir.glob("*.stdout"))
+    assert len(preserved) == 1, "stream file should be preserved on error for debugging"
+
+
 # --- T005: Tests for dispatch_with_retry_async ---
 
 
@@ -1032,8 +1119,28 @@ def test_compose_task_prompt_cache_ordered_prefix_comes_first(tmp_path):
     assert prompt.index("Implementation Plan") < prompt.index("You are implementing task")
     # spec comes before the "All Tasks" section (which is in the variable suffix)
     assert prompt.index("## Specification") < prompt.index("## All Tasks")
-    # data_model and contracts force-included (even though task doesn't touch them)
+    # data_model force-included (always part of the stable prefix)
     assert "## Data Model" in prompt
+    # Fix F: contracts are phase-scoped — a generic task that doesn't touch
+    # API paths or mention endpoints omits the contracts block.
+    assert "## Contract: api.md" not in prompt
+
+
+def test_compose_task_prompt_includes_contracts_when_task_touches_api(tmp_path):
+    """Fix F: contracts are included when the task description or files
+    mention API/contract concepts."""
+    from dag_executor import compose_task_prompt
+
+    epic_dir = _make_epic_dir(
+        tmp_path,
+        **{
+            "tasks.md": "## Phase 1\n- [ ] T001 add endpoint\n",
+            "data-model.md": "# Data Model\nEntities.",
+            "contracts__api.md": "# API contract",
+        },
+    )
+    task = _make_task(description="Add /api/foo endpoint", files=["app/api/foo.py"])
+    prompt = compose_task_prompt(task, epic_dir, "test-plat", "001-test")
     assert "## Contract: api.md" in prompt
 
 
@@ -1192,6 +1299,54 @@ def test_parse_tasks_empty(tmp_path):
     assert len(tasks) == 0
 
 
+# --- A5: parse_tasks warns when [P] tasks share the same file ---
+
+
+def test_parallel_file_conflict_detected(tmp_path, caplog):
+    """Two [P] tasks targeting the same file must emit a warning.
+
+    Regression guard: epic 010 had T020/T021 both marked [P] writing to
+    ``handoff/base.py`` — implement processes them sequentially anyway
+    (shared file), so [P] was misleading. This surfaces the conflict.
+    """
+    import logging
+
+    from dag_executor import parse_tasks
+
+    tasks_md = tmp_path / "tasks.md"
+    tasks_md.write_text(
+        "# Tasks\n"
+        "- [ ] T020 [P] Implement base `handoff/base.py`\n"
+        "- [ ] T021 [P] Add types to `handoff/base.py`\n"
+        "- [ ] T022 [P] Implement separate `handoff/chatwoot.py`\n"
+    )
+    with caplog.at_level(logging.WARNING, logger="dag_executor"):
+        parse_tasks(tasks_md)
+
+    warnings = [r for r in caplog.records if "parallel_file_conflict" in r.getMessage()]
+    assert len(warnings) == 1
+    msg = warnings[0].getMessage()
+    assert "handoff/base.py" in msg
+    assert "T020" in msg and "T021" in msg
+
+
+def test_no_parallel_conflict_when_sequential(tmp_path, caplog):
+    """Non-parallel tasks sharing a file emit no warning (sequential is fine)."""
+    import logging
+
+    from dag_executor import parse_tasks
+
+    tasks_md = tmp_path / "tasks.md"
+    tasks_md.write_text(
+        "# Tasks\n- [ ] T020 Implement base `handoff/base.py`\n- [ ] T021 Add types to `handoff/base.py`\n"
+    )
+    with caplog.at_level(logging.WARNING, logger="dag_executor"):
+        parse_tasks(tasks_md)
+
+    warnings = [r for r in caplog.records if "parallel_file_conflict" in r.getMessage()]
+    assert warnings == []
+
+
 # --- T029: Edge case tests ---
 
 
@@ -1248,6 +1403,90 @@ def test_parse_claude_output_partial_fields():
     assert result["tokens_out"] is None  # missing from usage
     assert result["cost_usd"] == 0.05
     assert result["duration_ms"] is None
+
+
+def test_parse_claude_output_emits_cache_metrics(caplog):
+    """When cache_read/cache_create are present, log a structured cache_metrics line.
+
+    This is the empirical validator for Phase 5 (cache-optimal reorder) + A3
+    (analyze slice placed last). Without this log, the prefix-cache hit rate
+    claim is unverifiable in production."""
+    import logging
+
+    from dag_executor import parse_claude_output
+
+    stdout = (
+        '{"usage": {"input_tokens": 100, "cache_read_input_tokens": 800, '
+        '"cache_creation_input_tokens": 50, "output_tokens": 200}, '
+        '"total_cost_usd": 0.02, "duration_ms": 1500}'
+    )
+    with caplog.at_level(logging.INFO, logger="dag_executor"):
+        result = parse_claude_output(stdout)
+
+    assert result["cache_read"] == 800
+    assert result["cache_create"] == 50
+    cache_logs = [r for r in caplog.records if "claude_cache_metrics" in r.getMessage()]
+    assert len(cache_logs) == 1
+    msg = cache_logs[0].getMessage()
+    assert "cache_read=800" in msg
+    assert "cache_create=50" in msg
+    # total_in = 100 + 800 + 50 = 950 → hit_rate = 800/950 ≈ 0.84
+    assert "hit_rate=0.84" in msg
+
+
+def test_parse_claude_output_skips_cache_log_without_cache_fields(caplog):
+    """When cache_read and cache_create are BOTH absent, do not emit cache log.
+
+    Old claude CLI versions and runs without caching won't populate these
+    fields. Emitting a spurious `hit_rate=0.00` log would pollute metrics."""
+    import logging
+
+    from dag_executor import parse_claude_output
+
+    stdout = '{"usage": {"input_tokens": 500}, "total_cost_usd": 0.05}'
+    with caplog.at_level(logging.INFO, logger="dag_executor"):
+        parse_claude_output(stdout)
+
+    cache_logs = [r for r in caplog.records if "claude_cache_metrics" in r.getMessage()]
+    assert cache_logs == []
+
+
+def test_parse_claude_output_warns_on_zero_cost_long_run(caplog):
+    """Long-running runs with cost_usd=0.0 must emit a warning.
+
+    Reproduces the bug seen in epic 011-evals (implement:phase-8 ran for 2131s
+    but reported $0). The parser cannot recover the missing cost, but it must
+    flag the row so it's manually reconciled."""
+    import logging
+
+    from dag_executor import parse_claude_output
+
+    stdout = '{"usage": {"input_tokens": 500}, "total_cost_usd": 0.0, "duration_ms": 2131000}'
+    with caplog.at_level(logging.WARNING, logger="dag_executor"):
+        result = parse_claude_output(stdout)
+
+    assert result["cost_usd"] == 0.0
+    assert result["duration_ms"] == 2131000
+    cost_zero_logs = [r for r in caplog.records if "claude_cost_zero" in r.getMessage()]
+    assert len(cost_zero_logs) == 1, "Expected exactly one cost_zero warning"
+    assert "duration_ms=2131000" in cost_zero_logs[0].getMessage()
+
+
+def test_parse_claude_output_no_warning_on_short_run_with_zero_cost(caplog):
+    """Short runs (< 60s) with cost=0 are normal — no warning expected.
+
+    A skipped no-op or a fast cache-hit can legitimately cost $0. The
+    warning threshold is duration_ms > 60_000."""
+    import logging
+
+    from dag_executor import parse_claude_output
+
+    stdout = '{"usage": {"input_tokens": 100}, "total_cost_usd": 0.0, "duration_ms": 5000}'
+    with caplog.at_level(logging.WARNING, logger="dag_executor"):
+        parse_claude_output(stdout)
+
+    cost_zero_logs = [r for r in caplog.records if "claude_cost_zero" in r.getMessage()]
+    assert cost_zero_logs == []
 
 
 def test_run_eval_scoring_best_effort_on_db_failure():
@@ -1437,6 +1676,49 @@ def test_check_auto_escalate_malformed_yaml(tmp_path):
         skip_condition=None,
     )
     assert check_auto_escalate(node, tmp_path, "001-test") is None
+
+
+def test_emit_auto_escalate_fail_event_writes_payload(tmp_path):
+    """In autonomous mode, _emit_auto_escalate_fail_event records score+verdict
+    in events table so the Telegram poller can notify."""
+    import json as _json
+    import sqlite3
+
+    from dag_executor import _emit_auto_escalate_fail_event
+
+    # Build platform_dir/epic_dir with a judge-report
+    platform_dir = tmp_path / "prosauai"
+    epic_dir = platform_dir / "epics" / "011-evals"
+    epic_dir.mkdir(parents=True)
+    (epic_dir / "judge-report.md").write_text("---\nscore: 50\nverdict: fail\n---\n# Report")
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute(
+        "CREATE TABLE events (event_id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "platform_id TEXT, entity_type TEXT, entity_id TEXT, action TEXT, "
+        "actor TEXT, payload TEXT, created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')))"
+    )
+
+    node = Node(
+        id="judge",
+        skill="madruga:judge",
+        outputs=["epics/011-evals/judge-report.md"],
+        depends=[],
+        gate="auto-escalate",
+        layer="test",
+        optional=False,
+        skip_condition=None,
+    )
+
+    _emit_auto_escalate_fail_event(conn, "prosauai", "011-evals", node, platform_dir)
+
+    row = conn.execute("SELECT action, payload FROM events WHERE action='auto_escalate_failed'").fetchone()
+    assert row is not None
+    payload = _json.loads(row["payload"])
+    assert payload["score"] == 50
+    assert payload["verdict"] == "fail"
+    assert payload["epic_id"] == "011-evals"
 
 
 # --- Tests for compose_skill_prompt context threading ---
@@ -2525,6 +2807,193 @@ def test_group_tasks_by_phase_stable_numbering_with_checked():
     assert [t.id for t in result[1][1]] == ["T003"]
 
 
+def test_auto_commit_logs_self_committed_count(tmp_path, caplog):
+    """When working tree is clean but the branch has unique commits, log the
+    count instead of the misleading "No changes to commit"."""
+    import logging
+    import subprocess as sp
+
+    from dag_executor import _auto_commit_epic
+
+    # Build a tiny upstream + clone scenario
+    upstream = tmp_path / "upstream.git"
+    sp.run(["git", "init", "--bare", "-b", "main", str(upstream)], check=True, capture_output=True)
+    work = tmp_path / "work"
+    sp.run(["git", "clone", str(upstream), str(work)], check=True, capture_output=True)
+    sp.run(["git", "-C", str(work), "config", "user.email", "t@t"], check=True)
+    sp.run(["git", "-C", str(work), "config", "user.name", "t"], check=True)
+    (work / "seed.txt").write_text("seed")
+    sp.run(["git", "-C", str(work), "add", "seed.txt"], check=True)
+    sp.run(["git", "-C", str(work), "commit", "-m", "seed"], check=True, capture_output=True)
+    sp.run(["git", "-C", str(work), "push", "origin", "main"], check=True, capture_output=True)
+    # Branch off and make 3 self-committed tasks
+    sp.run(["git", "-C", str(work), "checkout", "-b", "epic/x/001-foo"], check=True, capture_output=True)
+    for i in range(3):
+        f = work / f"t{i}.txt"
+        f.write_text(str(i))
+        sp.run(["git", "-C", str(work), "add", f.name], check=True)
+        sp.run(["git", "-C", str(work), "commit", "-m", f"feat: T{i}"], check=True, capture_output=True)
+    # Set upstream so @{u} resolves to origin/main
+    sp.run(
+        ["git", "-C", str(work), "branch", "--set-upstream-to=origin/main"],
+        check=True,
+        capture_output=True,
+    )
+
+    with caplog.at_level(logging.INFO, logger="dag_executor"):
+        ok = _auto_commit_epic(work, "x", "001-foo")
+    assert ok is True
+    msgs = [r.getMessage() for r in caplog.records]
+    assert any("Phase commit skipped" in m and "3" in m for m in msgs), msgs
+
+
+def test_auto_commit_logs_no_work_when_nothing_committed(tmp_path, caplog):
+    """When working tree is clean AND no new commits exist, the legacy
+    'No changes to commit' message is preserved."""
+    import logging
+    import subprocess as sp
+
+    from dag_executor import _auto_commit_epic
+
+    upstream = tmp_path / "upstream.git"
+    sp.run(["git", "init", "--bare", "-b", "main", str(upstream)], check=True, capture_output=True)
+    work = tmp_path / "work"
+    sp.run(["git", "clone", str(upstream), str(work)], check=True, capture_output=True)
+    sp.run(["git", "-C", str(work), "config", "user.email", "t@t"], check=True)
+    sp.run(["git", "-C", str(work), "config", "user.name", "t"], check=True)
+    (work / "seed.txt").write_text("seed")
+    sp.run(["git", "-C", str(work), "add", "seed.txt"], check=True)
+    sp.run(["git", "-C", str(work), "commit", "-m", "seed"], check=True, capture_output=True)
+    sp.run(["git", "-C", str(work), "push", "origin", "main"], check=True, capture_output=True)
+    sp.run(["git", "-C", str(work), "checkout", "-b", "epic/x/002-empty"], check=True, capture_output=True)
+    sp.run(
+        ["git", "-C", str(work), "branch", "--set-upstream-to=origin/main"],
+        check=True,
+        capture_output=True,
+    )
+
+    with caplog.at_level(logging.INFO, logger="dag_executor"):
+        ok = _auto_commit_epic(work, "x", "002-empty")
+    assert ok is True
+    msgs = [r.getMessage() for r in caplog.records]
+    assert any("working tree clean" in m for m in msgs), msgs
+
+
+def _make_seed_conn():
+    """Build an in-memory pipeline_runs schema matching post-migration 020."""
+    import sqlite3
+
+    conn = sqlite3.connect(":memory:")
+    conn.execute(
+        "CREATE TABLE pipeline_runs (run_id TEXT PRIMARY KEY, platform_id TEXT, epic_id TEXT, "
+        "node_id TEXT, status TEXT, error TEXT, error_class TEXT, started_at TEXT)"
+    )
+    return conn
+
+
+def _insert_run(conn, run_id, *, status="failed", error=None, error_class=None, started_at=None):
+    conn.execute(
+        "INSERT INTO pipeline_runs (run_id, platform_id, epic_id, node_id, status, error, "
+        "error_class, started_at) VALUES (?, 'p', 'e', 'n', ?, ?, ?, ?)",
+        (run_id, status, error, error_class, started_at or run_id),
+    )
+    conn.commit()
+
+
+def test_circuit_breaker_seed_ignores_transient_failures():
+    """Fix E: CB seed must skip rows classified as transient (rate limit,
+    timeout, watchdog) — those are infra failures, not task bugs. Pre-fix the
+    breaker stayed OPEN after every daemon restart that interrupted work."""
+    from dag_executor import CircuitBreaker
+
+    conn = _make_seed_conn()
+    _insert_run(conn, "r1", error="hit your limit", error_class="transient", started_at="2026-04-25T10:00:00Z")
+    _insert_run(conn, "r2", error="timeout", error_class="transient", started_at="2026-04-25T10:01:00Z")
+    _insert_run(conn, "r3", error="zombie", error_class="transient", started_at="2026-04-25T10:02:00Z")
+
+    cb = CircuitBreaker(max_failures=3, conn=conn, platform_id="p", epic_id="e")
+    # All 3 are transient — none counted, breaker stays closed
+    assert cb.state == "closed"
+    assert cb.failure_count == 0
+
+
+def test_circuit_breaker_seed_counts_deterministic():
+    """Deterministic + unknown failures DO count toward CB seed."""
+    from dag_executor import CircuitBreaker
+
+    conn = _make_seed_conn()
+    _insert_run(
+        conn,
+        "r1",
+        error="ENOENT: file missing",
+        error_class="deterministic",
+        started_at="2026-04-25T10:00:00Z",
+    )
+    _insert_run(
+        conn,
+        "r2",
+        error="ENOENT: file missing",
+        error_class="deterministic",
+        started_at="2026-04-25T10:01:00Z",
+    )
+    _insert_run(
+        conn,
+        "r3",
+        error="ENOENT: file missing",
+        error_class="deterministic",
+        started_at="2026-04-25T10:02:00Z",
+    )
+
+    cb = CircuitBreaker(max_failures=3, conn=conn, platform_id="p", epic_id="e")
+    assert cb.state == "open"
+    assert cb.failure_count == 3
+
+
+def test_circuit_breaker_seed_falls_back_to_classify_when_class_null():
+    """Pre-migration rows have error_class=NULL — seed re-classifies on the fly."""
+    from dag_executor import CircuitBreaker
+
+    conn = _make_seed_conn()
+    # No error_class stored; the error string itself signals transient.
+    _insert_run(conn, "r1", error="rate limit exceeded", error_class=None, started_at="2026-04-25T10:00:00Z")
+    _insert_run(conn, "r2", error="rate limit exceeded", error_class=None, started_at="2026-04-25T10:01:00Z")
+
+    cb = CircuitBreaker(max_failures=3, conn=conn, platform_id="p", epic_id="e")
+    # Both reclassified as transient → breaker stays closed
+    assert cb.state == "closed"
+
+
+def test_phase_id_from_label_simple():
+    """Phase labels like 'Phase 1: Setup' map to implement:phase-1."""
+    from dag_executor import _phase_id_from_label
+
+    assert _phase_id_from_label("Phase 1: Setup", 0) == "implement:phase-1"
+    assert _phase_id_from_label("Phase 10: Deployment Smoke", 9) == "implement:phase-10"
+
+
+def test_phase_id_from_label_split_preserves_original_number():
+    """Fix C: a split phase keeps its original number, separated by part suffix.
+
+    Pre-fix, Phase 9 split in 2 parts occupied phase_idx 8 and 9, so the loop
+    emitted implement:phase-9 + implement:phase-10 — and the real Phase 10
+    (Deployment Smoke) was forced to implement:phase-11 in the DB. Confused
+    every cost/duration query by phase."""
+    from dag_executor import _phase_id_from_label
+
+    assert _phase_id_from_label("Phase 9: Polish (part 1)", 8) == "implement:phase-9-1"
+    assert _phase_id_from_label("Phase 9: Polish (part 2)", 9) == "implement:phase-9-2"
+    # The next non-split phase keeps its original number from tasks.md
+    assert _phase_id_from_label("Phase 10: Deployment Smoke", 10) == "implement:phase-10"
+
+
+def test_phase_id_from_label_falls_back_when_unparseable():
+    """Unparseable labels fall back to the legacy phase_idx+1 behavior."""
+    from dag_executor import _phase_id_from_label
+
+    assert _phase_id_from_label("Custom Stage", 4) == "implement:phase-5"
+    assert _phase_id_from_label("", 0) == "implement:phase-1"
+
+
 def test_group_tasks_by_phase_no_phases_empty():
     """Returns empty list when all tasks have phase='' (no headers)."""
     from dag_executor import TaskItem, group_tasks_by_phase
@@ -3032,6 +3501,67 @@ def test_compose_phase_prompt_slices_tasks_md(tmp_path):
     assert "T001 setup" in prompt
     assert "T200 unrelated task" not in prompt
     assert "T100 webhook" not in prompt
+
+
+# --- A3: phase prompt includes analyze-report slice filtered to phase tasks ---
+
+
+def test_compose_phase_prompt_includes_analyze_slice(tmp_path):
+    """analyze-report.md slice must be appended when phase tasks are cited.
+
+    Before the fix, phase dispatch never saw findings like I1 (HMAC header)
+    because _analyze_report_slice was only wired into compose_task_prompt.
+    Phase dispatch had to rely on the model reading the file via Read(), not
+    guaranteed under tight max-turns.
+    """
+    from dag_executor import compose_phase_prompt
+
+    epic_dir = _make_epic_dir(tmp_path)
+    (epic_dir / "tasks.md").write_text("- [ ] T020 implement base\n- [ ] T050 implement other\n")
+    (epic_dir / "analyze-report.md").write_text(
+        "# Analyze Report\n\n"
+        "Finding I1 affects T020: use X-Webhook-Signature not X-Webhook-Secret.\n\n"
+        "Finding C3 affects T050: unrelated to this phase.\n"
+    )
+
+    tasks = [_make_task(task_id="T020", description="implement base")]
+    prompt = compose_phase_prompt("Phase 1: Setup", tasks, epic_dir, "p1", "001-test")
+
+    assert "Pre-Implementation Analysis" in prompt
+    assert "Finding I1" in prompt
+    assert "T020" in prompt
+    assert "Finding C3" not in prompt, "T050 finding must NOT leak into T020 phase"
+
+
+def test_compose_phase_prompt_analyze_slice_dedup(tmp_path):
+    """A single paragraph citing multiple phase tasks appears only once."""
+    from dag_executor import compose_phase_prompt
+
+    epic_dir = _make_epic_dir(tmp_path)
+    (epic_dir / "tasks.md").write_text("- [ ] T020 impl\n- [ ] T021 impl\n")
+    (epic_dir / "analyze-report.md").write_text(
+        "# Report\n\nFinding I4: T020 and T021 both edit handoff/base.py — serialize.\n"
+    )
+
+    tasks = [_make_task(task_id="T020", description="impl"), _make_task(task_id="T021", description="impl")]
+    prompt = compose_phase_prompt("Phase 1: Setup", tasks, epic_dir, "p1", "001-test")
+
+    # Paragraph must appear exactly once despite matching 2 task ids.
+    assert prompt.count("Finding I4") == 1
+
+
+def test_compose_phase_prompt_no_analyze_file(tmp_path):
+    """Missing analyze-report.md: no crash, no section added."""
+    from dag_executor import compose_phase_prompt
+
+    epic_dir = _make_epic_dir(tmp_path)
+    (epic_dir / "tasks.md").write_text("- [ ] T001 setup\n")
+    # explicitly NO analyze-report.md
+
+    tasks = [_make_task(task_id="T001", description="setup")]
+    prompt = compose_phase_prompt("Phase 1: Setup", tasks, epic_dir, "p1", "001-test")
+
+    assert "Pre-Implementation Analysis" not in prompt
 
 
 # --- F3: Layer 4 branch check must skip non-CODE_CWD nodes ---

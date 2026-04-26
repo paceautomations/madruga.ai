@@ -1,20 +1,23 @@
 ---
 title: 'ADR-037: HelpdeskAdapter pattern (bidirectional multi-helpdesk integration)'
 status: Accepted
-decision: Every helpdesk integration (Chatwoot, NoneAdapter, future Blip/Zendesk)
-  implements the ``HelpdeskAdapter`` ``@runtime_checkable`` Protocol defined in
-  ``prosauai.handoff.base``. Adapters are registered via a module-level registry
-  (``prosauai.handoff.registry``) at application startup and dispatched by
-  ``helpdesk.type`` from ``tenants.yaml``. The Protocol exposes **5 methods**
+decision: >
+  Every helpdesk integration (Chatwoot, NoneAdapter, future Blip/Zendesk)
+  implements the HelpdeskAdapter @runtime_checkable Protocol defined in
+  prosauai.handoff.base. Adapters are registered via a module-level registry
+  (prosauai.handoff.registry) at application startup and dispatched by
+  helpdesk.type from tenants.yaml. The Protocol exposes 5 methods
   (vs. the 2-method shape of ADR-031's ChannelAdapter) because the helpdesk
-  integration is bidirectional: inbound webhook parsing (3 methods) plus
-  outbound messaging (2 methods).
-alternatives: ABC inheritance; per-helpdesk FastAPI sub-apps; state-machine
+  integration is bidirectional (inbound webhook parsing — 3 methods — plus
+  outbound messaging — 2 methods).
+alternatives: >
+  ABC inheritance; per-helpdesk FastAPI sub-apps; state-machine
   per-adapter; a single generic "helpdesk client" with feature-flags; adapter
   merging with ChannelAdapter (ADR-031)
-rationale: Protocol + runtime_checkable mirrors ADR-031 (ChannelAdapter) and
+rationale: >
+  Protocol + runtime_checkable mirrors ADR-031 (ChannelAdapter) and
   keeps adapters duck-typed, testable with lightweight stubs, and conformance-
-  checked at test time via ``isinstance``. The 5-method shape is the minimal
+  checked at test time via isinstance. The 5-method shape is the minimal
   surface needed to cover the full contract — any merger with ChannelAdapter
   would mix inbound-channel semantics with helpdesk-side-effect semantics, which
   are orthogonal concerns. NoneAdapter as null-object ensures tenants without a

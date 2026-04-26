@@ -93,7 +93,7 @@ conn.close()
 | 3 | solution-overview | ready | business | human | ~30 min | — |
 | ... | ... | ... | ... | ... | ... | ... |
 
-**Time estimates per skill**: platform-new ~15min, vision ~30min, solution-overview ~30min, business-process ~30min, tech-research ~45min, codebase-map ~30min, adr ~45min, blueprint ~30min, domain-model ~45min, containers ~45min, context-map ~30min, epic-breakdown ~45min, roadmap ~30min. **Total pipeline: ~7h.**
+**Time estimates per skill**: platform-new ~15min, vision ~30min, solution-overview ~30min, business-process ~30min, tech-research ~45min, codebase-map ~30min, adr ~45min, blueprint ~30min, domain-model ~45min, containers ~45min, context-map ~30min, roadmap ~60min (1-way-door: defines + sequences epics). **Total pipeline: ~7h.**
 ```
 
 **Colored Mermaid DAG:**

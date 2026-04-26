@@ -129,7 +129,6 @@ Docs owned by each node — add to Phase 2 read set when the user picks option 2
 | solution-overview | `business/solution-overview.md` |
 | business-process | `business/process.md` |
 | vision | `business/vision.md` |
-| epic-breakdown | `epics/*/pitch.md` |
 | roadmap | `planning/roadmap.md` |
 
 Record user's choice per stale node in the report under "Staleness Resolution".

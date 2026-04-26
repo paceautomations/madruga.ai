@@ -52,7 +52,7 @@ Every skill belongs to exactly one archetype. The archetype determines required 
 
 Full 6-step contract. Generates an artifact. Has a gate.
 
-**Skills:** vision, solution-overview, business-process, tech-research, codebase-map, adr, blueprint, domain-model, containers, context-map, epic-breakdown, roadmap, epic-context, verify, reconcile.
+**Skills:** vision, solution-overview, business-process, tech-research, codebase-map, adr, blueprint, domain-model, containers, context-map, roadmap, epic-context, verify, reconcile.
 
 **Required sections:**
 

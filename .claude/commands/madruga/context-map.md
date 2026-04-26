@@ -6,9 +6,9 @@ arguments:
     required: false
 argument-hint: "[platform-name]"
 handoffs:
-  - label: Break Down into Epics (Shape Up)
-    agent: madruga/epic-breakdown
-    prompt: "Break project into Shape Up epics. WARNING: 1-way-door gate — epic scope defines the entire implementation."
+  - label: Define Epics + Build Roadmap
+    agent: madruga/roadmap
+    prompt: "Break project into epics and sequence them. WARNING: 1-way-door gate — epic scope + sequencing define everything downstream."
 ---
 
 # Context Map — DDD Context Map

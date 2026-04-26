@@ -74,6 +74,11 @@ _running_epics: set[str] = set()
 # epic is auto-transitioned to status='blocked' to stop the retry storm.
 # Postmortem: prosauai/003 T031-T046 cascade retried ~22× before user noticed.
 _epic_fail_counts: dict[str, int] = {}
+# One-shot notification tracker for DirtyTreeError. Dirty tree is a transient
+# user-state condition (dev is mid-work on another epic in the same repo), not
+# a pipeline failure — easter skips dispatch and self-heals when the tree goes
+# clean. We notify once per streak to avoid spamming every poll_interval.
+_dirty_notified: set[str] = set()
 MAX_EPIC_DISPATCH_FAILURES = int(os.environ.get("MADRUGA_MAX_EPIC_FAILS", "3"))
 RATE_LIMIT_COOLDOWN_SECONDS = int(os.environ.get("MADRUGA_RATE_LIMIT_COOLDOWN", "600"))
 _platform_filter: str | None = None
@@ -338,8 +343,9 @@ async def dag_scheduler(conn, semaphore, shutdown_event, poll_interval=15, platf
                             gate_mode=os.environ.get("MADRUGA_MODE", "auto"),
                         )
                         if result == 0:
-                            # success → clear the fail streak for this epic
+                            # success → clear the fail streak + dirty-tree streak
                             _epic_fail_counts.pop(epic_id, None)
+                            _dirty_notified.discard(epic_id)
                         else:
                             _epic_fail_counts[epic_id] = _epic_fail_counts.get(epic_id, 0) + 1
                             fail_count = _epic_fail_counts[epic_id]
@@ -385,27 +391,34 @@ async def dag_scheduler(conn, semaphore, shutdown_event, poll_interval=15, platf
                             # Cooldown after failure to avoid rapid retry busy-loop
                             await _interruptible_sleep(shutdown_event, poll_interval * 2)
                     except DirtyTreeError as dirty:
-                        # User-actionable — a retry loop would never resolve this.
-                        # Block the epic, notify, continue polling other epics.
-                        logger.error(
-                            "epic_blocked_dirty_tree",
-                            epic_id=epic_id,
-                            platform=epic_platform_id,
-                            dirty_tree_message=str(dirty),
-                        )
-                        try:
-                            _mark_epic_blocked(epic_platform_id, epic_id)
-                        except Exception:
-                            logger.exception("dirty_tree_auto_block_failed", epic_id=epic_id)
-                        topic = os.environ.get("MADRUGA_NTFY_TOPIC")
-                        if topic:
-                            await asyncio.to_thread(
-                                ntfy_alert,
-                                topic,
-                                f"Epic {epic_id} BLOCKED: dirty working tree in {epic_platform_id} repo. "
-                                f"Commit or stash changes, then re-enable the epic via portal Start button.",
+                        # Transient user-state — dev is working in the bound repo.
+                        # Skip dispatch safely; self-heals when the tree is clean.
+                        # Notify once per streak to avoid spamming the poll loop.
+                        if epic_id not in _dirty_notified:
+                            logger.warning(
+                                "epic_skipped_dirty_tree",
+                                epic_id=epic_id,
+                                platform=epic_platform_id,
+                                dirty_tree_message=str(dirty),
                             )
-                        _epic_fail_counts.pop(epic_id, None)
+                            topic = os.environ.get("MADRUGA_NTFY_TOPIC")
+                            if topic:
+                                await asyncio.to_thread(
+                                    ntfy_alert,
+                                    topic,
+                                    f"Epic {epic_id} SKIPPED: dirty working tree in {epic_platform_id} repo. "
+                                    f"Will auto-resume when tree is clean. Commit or stash to unblock.",
+                                )
+                            _dirty_notified.add(epic_id)
+                        else:
+                            logger.debug(
+                                "epic_skipped_dirty_tree_repeat",
+                                epic_id=epic_id,
+                                platform=epic_platform_id,
+                            )
+                        # Longer cooldown than a normal poll — the dev is editing,
+                        # no need to retry every poll_interval.
+                        await _interruptible_sleep(shutdown_event, poll_interval * 4)
                     finally:
                         _running_epics.discard(epic_id)
                         unbind_contextvars("epic_id", "platform")
@@ -425,6 +438,24 @@ async def dag_scheduler(conn, semaphore, shutdown_event, poll_interval=15, platf
         await _interruptible_sleep(shutdown_event, poll_interval)
 
 
+def _current_rss_mb() -> float | None:
+    """Resident memory in MB for the current process. ``None`` on non-Linux.
+
+    Reads /proc/self/status (stdlib, zero deps). health_checker publishes
+    this periodically so memory regressions in long-running dispatch loops
+    are observable via log/metrics pipeline.
+    """
+    try:
+        with open("/proc/self/status") as f:
+            for line in f:
+                if line.startswith("VmRSS:"):
+                    # Format: "VmRSS:\t  123456 kB"
+                    return int(line.split()[1]) / 1024
+    except OSError:
+        return None
+    return None
+
+
 async def health_checker(bot, shutdown_event, interval=60, conn=None, adapter=None, chat_id=None):
     """Check Telegram API connectivity and send systemd watchdog pings."""
     from telegram_bot import poll_pending_gates
@@ -436,11 +467,22 @@ async def health_checker(bot, shutdown_event, interval=60, conn=None, adapter=No
         # Systemd watchdog
         sd_notify("WATCHDOG=1")
 
+        # A1 validation metric: current resident memory. Published every
+        # `interval` seconds so Grafana/journalctl can confirm the
+        # stream-to-file refactor actually dropped the peak sustained RSS.
+        rss_mb = _current_rss_mb()
+        if rss_mb is not None:
+            logger.info("easter_rss", rss_mb=round(rss_mb, 1))
+
         if bot is None:
             continue
 
         try:
-            me = await bot.get_me()
+            # Bound the Telegram check so a stuck network call cannot stall
+            # this loop past WatchdogSec (120s) — without the timeout, a
+            # blocked aiogram await skips sd_notify("WATCHDOG=1") and
+            # systemd kills the service.
+            me = await asyncio.wait_for(bot.get_me(), timeout=10)
             if _easter_state.telegram_fail_count > 0:
                 logger.info(
                     "telegram_recovered", username=me.username, after_failures=_easter_state.telegram_fail_count
@@ -458,9 +500,13 @@ async def health_checker(bot, shutdown_event, interval=60, conn=None, adapter=No
                             )
             _easter_state.telegram_fail_count = 0
             _easter_state.telegram_status = "connected"
-        except Exception:
+        except Exception as e:
             _easter_state.telegram_fail_count += 1
-            logger.warning("health_check_failed", fail_count=_easter_state.telegram_fail_count)
+            logger.warning(
+                "health_check_failed",
+                fail_count=_easter_state.telegram_fail_count,
+                err_type=type(e).__name__,
+            )
 
             if _easter_state.telegram_fail_count >= DEGRADATION_THRESHOLD and _easter_state.easter_state != "degraded":
                 _easter_state.easter_state = "degraded"
@@ -520,6 +566,54 @@ async def retention_cleanup(conn, shutdown_event, interval=86400):
             logger.info("retention_cleanup", **result)
         except Exception:
             logger.exception("retention_cleanup_error")
+
+
+#: Retention horizon for subprocess diagnostic artifacts (stream + timeout).
+#: 7 days balances "enough to postmortem a weekend failure on Monday" with
+#: bounded disk usage (typical artifact = 10-50 MB).
+DISPATCH_ARTIFACT_RETENTION_DAYS = 7
+
+
+def _cleanup_dispatch_artifacts(days: int) -> dict[str, int]:
+    """Delete .pipeline/stream/*.stdout and .pipeline/timeout-diagnostics/*.stdout
+    older than ``days``. Synchronous — call via asyncio.to_thread.
+
+    Returns a dict with per-directory deletion counts.
+    """
+    from config import REPO_ROOT
+
+    cutoff = time.time() - days * 86400
+    result = {"stream_deleted": 0, "timeout_deleted": 0, "errors": 0}
+    for dir_name, key in (("stream", "stream_deleted"), ("timeout-diagnostics", "timeout_deleted")):
+        d = REPO_ROOT / ".pipeline" / dir_name
+        if not d.is_dir():
+            continue
+        for p in d.glob("*.stdout"):
+            try:
+                if p.stat().st_mtime < cutoff:
+                    p.unlink(missing_ok=True)
+                    result[key] += 1
+            except OSError:
+                result["errors"] += 1
+    return result
+
+
+async def dispatch_artifact_cleanup(shutdown_event, interval=86400, days=DISPATCH_ARTIFACT_RETENTION_DAYS):
+    """Remove old subprocess stdout diagnostics. Runs once daily.
+
+    Targets ``.pipeline/stream/*.stdout`` (live dispatch buffer preserved on
+    error/timeout by ``dispatch_node_async``) and ``.pipeline/timeout-
+    diagnostics/*.stdout`` (legacy pre-unified path). Without this cron,
+    artifacts accumulate indefinitely across weeks of error runs.
+    """
+    while not shutdown_event.is_set():
+        if await _interruptible_sleep(shutdown_event, interval):
+            break
+        try:
+            result = await asyncio.to_thread(_cleanup_dispatch_artifacts, days)
+            logger.info("dispatch_artifact_cleanup", **result)
+        except Exception:
+            logger.exception("dispatch_artifact_cleanup_error")
 
 
 def _backup_db(src_db_path: str, target_path: str) -> None:
@@ -726,6 +820,9 @@ async def lifespan(app: FastAPI):
 
             # Retention cleanup (daily)
             tg.create_task(retention_cleanup(conn, _shutdown_event))
+
+            # Dispatch artifact cleanup (daily) — A1 stream files + timeout diagnostics
+            tg.create_task(dispatch_artifact_cleanup(_shutdown_event))
 
             # DB backup (every 6 hours)
             tg.create_task(periodic_backup(conn, _shutdown_event))

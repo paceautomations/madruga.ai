@@ -1203,3 +1203,93 @@ def test_post_save_allows_protected_node_without_phase_ctx(monkeypatch, setup_pl
     finally:
         post_save.REPO_ROOT = original_repo
         db_mod.DB_PATH = original_db
+
+
+def test_record_save_autoseeds_epic_from_pitch_when_missing(setup_platform):
+    """FK check failure + pitch.md on disk → auto-seed stub instead of SystemExit.
+
+    Regression: epic 010 landed in the portal Kanban without title because
+    the operator had to run ``upsert_epic`` manually and forgot ``title=``.
+    post_save.py now reads the frontmatter and seeds the stub itself.
+    """
+    tmp_path, db_path = setup_platform
+    import db_core as db_mod
+    import post_save
+
+    original_repo = post_save.REPO_ROOT
+    original_db = db_mod.DB_PATH
+    post_save.REPO_ROOT = tmp_path
+    db_mod.DB_PATH = db_path
+
+    try:
+        from db import get_conn as gc, upsert_platform
+
+        conn = gc(db_path)
+        upsert_platform(conn, "test-plat", name="test-plat", repo_path="platforms/test-plat")
+        conn.close()
+
+        epic_dir = tmp_path / "platforms" / "test-plat" / "epics" / "042-auto-seed"
+        epic_dir.mkdir(parents=True)
+        (epic_dir / "pitch.md").write_text(
+            '---\ntitle: "Handoff Engine + Multi-Helpdesk"\nstatus: drafted\npriority: 2\n---\n'
+            "# Handoff Engine + Multi-Helpdesk\n\nBody.\n"
+        )
+        (epic_dir / "spec.md").write_text("# Spec\n\nContent.\n")
+
+        result = post_save.record_save(
+            platform="test-plat",
+            node="specify",
+            skill="speckit.specify",
+            artifact="epics/042-auto-seed/spec.md",
+            epic="042-auto-seed",
+        )
+        assert result["status"] == "ok"
+
+        conn = gc(db_path)
+        row = conn.execute(
+            "SELECT title, status, priority FROM epics WHERE platform_id='test-plat' AND epic_id='042-auto-seed'"
+        ).fetchone()
+        conn.close()
+        assert row is not None, "auto-seed should have created the epic row"
+        assert row["title"] == "Handoff Engine + Multi-Helpdesk"
+        assert row["priority"] == 2
+    finally:
+        post_save.REPO_ROOT = original_repo
+        db_mod.DB_PATH = original_db
+
+
+def test_record_save_systemexits_when_no_pitch(setup_platform):
+    """FK check failure + no pitch.md → SystemExit with actionable message."""
+    tmp_path, db_path = setup_platform
+    import db_core as db_mod
+    import post_save
+
+    original_repo = post_save.REPO_ROOT
+    original_db = db_mod.DB_PATH
+    post_save.REPO_ROOT = tmp_path
+    db_mod.DB_PATH = db_path
+
+    try:
+        from db import get_conn as gc, upsert_platform
+
+        conn = gc(db_path)
+        upsert_platform(conn, "test-plat", name="test-plat", repo_path="platforms/test-plat")
+        conn.close()
+
+        epic_dir = tmp_path / "platforms" / "test-plat" / "epics" / "099-no-pitch"
+        epic_dir.mkdir(parents=True)
+        (epic_dir / "spec.md").write_text("# Spec\n\nContent.\n")
+
+        with pytest.raises(SystemExit) as exc_info:
+            post_save.record_save(
+                platform="test-plat",
+                node="specify",
+                skill="speckit.specify",
+                artifact="epics/099-no-pitch/spec.md",
+                epic="099-no-pitch",
+            )
+        assert "pitch.md" in str(exc_info.value)
+        assert "/madruga:epic-context" in str(exc_info.value)
+    finally:
+        post_save.REPO_ROOT = original_repo
+        db_mod.DB_PATH = original_db

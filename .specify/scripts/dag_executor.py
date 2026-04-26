@@ -239,6 +239,36 @@ def parse_claude_output(stdout: str) -> dict:
         # Fallback: estimate cost from token counts if claude didn't provide it
         if result["cost_usd"] is None:
             result["cost_usd"] = _estimate_cost_usd(result["tokens_in"], result["tokens_out"])
+        # Long runs sometimes land here with cost=None or 0.0 — claude can
+        # truncate the final result JSON or omit total_cost_usd entirely.
+        # Surface a warning so the row is flagged for manual reconciliation
+        # instead of silently undercounting spend.
+        duration_ms = result["duration_ms"] or 0
+        cost = result["cost_usd"]
+        if duration_ms > 60_000 and (cost is None or cost == 0.0):
+            log.warning(
+                "claude_cost_zero duration_ms=%d cost_usd=%s tokens_in=%s tokens_out=%s cache_read=%s cache_create=%s",
+                duration_ms,
+                cost,
+                result["tokens_in"],
+                result["tokens_out"],
+                cache_read,
+                cache_create,
+            )
+        # Emit cache metrics so we can empirically validate the Phase 5
+        # (MADRUGA_CACHE_ORDERED) prefix-cache reorder + A3 analyze slice
+        # placement. hit_rate = cache_read / tokens_in. Production-only
+        # signal; absent when claude CLI didn't report cache fields.
+        if cache_read is not None or cache_create is not None:
+            total_in = result["tokens_in"] or 0
+            hit_rate = (cache_read or 0) / total_in if total_in else 0.0
+            log.info(
+                "claude_cache_metrics cache_read=%d cache_create=%d tokens_in=%d hit_rate=%.2f",
+                cache_read or 0,
+                cache_create or 0,
+                total_in,
+                hit_rate,
+            )
     except (ValueError, TypeError, AttributeError):
         log.debug("Failed to parse claude output as JSON")
     return result
@@ -486,9 +516,41 @@ def _parse_tasks_from_text(content: str) -> list[TaskItem]:
     return tasks
 
 
+def _detect_parallel_file_conflicts(tasks: list[TaskItem]) -> list[tuple[str, list[str]]]:
+    """Return list of ``(file_path, [task_ids])`` where 2+ parallel tasks share a file.
+
+    Heuristic check: tasks marked ``[P]`` are supposed to run in parallel, but
+    implement dispatches process sequentially by file path, so ``[P]`` on the
+    same file is misleading at best. This surfaces the conflict for humans
+    reviewing tasks.md — it does not change execution behavior.
+    """
+    file_to_tasks: dict[str, list[str]] = {}
+    for t in tasks:
+        if not t.parallel:
+            continue
+        for f in t.files:
+            file_to_tasks.setdefault(f, []).append(t.id)
+    return [(f, ids) for f, ids in file_to_tasks.items() if len(ids) > 1]
+
+
+# Tracks ``tasks.md`` paths we already warned about in this process, so phase
+# dispatch (which re-parses on every phase) doesn't spam the same conflicts.
+_PARALLEL_CONFLICT_WARNED: set[str] = set()
+
+
 def parse_tasks(tasks_md_path: Path) -> list[TaskItem]:
     """Parse tasks.md into structured TaskItem list."""
-    return _parse_tasks_from_text(tasks_md_path.read_text(encoding="utf-8"))
+    tasks = _parse_tasks_from_text(tasks_md_path.read_text(encoding="utf-8"))
+    key = str(tasks_md_path)
+    if key not in _PARALLEL_CONFLICT_WARNED:
+        _PARALLEL_CONFLICT_WARNED.add(key)
+        for file_path, task_ids in _detect_parallel_file_conflicts(tasks):
+            log.warning(
+                "parallel_file_conflict file=%r tasks=%s — tasks marked [P] but share target; consider serializing",
+                file_path,
+                task_ids,
+            )
+    return tasks
 
 
 def group_tasks_by_phase(
@@ -531,6 +593,34 @@ def group_tasks_by_phase(
                 sub_label = f"{phase_label} (part {i // max_per_phase + 1})"
                 result.append((sub_label, chunk))
     return result
+
+
+_PHASE_LABEL_RE = re.compile(
+    r"^\s*Phase\s+(\d+)(?:\b|:|\s).*?(?:\(part\s+(\d+)\))?\s*$",
+    re.IGNORECASE,
+)
+
+
+def _phase_id_from_label(phase_label: str, fallback_idx: int) -> str:
+    """Compose a stable DB node_id from a phase label.
+
+    Preserves the original phase number from tasks.md (e.g. "Phase 9: Polish")
+    even when group_tasks_by_phase split the phase into parts. A split phase 9
+    becomes implement:phase-9-1 + implement:phase-9-2; the next phase keeps its
+    original number (implement:phase-10), which previously was mis-assigned to
+    "phase-11" because the loop used phase_idx+1 directly.
+
+    Falls back to phase-{fallback_idx+1} when the label can't be parsed
+    (preserves legacy behavior for unusual or non-numbered phase labels).
+    """
+    m = _PHASE_LABEL_RE.match(phase_label or "")
+    if not m:
+        return f"implement:phase-{fallback_idx + 1}"
+    phase_num = m.group(1)
+    part_num = m.group(2)
+    if part_num:
+        return f"implement:phase-{phase_num}-{part_num}"
+    return f"implement:phase-{phase_num}"
 
 
 def _verify_phase_completion(
@@ -599,37 +689,65 @@ def _task_needs_contracts(task: TaskItem) -> bool:
     return API_DESC_RE.search(task.description) is not None
 
 
-def _add_epic_docs(add, epic_dir: Path) -> None:
+def _phase_needs_contracts(tasks: list[TaskItem] | None) -> bool:
+    """True if any task in the phase mentions contracts (path or description).
+
+    None means "caller didn't supply tasks" — default to True so the legacy
+    (always include) behavior is preserved when scoping context isn't possible.
+    """
+    if tasks is None:
+        return True
+    return any(_task_needs_contracts(t) for t in tasks)
+
+
+def _add_epic_docs(add, epic_dir: Path, tasks: list[TaskItem] | None = None) -> None:
     """Add plan, spec, data-model, and contracts to prompt sections.
 
-    Shared by compose_task_prompt (cache-ordered path) and compose_phase_prompt
-    to keep the stable prefix identical for Anthropic prompt-cache reuse.
+    Plan, spec and data-model are always included — they form the stable
+    prefix the prompt cache relies on across turns. Contracts are gated by
+    ``_phase_needs_contracts(tasks)``: phases that don't touch contract paths
+    or mention endpoints omit the contracts/ block.
     """
     add("plan", _read_context(epic_dir / "plan.md", "Implementation Plan"))
     add("spec", _read_context(epic_dir / "spec.md", "Specification"))
     add("data_model", _read_context(epic_dir / "data-model.md", "Data Model"))
     contracts_dir = epic_dir / "contracts"
-    if contracts_dir.is_dir():
+    if contracts_dir.is_dir() and _phase_needs_contracts(tasks):
         for cf in sorted(contracts_dir.glob("*.md")):
             add(f"contract:{cf.name}", _read_context(cf, f"Contract: {cf.name}"))
 
 
-def _analyze_report_slice(path: Path, task_id: str) -> str | None:
-    """Return only paragraphs of analyze-report.md that mention ``task_id``.
+def _analyze_report_slice(path: Path, task_ids: str | set[str]) -> str | None:
+    """Return paragraphs of analyze-report.md that mention any of ``task_ids``.
+
+    Accepts either a single task id (``compose_task_prompt`` path) or a set
+    of ids (``compose_phase_prompt`` path). Dedup is on paragraph content —
+    a finding citing multiple tasks appears once.
 
     Empty → returns None (no section added). Whole-file fallback is intentional:
-    if analyze-report.md doesn't reference the task, the task is unaffected by
-    the pre-implementation consistency check and doesn't need the report at all.
+    if analyze-report.md doesn't reference the task(s), they are unaffected by
+    the pre-implementation consistency check and don't need the report at all.
     """
     if not path.exists():
         return None
+    ids = {task_ids} if isinstance(task_ids, str) else set(task_ids)
+    if not ids:
+        return None
     content = path.read_text(encoding="utf-8")
-    paras = content.split("\n\n")
-    relevant = [p for p in paras if task_id in p]
+    seen: set[str] = set()
+    relevant: list[str] = []
+    for para in content.split("\n\n"):
+        key = para.strip()
+        if not key or key in seen:
+            continue
+        if any(tid in para for tid in ids):
+            seen.add(key)
+            relevant.append(para)
     if not relevant:
         return None
+    label = next(iter(ids)) if len(ids) == 1 else "phase tasks: " + ", ".join(sorted(ids))
     body = "\n\n".join(relevant)
-    return f"\n---\n\n## Pre-Implementation Analysis (filtered to {task_id})\n\n{body}"
+    return f"\n---\n\n## Pre-Implementation Analysis (filtered to {label})\n\n{body}"
 
 
 def _format_context(content: str, header: str) -> str:
@@ -715,7 +833,7 @@ def compose_task_prompt(
         # ─── STABLE PREFIX (cacheable across tasks in the same epic) ───
         add("cue", _CACHE_PREFIX_CUE)
         if not resume:
-            _add_epic_docs(add, epic_dir)
+            _add_epic_docs(add, epic_dir, tasks=[task])
 
         # ─── VARIABLE SUFFIX (task-specific, not cached) ───
         # tasks.md goes in the suffix because mark_task_done flips [ ]→[X]
@@ -908,16 +1026,27 @@ def _add_epic_docs_phase_scoped(
     phase_label: str,
     phase_tasks: list[TaskItem],
 ) -> None:
-    """Like ``_add_epic_docs`` but swaps the full spec.md for a phase-scoped slice."""
+    """Like ``_add_epic_docs`` but swaps the full spec.md for a phase-scoped slice.
+
+    Also appends an analyze-report.md slice aggregating findings that mention
+    any task in the phase — without this, phase dispatch only sees analyze
+    findings if the model chooses to ``Read(analyze-report.md)``, which is
+    not guaranteed under tight max-turns. Appended LAST so the stable prefix
+    (plan/spec/data_model/contracts) remains byte-identical across phases
+    and the Anthropic prefix cache stays warm.
+    """
     add("plan", _read_context(epic_dir / "plan.md", "Implementation Plan"))
     scoped_spec = _scoped_spec_section(epic_dir, phase_label, phase_tasks)
     if scoped_spec is not None:
         add("spec", _format_context(scoped_spec, "Specification"))
     add("data_model", _read_context(epic_dir / "data-model.md", "Data Model"))
     contracts_dir = epic_dir / "contracts"
-    if contracts_dir.is_dir():
+    if contracts_dir.is_dir() and _phase_needs_contracts(phase_tasks):
         for cf in sorted(contracts_dir.glob("*.md")):
             add(f"contract:{cf.name}", _read_context(cf, f"Contract: {cf.name}"))
+    analyze_slice = _analyze_report_slice(epic_dir / "analyze-report.md", {t.id for t in phase_tasks})
+    if analyze_slice is not None:
+        add("analyze_report", analyze_slice)
 
 
 def compose_phase_prompt(
@@ -1232,7 +1361,7 @@ async def run_implement_tasks(
             consecutive_failures += 1
             failed.append((task.id, error or "unknown error"))
             log.error("Task %s failed: %s", task.id, error)
-            complete_run(conn, run_id, status="failed", error=error)
+            complete_run(conn, run_id, status="failed", error=error, error_class=_classify_error(error))
 
             # Early abort: if the same error keeps killing tasks in a row, stop
             # the whole batch. Continuing burns time + cost without fixing the
@@ -1294,7 +1423,7 @@ async def _run_implement_phases(
             total_completed += len(phase_tasks)
             continue
 
-        phase_id = f"implement:phase-{phase_idx + 1}"
+        phase_id = _phase_id_from_label(phase_label, phase_idx)
         max_turns = _phase_max_turns(len(still_pending))
         timeout = max(DEFAULT_TIMEOUT, 300 * len(still_pending) + 600)
 
@@ -1401,7 +1530,7 @@ async def _run_implement_phases(
         else:
             # Zero progress
             consecutive_phase_failures += 1
-            complete_run(conn, run_id, status="failed", error=error)
+            complete_run(conn, run_id, status="failed", error=error, error_class=_classify_error(error))
             _run_eval_scoring(conn, platform_name, phase_id, run_id, trace_id, epic_slug, None, metrics)
             log.error("Phase '%s' failed with zero progress: %s", phase_label, error)
             # Rate limit: break immediately — next phases would fail for the same reason,
@@ -1475,6 +1604,40 @@ def _epic_output_dir(platform_name: str, epic_slug: str) -> str:
     return str(REPO_ROOT / rel)
 
 
+def _count_unique_branch_commits(cwd: str | Path) -> int | None:
+    """Count commits on the current branch that aren't on origin/HEAD.
+
+    Used by _auto_commit_epic to distinguish "no work happened" from "tasks
+    already self-committed via PostToolUse hook" — both leave an empty
+    working tree but only the latter has new commits to ship.
+
+    Returns None if the merge-base lookup fails (detached HEAD, missing
+    upstream, etc) — callers degrade gracefully.
+    """
+    try:
+        # Resolve the branch the upstream points at (e.g. origin/main, origin/develop)
+        upstream = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"],
+            capture_output=True,
+            text=True,
+            cwd=str(cwd),
+        )
+        if upstream.returncode != 0 or not upstream.stdout.strip():
+            return None
+        ref = upstream.stdout.strip()
+        count = subprocess.run(
+            ["git", "rev-list", "--count", f"{ref}..HEAD"],
+            capture_output=True,
+            text=True,
+            cwd=str(cwd),
+        )
+        if count.returncode != 0:
+            return None
+        return int(count.stdout.strip() or 0)
+    except (subprocess.SubprocessError, ValueError):
+        return None
+
+
 def _auto_commit_epic(cwd: str | Path, platform_name: str, epic_slug: str) -> bool:
     """Commit working tree changes to the epic branch after implement.
 
@@ -1484,7 +1647,18 @@ def _auto_commit_epic(cwd: str | Path, platform_name: str, epic_slug: str) -> bo
     try:
         status = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True, cwd=str(cwd))
         if not status.stdout.strip():
-            log.info("No changes to commit for %s/%s", platform_name, epic_slug)
+            ahead = _count_unique_branch_commits(cwd)
+            if ahead is None:
+                log.debug("No upstream tracking for %s/%s — skipping commit", platform_name, epic_slug)
+            elif ahead > 0:
+                log.info(
+                    "Phase commit skipped for %s/%s — %d task(s) already committed",
+                    platform_name,
+                    epic_slug,
+                    ahead,
+                )
+            else:
+                log.info("No changes to commit for %s/%s (working tree clean)", platform_name, epic_slug)
             return True
 
         safe_files = []
@@ -1655,14 +1829,17 @@ def topological_sort(nodes: list[Node]) -> list[Node]:
 # ── Auto-Escalate Gate ──────────────────────────────────────────────
 
 
-def check_auto_escalate(node: Node, platform_dir: Path, epic_slug: str | None) -> bool | None:
-    """Parse node output report frontmatter to decide auto-escalate gate.
+def _read_auto_escalate_metadata(
+    node: Node, platform_dir: Path, epic_slug: str | None
+) -> tuple[dict | None, Path | None]:
+    """Read the frontmatter dict from the first matching auto-escalate report.
 
-    Returns True=pass (auto-proceed), False=fail (escalate), None=can't determine.
-    Only applies to nodes with gate='auto-escalate' in an epic context.
+    Returns (frontmatter_dict, report_path). Both None if no readable report.
+    Used by both check_auto_escalate (verdict decision) and the event emitter
+    (which needs score/verdict/report_path for the Telegram notify payload).
     """
     if node.gate != "auto-escalate" or not epic_slug:
-        return None
+        return None, None
     for output in node.outputs:
         resolved = output.replace("{epic}", f"epics/{epic_slug}")
         report_path = platform_dir / resolved
@@ -1676,14 +1853,68 @@ def check_auto_escalate(node: Node, platform_dir: Path, epic_slug: str | None) -
             continue
         try:
             fm = yaml.safe_load(content[3:end])
-            score = fm.get("score", 0)
-            verdict = str(fm.get("verdict", "")).lower()
-            if verdict == "pass" and isinstance(score, (int, float)) and score >= 80:
-                return True
-            return False
+            if isinstance(fm, dict):
+                return fm, report_path
         except (yaml.YAMLError, AttributeError, TypeError):
             continue
-    return None
+    return None, None
+
+
+def check_auto_escalate(node: Node, platform_dir: Path, epic_slug: str | None) -> bool | None:
+    """Parse node output report frontmatter to decide auto-escalate gate.
+
+    Returns True=pass (auto-proceed), False=fail (escalate), None=can't determine.
+    Only applies to nodes with gate='auto-escalate' in an epic context.
+    """
+    fm, _ = _read_auto_escalate_metadata(node, platform_dir, epic_slug)
+    if fm is None:
+        return None
+    score = fm.get("score", 0)
+    verdict = str(fm.get("verdict", "")).lower()
+    if verdict == "pass" and isinstance(score, (int, float)) and score >= 80:
+        return True
+    return False
+
+
+def _emit_auto_escalate_fail_event(
+    conn,
+    platform_name: str,
+    epic_slug: str | None,
+    node: Node,
+    platform_dir: Path,
+) -> None:
+    """Emit an event so the Telegram poller can notify the user.
+
+    Called in autonomous mode when an auto-escalate gate fails — without
+    this, a sub-threshold judge score proceeds to qa silently and the user
+    only notices on the final report.
+    """
+    from db_pipeline import insert_event
+
+    fm, report_path = _read_auto_escalate_metadata(node, platform_dir, epic_slug)
+    payload: dict = {
+        "node_id": node.id,
+        "epic_id": epic_slug,
+        "score": (fm or {}).get("score") if fm else None,
+        "verdict": (fm or {}).get("verdict") if fm else None,
+        "report_path": (
+            str(report_path.relative_to(platform_dir.parent.parent))
+            if report_path
+            else (node.outputs[0] if node.outputs else None)
+        ),
+    }
+    try:
+        insert_event(
+            conn,
+            platform_id=platform_name,
+            entity_type="pipeline_run",
+            entity_id=node.id,
+            action="auto_escalate_failed",
+            payload=payload,
+        )
+    except Exception as e:
+        # Notify failures must never block the pipeline.
+        log.warning("auto_escalate_event_emit_failed node=%s err=%s", node.id, e)
 
 
 def _handle_auto_escalate(
@@ -1702,6 +1933,7 @@ def _handle_auto_escalate(
     if escalate is False:
         if gmode == "auto":
             log.warning("Auto-escalate: '%s' FAILED (score < 80 after fix) — mode=auto, proceeding to qa", node.id)
+            _emit_auto_escalate_fail_event(conn, platform_name, epic_slug, node, platform_dir)
         elif gmode == "interactive":
             print(f"\n>>> Auto-escalate: '{node.id}' FAILED quality gate (score < 80)")
             report_hint = node.outputs[0] if node.outputs else "report.md"
@@ -1795,6 +2027,11 @@ class CircuitBreaker:
         not new failures, they're the breaker echoing its own state. Counting them
         causes the CB to stay permanently OPEN across epic re-dispatches (see
         easter-tracking postmortem on T031-T046 cascade).
+
+        Transient errors (rate limit, timeout, watchdog kill, zombie restart)
+        are skipped — they're infra failures, not task bugs, and would cause
+        premature CB OPEN after a daemon restart. Pre-migration-020 rows have
+        ``error_class`` NULL and are reclassified on the fly.
         """
         import sqlite3
 
@@ -1802,18 +2039,22 @@ class CircuitBreaker:
             epic_filter = "AND epic_id=?" if epic_id else "AND epic_id IS NULL"
             params = (platform_id, epic_id) if epic_id else (platform_id,)
             rows = conn.execute(
-                "SELECT status, error FROM pipeline_runs "
+                "SELECT status, error, error_class FROM pipeline_runs "
                 f"WHERE platform_id=? {epic_filter} "
                 "  AND (error IS NULL OR error NOT LIKE '%circuit breaker%') "
                 "ORDER BY started_at DESC LIMIT ?",
                 (*params, self.max_failures),
             ).fetchall()
             consecutive = 0
-            for status, _error in rows:
-                if status == "failed":
-                    consecutive += 1
-                else:
+            for status, error, stored_class in rows:
+                if status != "failed":
                     break
+                cls = stored_class or _classify_error(error)
+                if cls == "transient":
+                    # Infra failure — ignore but don't break the streak
+                    # (a real task failure right before a transient still counts).
+                    continue
+                consecutive += 1
             if consecutive >= self.max_failures:
                 self.failure_count = consecutive
                 self.state = "open"
@@ -2038,9 +2279,9 @@ async def terminate_active_subprocesses(graceful_timeout: float = 5.0) -> int:
         return 0
 
     # Wait for graceful exit, bounded by `graceful_timeout`.
-    deadline = asyncio.get_event_loop().time() + graceful_timeout
+    deadline = asyncio.get_running_loop().time() + graceful_timeout
     while _active_subprocesses:
-        remaining = deadline - asyncio.get_event_loop().time()
+        remaining = deadline - asyncio.get_running_loop().time()
         if remaining <= 0:
             break
         done_snapshot = [p for p in list(_active_subprocesses) if p.returncode is not None]
@@ -2155,28 +2396,42 @@ async def dispatch_node_async(
     )
     # A8: register so shutdown can terminate us
     _active_subprocesses.add(process)
-    # Streaming buffers so we can inspect partial output on timeout. Replaces
-    # the prior ``process.communicate()`` call — communicate() only yields
-    # stdout/stderr AFTER the child closes its pipes, which means on timeout
-    # asyncio.wait_for cancels the task and the partial output is lost. With
-    # manual drainers we keep a live copy in-process.
-    # See easter-tracking.md (epic prosauai/004-router-mece) for the "silent
-    # hang in claude -p stream" pattern that motivated this.
-    stdout_buf = bytearray()
+
+    # Stream stdout to ``.pipeline/stream/<node>_<ts>_<pid>.stdout`` instead
+    # of into a bytearray: with N concurrent dispatches each buffering the
+    # full claude -p JSON payload in memory, sustained RAM scaled linearly
+    # with concurrency and blob size. The file doubles as the postmortem
+    # artifact — unlinked on success, preserved on timeout/error.
+    # stderr stays in-memory (small by design).
+    stream_dir = REPO_ROOT / ".pipeline" / "stream"
+    stream_dir.mkdir(parents=True, exist_ok=True)
+    stream_path = stream_dir / f"{node.id.replace(':', '_')}_{int(time.time())}_{process.pid}.stdout"
+    stdout_file = stream_path.open("wb")
     stderr_buf = bytearray()
 
-    async def _drain(stream: asyncio.StreamReader | None, buf: bytearray) -> None:
+    async def _drain(stream: asyncio.StreamReader | None, sink) -> None:
+        """Pump ``stream`` chunks into ``sink`` (``file.write`` or ``bytearray.extend``).
+
+        Guards EOF (empty) AND non-bytes (broken mock that would otherwise
+        infinite-loop and blow up RAM via AsyncMock.call_args_list). Real
+        asyncio.StreamReader always returns bytes, so the isinstance check is
+        a pure test-safety net with zero cost in production.
+        """
         if stream is None:
             return
         while True:
             chunk = await stream.read(8192)
-            # Guard: EOF (empty) OR non-bytes (broken mock that would otherwise
-            # infinite-loop and blow up RAM via AsyncMock.call_args_list). Real
-            # asyncio.StreamReader always returns bytes, so this is a pure
-            # test-safety net with zero cost in production.
             if not chunk or not isinstance(chunk, (bytes, bytearray)):
                 return
-            buf.extend(chunk)
+            sink(chunk)
+
+    def _read_stdout_from_file() -> str:
+        """Read the stream file back into a string for caller-compat."""
+        try:
+            return stream_path.read_text(encoding="utf-8", errors="replace")
+        except OSError as exc:
+            log.warning("Could not read stream file %s: %s", stream_path, exc)
+            return ""
 
     try:
         # Pipe the (potentially very large) prompt via stdin to avoid the Linux
@@ -2192,8 +2447,8 @@ async def dispatch_node_async(
         try:
             await asyncio.wait_for(
                 asyncio.gather(
-                    _drain(process.stdout, stdout_buf),
-                    _drain(process.stderr, stderr_buf),
+                    _drain(process.stdout, stdout_file.write),
+                    _drain(process.stderr, stderr_buf.extend),
                     process.wait(),
                 ),
                 timeout=timeout,
@@ -2201,38 +2456,32 @@ async def dispatch_node_async(
         except asyncio.TimeoutError:
             _kill_process_group_safely(process)
             await process.wait()
-            partial = stdout_buf.decode(errors="replace")
-            # Persist partial stdout to disk so we can diagnose silent hangs
-            # without capturing it from journalctl (claude -p JSON mode writes
-            # the whole response at the end — partial output is the only clue
-            # about whether the agent was mid-tool-use or mid-auto-review).
-            try:
-                diag_dir = REPO_ROOT / ".pipeline" / "timeout-diagnostics"
-                diag_dir.mkdir(parents=True, exist_ok=True)
-                fname = f"{node.id.replace(':', '_')}_{int(time.time())}.stdout"
-                (diag_dir / fname).write_text(partial[:200_000], encoding="utf-8")
-                log.error(
-                    "Node '%s': timeout after %ds — partial stdout (%d bytes) saved to %s",
-                    node.id,
-                    timeout,
-                    len(partial),
-                    diag_dir / fname,
-                )
-            except Exception as exc:  # noqa: BLE001 — diagnostic best-effort
-                log.warning("Could not persist timeout diagnostic: %s", exc)
-                log.error("Node '%s': timeout after %ds", node.id, timeout)
+            stdout_file.close()
+            partial = _read_stdout_from_file()
+            log.error(
+                "Node '%s': timeout after %ds — partial stdout (%d bytes) preserved at %s",
+                node.id,
+                timeout,
+                len(partial),
+                stream_path,
+            )
             return False, f"timeout after {timeout}s", partial or None
 
-        stdout_text = stdout_buf.decode(errors="replace")
+        stdout_file.close()
+        stdout_text = _read_stdout_from_file()
         if process.returncode != 0:
             # Claude CLI with --output-format json often fails silently (empty stderr,
             # error details embedded in stdout JSON). Parse stdout to surface the real
             # cause (e.g. context_length_exceeded, rate_limit, max_turns).
             error = _extract_claude_error(stdout_text, bytes(stderr_buf), process.returncode)
-            log.error("Node '%s' failed: %s", node.id, error)
+            log.error("Node '%s' failed: %s (stdout preserved at %s)", node.id, error, stream_path)
             return False, error, stdout_text
+        # Success: clean up the stream file to avoid disk bloat.
+        stream_path.unlink(missing_ok=True)
         return True, None, stdout_text
     finally:
+        if not stdout_file.closed:
+            stdout_file.close()
         _active_subprocesses.discard(process)
 
 
@@ -2667,7 +2916,14 @@ async def run_pipeline_async(
         _dispatch_log = stdout[:4096] if stdout else None
 
         if not success:
-            complete_run(conn, run_id, status="failed", error=error, dispatch_log=_dispatch_log)
+            complete_run(
+                conn,
+                run_id,
+                status="failed",
+                error=error,
+                error_class=_classify_error(error),
+                dispatch_log=_dispatch_log,
+            )
             log.error("Node '%s' failed after retries: %s", node.id, error)
             try:
                 if trace_id:
@@ -3272,7 +3528,7 @@ def run_pipeline(
 
         if not success:
             run_id = insert_run(conn, platform_name, node.id, epic_id=epic_slug, error=error, trace_id=trace_id)
-            complete_run(conn, run_id, status="failed", error=error)
+            complete_run(conn, run_id, status="failed", error=error, error_class=_classify_error(error))
             log.error("Node '%s' failed after retries: %s", node.id, error)
             try:
                 if trace_id:

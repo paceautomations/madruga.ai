@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://prosauai.com/schemas/config/tenants-rag-block.schema.json",
+  "title": "tenants.yaml — bloco rag (epic 012 extension)",
+  "description": "Validacao do bloco rag dentro de cada tenant em config/tenants.yaml. Hot-reloaded em <=60s pelo config_poller (epic 010). YAML invalido rejeitado com fail-safe — config anterior permanece (FR-046).",
+  "version": "0.1.0-epic012",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "enabled": {
+      "type": "boolean",
+      "default": false,
+      "description": "Master flag. False = upload returns 403, tool not exposed to LLM. Default false (opt-in)."
+    },
+    "top_k": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 20,
+      "default": 5,
+      "description": "Default number of chunks returned by search_knowledge tool. LLM may pass smaller value via top_k arg. Server-side hard cap is 20 (FR-034)."
+    },
+    "max_upload_mb": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 50,
+      "default": 10,
+      "description": "Max raw file size for upload (FR-013). Files larger return 413 max_upload_mb_exceeded."
+    },
+    "max_documents_per_tenant": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000,
+      "default": 200,
+      "description": "Soft quota. Replace by source_name does not count toward this (delta=0). Override per-tenant for enterprise. (FR-073)"
+    },
+    "max_chunks_per_tenant": {
+      "type": "integer",
+      "minimum": 100,
+      "maximum": 50000,
+      "default": 10000,
+      "description": "Soft quota. Hard cap absolute is 50000 enforced server-side regardless of override (R9 — protects HNSW perf). Replace by source_name deduces old chunks from total."
+    },
+    "min_distance_threshold": {
+      "type": ["number", "null"],
+      "minimum": 0.0,
+      "maximum": 2.0,
+      "default": null,
+      "description": "OPTIONAL. If set, chunks with cosine distance > threshold are dropped from result. Adiado para 012.1 — null em v1 (LLM filtra no contexto)."
+    }
+  },
+  "examples": [
+    {
+      "title": "Default disabled (most tenants in v1)",
+      "value": {
+        "enabled": false
+      }
+    },
+    {
+      "title": "Ariel rollout config (enabled with defaults)",
+      "value": {
+        "enabled": true,
+        "top_k": 5,
+        "max_upload_mb": 10,
+        "max_documents_per_tenant": 200,
+        "max_chunks_per_tenant": 10000
+      }
+    },
+    {
+      "title": "Enterprise tenant override",
+      "value": {
+        "enabled": true,
+        "top_k": 8,
+        "max_upload_mb": 20,
+        "max_documents_per_tenant": 500,
+        "max_chunks_per_tenant": 30000
+      }
+    }
+  ],
+  "fail_safe_behavior": {
+    "description": "Quando o YAML e invalido por este schema, config_poller (epic 010) loga 'tenant_config_reload_failed{tenant, reason}' + emite metric do mesmo nome; configuracao anterior permanece ativa (FR-046).",
+    "examples_invalid": [
+      {
+        "value": {"enabled": true, "top_k": 50},
+        "reason": "top_k > 20 (out of range)"
+      },
+      {
+        "value": {"enabled": true, "max_upload_mb": -1},
+        "reason": "max_upload_mb negative"
+      },
+      {
+        "value": {"enabled": true, "max_chunks_per_tenant": 100000},
+        "reason": "max_chunks_per_tenant > 50000 (absolute hard cap)"
+      },
+      {
+        "value": {"enabled": "yes"},
+        "reason": "enabled must be boolean (not string)"
+      }
+    ]
+  },
+  "integration_with_tenants_yaml": {
+    "description": "O bloco rag e adicionado dentro de cada tenant entry em tenants.yaml. Exemplo de integracao:",
+    "snippet": {
+      "tenants": [
+        {
+          "id": "pace-internal",
+          "db_tenant_id": "00000000-0000-4000-a000-000000000001",
+          "instance_name": "Ariel",
+          "evolution_api_url": "${PACE_EVOLUTION_URL}",
+          "rag": {
+            "enabled": true,
+            "top_k": 5,
+            "max_upload_mb": 10
+          }
+        }
+      ]
+    }
+  }
+}

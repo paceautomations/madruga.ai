@@ -37,7 +37,6 @@ PIPELINE_SKILLS = {
     "domain-model",
     "containers",
     "context-map",
-    "epic-breakdown",
     "roadmap",
     "epic-context",
     "verify",
@@ -276,7 +275,6 @@ def lint_handoff_chain() -> list[dict]:
         "domain-model",
         "containers",
         "context-map",
-        "epic-breakdown",
         "roadmap",
     }
     missing = expected_l1 - visited

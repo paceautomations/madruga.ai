@@ -45,7 +45,7 @@ _WALL_CLOCK_THRESHOLD_MS = 10_000
 
 # Fields allowed in complete_run() updates — validated at import time to prevent SQL injection
 _COMPLETE_RUN_FIELDS = frozenset(
-    {"tokens_in", "tokens_out", "cost_usd", "duration_ms", "error", "output_lines", "dispatch_log"}
+    {"tokens_in", "tokens_out", "cost_usd", "duration_ms", "error", "error_class", "output_lines", "dispatch_log"}
 )
 _validate_identifiers(*_COMPLETE_RUN_FIELDS)
 
@@ -1057,6 +1057,80 @@ def seed_epic_nodes_from_disk(
 # ══════════════════════════════════════
 
 
+def seed_epic_from_pitch(
+    conn: sqlite3.Connection,
+    platform_id: str,
+    epic_id: str,
+    platform_dir: str | Path,
+) -> str | None:
+    """Upsert an epic stub into the ``epics`` table from its ``pitch.md``.
+
+    Reads ``<platform_dir>/epics/<epic_id>/pitch.md``, parses YAML
+    frontmatter, resolves title (frontmatter → first ``# heading`` →
+    epic_id fallback) and status (via :data:`_EPIC_STATUS_MAP`), and
+    upserts with ``priority``, ``delivered_at``, and canonical
+    ``file_path``.
+
+    Returns the canonical DB status on success, or ``None`` if no
+    ``pitch.md`` was found (caller should NOT treat this as a hard
+    error — it just means the epic isn't defined on disk yet).
+
+    Caller owns the transaction. Use inside a ``with transaction(conn)``
+    block for atomic multi-epic seeds.
+    """
+    pdir = Path(platform_dir)
+    pitch = pdir / "epics" / epic_id / "pitch.md"
+    if not pitch.exists():
+        return None
+
+    content = pitch.read_text(encoding="utf-8")
+
+    frontmatter: dict = {}
+    if content.startswith("---"):
+        parts = content.split("---", 2)
+        if len(parts) >= 3:
+            try:
+                frontmatter = yaml.safe_load(parts[1]) or {}
+            except yaml.YAMLError:
+                frontmatter = {}
+
+    # Title: frontmatter → first heading → epic_id
+    title_line = str(frontmatter.get("title", "")).strip()
+    if not title_line:
+        for line in content.split("\n"):
+            if line.startswith("# "):
+                title_line = line[2:].strip()
+                break
+
+    raw_status = str(frontmatter.get("status", "")).lower().strip()
+    fs_status = _EPIC_STATUS_MAP.get(raw_status) or "proposed"
+
+    # Guard: never regress shipped → proposed via seed.
+    existing_row = conn.execute(
+        "SELECT status FROM epics WHERE platform_id=? AND epic_id=?",
+        (platform_id, epic_id),
+    ).fetchone()
+    if existing_row and existing_row[0] == "shipped" and fs_status == "proposed":
+        fs_status = "shipped"
+
+    priority = frontmatter.get("priority")
+    delivered_at = frontmatter.get("delivered_at")
+    if delivered_at is not None:
+        delivered_at = str(delivered_at).strip('"').strip("'")
+
+    upsert_epic(
+        conn,
+        platform_id,
+        epic_id,
+        title=title_line or epic_id,
+        file_path=f"epics/{epic_id}/pitch.md",
+        status=fs_status,
+        priority=priority,
+        delivered_at=delivered_at,
+    )
+    return fs_status
+
+
 def seed_from_filesystem(conn: sqlite3.Connection, platform_id: str, platform_dir: str | Path) -> dict:
     """Import existing state from filesystem into DB. Idempotent.
 
@@ -1189,85 +1263,44 @@ def seed_from_filesystem(conn: sqlite3.Connection, platform_id: str, platform_di
         epics_seeded = 0
         epics_dir = pdir / "epics"
         if epics_dir.exists():
+            epic_cycle = pipeline.get("epic_cycle", {}).get("nodes", [])
+            required_ids = {n["id"] for n in epic_cycle if not n.get("optional", False)}
             for epic_dir in sorted(epics_dir.iterdir()):
                 pitch = epic_dir / "pitch.md"
-                if epic_dir.is_dir() and pitch.exists():
-                    epic_id = epic_dir.name
-                    content = pitch.read_text(encoding="utf-8")
+                if not (epic_dir.is_dir() and pitch.exists()):
+                    continue
+                epic_id = epic_dir.name
+                fs_status = seed_epic_from_pitch(txn, platform_id, epic_id, pdir)
+                if fs_status is None:
+                    continue
 
-                    # Parse YAML frontmatter
-                    frontmatter: dict = {}
-                    if content.startswith("---"):
-                        parts = content.split("---", 2)
-                        if len(parts) >= 3:
-                            try:
-                                frontmatter = yaml.safe_load(parts[1]) or {}
-                            except yaml.YAMLError:
-                                pass
+                # Seed epic_nodes from output files on disk
+                completed_ids = seed_epic_nodes_from_disk(txn, platform_id, epic_id, pdir, epic_cycle)
 
-                    # Title: prefer frontmatter, fall back to first heading
-                    title_line = str(frontmatter.get("title", "")).strip()
-                    if not title_line:
-                        for line in content.split("\n"):
-                            if line.startswith("# "):
-                                title_line = line[2:].strip()
-                                break
-
-                    # Status: map frontmatter value to DB constraint
-                    raw_status = str(frontmatter.get("status", "")).lower().strip()
-                    fs_status = _EPIC_STATUS_MAP.get(raw_status) or "proposed"
-
-                    # Guard: never regress shipped→proposed via reseed.
-                    # blocked/cancelled from filesystem are legitimate overrides.
-                    existing_row = txn.execute(
-                        "SELECT status FROM epics WHERE platform_id=? AND epic_id=?",
+                # Recalculate epic status from completed nodes
+                new_status, new_delivered = compute_epic_status(
+                    txn,
+                    platform_id,
+                    epic_id,
+                    required_ids,
+                    fs_status,
+                    completed_ids=completed_ids,
+                )
+                if new_status != fs_status:
+                    existing_title = txn.execute(
+                        "SELECT title FROM epics WHERE platform_id=? AND epic_id=?",
                         (platform_id, epic_id),
                     ).fetchone()
-                    if existing_row and existing_row[0] == "shipped" and fs_status == "proposed":
-                        fs_status = "shipped"
-
-                    # Priority and delivery from frontmatter
-                    priority = frontmatter.get("priority")
-                    delivered_at = frontmatter.get("delivered_at")
-                    if delivered_at is not None:
-                        delivered_at = str(delivered_at).strip('"').strip("'")
-
                     upsert_epic(
                         txn,
                         platform_id,
                         epic_id,
-                        title=title_line or epic_id,
-                        file_path=f"epics/{epic_id}/pitch.md",
-                        status=fs_status,
-                        priority=priority,
-                        delivered_at=delivered_at,
+                        title=(existing_title[0] if existing_title else epic_id),
+                        status=new_status,
+                        delivered_at=new_delivered,
                     )
 
-                    # Seed epic_nodes from output files on disk
-                    epic_cycle = pipeline.get("epic_cycle", {}).get("nodes", [])
-                    completed_ids = seed_epic_nodes_from_disk(txn, platform_id, epic_id, pdir, epic_cycle)
-
-                    # Recalculate epic status from completed nodes
-                    required_ids = {n["id"] for n in epic_cycle if not n.get("optional", False)}
-                    new_status, new_delivered = compute_epic_status(
-                        txn,
-                        platform_id,
-                        epic_id,
-                        required_ids,
-                        fs_status,
-                        completed_ids=completed_ids,
-                    )
-                    if new_status != fs_status:
-                        upsert_epic(
-                            txn,
-                            platform_id,
-                            epic_id,
-                            title=title_line or epic_id,
-                            status=new_status,
-                            delivered_at=new_delivered,
-                        )
-
-                    epics_seeded += 1
+                epics_seeded += 1
 
     logger.info("Seeded %s: %d nodes, %d epics", platform_id, nodes_seeded, epics_seeded)
     return {"status": "ok", "nodes": nodes_seeded, "epics": epics_seeded}

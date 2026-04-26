@@ -1,0 +1,38 @@
+---
+epic: 015-agent-pipeline-steps
+created: 2026-04-26
+updated: 2026-04-26
+---
+
+# Registro de Decisoes — Epic 015 (Agent Pipeline Steps)
+
+1. `[2026-04-26 epic-context]` Step abstraction model: generic `llm_step` + 4 presets (`classifier`, `clarifier`, `resolver`, `specialist`) + `custom` escape hatch. Engine unico — preset eh metadata, nao codigo separado. (ref: Q1-A; ADR-047 novo)
+2. `[2026-04-26 epic-context]` Storage: coluna JSONB `pipeline_steps` em `prompts` (array ordenado de step configs). Pattern ADR-006 Agent-as-Data. Versionamento via `prompts.version` existente. NULL OR `[]` → backward compat. (ref: Q2-A; ADR-006 reaffirmed; ADR-047)
+3. `[2026-04-26 epic-context]` Data flow: cada step recebe `(user_message, context_window, step_outputs_so_far)`. Outputs anteriores acessiveis via dict (`step_outputs.classifier.intent`). Jinja-like template em prompts subsequentes. (ref: Q3-A; ADR-047)
+4. `[2026-04-26 epic-context]` Conditional routing: linear-only em v1. Pipeline_steps[0] → [1] → ... → [N-1]. Ultimo step.output e a resposta final. Branching/DAG em 015.1+. (ref: Q4-A; ADR-047)
+5. `[2026-04-26 epic-context]` Failure handling: step falha → retry 1x → handoff via epic 010 (mute conversation + mensagem amigavel). Reusa retry budget ADR-016. Fallback step adiado. (ref: Q5-A; ADR-016 reaffirmed; epic 010 pattern)
+6. `[2026-04-26 epic-context]` Eval & tracing per step: cada step gera 1 row em `eval_scores` (com novo `step_index INT NULL`) + 1 row em `trace_steps` (campo `step_index` ja existe + novo `step_kind ENUM('pipeline','agent_step')`). 4 metricas Prometheus per-step. (ref: Q6-A; ADR-048 novo)
+7. `[2026-04-26 epic-context]` Admin UI: JSONB editor na aba "Agentes" com preset selector, prompt diff entre steps, schema validation client-side (Zod) + server-side (Pydantic). Sem visual graph editor v1. (ref: Q7-A)
+8. `[2026-04-26 epic-context]` Backward compat: `pipeline_steps IS NULL OR len == 0` → comportamento atual (single LLM call via `agent.py:generate_response`). Zero migration de Ariel/ResenhAI. (ref: ADR-006 reaffirmed)
+9. `[2026-04-26 epic-context]` Tools per step: cada step declara `tools_enabled` opcional (override do agent prompt). Glob whitelist do epic 013 + builtin epic 012 funcionam. Default herda do agent. (ref: ADR-014 + epic 013 reaffirmed)
+10. `[2026-04-26 epic-context]` Step output schema: cada preset declara output Pydantic (`ClassifierOutput.intent`, `ClarifierOutput.questions[]`, `ResolverOutput.answer + .tool_calls`, `SpecialistOutput.final_response`). Custom step usa `Any`. (ref: type safety + flexibilidade)
+11. `[2026-04-26 epic-context]` Step prompt template: Jinja-like restrict sobre `{user_message, context_window, step_outputs.<step_name>.<field>}`. Modo sandboxed (sem `import`, `exec`, `__class__`). CI test adversarial. (ref: ADR-047)
+12. `[2026-04-26 epic-context]` Step model override: cada step declara `model` opcional (default `prompts.model`). Permite classifier barato + specialist premium. Reusa ADR-025. (ref: ADR-025 reaffirmed)
+13. `[2026-04-26 epic-context]` Sandwich pattern preserved: APENAS o ultimo step aplica `safety_prefix + step_prompt + safety_suffix`. Steps intermediarios usam `step_prompt` puro. Output guards aplicam ao final response. (ref: ADR-016 reaffirmed)
+14. `[2026-04-26 epic-context]` Latency budget per step: ≤2s p95 individual. Pipeline total budget: agent prompt declara `total_timeout_seconds` (default 90s). Pipeline aborta se exceder; mensagem amigavel + handoff. (ref: ADR-016 + NFR Q1 reaffirmed)
+15. `[2026-04-26 epic-context]` NFR Q1 override per agent: agentes multi-step declaram `nfr_p95_seconds` no prompt config (default 8s para 4-step, 5s para 2-step). Alert rule do epic 014 dinamica via Prometheus query. (ref: NFR Q1 amplified)
+16. `[2026-04-26 epic-context]` Pipeline executor module: novo `apps/api/prosauai/conversation/pipeline_steps_executor.py`. Boundary clara — orchestrator existente chama executor quando `pipeline_steps not in (None, [])`, senao chama `generate_response` legacy. (ref: novo modulo)
+17. `[2026-04-26 epic-context]` Eval per-step persistence: `EvalScoreRepo.save()` recebe `step_index: int | None`. NULL = score do agregado (legacy/last-step). INT = score do step especifico. Migration `ALTER TABLE eval_scores ADD COLUMN step_index INT NULL`. (ref: ADR-048 novo)
+18. `[2026-04-26 epic-context]` Trace per-step persistence: `trace_steps` ja tem `step_index`. Adicionar `step_kind TEXT NOT NULL DEFAULT 'pipeline'` ENUM `('pipeline', 'agent_step')`. Index `(trace_id, step_kind, step_index)`. (ref: ADR-048 novo)
+19. `[2026-04-26 epic-context]` Per-step Prometheus series: 4 series novas via facade structlog — `pipeline_step_duration_seconds`, `pipeline_step_tokens_total`, `pipeline_step_errors_total`, `pipeline_step_executions_total`. Cardinality safe (`step_preset` ≤5 vals). (ref: epic 014 dep)
+20. `[2026-04-26 epic-context]` Preset definitions v1: 4 presets concretos com prompts default + output schemas + tools_enabled defaults. Editaveis pelo tenant. (ref: catalogo concreto)
+21. `[2026-04-26 epic-context]` Custom step type: escape hatch — `preset: 'custom'` aceita `output_schema: 'any'`. Permite step nao-coberto pelos 4 presets sem PR. v1 documenta como "use com cuidado — no type safety". (ref: flexibilidade)
+22. `[2026-04-26 epic-context]` Step retry budget: cada step herda max 3 retries com backoff exponencial (ADR-016). Apos 3, pipeline aborta + handoff via epic 010. NAO ha retry no nivel do pipeline. (ref: ADR-016 reaffirmed)
+23. `[2026-04-26 epic-context]` Step circuit breaker: per `(tenant, agent_id, step_preset)` abre apos 50 erros/5min. Half-open testa 1 execucao apos 5min. Pattern epic 010/013/014. Quando aberto: skip step + fallback OR handoff. (ref: ADR-015 extended)
+24. `[2026-04-26 epic-context]` Eval threshold per step: v1 apenas observa, sem alerta automatico. Threshold per step calibrado durante shadow phase (3d Ariel). 015.1+ adiciona alerta dedicado por step. (ref: calibracao gradual)
+25. `[2026-04-26 epic-context]` Admin diff feature: aba "Agentes" → seletor de prompt versao + diff visual entre steps de mesma versao + diff entre versoes. Reusa diff component do epic 008. (ref: UX continuidade)
+26. `[2026-04-26 epic-context]` Schema migration: 1 migration: `ALTER TABLE prompts ADD COLUMN pipeline_steps JSONB NULL`; `ALTER TABLE eval_scores ADD COLUMN step_index INT NULL`; `ALTER TABLE trace_steps ADD COLUMN step_kind TEXT NOT NULL DEFAULT 'pipeline'`. Idempotente, fail-fast no startup. (ref: ADR-024 reaffirmed)
+27. `[2026-04-26 epic-context]` Backward compat test: golden test em CI — agent com `pipeline_steps=NULL` produz mesma resposta que single-shot atual para 5 fixtures Ariel. Diff zero exigido para PR-A merge. (ref: invariante operacional)
+28. `[2026-04-26 epic-context]` Rollout: Ariel **agente-piloto novo** (nao migrar agentes existentes) com 4-step `classifier→clarifier→resolver→specialist`. Shadow 3d com logging do single-shot equivalente em paralelo → flip para `on` se `auto_resolved` ratio nao regride. ResenhAI fica para 015.1+ apos validacao Ariel. (ref: epic 010/011 pattern)
+29. `[2026-04-26 epic-context]` Step output truncation: 8KB JSONB limit (mesmo dos `trace_steps` epic 008). Output maior eh truncado com marker `...[truncated]`. UTF-8 multibyte safe. (ref: epic 008 reaffirmed)
+30. `[2026-04-26 epic-context]` Cardinality control: labels Prometheus `tenant` (≤100), `agent_id` (≤500), `step_preset` (≤5), `step_index` (≤10), `model` (≤10), `error_type` (≤20). Max ≤500K series — bem dentro do hard cap. Lint no startup. (ref: epic 014 reaffirmed)

@@ -14,7 +14,8 @@ Started: 2026-04-23T11:16 -03
 - **tasks.md T020/T021 conflito [P]**: ambas marcadas paralelas mas escrevem no mesmo arquivo `handoff/base.py`. Implement skill vai processar sequencialmente pelo nome do arquivo — não é bug blocker, mas confuso. Melhor T021 depender de T020 ou fundir as duas.
 - **tasks.md T512 condição ambígua**: "E conversation resolved" no final da task description parece typo — spec não exige conversa resolved para NoneAdapter detectar fromMe; a condição real é `fromMe:true` + `message_id NOT IN bot_sent_messages` + `helpdesk_type==none`. Vale corrigir antes do implement.
 - **FR-026 (10s echo window)**: fallback temporal pode suprimir mute legítimo se humano responde dentro de 10s do bot. Tracking por `message_id` deveria ser suficiente; a janela de tempo é redundante e cria falso negativo.
-- **T910 (cleanup Redis legacy) está em Phase 10** junto com tarefas pré-rollout — mas a condition é "apos 7d com zero leituras em produção". Sequencialmente deveria estar na fase pós-rollout, não no Polish pré-PR-C.
+- **T910 (cleanup Redis legacy) estava em Phase 10** junto com tarefas pré-rollout — mas a condition era "após 7d com zero leituras em produção". Foi executado manualmente fora do ciclo epic (2026-04-24) por decisão do usuário ("sem legado"); commit `b7b1f20` no repo prosauai.
+- **`handoff_bypass` em ariel.yaml é dead code** após T910: a regra `conversation_in_handoff: true` nunca dispara porque o webhook handler sempre passa `False`; proteção real está no pipeline safety net (`fetch_ai_active_for_update`). Remover a regra em follow-up ou documentar intenção.
 
 ## Analyze pré-implement (2026-04-23)
 
@@ -35,7 +36,18 @@ Findings do `speckit.analyze` antes do implement. O implement deve ler `analyze-
 
 ## Incidents críticos
 
-_(nenhum até agora)_
+### Rate limit cascade → phase numbering instability (2026-04-23 ~12:42)
+
+- **Symptom:** Pipeline travou após rate limit ("hit your limit"). Easter continuou re-tentando a cada 30s. Phases 3–5 correram normalmente depois de tokens resetarem às 15:00, mas 9 rows `failed` bloqueavam o epic.
+- **Detection:** DB query — 9 `failed` rows, epic `status=in_progress` mas CB com 3+ failures, phase-IDs deslocados (`phase-1` no lugar de `phase-3` na segunda tentativa).
+- **Root cause 1 (classificação):** `"hit your limit"` não batia em `TRANSIENT_ERROR_PATTERNS` → tratado como `unknown` (threshold=3) → CB abria prematuramente. `dag_executor.py:60`.
+- **Root cause 2 (numeração):** `group_tasks_by_phase` filtrava tasks `checked` antes de enumerar → na segunda tentativa Phase 3 virava `implement:phase-1` (index deslocado). `dag_executor.py:494–525`.
+- **Root cause 3 (loop de fases):** `_run_implement_phases` avançava para phase+1, phase+2... mesmo com erro idêntico — queimava turnos. `dag_executor.py:~1393`.
+- **Root cause 4 (cooldown):** Easter sem cooldown pós-rate-limit tentava re-disparar a cada 30s. `easter.py`.
+- **Fix:** A1: `TRANSIENT_ERROR_PATTERNS += "hit your limit"` | A2: `group_tasks_by_phase` inclui todas as tasks (numeração estável) | A3: break imediato em rate limit no loop de fases | B: `RATE_LIMIT_COOLDOWN_SECONDS=600` no Easter. Commits em `dag_executor.py` + `easter.py` (sessão anterior à abertura deste tracking).
+- **Test:** `test_group_tasks_by_phase_stable_numbering_with_checked` + `test_dag_scheduler_rate_limit_cooldown_skips_dispatch`.
+- **Data fix:** `DELETE` de 9 rows `failed`, `UPDATE epics SET status='in_progress'`.
+- **Duration lost:** ~2h46min (12:42 → 15:28 BRT).
 
 ## T912 — Audit final Polish & Cross-Cutting (2026-04-23)
 
@@ -173,6 +185,82 @@ Nenhum destes pontos e exercivel no ambiente de dev local do autonomous agent �
 
 **Kill criteria**: se durante as 4 semanas pos-rollout algum incident no qual o bot falou em cima do humano for rastreado ate a ausencia do fallback legacy → reverter remocao imediatamente; reabrir task para investigar se o bug esta na transicao do `state.mute_conversation` e nao na remocao em si.
 
-## Síntese
+## Síntese (2026-04-24)
 
-_(preenchido no último tick)_
+**Epic shipped**: `2026-04-24T01:34:33Z` (01:34 BRT)
+**Duração total**: ~11h48min wall time (specify 13:47 → roadmap-reassess 01:35); gap de 2h46min = rate limit pause
+**Duração compute**: 9h00min (soma das durações de todos os nós)
+**Fases implement**: 16 + 1 re-run de phase-14 (3 min, às 00:58 — tasks pendentes re-detectadas após phases 15/16 completarem; comportamento correto da numeração estável)
+
+### Métricas
+
+| Item | Valor |
+|------|-------|
+| Incidents críticos | 1 |
+| Tempo perdido (rate limit cascade) | ~2h46min |
+| Fixes de código commitados | 4 (dag_executor A1/A2/A3 + easter.py B) |
+| Testes adicionados | 2 (stable phase numbering + easter cooldown) |
+| Fases implement executadas | 16 |
+| Fases com erro | 0 (após desbloqueio) |
+| Nodes do ciclo L2 | 12/12 completed |
+
+### Incidents por causa raiz
+
+**1. Rate limit cascade → phase numbering instability (2026-04-23 ~12:42)**
+
+A interrupção por tokens ("hit your limit") desencadeou três falhas em cascata:
+- `_classify_error` tratava o erro como `unknown` (threshold=3) em vez de `transient` — 3 falhas idênticas abriam o Circuit Breaker prematuramente.
+- `group_tasks_by_phase` filtrava tasks `checked` antes de numerar fases — na segunda tentativa Phase 3 virava `implement:phase-1`, criando rows duplicadas no DB e enganando o CB.
+- `_run_implement_phases` avançava para phase+1, phase+2... mesmo sabendo que o erro era o mesmo — queimava turnos com falhas idênticas.
+- Easter não tinha cooldown para rate limit — tentava re-disparar a cada 30s durante horas.
+
+Fixes: `dag_executor.py` A1 (TRANSIENT_ERROR_PATTERNS += "hit your limit") + A2 (group_tasks_by_phase inclui todas as tasks — numeração estável) + A3 (break imediato em rate limit no loop de fases) + `easter.py` B (RATE_LIMIT_COOLDOWN_SECONDS=600). Data fix: 9 rows `failed` deletadas, epic resetado para `in_progress`.
+
+### Melhorias consolidadas — madruga.ai
+
+- **Phase prompt ~95KB por fase**: plan.md (36KB) + data_model.md (29KB) repetem em todas as fases. Cache-ordered já ativo, mas um `plan-summary.md` por epic (~8KB) poderia substituir o plano completo para fases leaf, economizando ~55KB/dispatch.
+- **analyze-report.md ausente do phase context**: findings HIGH (ex: I1 HMAC header) dependem do model ler o arquivo via tool — não garantido. Incluir `analyze-report.md` como seção explícita no phase header (scoped por severidade ≥ HIGH).
+- **Easter memory ~700MB em pico**: investigar se `output_lines` no DB acumula texto de stdout sem truncar durante dispatches longos.
+- **`test_async_main_deprecation_warning` trava make test**: ortogonal ao epic, mas bloqueia CI em ambiente com instâncias pytest paralelas. Diagnosticar em follow-up de infra.
+
+### Melhorias consolidadas — prosauai
+
+- **T912/T913/T914/T909/T910 deferidos**: detalhados nas seções acima — todos têm gate operacional claro (staging deploy, 7d zero leituras Redis, PR-C merge).
+- **FR-026 (10s echo window) redundante**: tracking por `message_id` via `bot_sent_messages` já cobre o caso; a janela temporal cria falso negativo se humano responde rápido. Candidato a remoção em epic follow-up.
+- **T910 (Redis legacy cleanup)**: aguarda 7d com zero `handoff_redis_legacy_read` em produção antes de remover — gate conservador correto dado o risco de bot respondendo sobre humano.
+- **tasks.md: [P] em tasks do mesmo arquivo**: T020/T021 exemplo — modelo processa sequencialmente mas a marcação [P] confunde leitura. Considerar pré-validação de conflitos de arquivo no `speckit.tasks`.
+
+---
+
+## Follow-up implementado (2026-04-24)
+
+Deep dive dos problemas listados acima resultou em 7 ações. Plano em `/home/gabrielhamu/.claude/plans/vamos-implementar-tudo-planeje-streamed-taco.md`. Eliminadas 2 ações originais após análise custo/benefício: A2 (phase prompt 95KB — cache Anthropic amortiza) e B4 (rule_match/safety_trip enum — deferido para epic bridge router→state).
+
+### Madruga.ai (7 commits pendentes — nenhum push ainda)
+
+- **A1** stream-to-file no `dispatch_node_async`: substituiu `bytearray` unbounded por arquivo em `.pipeline/stream/`. Cleanup automático em sucesso, preservado em timeout/erro. 3 testes novos. Expectativa: pico Easter ~500MB (vs 700MB).
+- **A4** fix `test_async_main_deprecation_warning`: migrado de `asyncio.get_event_loop().run_until_complete` para `@pytest.mark.asyncio + await`. Corrigidos também call sites em `dag_executor.py:2041-2043` e `test_easter.py:964` (para `asyncio.get_running_loop()`). Teste passa em 2.6s.
+- **A3** phase dispatch recebe `analyze-report.md` slice: `_add_epic_docs_phase_scoped` agora agrega parágrafos que citam qualquer task da phase (dedup por conteúdo). Simplificação posterior: unificado com `_analyze_report_slice` via single helper aceitando `str | set[str]`. 3 testes novos.
+- **A5** `parse_tasks` warning para `[P]` file conflict: `_detect_parallel_file_conflicts` emite log.warning quando 2+ tasks `[P]` compartilham arquivo. 2 testes novos.
+- **B1** FR-017 spec update: `X-Webhook-Secret` → `X-Webhook-Signature` (HMAC-SHA256 hex, match do código atual). Texto explica por que scheme é custom (não `X-Chatwoot-Signature` oficial do Cloud).
+- **B2 spec** FR-026 marcado REMOVED: janela 10s anulava benefício da retention 48h; detecção agora é só por PK `(tenant_id, message_id)`.
+- **Validação**: `make ruff` + `make lint` passam; 201 tests passed em `test_dag_executor.py + test_easter.py`.
+
+### Prosauai (worktree `/tmp/prosauai-010-followup` na branch `epic/prosauai/010-handoff-followup` a partir de `epic/prosauai/010-handoff-engine-inbox`)
+
+- **B2** `handoff/none.py`: removido `BOT_ECHO_TOLERANCE_SECONDS=10` e cláusula `sent_at >= now() - 10s` da query `_is_bot_echo`; match agora é PK-only. Testes unit (`test_none.py`) e integration (`test_handoff_flow_none_adapter.py::test_noneadapter_fromme_echo_match_skips_mute`) ajustados para nova semântica. Test antigo `test_bot_echo_tolerance_is_10_seconds` removido.
+- **B3** `config/routing/resenhai.yaml`: removida regra `handoff_bypass` (simétrico com ariel.yaml no commit anterior `d718647`). Campo `conversation_in_handoff` do `StateSnapshot` preservado (risco/beneficio: 11+ arquivos de teste seriam afetados; já é sempre `False` em produção, baixo custo de manter).
+- **Validação**: ruff passa; 2050 tests passed (2 flakies ortogonais — passam isoladas).
+
+### Não feito (deferido)
+
+- **Testes B2 novos**: os 3 testes sugeridos no plano (`test_is_bot_echo_exact_match_old/no_match/within_retention`) não foram adicionados — os existentes (unit + integration) já cobrem a nova semântica PK-only após ajuste. Adicioná-los seria redundância.
+- **Env kill-switch `PROSAUAI_BOT_ECHO_WINDOW_SECONDS`**: decidido NÃO adicionar. `git revert` é mais simples que feature flag para um comportamento cujo rollback é estático (voltar 15 LOC).
+- **Remover campo `conversation_in_handoff` de `StateSnapshot`**: risco de quebrar 11+ testes de regressão histórica sem benefício proporcional. Manter como dead field até epic 015-bridge (ou quando re-compilar `facts.py` tiver outra motivação).
+
+### Próximos passos
+
+1. Commitar/push madruga.ai (4 commits: A1 → A4 → A3+A5 → B1+B2-spec).
+2. Commitar/push prosauai worktree (2 commits: B2-code + B3-yaml) em branch `epic/prosauai/010-handoff-followup`; PR para `develop`.
+3. Shadow deploy de B2: observar 7d `handoff_events.metadata` antes de flipar mode=on.
+4. Pos-merge: rodar `/madruga:reverse-reconcile prosauai` para confirmar zero drift FR-017/FR-026.

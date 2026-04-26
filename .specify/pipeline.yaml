@@ -80,19 +80,12 @@ nodes:
     layer: engineering
     gate: human
 
-  - id: epic-breakdown
-    skill: "madruga:epic-breakdown"
-    output_pattern: "epics/*/pitch.md"
-    depends: ["domain-model", "containers", "context-map"]
-    layer: planning
-    gate: 1-way-door
-
   - id: roadmap
     skill: "madruga:roadmap"
     outputs: ["planning/roadmap.md"]
-    depends: ["epic-breakdown"]
+    depends: ["domain-model", "containers", "context-map"]
     layer: planning
-    gate: human
+    gate: 1-way-door
 
 epic_cycle:
   nodes:

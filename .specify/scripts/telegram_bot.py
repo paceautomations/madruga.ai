@@ -89,6 +89,38 @@ def poll_pending_gates(conn: sqlite3.Connection, platform_id: str | None = None)
     return [dict(r) for r in rows]
 
 
+def poll_pending_auto_escalate_alerts(conn: sqlite3.Connection, platform_id: str | None = None) -> list[dict]:
+    """Query events for auto_escalate_failed entries not yet notified.
+
+    A row is "not yet notified" when no follow-up event with
+    action='auto_escalate_failed_notified' exists for the same entity_id +
+    platform_id. The follow-up event is inserted by the notify helper after
+    a successful Telegram send, making the poll idempotent across restarts.
+    """
+    sql = (
+        "SELECT e1.event_id, e1.platform_id, e1.entity_id, e1.payload, e1.created_at "
+        "FROM events e1 LEFT JOIN events e2 "
+        "  ON e2.action='auto_escalate_failed_notified' "
+        "  AND CAST(json_extract(e2.payload, '$.alert_event_id') AS INTEGER) = e1.event_id "
+        "WHERE e1.action='auto_escalate_failed' AND e2.event_id IS NULL"
+    )
+    params: list = []
+    if platform_id:
+        sql += " AND e1.platform_id=?"
+        params.append(platform_id)
+    sql += " ORDER BY e1.created_at"
+    rows = conn.execute(sql, params).fetchall()
+    out: list[dict] = []
+    for r in rows:
+        d = dict(r)
+        try:
+            d["payload"] = json.loads(d["payload"]) if d["payload"] else {}
+        except (TypeError, ValueError):
+            d["payload"] = {}
+        out.append(d)
+    return out
+
+
 # --- Message formatting ---
 
 
@@ -201,6 +233,75 @@ async def notify_gate(
     )
     conn.commit()
     logger.info("gate_notified", run_id=run_id, message_id=message_id)
+
+
+# --- Auto-escalate fail notification (autonomous mode visibility) ---
+
+
+def format_auto_escalate_alert(alert: dict) -> str:
+    """Format HTML alert for an auto_escalate_failed event."""
+    payload = alert.get("payload", {}) or {}
+    node_id = payload.get("node_id", "?")
+    epic = payload.get("epic_id", "?")
+    platform = alert.get("platform_id", "?")
+    score = payload.get("score")
+    verdict = payload.get("verdict", "?")
+    report = payload.get("report_path") or "(unknown)"
+    score_str = f"{score}" if score is not None else "?"
+    lines = [
+        "<b>Pipeline \u2014 Auto-Escalate FAIL (autonomous)</b>",
+        "",
+        f"<b>Node:</b> <code>{node_id}</code>",
+        f"<b>Plataforma:</b> {platform}",
+        f"<b>Epic:</b> {epic}",
+        f"<b>Score:</b> {score_str} (verdict: {verdict})",
+        f"<b>Report:</b> <code>{report}</code>",
+        "",
+        "Pipeline seguiu para o pr\u00f3ximo n\u00f3 (modo aut\u00f4nomo). Revise o report quando puder.",
+    ]
+    return "\n".join(lines)
+
+
+async def notify_auto_escalate_alert(
+    adapter: TelegramAdapter,
+    chat_id: int,
+    alert: dict,
+    conn: sqlite3.Connection,
+) -> None:
+    """Send a non-blocking alert for an auto_escalate_failed event and mark notified.
+
+    Idempotency: inserts an `auto_escalate_failed_notified` event referencing the
+    original event id. The poller filters out alerts already followed up.
+    """
+    text = format_auto_escalate_alert(alert)
+    try:
+        message_id = await adapter.alert(chat_id, text, level="warn")
+    except Exception:
+        # adapter.alert can fall back to send; if both fail, propagate the
+        # exception so the caller logs the failure (we already swallow at
+        # the gate_poller level).
+        message_id = await adapter.send(chat_id, text)
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    payload = {
+        "alert_event_id": alert["event_id"],
+        "message_id": message_id,
+    }
+    conn.execute(
+        "INSERT INTO events (platform_id, entity_type, entity_id, action, actor, payload, created_at) "
+        "VALUES (?, 'pipeline_run', ?, 'auto_escalate_failed_notified', 'system', ?, ?)",
+        (
+            alert.get("platform_id", "unknown"),
+            alert.get("entity_id", "?"),
+            json.dumps(payload),
+            now,
+        ),
+    )
+    conn.commit()
+    logger.info(
+        "auto_escalate_alert_notified",
+        alert_event_id=alert["event_id"],
+        message_id=message_id,
+    )
 
 
 # --- Decision notification (1-way-door) ---
@@ -543,7 +644,12 @@ async def gate_poller(
     platform_id: str | None = None,
     dry_run: bool = False,
 ) -> None:
-    """Asyncio task: poll DB for pending gates and send notifications."""
+    """Asyncio task: poll DB for pending gates and send notifications.
+
+    Also handles auto_escalate_failed events emitted by dag_executor in
+    autonomous mode — non-blocking alerts so the user notices judge fails
+    without the pipeline pausing.
+    """
     attempt = 0
     while True:
         try:
@@ -555,6 +661,14 @@ async def gate_poller(
                         logger.info("dry_run_skip", run_id=gate["run_id"])
                     else:
                         await notify_gate(adapter, chat_id, gate, conn)
+            alerts = poll_pending_auto_escalate_alerts(conn, platform_id=platform_id)
+            if alerts:
+                logger.info("pending_auto_escalate_alerts_found", count=len(alerts))
+                for alert in alerts:
+                    if dry_run:
+                        logger.info("dry_run_skip_alert", alert_event_id=alert["event_id"])
+                    else:
+                        await notify_auto_escalate_alert(adapter, chat_id, alert, conn)
             attempt = 0  # reset on success
         except Exception:
             attempt += 1

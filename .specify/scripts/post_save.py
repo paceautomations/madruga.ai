@@ -377,22 +377,39 @@ def record_save(
                     # A6: validate the (platform, epic) FK target BEFORE attempting
                     # upsert_epic_node. Without this pre-check, sqlite3 raises a
                     # bare "FOREIGN KEY constraint failed" that doesn't tell the
-                    # operator which FK failed. Fail-fast with an actionable
-                    # message instead.
+                    # operator which FK failed.
+                    #
+                    # Defence in depth: if the epic isn't registered yet but
+                    # pitch.md exists on disk (e.g. external drafts, recovery
+                    # flows, hooks firing before epic-context seeded the stub),
+                    # seed it from the frontmatter here instead of forcing the
+                    # operator to run ``upsert_epic`` manually — a shortcut
+                    # that lost the ``title`` in practice (epic 010 postmortem).
                     epic_exists = txn.execute(
                         "SELECT 1 FROM epics WHERE platform_id=? AND epic_id=?",
                         (platform, epic),
                     ).fetchone()
                     if not epic_exists:
-                        raise SystemExit(
-                            f"ERROR: epic '{epic}' not found for platform '{platform}' in the 'epics' table.\n"
-                            f"post_save.py cannot create epic stubs — run epic-context (or upsert_epic manually)\n"
-                            f"before recording per-node artifacts.\n"
-                            f'  Example: python3 -c "from db_pipeline import upsert_epic; import sqlite3; "\n'
-                            f"           \"c=sqlite3.connect('.pipeline/madruga.db'); \"\n"
-                            f"           \"upsert_epic(c, '{platform}', '{epic}', \"\n"
-                            f"           \"status='in_progress', \"\n"
-                            f"           \"branch_name='epic/{platform}/{epic}'); c.commit()\""
+                        from db_pipeline import seed_epic_from_pitch
+
+                        seeded_status = seed_epic_from_pitch(
+                            txn,
+                            platform,
+                            epic,
+                            REPO_ROOT / "platforms" / platform,
+                        )
+                        if seeded_status is None:
+                            raise SystemExit(
+                                f"ERROR: epic '{epic}' not found for platform '{platform}' in the 'epics' table\n"
+                                f"and no pitch.md exists at platforms/{platform}/epics/{epic}/pitch.md.\n"
+                                f"Run /madruga:epic-context first to materialise the pitch, or add an entry\n"
+                                f"to the roadmap and retry."
+                            )
+                        log.info(
+                            "Auto-seeded epic '%s/%s' (status=%s) from pitch.md before recording node.",
+                            platform,
+                            epic,
+                            seeded_status,
                         )
                     upsert_epic_node(
                         txn,

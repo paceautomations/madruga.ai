@@ -37,7 +37,6 @@ _NODE_EXPECTED_SECTIONS: dict[str, list[str]] = {
     "domain-model": [r"#+\s*Bounded Context", r"#+\s*Aggregate"],
     "containers": [r"#+\s*Container|specification\s*\{"],
     "context-map": [r"#+\s*Context Map|#+\s*Relationship"],
-    "epic-breakdown": [r"#+\s*Problem|#+\s*Solution"],
     "roadmap": [r"#+\s*Roadmap|#+\s*Epic.*Sequenc"],
     # L2 nodes
     "epic-context": [r"#+\s*Problem|#+\s*Solution"],
@@ -60,8 +59,7 @@ _NODE_EXPECTED_LINES: dict[str, int] = {
     "domain-model": 120,
     "containers": 80,
     "context-map": 80,
-    "epic-breakdown": 100,
-    "roadmap": 80,
+    "roadmap": 120,
     "epic-context": 80,
     "specify": 120,
     "plan": 150,

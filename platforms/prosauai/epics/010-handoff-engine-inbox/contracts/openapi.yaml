@@ -1,0 +1,359 @@
+openapi: 3.1.0
+info:
+  title: ProsaUAI Handoff Engine API
+  version: "1.0.0"
+  description: |
+    Endpoints introduzidos pelo epic 010 (Handoff Engine + Multi-Helpdesk Integration).
+
+    - 1 webhook helpdesk inbound (`/webhook/helpdesk/chatwoot/{tenant_slug}`)
+    - 3 admin endpoints (`/admin/conversations/{id}/mute|unmute|reply`)
+
+    Formato: JSON. Auth HMAC (webhook) / JWT Bearer (admin).
+    Multi-tenant: tenant_slug path param (webhook) ou JWT claim (admin).
+  contact:
+    name: Pace Engineering
+    email: engineering@pace.ai
+
+servers:
+  - url: https://api.prosauai.com
+    description: Production
+  - url: https://staging.api.prosauai.com
+    description: Staging
+
+tags:
+  - name: helpdesk-webhooks
+    description: Inbound webhooks from external helpdesks (Chatwoot v1)
+  - name: admin-handoff
+    description: Admin operations on conversation handoff state
+
+paths:
+  /webhook/helpdesk/chatwoot/{tenant_slug}:
+    post:
+      operationId: chatwootWebhookIngest
+      tags: [helpdesk-webhooks]
+      summary: Receive Chatwoot webhook events
+      description: |
+        Processa 2 tipos de evento Chatwoot (Clarify Q2 epic 010):
+
+        - `conversation_updated` com delta em `assignee_id` (null → non-null = assigned; non-null → null = resolved)
+        - `conversation_status_changed` com `status=resolved`
+
+        Outros event types retornam 200 OK sem side effect (log `chatwoot_webhook_unhandled`).
+
+        Idempotente via Redis SETNX `handoff:wh:{event_id}` TTL 24h.
+
+        Sempre responde 200 OK (mesmo em erro nao-HMAC) para evitar retry storm Chatwoot —
+        excepcao: 401 para HMAC invalido, 404 para tenant_slug inexistente.
+      parameters:
+        - name: tenant_slug
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^[a-z0-9-]+$"
+            minLength: 2
+            maxLength: 64
+          description: Slug do tenant (ex: "ariel", "resenhai")
+      security:
+        - chatwootWebhookHMAC: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatwootWebhookPayload"
+      responses:
+        "200":
+          description: Webhook aceito (ou no-op duplicado / event_type desconhecido / mode=off)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+        "401":
+          description: HMAC invalido
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: tenant_slug nao encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/conversations/{conversation_id}/mute:
+    post:
+      operationId: adminConversationMute
+      tags: [admin-handoff]
+      summary: Force mute AI (manual_toggle)
+      description: |
+        Admin forca `ai_active=false` com `reason=manual_toggle` e `ai_muted_by_user_id=<JWT.sub>`.
+        Emite evento `handoff_events.event_type=muted, source=manual_toggle`.
+
+        Respeita tenant scope do JWT — admin so muta conversas do proprio tenant
+        exceto Pace ops (pool_admin BYPASSRLS, ADR-027).
+      parameters:
+        - name: conversation_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      security:
+        - adminBearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MuteRequest"
+      responses:
+        "200":
+          description: Mute aplicado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HandoffStateResponse"
+        "403":
+          description: Admin sem escopo no tenant da conversa
+        "404":
+          description: Conversa nao encontrada
+
+  /admin/conversations/{conversation_id}/unmute:
+    post:
+      operationId: adminConversationUnmute
+      tags: [admin-handoff]
+      summary: Force resume AI (manual_toggle)
+      description: |
+        Admin forca `ai_active=true`, limpa `ai_muted_*` e `ai_auto_resume_at`.
+        Emite evento `handoff_events.event_type=resumed, source=manual_toggle`.
+      parameters:
+        - name: conversation_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      security:
+        - adminBearerAuth: []
+      responses:
+        "200":
+          description: Resume aplicado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HandoffStateResponse"
+        "403":
+          description: Admin sem escopo
+        "404":
+          description: Conversa nao encontrada
+
+  /admin/conversations/{conversation_id}/reply:
+    post:
+      operationId: adminConversationReply
+      tags: [admin-handoff]
+      summary: Send emergency reply via helpdesk (Pace ops composer)
+      description: |
+        Delega ao `HelpdeskAdapter` do tenant para enviar mensagem outbound ao cliente
+        via o helpdesk configurado. Identidade outbound: `sender_name=<JWT.email>`
+        (Q4-A clarify) — expõe email interno Pace no Chatwoot do tenant para
+        auditoria granular do atendente.
+
+        Audit: `handoff_events.metadata.admin_user_id=<JWT.sub>`.
+
+        Tenant com `helpdesk.type=none` retorna 409 Conflict — composer nao e aplicavel.
+      parameters:
+        - name: conversation_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      security:
+        - adminBearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReplyRequest"
+      responses:
+        "200":
+          description: Mensagem enviada com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReplyResponse"
+        "403":
+          description: Admin sem escopo
+        "404":
+          description: Conversa nao encontrada
+        "409":
+          description: Tenant sem helpdesk configurado (helpdesk.type=none)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error: no_helpdesk_configured
+                detail: "Tenant has no helpdesk; composer is not applicable"
+        "503":
+          description: Helpdesk indisponivel (circuit breaker aberto ou 5xx upstream)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  securitySchemes:
+    chatwootWebhookHMAC:
+      type: apiKey
+      in: header
+      name: X-Webhook-Signature
+      description: HMAC-SHA256 hex do body usando webhook_secret per-tenant
+    adminBearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT com claims `sub` (admin user id), `email`, `tenant_scope`
+
+  schemas:
+    ChatwootWebhookPayload:
+      type: object
+      description: |
+        Payload Chatwoot v1. Shape canonico validado contra fixture real capturada em dev (PR-A task T000).
+        Campos nao listados sao tolerados (forward-compatible).
+      required: [event]
+      additionalProperties: true
+      properties:
+        event:
+          type: string
+          description: |
+            Tipos processados explicitamente: `conversation_updated`, `conversation_status_changed`.
+            Outros → 200 OK no-op + log.
+          examples: ["conversation_updated", "conversation_status_changed"]
+        id:
+          type: string
+          description: Chatwoot event_id (usado como idempotency key SETNX)
+        conversation:
+          type: object
+          properties:
+            id: { type: integer }
+            status: { type: string }
+            assignee_id: { type: integer, nullable: true }
+        changed_attributes:
+          type: array
+          items:
+            type: object
+
+    MuteRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          enum: [manual_toggle]
+          default: manual_toggle
+          description: "Reason sempre manual_toggle neste endpoint (outras reasons vem de webhooks)"
+        metadata:
+          type: object
+          additionalProperties: true
+          description: "Metadata adicional para audit (ex: motivo textual do ops)"
+
+    ReplyRequest:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 4096
+          description: "Corpo da mensagem outbound ao cliente via helpdesk"
+        metadata:
+          type: object
+          description: "Metadata opcional, armazenada em handoff_events.metadata"
+
+    ReplyResponse:
+      type: object
+      required: [helpdesk_message_id, delivered_at, handoff_event_id]
+      properties:
+        helpdesk_message_id:
+          type: string
+          description: "ID da mensagem no helpdesk externo (Chatwoot message_id)"
+        delivered_at:
+          type: string
+          format: date-time
+        handoff_event_id:
+          type: string
+          format: uuid
+
+    HandoffStateResponse:
+      type: object
+      required: [conversation_id, ai_active]
+      properties:
+        conversation_id:
+          type: string
+          format: uuid
+        ai_active:
+          type: boolean
+        ai_muted_reason:
+          type: string
+          enum:
+            - chatwoot_assigned
+            - fromMe_detected
+            - manual_toggle
+            - rule_match
+            - safety_trip
+          nullable: true
+        ai_muted_at:
+          type: string
+          format: date-time
+          nullable: true
+        ai_muted_by_user_id:
+          type: string
+          format: uuid
+          nullable: true
+        ai_auto_resume_at:
+          type: string
+          format: date-time
+          nullable: true
+        external_refs:
+          type: object
+          additionalProperties: true
+          example:
+            chatwoot:
+              conversation_id: 123
+              inbox_id: 4
+
+    AcceptedResponse:
+      type: object
+      required: [accepted]
+      properties:
+        accepted:
+          type: boolean
+          example: true
+        handled:
+          type: boolean
+          description: "False quando event_type=unhandled ou mode=off ou duplicate"
+        note:
+          type: string
+          nullable: true
+          description: "Razao de no-op quando handled=false"
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          enum:
+            - invalid_hmac
+            - tenant_not_found
+            - conversation_not_found
+            - no_helpdesk_configured
+            - helpdesk_unavailable
+            - forbidden
+            - internal_error
+        detail:
+          type: string
+          description: "Mensagem humana para debug (sem info sensivel)"

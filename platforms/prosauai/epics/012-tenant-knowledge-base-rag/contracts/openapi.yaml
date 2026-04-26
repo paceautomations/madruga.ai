@@ -1,0 +1,493 @@
+openapi: 3.1.0
+info:
+  title: ProsaUAI Admin API — Knowledge Base
+  version: 0.1.0-epic012
+  description: |
+    Endpoints adicionados pelo epic 012 ao admin API existente (epic 008).
+    Auth via JWT admin (mesmo middleware). Pace ops com `pool_admin` BYPASSRLS pode
+    listar cross-tenant; tenant operators veem so seu proprio tenant via RLS.
+  contact:
+    name: Pace Engineering
+servers:
+  - url: https://admin.prosauai.com
+    description: Production
+  - url: http://localhost:8000
+    description: Local dev
+
+tags:
+  - name: knowledge
+    description: Knowledge base management (epic 012)
+  - name: agents
+    description: Agents tools_enabled toggle (epic 008 extension)
+  - name: sar
+    description: SAR / LGPD endpoints (ADR-018 extension)
+
+paths:
+  /admin/knowledge/documents:
+    post:
+      tags: [knowledge]
+      summary: Upload a document to the tenant knowledge base
+      description: |
+        FR-011, FR-012, FR-013, FR-014, FR-015, FR-016, FR-017, FR-073, FR-074.
+
+        Multipart/form-data with:
+          - `tenant_id` (UUID, query param OR form field)
+          - `file` (binary; md, txt, or pdf; <= rag.max_upload_mb)
+
+        **Atomic-replace**: if `source_name` (filename) already exists for the tenant,
+        DELETE old chunks + Storage + document, INSERT new — all in one transaction
+        guarded by `pg_advisory_xact_lock(hashtext('doc:{tenant_id}:{source_name}'))`.
+
+        Response is **synchronous** (waits for embedding to complete).
+      parameters:
+        - in: query
+          name: tenant_id
+          schema:
+            type: string
+            format: uuid
+          required: false  # may be in form-data instead
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                tenant_id:
+                  type: string
+                  format: uuid
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: Document uploaded and indexed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentUploadResponse'
+        '400':
+          description: Empty file (size_bytes < 1)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: empty_file
+        '403':
+          description: RAG not enabled for tenant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: rag_not_enabled_for_tenant
+        '413':
+          description: |
+            Either file exceeds `rag.max_upload_mb` OR tenant quota exceeded
+            (max_documents_per_tenant or max_chunks_per_tenant).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                size_exceeded:
+                  value:
+                    error: max_upload_mb_exceeded
+                    limit_mb: 10
+                quota_exceeded:
+                  value:
+                    error: tenant_quota_exceeded
+                    dimension: chunks
+                    current: 9850
+                    limit: 10000
+                    hint: delete old documents or contact ops to raise quota
+        '415':
+          description: Unsupported file format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: unsupported_format
+                accepted: [md, txt, pdf]
+        '422':
+          description: |
+            Content was extracted but produced zero usable chunks
+            (PDF scanned, MD whitespace-only, etc).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                pdf_scanned:
+                  value:
+                    error: no_chunks_extracted
+                    source_type: pdf
+                    hint: PDF parece scanned (sem texto extraivel); OCR nao suportado em v1
+                pdf_encrypted:
+                  value:
+                    error: pdf_encrypted
+                empty_md:
+                  value:
+                    error: no_chunks_extracted
+                    source_type: md
+                    hint: arquivo parece vazio ou so whitespace
+        '503':
+          description: Embeddings provider down (Bifrost/OpenAI 3 retries failed)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: embeddings_provider_down
+      security:
+        - adminJwt: []
+
+    get:
+      tags: [knowledge]
+      summary: List documents (paginated, tenant-scoped or cross-tenant for Pace ops)
+      description: FR-018. Cross-tenant requires `pool_admin` BYPASSRLS.
+      parameters:
+        - in: query
+          name: tenant_id
+          schema:
+            type: string
+            format: uuid
+          required: false
+          description: Required for non-Pace-ops; optional for Pace ops cross-tenant view.
+        - in: query
+          name: source_type
+          schema:
+            type: string
+            enum: [md, txt, pdf]
+          required: false
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - in: query
+          name: page_size
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+      responses:
+        '200':
+          description: Paginated list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentListResponse'
+      security:
+        - adminJwt: []
+
+  /admin/knowledge/documents/{document_id}:
+    delete:
+      tags: [knowledge]
+      summary: Delete a document (cascade chunks + Storage)
+      description: |
+        FR-009, FR-019. Transaction:
+          1. DELETE Supabase Storage `knowledge/{tenant_id}/{document_id}.{ext}`
+          2. DELETE FROM knowledge_chunks WHERE document_id=$1 (FK CASCADE auto)
+          3. DELETE FROM documents WHERE id=$1
+        Cross-tenant deletion blocked by RLS — returns 404 silently.
+      parameters:
+        - in: path
+          name: document_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deleted
+        '404':
+          description: Document not found OR cross-tenant access denied (RLS)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: document_not_found
+      security:
+        - adminJwt: []
+
+  /admin/knowledge/documents/{document_id}/raw:
+    get:
+      tags: [knowledge]
+      summary: Get signed URL for downloading the raw file
+      description: FR-020. Returns 302 to a Supabase Storage signed URL with TTL 5min.
+      parameters:
+        - in: path
+          name: document_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '302':
+          description: Redirect to signed URL
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri
+        '404':
+          description: Document not found
+      security:
+        - adminJwt: []
+
+  /admin/knowledge/documents/{document_id}/chunks:
+    get:
+      tags: [knowledge]
+      summary: Preview the first N chunks of a document
+      description: FR-021. Used by admin UI document detail sheet.
+      parameters:
+        - in: path
+          name: document_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+      responses:
+        '200':
+          description: Chunk preview list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ChunkPreview'
+      security:
+        - adminJwt: []
+
+  /admin/agents/{agent_id}:
+    patch:
+      tags: [agents]
+      summary: Update agent config (toggle search_knowledge in tools_enabled)
+      description: |
+        FR-048. Existing endpoint from epic 008 — extended doc to clarify
+        `tools_enabled` toggle for `search_knowledge`.
+      parameters:
+        - in: path
+          name: agent_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                tools_enabled:
+                  type: array
+                  items:
+                    type: string
+                  example: [search_knowledge]
+      responses:
+        '200':
+          description: Agent updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  agent_id:
+                    type: string
+                    format: uuid
+                  tools_enabled:
+                    type: array
+                    items:
+                      type: string
+      security:
+        - adminJwt: []
+
+  /admin/sar/{customer_id}:
+    get:
+      tags: [sar]
+      summary: SAR data export (extended to include documents)
+      description: |
+        FR-066. ADR-018 endpoint extended to list `documents` belonging to the
+        tenant of the customer. Cross-tenant embedding explicitly forbidden via RLS.
+      parameters:
+        - in: path
+          name: customer_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: SAR data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  customer_id:
+                    type: string
+                    format: uuid
+                  conversations:
+                    type: array
+                  messages:
+                    type: array
+                  documents:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DocumentRecord'
+
+components:
+  securitySchemes:
+    adminJwt:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    DocumentRecord:
+      type: object
+      required: [document_id, tenant_id, source_name, source_type, storage_path, size_bytes, chunks_count, embedding_model, uploaded_at]
+      properties:
+        document_id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        source_name:
+          type: string
+          example: faq.pdf
+        source_type:
+          type: string
+          enum: [md, txt, pdf]
+        storage_path:
+          type: string
+          example: knowledge/00000000-0000-4000-a000-000000000001/abc-123.pdf
+        size_bytes:
+          type: integer
+          minimum: 1
+        uploaded_by_user_id:
+          type: string
+          format: uuid
+          nullable: true
+        uploaded_at:
+          type: string
+          format: date-time
+        chunks_count:
+          type: integer
+          minimum: 1
+        embedding_model:
+          type: string
+          example: text-embedding-3-small
+
+    DocumentUploadResponse:
+      type: object
+      required: [document_id, source_name, source_type, chunks_created, total_tokens, cost_usd, embedding_model, replaced_existing]
+      properties:
+        document_id:
+          type: string
+          format: uuid
+        source_name:
+          type: string
+        source_type:
+          type: string
+          enum: [md, txt, pdf]
+        chunks_created:
+          type: integer
+          minimum: 1
+        total_tokens:
+          type: integer
+          minimum: 1
+        cost_usd:
+          type: number
+          format: float
+          example: 0.00012
+        embedding_model:
+          type: string
+        replaced_existing:
+          type: boolean
+          description: True if atomic-replace happened (source_name was already present).
+
+    DocumentListResponse:
+      type: object
+      required: [items, page, page_size, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DocumentRecord'
+        page:
+          type: integer
+        page_size:
+          type: integer
+        total:
+          type: integer
+
+    ChunkPreview:
+      type: object
+      required: [chunk_index, content, tokens]
+      properties:
+        chunk_index:
+          type: integer
+          minimum: 0
+        content:
+          type: string
+        tokens:
+          type: integer
+          minimum: 10
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          enum:
+            - unsupported_format
+            - max_upload_mb_exceeded
+            - empty_file
+            - rag_not_enabled_for_tenant
+            - embeddings_provider_down
+            - tenant_quota_exceeded
+            - no_chunks_extracted
+            - pdf_no_extractable_text
+            - pdf_encrypted
+            - pdf_extraction_failed
+            - document_not_found
+            - concurrent_upload_in_progress
+        hint:
+          type: string
+        limit_mb:
+          type: integer
+          description: Present when error=max_upload_mb_exceeded
+        accepted:
+          type: array
+          items:
+            type: string
+          description: Present when error=unsupported_format
+        dimension:
+          type: string
+          enum: [documents, chunks]
+          description: Present when error=tenant_quota_exceeded
+        current:
+          type: integer
+        limit:
+          type: integer
+        source_type:
+          type: string
+          description: Present when error=no_chunks_extracted

@@ -67,8 +67,8 @@ adr → blueprint → domain-model → containers → context-map
 - Define COMO o sistema funciona (DDD, C4, ADRs)
 
 ### Fase 4: Planejamento (~1h)
-epic-breakdown → roadmap
-- Define QUANDO entregar (epics Shape Up)
+roadmap
+- Define QUAIS epics existem (problem/appetite/deps/priority) e QUANDO entregar — 1-way-door
 
 ### Ciclo por Epic (~2-4h cada)
 epic-context (cria branch) → specify → plan → tasks → implement → verify → reconcile → PR/merge
@@ -85,7 +85,7 @@ Tempo total estimado: ~7h para pipeline completo + 2-4h por epic.
 **Pipeline (madruga:)** — documentacao da plataforma:
   /madruga:pipeline, /madruga:vision, /madruga:solution-overview, /madruga:business-process,
   /madruga:tech-research, /madruga:adr, /madruga:blueprint, /madruga:domain-model,
-  /madruga:containers, /madruga:context-map, /madruga:epic-breakdown, /madruga:roadmap
+  /madruga:containers, /madruga:context-map, /madruga:roadmap
 
 **Epic Cycle (speckit.)** — implementacao por epic:
   /speckit.specify, /speckit.plan, /speckit.tasks,

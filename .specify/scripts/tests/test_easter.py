@@ -370,6 +370,72 @@ async def test_telegram_recovery_resumes_normal():
 
 
 @pytest.mark.asyncio
+async def test_health_checker_wraps_get_me_in_wait_for():
+    """Fix D: bot.get_me() must be wrapped in asyncio.wait_for(timeout).
+
+    Pre-fix, an aiogram TelegramNetworkError (HTTP read timeout) could hold
+    the await indefinitely, preventing the next sd_notify from running and
+    getting the service killed by systemd's WatchdogSec=120. We verify the
+    code path explicitly invokes wait_for with a finite timeout, and that
+    a TimeoutError raised by wait_for is caught by the existing exception
+    handler (fail_count increments, loop continues, WATCHDOG=1 still sent
+    on the next iteration)."""
+    import easter
+    from easter import health_checker
+
+    easter._easter_state.easter_state = "running"
+    easter._easter_state.telegram_fail_count = 0
+    easter._easter_state.telegram_status = "connected"
+
+    shutdown = asyncio.Event()
+    mock_bot = AsyncMock()
+
+    sd_calls = []
+
+    def _fake_sd_notify(msg):
+        sd_calls.append(msg)
+
+    call_count = 0
+
+    async def _fake_sleep(_event, _seconds):
+        nonlocal call_count
+        call_count += 1
+        if call_count >= 2:
+            shutdown.set()
+            raise asyncio.CancelledError()
+        return False
+
+    wait_for_calls = []
+
+    async def _stub_wait_for(coro, timeout):
+        wait_for_calls.append(timeout)
+        # Cancel the coroutine so AsyncMock cleanup doesn't lag, then
+        # synthesize the same TimeoutError the real wait_for would raise.
+        if asyncio.iscoroutine(coro):
+            coro.close()
+        raise TimeoutError("simulated telegram timeout")
+
+    with (
+        patch("easter._interruptible_sleep", new=_fake_sleep),
+        patch("easter.sd_notify", side_effect=_fake_sd_notify),
+        patch("easter.asyncio.wait_for", new=_stub_wait_for),
+    ):
+        try:
+            await health_checker(mock_bot, shutdown, interval=0.01)
+        except asyncio.CancelledError:
+            pass
+
+    # wait_for was called with a finite, small timeout (the fix)
+    assert wait_for_calls, "bot.get_me() was not wrapped in asyncio.wait_for"
+    assert wait_for_calls[0] is not None
+    assert 1 <= wait_for_calls[0] <= 30, f"timeout {wait_for_calls[0]}s out of expected range"
+    # TimeoutError increments fail_count via the existing except branch
+    assert easter._easter_state.telegram_fail_count >= 1
+    # WATCHDOG=1 was emitted before the failed Telegram check
+    assert "WATCHDOG=1" in sd_calls
+
+
+@pytest.mark.asyncio
 async def test_ntfy_fallback_on_degradation():
     """ntfy_alert is called when transitioning to degraded mode."""
     import easter
@@ -640,8 +706,15 @@ async def test_dag_scheduler_ntfy_on_pipeline_failure():
 # --- C3: telegram_bot.py async_main deprecation ---
 
 
-def test_async_main_deprecation_warning():
-    """async_main emits DeprecationWarning."""
+@pytest.mark.asyncio
+async def test_async_main_deprecation_warning():
+    """async_main emits DeprecationWarning.
+
+    Uses pytest-asyncio's per-test event loop (``loop_scope='function'``)
+    instead of ``asyncio.get_event_loop().run_until_complete`` — the
+    deprecated pattern hangs indefinitely when multiple pytest sessions
+    contend for the global loop on Python 3.12+.
+    """
     import warnings
 
     from telegram_bot import async_main
@@ -649,8 +722,8 @@ def test_async_main_deprecation_warning():
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
         try:
-            asyncio.get_event_loop().run_until_complete(
-                async_main(MagicMock(verbose=False, poll_interval=15, health_interval=60, platform=None, dry_run=True))
+            await async_main(
+                MagicMock(verbose=False, poll_interval=15, health_interval=60, platform=None, dry_run=True)
             )
         except (SystemExit, Exception):
             pass  # Expected — no env vars set
@@ -858,7 +931,13 @@ async def test_dispatch_with_retry_no_abort_check():
 
 
 def test_auto_commit_epic_no_changes(tmp_path):
-    """F9: _auto_commit_epic returns True when no changes to commit."""
+    """F9: _auto_commit_epic returns True when no changes to commit.
+
+    With Fix G, the function also calls _count_unique_branch_commits to
+    distinguish "no work happened" from "tasks already self-committed".
+    That helper invokes `git rev-parse @{u}` (1 extra call); when stdout is
+    empty it short-circuits without calling `git rev-list`. Total = 2.
+    """
     from dag_executor import _auto_commit_epic
 
     with patch("dag_executor.subprocess.run") as mock_run:
@@ -867,8 +946,13 @@ def test_auto_commit_epic_no_changes(tmp_path):
         result = _auto_commit_epic(tmp_path, "test-plat", "001-epic")
 
     assert result is True
-    # Only git status called, no git add or commit
-    assert mock_run.call_count == 1
+    # git status + git rev-parse @{u} (returns empty → bail out, no rev-list)
+    assert mock_run.call_count == 2
+    # No git add or commit happened
+    cmds = [c.args[0][:2] for c in mock_run.call_args_list]
+    assert ["git", "status"] in cmds
+    assert all(c != ["git", "add"] for c in cmds)
+    assert all(c != ["git", "commit"] for c in cmds)
 
 
 def test_auto_commit_epic_with_changes(tmp_path):
@@ -961,7 +1045,7 @@ async def test_dag_scheduler_skips_epic_with_pending_gate():
         ),
         patch("easter.run_pipeline_async") as mock_dispatch,
     ):
-        asyncio.get_event_loop().call_later(0.1, shutdown.set)
+        asyncio.get_running_loop().call_later(0.1, shutdown.set)
         await easter.dag_scheduler(mock_conn, asyncio.Semaphore(1), shutdown, poll_interval=0.05)
 
         # Dispatch must NOT have been called (gate is pending)
@@ -1279,20 +1363,24 @@ def test_aggregate_completed_nodes_no_implement():
     assert progress is None
 
 
-# --- F5: DirtyTreeError is user-actionable, not a generic retry ---
+# --- F5: DirtyTreeError is transient user state, not a block-worthy failure ---
 
 
 @pytest.mark.asyncio
-async def test_dag_scheduler_blocks_epic_on_dirty_tree_error():
-    """A DirtyTreeError raised by run_pipeline_async (via get_repo_work_dir)
-    must:
-      1. Mark the epic as 'blocked' (no retry on user-actionable errors)
-      2. NOT increment _epic_fail_counts (those are for transient failures)
-      3. Continue polling — i.e. the loop iteration completes without
-         bubbling up to the generic `except Exception:` retry-with-backoff.
+async def test_dag_scheduler_skips_epic_on_dirty_tree():
+    """A DirtyTreeError raised by run_pipeline_async must:
+    1. NOT mark the epic as 'blocked' — dirty tree is transient user state.
+    2. NOT increment _epic_fail_counts (those are for pipeline failures).
+    3. Add the epic to _dirty_notified so repeat dirty-tree events are quiet.
+    4. Continue polling — loop iteration completes without bubbling up to
+       the generic `except Exception:` retry-with-backoff.
     """
-    from easter import dag_scheduler
+    from easter import _dirty_notified, _epic_fail_counts, dag_scheduler
     from ensure_repo import DirtyTreeError
+
+    # Ensure clean state for this test (module-level set persists across tests)
+    _dirty_notified.discard("016")
+    _epic_fail_counts.pop("016", None)
 
     shutdown = asyncio.Event()
     mock_conn = MagicMock()
@@ -1321,12 +1409,108 @@ async def test_dag_scheduler_blocks_epic_on_dirty_tree_error():
         await dag_scheduler(mock_conn, asyncio.Semaphore(3), shutdown, poll_interval=0.01)
 
     block_calls = [c for c in block_conn.execute.call_args_list if "UPDATE epics SET status='blocked'" in c.args[0]]
-    assert len(block_calls) == 1, f"expected 1 block UPDATE, got {block_conn.execute.call_args_list}"
-    assert block_conn.commit.called
-
-    from easter import _epic_fail_counts
+    assert block_calls == [], f"expected no block UPDATE, got {block_conn.execute.call_args_list}"
 
     assert "016" not in _epic_fail_counts
+    assert "016" in _dirty_notified
+
+    # Cleanup
+    _dirty_notified.discard("016")
+
+
+@pytest.mark.asyncio
+async def test_dag_scheduler_dirty_tree_notifies_once_per_streak():
+    """Repeat DirtyTreeError for the same epic must ntfy only once."""
+    from easter import _dirty_notified, dag_scheduler
+    from ensure_repo import DirtyTreeError
+
+    _dirty_notified.discard("017")
+
+    shutdown = asyncio.Event()
+    mock_conn = MagicMock()
+    iterations = {"n": 0}
+
+    async def _fake_run(*args, **kwargs):
+        raise DirtyTreeError("dirty")
+
+    async def _fake_sleep(_event, _seconds):
+        iterations["n"] += 1
+        if iterations["n"] >= 3:
+            shutdown.set()
+        return True
+
+    ntfy_mock = MagicMock()
+
+    with (
+        _mock_scheduler_db(mock_conn),
+        patch("db.get_conn", return_value=mock_conn),
+        patch(
+            "easter.poll_active_epics",
+            return_value=[{"epic_id": "017", "platform_id": "test", "branch_name": "epic/test/017"}],
+        ),
+        patch("easter.run_pipeline_async", new=_fake_run),
+        patch("easter._running_epics", set()),
+        patch("easter._interruptible_sleep", new=_fake_sleep),
+        patch("easter.ntfy_alert", new=ntfy_mock),
+        patch.dict("os.environ", {"MADRUGA_NTFY_TOPIC": "test-topic"}),
+        patch("ensure_repo._load_repo_binding", return_value=_SELF_REF_BINDING),
+        patch("ensure_repo._is_self_ref", return_value=True),
+    ):
+        await dag_scheduler(mock_conn, asyncio.Semaphore(3), shutdown, poll_interval=0.01)
+
+    assert ntfy_mock.call_count == 1, f"expected 1 ntfy call per streak, got {ntfy_mock.call_count}"
+    assert "017" in _dirty_notified
+    _dirty_notified.discard("017")
+
+
+@pytest.mark.asyncio
+async def test_dag_scheduler_dirty_then_clean_self_heals():
+    """Dirty tree → clean tree: epic stays in_progress, _dirty_notified clears,
+    and the next dispatch succeeds without any manual intervention."""
+    from easter import _dirty_notified, dag_scheduler
+    from ensure_repo import DirtyTreeError
+
+    _dirty_notified.discard("018")
+
+    shutdown = asyncio.Event()
+    mock_conn = MagicMock()
+    calls = {"n": 0}
+
+    async def _fake_run(*args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise DirtyTreeError("dirty")
+        return 0  # second iteration: clean + success
+
+    async def _fake_sleep(_event, _seconds):
+        if calls["n"] >= 2:
+            shutdown.set()
+        return True
+
+    with (
+        _mock_scheduler_db(mock_conn),
+        patch("db.get_conn", return_value=mock_conn),
+        patch(
+            "easter.poll_active_epics",
+            return_value=[{"epic_id": "018", "platform_id": "test", "branch_name": "epic/test/018"}],
+        ),
+        patch("easter.run_pipeline_async", new=_fake_run),
+        patch("easter._running_epics", set()),
+        patch("easter._interruptible_sleep", new=_fake_sleep),
+        patch("ensure_repo._load_repo_binding", return_value=_SELF_REF_BINDING),
+        patch("ensure_repo._is_self_ref", return_value=True),
+    ):
+        await dag_scheduler(mock_conn, asyncio.Semaphore(3), shutdown, poll_interval=0.01)
+
+    # No block UPDATE ever fired
+    block_calls = [c for c in mock_conn.execute.call_args_list if "UPDATE epics SET status='blocked'" in c.args[0]]
+    assert block_calls == []
+
+    # Dispatched at least twice (dirty + clean)
+    assert calls["n"] >= 2
+
+    # Success cleared the dirty-notified streak
+    assert "018" not in _dirty_notified
 
 
 def test_is_rate_limit_error_str_matches_patterns():
@@ -1385,3 +1569,68 @@ async def test_dag_scheduler_rate_limit_cooldown_skips_dispatch():
 
     assert call_count["dispatches"] == 0, "dispatch should be skipped during rate limit cooldown"
     assert call_count["sleeps"] >= 1
+
+
+# --- Sugestao #1: dispatch artifact cleanup cron ---
+
+
+def test_cleanup_dispatch_artifacts_deletes_old_files(tmp_path):
+    """_cleanup_dispatch_artifacts removes .stdout files older than ``days`` in both
+    .pipeline/stream/ and .pipeline/timeout-diagnostics/."""
+    import os
+    import time as _time
+
+    from easter import _cleanup_dispatch_artifacts
+
+    stream_dir = tmp_path / ".pipeline" / "stream"
+    timeout_dir = tmp_path / ".pipeline" / "timeout-diagnostics"
+    stream_dir.mkdir(parents=True)
+    timeout_dir.mkdir(parents=True)
+
+    old = stream_dir / "old_node_1000000_123.stdout"
+    old.write_text("old")
+    fresh = stream_dir / "fresh_node_9999999999_456.stdout"
+    fresh.write_text("fresh")
+    timeout_old = timeout_dir / "timeout_node_1000000_789.stdout"
+    timeout_old.write_text("old timeout")
+
+    old_mtime = _time.time() - 10 * 86400
+    os.utime(old, (old_mtime, old_mtime))
+    os.utime(timeout_old, (old_mtime, old_mtime))
+
+    with patch("config.REPO_ROOT", tmp_path):
+        result = _cleanup_dispatch_artifacts(days=7)
+
+    assert result == {"stream_deleted": 1, "timeout_deleted": 1, "errors": 0}
+    assert not old.exists(), "old stream file must be deleted"
+    assert fresh.exists(), "fresh stream file must be preserved"
+    assert not timeout_old.exists(), "old timeout diagnostic must be deleted"
+
+
+def test_cleanup_dispatch_artifacts_missing_dir_noop(tmp_path):
+    """Missing .pipeline/stream/ and .pipeline/timeout-diagnostics/ → zero ops, no crash."""
+    from easter import _cleanup_dispatch_artifacts
+
+    with patch("config.REPO_ROOT", tmp_path):
+        result = _cleanup_dispatch_artifacts(days=7)
+
+    assert result == {"stream_deleted": 0, "timeout_deleted": 0, "errors": 0}
+
+
+# --- Sugestao #2: RSS metric ---
+
+
+def test_current_rss_mb_returns_positive_on_linux():
+    """_current_rss_mb reads /proc/self/status and returns MB > 0 on Linux.
+
+    Skipped if /proc/self/status is unreadable (non-Linux CI)."""
+    import os
+
+    from easter import _current_rss_mb
+
+    if not os.path.exists("/proc/self/status"):
+        pytest.skip("non-Linux platform")
+    rss = _current_rss_mb()
+    assert rss is not None
+    assert rss > 0
+    assert rss < 10_000  # sanity: test process shouldn't hold 10 GB

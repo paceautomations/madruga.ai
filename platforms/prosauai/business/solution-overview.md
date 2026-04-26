@@ -1,6 +1,6 @@
 ---
 title: "Solution Overview"
-updated: 2026-04-20
+updated: 2026-04-22
 sidebar:
   order: 2
 ---
@@ -34,23 +34,23 @@ Em grupos WhatsApp, o agente participa quando mencionado — publica ranking, re
 
 | Feature | Status | Para | Valor | Limites |
 |---------|--------|------|-------|---------|
-| **Transcricao de audio** | 🔄 epic 009 · previsao 2026-04-29 | end-user + tenant | Cliente envia audio (PTT ou arquivo) e recebe resposta coerente com o conteudo falado — nao precisa digitar, e o agente nao trava com "so entendo texto". | pt-BR prioritario; ingles suportado; ate 10 min por audio |
-| **Descricao de imagem** | 🔄 epic 009 · previsao 2026-04-29 | end-user + tenant | Cliente envia foto (print de erro, comprovante, produto, documento escaneado) e o agente descreve em linguagem natural e responde com base nela. Reduz handoff em 30-50% dos casos. | JPG/PNG/WEBP ate 20 MB; caption do cliente e usada como contexto adicional |
-| **Extracao de texto de documentos** | 🔄 epic 009 · previsao 2026-04-29 | end-user + tenant | Cliente envia PDF ou DOCX e o agente responde perguntas sobre o conteudo — "qual o valor", "qual a data de vencimento", termos de contrato. | PDF texto nativo + DOCX; ate 25 MB, 10 paginas. PDF escaneado fica para o proximo ciclo |
-| **Stickers, localizacao, contatos e reacoes** | 🔄 epic 009 | end-user | Sticker vira texto descritivo, localizacao vira endereco em linguagem natural, contato compartilhado vira descricao, reacao (❤️/👍) conta como feedback explicito. Nenhum tipo de conteudo faz o agente travar. | — |
-| **Suporte a Meta Cloud API (WhatsApp oficial)** | 📋 epic 009 PR-C · previsao 2026-05-10 | tenant | Tenant pode conectar o ProsaUAI via Meta Cloud (oficial) alem do gateway atual. Destrava funcionalidades oficiais (botoes, listas, templates aprovados) e elimina dependencia do gateway para quem prefere pagar a Meta direto. | Retrocompativel — tenants atuais continuam funcionando sem alteracao |
-| **Fallback tonalizado por persona** | 🔄 epic 009 | end-user | Quando qualquer feature de midia falha (orcamento estourado, provider fora, arquivo corrompido, formato nao suportado), o cliente recebe mensagem humanizada pela persona do tenant ("Opa, hoje estou sem energia para audios longos, pode me resumir por texto?") — nunca um erro tecnico cru. | — |
+| **Transcricao de audio** | ✅ epic 009 | end-user + tenant | Cliente envia audio (PTT ou arquivo) e recebe resposta coerente com o conteudo falado — nao precisa digitar, e o agente nao trava com "so entendo texto". | pt-BR prioritario; ingles suportado; ate 10 min por audio |
+| **Descricao de imagem** | ✅ epic 009 | end-user + tenant | Cliente envia foto (print de erro, comprovante, produto, documento escaneado) e o agente descreve em linguagem natural e responde com base nela. Reduz handoff em 30-50% dos casos. | JPG/PNG/WEBP ate 20 MB; caption do cliente e usada como contexto adicional |
+| **Extracao de texto de documentos** | ✅ epic 009 | end-user + tenant | Cliente envia PDF ou DOCX e o agente responde perguntas sobre o conteudo — "qual o valor", "qual a data de vencimento", termos de contrato. | PDF texto nativo + DOCX; ate 25 MB, 10 paginas. PDF escaneado fica para backlog (OCR). |
+| **Stickers, localizacao, contatos e reacoes** | ✅ epic 009 | end-user | Sticker vira texto descritivo, localizacao vira endereco em linguagem natural, contato compartilhado vira descricao, reacao (❤️/👍) conta como feedback explicito. Nenhum tipo de conteudo faz o agente travar. | — |
+| **Suporte a Meta Cloud API (WhatsApp oficial)** | ✅ epic 009 (PR-C) | tenant | Tenant pode conectar o ProsaUAI via Meta Cloud (oficial) alem do gateway atual. Destrava funcionalidades oficiais (botoes, listas, templates aprovados) e elimina dependencia do gateway para quem prefere pagar a Meta direto. | Retrocompativel — tenants atuais continuam funcionando sem alteracao |
+| **Fallback tonalizado por persona** | ✅ epic 009 | end-user | Quando qualquer feature de midia falha (orcamento estourado, provider fora, arquivo corrompido, formato nao suportado), o cliente recebe mensagem humanizada pela persona do tenant ("Opa, hoje estou sem energia para audios longos, pode me resumir por texto?") — nunca um erro tecnico cru. | — |
 
 ### Controle operacional (Admin)
 
 | Feature | Status | Para | Valor |
 |---------|--------|------|-------|
 | **Painel Admin (login + navegacao)** | ✅ epic 007 | admin | Area administrativa com login por cookie e sidebar de navegacao entre as abas operacionais. |
-| **Overview por tenant** | 🔄 epic 008 | admin | Conversas ativas hoje, volume de mensagens, taxa de handoff, custo acumulado e distribuicao por intent. |
-| **Trace Explorer** | 🔄 epic 008 | admin | Waterfall completo de cada resposta do pipeline com input/output de cada etapa. Inclui transcripts de audio e descricoes de imagem na integra. |
-| **Performance AI** | 🔄 epic 008 | admin + Pace (ops) | Custo por modelo ao longo do tempo + custo por midia/dia (epic 009), latencia p50/p95/p99 por etapa e quality score medio por agente. |
-| **Conversas e Inbox** | 🔄 epic 008 | admin | Listagem cross-tenant com busca (nome do cliente + conteudo) e filtros por status e tenant. Listagem em <100 ms em volumes de 10k+ conversas. |
-| **Handoff para atendente humano** | 📋 epic 014 | tenant + end-user | Quando a IA decide (score baixo, topico critico, cliente pede) ou quando um atendente pega a conversa, o handoff e transparente — SLA configuravel, timeout retorna para bot. |
+| **Overview por tenant** | ✅ epic 008 | admin | Conversas ativas hoje, volume de mensagens, taxa de handoff, custo acumulado e distribuicao por intent. |
+| **Trace Explorer** | ✅ epic 008 | admin | Waterfall completo de cada resposta do pipeline com input/output de cada etapa. Inclui transcripts de audio e descricoes de imagem na integra. |
+| **Performance AI** | ✅ epic 008 + 009 | admin + Pace (ops) | Custo por modelo ao longo do tempo + custo por midia/dia, latencia p50/p95/p99 por etapa e quality score medio por agente. |
+| **Conversas e Inbox** | ✅ epic 008 | admin | Listagem cross-tenant com busca (nome do cliente + conteudo) e filtros por status e tenant. Listagem em <100 ms em volumes de 10k+ conversas. |
+| **Handoff para atendente humano** | 🔄 epic 010 · proximo | tenant + end-user | Quando a IA decide (score baixo, topico critico, cliente pede) ou quando um atendente pega a conversa, o handoff e transparente — SLA configuravel, timeout retorna para bot. Inbox dedicado para atendente. |
 
 ### Compliance e privacidade
 
@@ -62,20 +62,41 @@ Em grupos WhatsApp, o agente participa quando mencionado — publica ranking, re
 
 ---
 
-## Proximos ciclos e visao de longo prazo
+## Proximos ciclos
+
+> Ordem reconciliada em 2026-04-22 apos shipping de 009. Ver [roadmap.md](../planning/roadmap/) para datas e deps.
 
 | Feature | Horizonte | Valor |
 |---------|-----------|-------|
-| **PDF escaneado (OCR automatico)** | Proximo — epic 011 | Hoje o agente retorna aviso claro de que nao conseguiu ler. OCR remoto destrava PDFs de boletos, contratos e documentos fotografados. |
-| **Instagram DM + Telegram** | Proximo — epic 010 | Mesmo agente passa a responder em outros canais reusando o adaptador do epic 009 — validacao de que integrar novo canal nao muda o core da plataforma. |
-| **Agent tools (APIs externas)** | Proximo — epic 013 | Agente consulta dados reais do tenant (estoque, ranking, agenda), chama APIs e cria registros em nome do cliente. |
-| **Triggers proativos** | Proximo — epic 015 | Plataforma inicia conversa com o cliente (lembrete de agendamento, follow-up de pedido, boas-vindas) em vez de so reagir. |
-| **Streaming transcription** | Proximo — epic 012 | Audios transcritos em tempo real durante a fala. Ganho marginal em pt-BR curto — avaliar demanda antes de priorizar. |
-| **Medicao e melhoria continua de qualidade** | Longo prazo | Score automatico por conversa, deteccao de respostas fracas, ciclo semanal de revisao e aprovacao de melhoria com gate humano. |
-| **Cadastro self-service** | Longo prazo | Novo cliente se cadastra, configura agente e conecta WhatsApp sozinho — escala sem equipe de onboarding. |
-| **Base de conhecimento por tenant** | Longo prazo | Agente busca em documentos, FAQs e manuais do tenant para respostas especializadas. |
-| **Cobranca automatica** | Longo prazo | Billing integrado com tiers de preco e consumo medido. |
-| **Formularios no WhatsApp** | Longo prazo | Cadastro, pesquisa de satisfacao e coleta de dados dentro do chat, sem sair do WhatsApp. |
+| **Handoff Engine + Inbox** | Proximo — epic 010 | Materializa `pending_handoff` no DB + UI dedicada para atendente humano. SLA configuravel, timeout volta para bot. Fecha o buraco "IA e copiloto, nao piloto". |
+| **Evals (offline + online)** | Proximo — epic 011 | Score automatico por conversa (faithfulness, relevance, toxicity) + guardrails pre/pos-LLM em runtime. Unica forma de medir o 70% de resolucao autonoma da vision. |
+| **Base de conhecimento por tenant (RAG)** | Proximo — epic 012 | Tenant faz upload de FAQ/catalogo via admin; agente busca em documentos do proprio tenant. Destrava onboarding self-service <15min. |
+| **Agent Tools v2 (APIs externas)** | Proximo — epic 013 | Agente consulta dados reais do tenant (estoque, ranking, agenda), chama APIs e cria registros em nome do cliente. Conectores declarativos. |
+| **Alerting + WhatsApp Quality** | Proximo — epic 014 | Prometheus/Alertmanager para pipeline quebrado, quality score poller da Meta/Evolution, warm-up per-number, circuit breaker de send. Gate de producao para 1o cliente externo. |
+| **Agent Pipeline Steps** | Proximo — epic 015 | Pipeline configuravel por agente (classifier → clarifier → resolver → specialist). Reduz handoff desnecessario com clarificacao antes de chamar LLM caro. |
+| **Triggers proativos** | Proximo — epic 016 | Plataforma inicia conversa com o cliente (lembrete de agendamento, follow-up de pedido, boas-vindas) em vez de so reagir. |
+| **Tenant Self-Admin** | Proximo — epic 017 | Dono da PME loga na propria area administrativa (subset das abas) e ve so seus dados. Pre-requisito para billing e onboarding autonomo. |
+
+## Gated (liberacao sob trigger comercial)
+
+| Feature | Epic | Trigger |
+|---------|------|---------|
+| **API publica + onboarding externo** | epic 018 | Primeiro cliente externo disposto a pagar/testar. |
+| **Cobranca automatica (Stripe)** | epic 019 | Cliente pagando manualmente ha >=1 mes; operacao quer automatizar. |
+| **TenantStore Postgres + Ops Fase 3** | epic 020 | >=5 tenants reais simultaneos OU dor operacional com YAML. |
+
+## Backlog someday-maybe
+
+> Nao descartados — aguardam trigger concreto para promover a epic ativo. Ver [roadmap.md](../planning/roadmap/) para a lista completa de triggers.
+
+| Feature | Trigger para promover |
+|---------|-----------------------|
+| **PDF escaneado (OCR remoto)** | Demanda recorrente em segmento Servicos/Juridico por leitura de documentos nao-texto-nativo. |
+| **Instagram DM + Telegram** | Cliente real demanda canal nao-WhatsApp OU validacao arquitetural multi-source vira prioridade. |
+| **Streaming transcription** | p95 Whisper >5s sustentado por 30d OU audios >2min recorrentes em PT-BR. |
+| **WhatsApp Flows (formularios estruturados)** | Tier Business exige Flows como diferencial OU demanda real de cliente por captura estruturada. |
+| **Data Flywheel** | >=20 tenants gerando volume de conversas que justifique ciclo semanal de revisao humana. |
+| **Self-service signup 100% autonomo** | Public API Fase 2 estavel + admin manual virou gargalo (>=5 pedidos/semana). |
 
 ---
 

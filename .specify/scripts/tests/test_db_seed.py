@@ -459,3 +459,126 @@ def test_seed_epic_nodes_preserves_existing_completed_at(tmp_db, tmp_path):
     nodes = get_epic_nodes(tmp_db, "plat-preserve", "001-pres")
     specify = [n for n in nodes if n["node_id"] == "specify"][0]
     assert specify["completed_at"] == original_ts
+
+
+# ───────────────────────────────────────────────────────────────────────
+# seed_epic_from_pitch — extracted helper (consolidation PR)
+# ───────────────────────────────────────────────────────────────────────
+
+
+def _make_pitch(pdir, epic_id, body):
+    """Write platforms/<p>/epics/<epic>/pitch.md with the given body."""
+    epic_dir = pdir / "epics" / epic_id
+    epic_dir.mkdir(parents=True, exist_ok=True)
+    (epic_dir / "pitch.md").write_text(body, encoding="utf-8")
+    return epic_dir / "pitch.md"
+
+
+def test_seed_epic_from_pitch_title_from_frontmatter(tmp_db, tmp_path):
+    from db_pipeline import seed_epic_from_pitch, upsert_platform
+
+    pdir = tmp_path / "platforms" / "plat"
+    pdir.mkdir(parents=True)
+    _make_pitch(
+        pdir,
+        "010-handoff",
+        '---\ntitle: "Handoff Engine + Multi-Helpdesk"\nstatus: drafted\npriority: 2\n---\n# Ignored\nBody.\n',
+    )
+    upsert_platform(tmp_db, "plat", name="plat", repo_path="platforms/plat")
+
+    status = seed_epic_from_pitch(tmp_db, "plat", "010-handoff", pdir)
+    assert status == "drafted"
+
+    row = tmp_db.execute(
+        "SELECT title, status, priority, file_path FROM epics WHERE platform_id=? AND epic_id=?",
+        ("plat", "010-handoff"),
+    ).fetchone()
+    assert row["title"] == "Handoff Engine + Multi-Helpdesk"
+    assert row["status"] == "drafted"
+    assert row["priority"] == 2
+    assert row["file_path"] == "epics/010-handoff/pitch.md"
+
+
+def test_seed_epic_from_pitch_title_falls_back_to_first_heading(tmp_db, tmp_path):
+    from db_pipeline import seed_epic_from_pitch, upsert_platform
+
+    pdir = tmp_path / "platforms" / "plat"
+    pdir.mkdir(parents=True)
+    _make_pitch(pdir, "011-evals", "---\nstatus: proposed\n---\n# Evals Pipeline\n\nBody.\n")
+    upsert_platform(tmp_db, "plat", name="plat", repo_path="platforms/plat")
+
+    status = seed_epic_from_pitch(tmp_db, "plat", "011-evals", pdir)
+    assert status == "proposed"
+
+    row = tmp_db.execute(
+        "SELECT title FROM epics WHERE platform_id=? AND epic_id=?",
+        ("plat", "011-evals"),
+    ).fetchone()
+    assert row["title"] == "Evals Pipeline"
+
+
+def test_seed_epic_from_pitch_title_falls_back_to_epic_id(tmp_db, tmp_path):
+    from db_pipeline import seed_epic_from_pitch, upsert_platform
+
+    pdir = tmp_path / "platforms" / "plat"
+    pdir.mkdir(parents=True)
+    _make_pitch(pdir, "012-raw", "no frontmatter here, no headings\n")
+    upsert_platform(tmp_db, "plat", name="plat", repo_path="platforms/plat")
+
+    status = seed_epic_from_pitch(tmp_db, "plat", "012-raw", pdir)
+    assert status == "proposed"  # default
+
+    row = tmp_db.execute(
+        "SELECT title FROM epics WHERE platform_id=? AND epic_id=?",
+        ("plat", "012-raw"),
+    ).fetchone()
+    assert row["title"] == "012-raw"
+
+
+def test_seed_epic_from_pitch_missing_pitch_returns_none(tmp_db, tmp_path):
+    from db_pipeline import seed_epic_from_pitch, upsert_platform
+
+    pdir = tmp_path / "platforms" / "plat"
+    pdir.mkdir(parents=True)
+    upsert_platform(tmp_db, "plat", name="plat", repo_path="platforms/plat")
+
+    status = seed_epic_from_pitch(tmp_db, "plat", "999-missing", pdir)
+    assert status is None
+
+    row = tmp_db.execute(
+        "SELECT 1 FROM epics WHERE platform_id=? AND epic_id=?",
+        ("plat", "999-missing"),
+    ).fetchone()
+    assert row is None  # no row inserted
+
+
+def test_seed_epic_from_pitch_invalid_frontmatter_still_upserts(tmp_db, tmp_path):
+    from db_pipeline import seed_epic_from_pitch, upsert_platform
+
+    pdir = tmp_path / "platforms" / "plat"
+    pdir.mkdir(parents=True)
+    # Corrupted YAML — should not raise; falls back to heading + default status.
+    _make_pitch(pdir, "013-bad", "---\ntitle: [unterminated\n---\n# Heading Title\n")
+    upsert_platform(tmp_db, "plat", name="plat", repo_path="platforms/plat")
+
+    status = seed_epic_from_pitch(tmp_db, "plat", "013-bad", pdir)
+    assert status == "proposed"
+
+    row = tmp_db.execute(
+        "SELECT title FROM epics WHERE platform_id=? AND epic_id=?",
+        ("plat", "013-bad"),
+    ).fetchone()
+    assert row["title"] == "Heading Title"
+
+
+def test_seed_epic_from_pitch_never_regresses_shipped(tmp_db, tmp_path):
+    from db_pipeline import seed_epic_from_pitch, upsert_epic, upsert_platform
+
+    pdir = tmp_path / "platforms" / "plat"
+    pdir.mkdir(parents=True)
+    upsert_platform(tmp_db, "plat", name="plat", repo_path="platforms/plat")
+    upsert_epic(tmp_db, "plat", "014-ship", title="Already Shipped", status="shipped")
+
+    _make_pitch(pdir, "014-ship", '---\ntitle: "Already Shipped"\n---\n')
+    status = seed_epic_from_pitch(tmp_db, "plat", "014-ship", pdir)
+    assert status == "shipped"  # not regressed to proposed
