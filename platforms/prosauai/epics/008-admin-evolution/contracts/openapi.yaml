@@ -441,6 +441,57 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AgentDetail' }
+    patch:
+      tags: [agents]
+      summary: Toggle tools_enabled on an agent (epic 012 US4)
+      description: |
+        Updates the agent's ``tools_enabled`` whitelist (FR-048). The
+        accepted tool names live in
+        :data:`prosauai.tools.registry.TOOL_REGISTRY` — currently only
+        ``search_knowledge`` (epic 012). Unknown tool names are
+        rejected with 422.
+
+        Defense-in-depth: when ``search_knowledge`` is in the requested
+        list, the endpoint also checks that the tenant has
+        ``rag.enabled=true`` in ``tenants.yaml`` and rejects with 403
+        ``rag_not_enabled_for_tenant`` otherwise. Removing the tool
+        (``tools_enabled=[]``) is always allowed so operators can clean
+        up after disabling RAG (recovery path).
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                tools_enabled:
+                  type: array
+                  items: { type: string }
+                  example: [search_knowledge]
+              required: [tools_enabled]
+      responses:
+        '200':
+          description: Tools updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  agent_id: { type: string, format: uuid }
+                  tools_enabled:
+                    type: array
+                    items: { type: string }
+        '403':
+          description: Tenant has rag.enabled=false
+        '404':
+          description: Agent not found
+        '422':
+          description: Unknown tool name
 
   /admin/agents/{id}/prompts:
     get:
@@ -1112,6 +1163,18 @@ components:
         # The underlying ``prompts.version`` column is VARCHAR(50); we
         # surface it as a free-form string so ``"3.0"``-style tags work.
         active_prompt_version: { type: string, nullable: true }
+        # Epic 012 US4 — denormalised for the agents list / RAG toggle.
+        # ``tools`` mirrors the active prompt's ``tools_enabled`` array
+        # (kept in sync with ``agents.config.tools`` by the PATCH
+        # endpoint). ``rag_enabled`` is the resolved tenant-level flag
+        # so the UI knows whether the toggle is interactive.
+        tools:
+          type: array
+          items: { type: string }
+          default: []
+        rag_enabled:
+          type: boolean
+          default: false
 
     AgentMetrics:
       type: object

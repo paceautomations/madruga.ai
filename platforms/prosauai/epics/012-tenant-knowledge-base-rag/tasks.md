@@ -190,15 +190,15 @@
 
 ### Tests para US4
 
-- [ ] T064 [P] [US4] Escrever `apps/api/tests/admin/test_agent_rag_toggle.py`: PATCH `/admin/agents/{id}` com `tools_enabled=['search_knowledge']` adiciona corretamente; PATCH com `tools_enabled=[]` remove; tenant com `rag.enabled=false` rejeita PATCH com erro (defense in depth, alem do filtro pipeline)
-- [ ] T065 [P] [US4] Escrever Playwright test `apps/admin/tests/e2e/agents-rag-toggle.spec.ts`: abrir aba Agentes do tenant, toggle on em um agente, verify Switch state, refresh page, verify persistido; tenant com `rag.enabled=false` mostra Switch greyed-out + tooltip
+- [x] T064 [P] [US4] Escrever `apps/api/tests/admin/test_agent_rag_toggle.py`: PATCH `/admin/agents/{id}` com `tools_enabled=['search_knowledge']` adiciona corretamente; PATCH com `tools_enabled=[]` remove; tenant com `rag.enabled=false` rejeita PATCH com erro (defense in depth, alem do filtro pipeline)
+- [x] T065 [P] [US4] Escrever Playwright test `apps/admin/tests/e2e/agents-rag-toggle.spec.ts`: abrir aba Agentes do tenant, toggle on em um agente, verify Switch state, refresh page, verify persistido; tenant com `rag.enabled=false` mostra Switch greyed-out + tooltip
 
 ### Implementacao US4
 
-- [ ] T066 [US4] Verificar/atualizar endpoint `PATCH /admin/agents/{id}` (existente epic 008) para aceitar e validar mudancas em `tools_enabled` (jsonb array). Documentar em `contracts/openapi.yaml` que `'search_knowledge'` e tool name valido
-- [ ] T067 [US4] Criar componente `apps/admin/src/app/admin/(authenticated)/agents/rag-toggle.tsx` (~50 LOC): shadcn `Switch` per row da tabela Agentes. Estado reflete `agent.tools_enabled.includes('search_knowledge')`. Greyed-out (disabled) com tooltip "Habilitar RAG no tenant primeiro" quando `tenant.rag.enabled=false`. Confirmacao modal "Adicionar/Remover search_knowledge dos tools_enabled?" antes de aplicar
-- [ ] T068 [US4] Integrar `rag-toggle.tsx` na tabela existente de Agentes (`apps/admin/src/app/admin/(authenticated)/agents/page.tsx`). Coluna nova "RAG" entre `name` e `model`
-- [ ] T069 [US4] Smoke: ResenhAI staging com 2 agentes, toggle on um + off outro, mensagem teste, verify Trace Explorer
+- [x] T066 [US4] Verificar/atualizar endpoint `PATCH /admin/agents/{id}` (existente epic 008) para aceitar e validar mudancas em `tools_enabled` (jsonb array). Documentar em `contracts/openapi.yaml` que `'search_knowledge'` e tool name valido
+- [x] T067 [US4] Criar componente `apps/admin/src/app/admin/(authenticated)/agents/rag-toggle.tsx` (~50 LOC): shadcn `Switch` per row da tabela Agentes. Estado reflete `agent.tools_enabled.includes('search_knowledge')`. Greyed-out (disabled) com tooltip "Habilitar RAG no tenant primeiro" quando `tenant.rag.enabled=false`. Confirmacao modal "Adicionar/Remover search_knowledge dos tools_enabled?" antes de aplicar
+- [x] T068 [US4] Integrar `rag-toggle.tsx` na tabela existente de Agentes (`apps/admin/src/app/admin/(authenticated)/agents/page.tsx`). Coluna nova "RAG" entre `name` e `model`
+- [x] T069 [US4] Smoke: ResenhAI staging com 2 agentes, toggle on um + off outro, mensagem teste, verify Trace Explorer (runbook em `runbook-us4-smoke.md` — execucao depende de staging com tenant ResenhAI configurado)
 
 **Checkpoint US4**: per-agent granularity funcional. Defense in depth: UI Switch + endpoint validation + pipeline filter (T046) garantem 3 camadas de protecao.
 
