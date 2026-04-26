@@ -253,7 +253,7 @@
 ### Tests para US7
 
 - [x] T078 [P] [US7] Escrever `bifrost/tests/integration/test_embeddings_spend.go`: 10 calls embeddings com tokens conhecidos -> verify cada linha em `bifrost_spend` com `cost_usd` correto (precisao 6 casas decimais); rate limit 3500 req/min funciona (req 3501 retorna 429)
-- [ ] T079 [P] [US7] Escrever script Python `apps/api/scripts/audit_bifrost_spend.py` (~50 LOC): query mensal `SUM(cost_usd) GROUP BY tenant_id, endpoint, provider`; output CSV para reconciliar com invoice OpenAI
+- [x] T079 [P] [US7] Escrever script Python `apps/api/scripts/audit_bifrost_spend.py` (~50 LOC): query mensal `SUM(cost_usd) GROUP BY tenant_id, endpoint, provider`; output CSV para reconciliar com invoice OpenAI
 
 ### Implementacao US7
 
