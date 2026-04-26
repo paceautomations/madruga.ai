@@ -97,6 +97,39 @@ pgvector 0.8.x + **pgvectorscale** muda o cenario competitivo:
 - **HNSW desde o inicio**: Usar HNSW (nao IVFFlat) — sem necessidade de re-index periodico, performance superior para o volume esperado
 - Avaliar pgvectorscale quando volume de vetores crescer significativamente (>1M por tenant)
 
+## Extensao (epic 012, 2026-04-26)
+
+> Adicionado pelo epic 012 (Tenant Knowledge Base — RAG pgvector + Upload
+> Admin). Esta secao **estende** a decisao base sem revisa-la.
+
+O epic 012 materializa o que esta ADR prometeu ha 6 semanas:
+
+- **Nova tabela `prosauai.documents`** representando o documento raw
+  (1 row = 1 arquivo logico, replace-by-source_name conforme ADR-041).
+  Colunas: `id, tenant_id, source_name, source_hash, source_type,
+  storage_path, size_bytes, uploaded_by_user_id, uploaded_at,
+  chunks_count, embedding_model`. UNIQUE `(tenant_id, source_name)`.
+  RLS herdada deste ADR.
+- **Colunas adicionais em `knowledge_chunks`**:
+  - `document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE`
+    — substitui o relacionamento implicito por metadata; cascade remove
+    chunks quando documento e deletado.
+  - `chunk_index INT NOT NULL` — ordem do chunk dentro do documento;
+    UNIQUE composto `(document_id, chunk_index)`.
+  - `embedding_model TEXT NOT NULL` — auditoria + isolamento de query
+    (chunks com modelos diferentes nao se cruzam num mesmo SELECT).
+  - `tokens INT NOT NULL CHECK (tokens >= 10)` — MIN_CHUNK_TOKENS.
+- **HNSW (m=16, ef_construction=64) sobre `vector_cosine_ops`**:
+  confirmado e materializado em
+  `apps/api/db/migrations/20260601000008_create_knowledge_chunks.sql`.
+- **Storage layer**: Supabase Storage bucket `knowledge` em path
+  `{tenant_id}/{document_id}.{ext}` (ADR-041 detalha lifecycle).
+- **Embedding model**: OpenAI `text-embedding-3-small` (1536 dim) via
+  Bifrost extension (ADR-042).
+
+Compatibilidade com a decisao original mantida: tenant_isolation via
+RLS, namespace por `tenant_id`, sem servico de vetores separado.
+
 ---
 
 > **Proximo passo:** `/madruga:blueprint prosauai` — consolidar stack de engenharia a partir dos ADRs aprovados.

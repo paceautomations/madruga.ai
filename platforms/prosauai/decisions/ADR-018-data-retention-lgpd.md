@@ -249,11 +249,60 @@ Codigo: `prosauai/ops/partitions.py` (ensure_future_partitions + drop_expired_pa
 - [-] SAR endpoint precisa buscar em multiplas fontes (Supabase, Redis, pgvector, logs) — implementacao nao trivial
 - [-] Deletar embeddings remove o vetor, mas se embedding foi usado em resposta cacheada, a informacao pode persistir brevemente (mitiga: TTL curto no cache)
 
+## Extensao SAR — Knowledge Base (epic 012, 2026-04-26)
+
+> Adicionado pelo epic 012 (Tenant Knowledge Base — RAG). Esta secao
+> **estende** o cascade SAR original sem revisa-lo.
+
+O epic 012 introduziu duas novas fontes de dados que precisam participar
+do SAR delete cascade:
+
+- `prosauai.documents` (raw metadata + storage path).
+- `prosauai.knowledge_chunks` (chunks + embeddings).
+- Supabase Storage prefix `knowledge/{tenant_id}/`.
+
+**Cascade ao encerrar conta do tenant** (extensao):
+
+```
+Pedido de exclusao (tenant)
+    │
+    ├── Supabase: DELETE FROM prosauai.documents WHERE tenant_id = ?
+    │   └── ON DELETE CASCADE remove knowledge_chunks automaticamente
+    │
+    └── Supabase Storage: bucket('knowledge').remove(prefix='{tenant_id}/')
+        └── Remove os raw files preservados para re-embed (CLI epic 012)
+```
+
+**Implementacao**: helper
+`erase_tenant_knowledge_base(tenant_id)` em `apps/api/prosauai/privacy/sar.py`
+(epic 012, T062). Cobre 3 cenarios:
+
+- DB ok + Storage ok -> retorno 204.
+- DB falha -> rollback (transaction); Storage nao tocado.
+- DB ok + Storage 503 -> log estruturado `rag_storage_orphan` + retry
+  futuro via GC noturno; o agente nao consegue acessar pois RLS ja
+  removeu os rows.
+
+**SAR per-customer (FR-066/FR-067 do epic 012)**: o helper de erasure
+do customer existente (`erase_customer`) NAO ataca documentos, pois
+documentos sao de propriedade do tenant, nao do end-user. Isso e
+intencional — o tenant pode ter documentos que mencionam o end-user
+no texto, e a remocao indiscriminada quebraria o contexto do agente
+para outros usuarios. Caso uma SAR per-user requeira purga de
+referencias em chunks, o pipeline de PII redaction (Layer 1, ADR-016)
+deve ser usado para reescrever chunks afetados — fora do escopo v1 do
+epic 012.
+
+**Audit**: emitir `knowledge_document_deleted` (FR-076) com
+`actor_user_id=null, action_result=success, reason="tenant_sar"` para
+cada documento removido.
+
 ## Referencias
 - [LGPD — Lei 13.709/2018](https://www.planalto.gov.br/ccivil_03/_ato2015-2018/2018/lei/l13709.htm)
 - [EDPB — Right to Erasure Coordinated Enforcement (Mar/2025)](https://www.edpb.europa.eu/our-work-tools/our-documents/other/coordinated-enforcement-framework-right-erasure_en)
 - [GDPR and AI Right to Be Forgotten](https://keferboeck.com/en-gb/articles/gdpr-and-ai-right-to-be-forgotten-now-means-unlearning)
 - [CVE-2025-48757 — Supabase RLS Exposure](https://mattpalmer.io/posts/2025/05/CVE-2025-48757/)
+- [ADR-041 — replace by source_name](ADR-041-knowledge-document-replace-by-source-name.md)
 
 ---
 
