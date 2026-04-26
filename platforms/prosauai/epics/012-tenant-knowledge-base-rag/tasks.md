@@ -257,7 +257,7 @@
 
 ### Implementacao US7
 
-- [ ] T080 [US7] Adicionar dashboard Grafana (file `bifrost/dashboards/embeddings.json`) com paineis: requests/sec, p95 latencia, spend $ acumulado por tenant, rate limit usage %. Documentado em `bifrost/docs/dashboards.md`
+- [x] T080 [US7] Adicionar dashboard Grafana (file `bifrost/dashboards/embeddings.json`) com paineis: requests/sec, p95 latencia, spend $ acumulado por tenant, rate limit usage %. Documentado em `bifrost/docs/dashboards.md`
 - [ ] T081 [US7] Smoke quickstart Step 4 + 9 (verify spend grava + Trace Explorer mostra `rag.cost_usd` no span). Validar Bifrost circuit breaker abre apos 5 falhas em 60s e fecha apos 1 sucesso
 
 **Checkpoint US7**: spend tracking acurado, dashboard ops disponivel. SC-010 atendido.
