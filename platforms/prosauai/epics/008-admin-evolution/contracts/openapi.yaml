@@ -25,6 +25,8 @@ tags:
   - name: routing
   - name: agents
   - name: audit
+  - name: knowledge
+    description: Knowledge base management (epic 012 — RAG)
 
 paths:
   # ============================================================
@@ -510,6 +512,147 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AuditListResponse' }
+
+  # ============================================================
+  # Knowledge base (epic 012)
+  # ============================================================
+  /admin/knowledge/documents:
+    post:
+      tags: [knowledge]
+      summary: Upload a document to the tenant knowledge base
+      description: |
+        FR-011..FR-017, FR-073, FR-074. Multipart/form-data with `tenant_id`
+        (query param) + `file` (binary; md/txt/pdf; <= rag.max_upload_mb).
+        Atomic-replace by `source_name` happens server-side.
+      parameters:
+        - in: query
+          name: tenant_id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: Document uploaded and indexed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DocumentUploadResponse' }
+        '400':
+          description: Empty file
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RagErrorResponse' }
+        '403':
+          description: RAG not enabled for tenant
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RagErrorResponse' }
+        '413':
+          description: Size or quota exceeded
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RagErrorResponse' }
+        '415':
+          description: Unsupported file format
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RagErrorResponse' }
+        '422':
+          description: Zero usable chunks extracted (PDF scanned, MD whitespace, etc)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RagErrorResponse' }
+        '503':
+          description: Embeddings provider down
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RagErrorResponse' }
+    get:
+      tags: [knowledge]
+      summary: List documents (paginated)
+      parameters:
+        - in: query
+          name: tenant_id
+          schema: { type: string, format: uuid }
+        - in: query
+          name: source_type
+          schema: { type: string, enum: [md, txt, pdf] }
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: page_size
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        '200':
+          description: Paginated list
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DocumentListResponse' }
+
+  /admin/knowledge/documents/{document_id}:
+    delete:
+      tags: [knowledge]
+      summary: Delete a document (cascade chunks + Storage)
+      parameters:
+        - in: path
+          name: document_id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204': { description: Deleted }
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RagErrorResponse' }
+
+  /admin/knowledge/documents/{document_id}/raw:
+    get:
+      tags: [knowledge]
+      summary: Get signed URL for downloading the raw file (302 redirect, 5min TTL)
+      parameters:
+        - in: path
+          name: document_id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '302':
+          description: Redirect to signed URL
+          headers:
+            Location:
+              schema: { type: string, format: uri }
+        '404': { description: Not found }
+
+  /admin/knowledge/documents/{document_id}/chunks:
+    get:
+      tags: [knowledge]
+      summary: Preview the first N chunks of a document
+      parameters:
+        - in: path
+          name: document_id
+          required: true
+          schema: { type: string, format: uuid }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 50, default: 10 }
+      responses:
+        '200':
+          description: Chunk preview list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ChunkPreview' }
 
 # ============================================================
 # Components
@@ -1040,3 +1183,96 @@ components:
           type: array
           items: { $ref: '#/components/schemas/AuditEvent' }
         pagination: { $ref: '#/components/schemas/Pagination' }
+
+    # ============================================================
+    # Knowledge base (epic 012)
+    # ============================================================
+    DocumentRecord:
+      type: object
+      required: [document_id, tenant_id, source_name, source_type, source_hash, storage_path, size_bytes, chunks_count, embedding_model, uploaded_at]
+      properties:
+        document_id: { type: string, format: uuid }
+        tenant_id: { type: string, format: uuid }
+        source_name: { type: string, example: faq.pdf }
+        source_type: { type: string, enum: [md, txt, pdf] }
+        source_hash: { type: string, description: SHA-256 hex digest of the raw file }
+        storage_path: { type: string }
+        size_bytes: { type: integer, minimum: 1 }
+        uploaded_by_user_id:
+          type: string
+          format: uuid
+          nullable: true
+        uploaded_at: { type: string, format: date-time }
+        chunks_count: { type: integer, minimum: 1 }
+        embedding_model: { type: string, example: text-embedding-3-small }
+
+    DocumentUploadResponse:
+      type: object
+      required: [document_id, source_name, source_type, chunks_created, total_tokens, cost_usd, embedding_model, replaced_existing]
+      properties:
+        document_id: { type: string, format: uuid }
+        source_name: { type: string }
+        source_type: { type: string, enum: [md, txt, pdf] }
+        chunks_created: { type: integer, minimum: 1 }
+        total_tokens: { type: integer, minimum: 1 }
+        cost_usd: { type: number, format: float, example: 0.00012 }
+        embedding_model: { type: string }
+        replaced_existing:
+          type: boolean
+          description: True if atomic-replace happened (source_name was already present).
+
+    DocumentListResponse:
+      type: object
+      required: [items, page, page_size, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/DocumentRecord' }
+        page: { type: integer }
+        page_size: { type: integer }
+        total: { type: integer }
+
+    ChunkPreview:
+      type: object
+      required: [chunk_index, content, tokens]
+      properties:
+        chunk_index: { type: integer, minimum: 0 }
+        content: { type: string }
+        tokens: { type: integer, minimum: 10 }
+
+    RagErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          enum:
+            - unsupported_format
+            - max_upload_mb_exceeded
+            - empty_file
+            - rag_not_enabled_for_tenant
+            - embeddings_provider_down
+            - tenant_quota_exceeded
+            - no_chunks_extracted
+            - pdf_no_extractable_text
+            - pdf_encrypted
+            - pdf_extraction_failed
+            - document_not_found
+            - concurrent_upload_in_progress
+        hint: { type: string }
+        limit_mb:
+          type: integer
+          description: Present when error=max_upload_mb_exceeded
+        accepted:
+          type: array
+          items: { type: string }
+          description: Present when error=unsupported_format
+        dimension:
+          type: string
+          enum: [documents, chunks]
+          description: Present when error=tenant_quota_exceeded
+        current: { type: integer }
+        limit: { type: integer }
+        source_type:
+          type: string
+          description: Present when error=no_chunks_extracted
