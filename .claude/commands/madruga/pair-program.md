@@ -46,7 +46,12 @@ Cada invocação = um tick. Termina chamando `ScheduleWakeup` com o mesmo prompt
 3. **Classifica** o snapshot:
    - **healthy** — task progredindo, sem erros adjacentes, duração dentro do esperado. Segue p/ passo 5 sem escrever no arquivo.
    - **opportunity** — rodando ok, mas viu algo melhorável (ver heurísticas abaixo). Registra bullet na seção apropriada do arquivo. Segue p/ passo 5.
-   - **critical** — task em `running` acima do baseline do nó (baselines: `speckit.plan`/`madruga:judge`/`madruga:qa` > 30min; `implement:phase-*` > 45min; demais > 10min), 3 falhas seguidas de tasks adjacentes, CB OPEN, epic auto-blocked, ou stdout/stderr com erro parsável. Vai p/ passo 4.
+   - **critical** — task em `running` acima do baseline do nó, 3 falhas seguidas de tasks adjacentes, CB OPEN, epic auto-blocked, ou stdout/stderr com erro parsável. Vai p/ passo 4.
+
+   **Baselines de duração** (só atinge `critical` após cruzar):
+   - `speckit.plan` / `madruga:judge` / `madruga:qa`: > 30min
+   - `implement:phase-*`: **dinâmico** — extrair `timeout: Ns` do log `Dispatching phase ...` correspondente e usar `0.75 × N` segundos como threshold. Fallback p/ `45min` se o log não estiver disponível. O dispatcher já calcula `timeout` proporcional ao `task_count` (`count×20+50` turns, cap 400) e a fases pesadas (UI Next.js, ≥10 tasks) recebem `timeout=3600s`. Threshold estático de 45min gera falso positivo em fases grandes que terminam normalmente perto do timeout do dispatcher (ex.: phase-8 do epic 014 prosauai completou em 60.9min com timeout=3600s).
+   - demais: > 10min
 4. **Intervenção cirúrgica (só `critical`).** Mínimo escopo, causa raiz obrigatória:
    - **Diagnóstico:** parse `stdout` JSON do run (erro do `claude` vive lá, NÃO no stderr), `cat /proc/<pid>/wchan` p/ saber onde travou, `sudo py-spy dump --pid <pid>` se for Python stuck.
    - **Fix de código** (se necessário): editar o lugar certo (`dag_executor.py` / `db_pipeline.py` / `easter.py` / skill), rodar `make test`, commit atômico `fix: <summary>` com refs `file:line`.
