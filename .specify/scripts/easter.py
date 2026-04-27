@@ -46,6 +46,7 @@ from dag_executor import run_pipeline_async  # noqa: E402
 from ensure_repo import DirtyTreeError  # noqa: E402
 from ntfy import ntfy_alert  # noqa: E402
 from sd_notify import sd_notify  # noqa: E402
+from telegram_bot import preflight_polling_safe  # noqa: E402
 
 logger = structlog.get_logger(__name__)
 
