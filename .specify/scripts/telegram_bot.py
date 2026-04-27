@@ -70,6 +70,33 @@ def load_offset(conn: sqlite3.Connection) -> int | None:
     return int(row[0]) if row else None
 
 
+async def preflight_polling_safe(bot: Bot, offset: int | None) -> bool:
+    """Probe Telegram for a live conflicting polling instance.
+
+    Aiogram's ``Dispatcher.start_polling`` retries TelegramConflictError on
+    backoff forever, spamming the log every ~5s. A single explicit
+    ``getUpdates`` call surfaces the conflict synchronously so the caller
+    can fail fast (standalone bot) or skip polling (easter daemon).
+
+    Returns:
+        True if polling is safe to start (no conflict detected).
+        False if another live instance holds the long-poll lock.
+
+    Network errors and Telegram 5xx are logged and treated as safe — a
+    transient probe failure should not disable polling.
+    """
+    from aiogram.exceptions import TelegramConflictError
+
+    try:
+        await bot.get_updates(offset=offset, limit=1, timeout=5)
+        return True
+    except TelegramConflictError:
+        return False
+    except Exception:
+        logger.exception("telegram_preflight_probe_failed")
+        return True
+
+
 # --- Gate polling ---
 
 
@@ -664,6 +691,15 @@ async def async_main(args: argparse.Namespace) -> None:
             platform=args.platform or "all",
             dry_run=args.dry_run,
         )
+
+        # Fail fast on a live conflict — the operator must kill the
+        # duplicate before this process can take the long-poll lock.
+        if not await preflight_polling_safe(bot, offset):
+            logger.error(
+                "telegram_conflict_detected_exiting",
+                reason="another instance polling same bot token",
+            )
+            sys.exit(1)
 
         # Run all tasks concurrently
         async with asyncio.TaskGroup() as tg:

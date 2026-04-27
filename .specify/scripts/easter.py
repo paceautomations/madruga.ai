@@ -790,7 +790,20 @@ async def lifespan(app: FastAPI):
                 except Exception:
                     logger.exception("delete_webhook_failed")
 
-                tg.create_task(dp.start_polling(bot, offset=offset))
+                # Skip start_polling on a live conflict — aiogram would
+                # otherwise spam TelegramConflictError every ~5s forever.
+                # Outbound notifications (gate_poller, gate_reminder) keep
+                # working; only callback-driven approval/rejection is degraded
+                # until the duplicate instance dies and the daemon restarts.
+                from telegram_bot import preflight_polling_safe
+
+                if await preflight_polling_safe(bot, offset):
+                    tg.create_task(dp.start_polling(bot, offset=offset))
+                else:
+                    logger.error(
+                        "telegram_conflict_detected",
+                        reason="another instance polling same bot token; skipping start_polling",
+                    )
                 tg.create_task(tg_gate_poller(adapter, chat_id, conn))
                 tg.create_task(gate_reminder(conn, adapter, chat_id, _shutdown_event))
 
