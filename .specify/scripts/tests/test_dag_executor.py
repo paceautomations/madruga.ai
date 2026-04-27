@@ -3240,7 +3240,7 @@ def test_slice_spec_returns_none_when_user_story_missing():
     assert _slice_spec_for_user_story(spec, 5) is None
 
 
-def test_slice_spec_for_real_epic_format(tmp_path):
+def test_slice_spec_for_real_epic_format():
     """End-to-end: feed a spec mirroring the real prosauai/014 layout and
     check that slicing US-2 yields a tight slice (~ tens of lines), not the
     whole 200-line spec."""

@@ -693,3 +693,16 @@ class TestPreflightPollingSafe:
         assert kwargs["offset"] == 12345
         assert kwargs["limit"] == 1
         assert kwargs["timeout"] == 5
+
+    def test_drops_pending_webhook_state(self):
+        """delete_webhook must run before the probe to clear server-side
+        residue from a previous instance (ADR-018) — without it the probe
+        itself can fail spuriously."""
+        from telegram_bot import preflight_polling_safe
+
+        bot = AsyncMock()
+        bot.delete_webhook = AsyncMock()
+        bot.get_updates = AsyncMock(return_value=[])
+
+        asyncio.run(preflight_polling_safe(bot, offset=None))
+        bot.delete_webhook.assert_awaited_once_with(drop_pending_updates=True)

@@ -26,6 +26,7 @@ import structlog
 from aiogram import Bot, Dispatcher, F
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+from aiogram.exceptions import TelegramConflictError
 from aiogram.types import CallbackQuery
 
 sys.path.insert(0, os.path.dirname(__file__))
@@ -71,30 +72,42 @@ def load_offset(conn: sqlite3.Connection) -> int | None:
 
 
 async def preflight_polling_safe(bot: Bot, offset: int | None) -> bool:
-    """Probe Telegram for a live conflicting polling instance.
+    """Drop pending updates and probe for a live conflicting polling instance.
 
     Aiogram's ``Dispatcher.start_polling`` retries TelegramConflictError on
     backoff forever, spamming the log every ~5s. A single explicit
     ``getUpdates`` call surfaces the conflict synchronously so the caller
-    can fail fast (standalone bot) or skip polling (easter daemon).
+    can fail fast (standalone bot) or skip polling (easter daemon). The
+    accompanying ``delete_webhook(drop_pending_updates=True)`` clears stale
+    server-side state from a previous instance — without it, the probe
+    itself can fail spuriously (ADR-018).
 
     Returns:
         True if polling is safe to start (no conflict detected).
-        False if another live instance holds the long-poll lock.
+        False if another live instance holds the long-poll lock; the
+            caller should log+exit (standalone) or skip ``start_polling``
+            (easter daemon) and let outbound notifications keep working.
 
     Network errors and Telegram 5xx are logged and treated as safe — a
     transient probe failure should not disable polling.
     """
-    from aiogram.exceptions import TelegramConflictError
+    try:
+        await bot.delete_webhook(drop_pending_updates=True)
+    except Exception:
+        logger.exception("telegram_delete_webhook_failed")
 
     try:
         await bot.get_updates(offset=offset, limit=1, timeout=5)
-        return True
-    except TelegramConflictError:
+    except TelegramConflictError as exc:
+        logger.error(
+            "telegram_conflict_detected",
+            reason="another instance polling same bot token",
+            detail=str(exc)[:200],
+        )
         return False
     except Exception:
         logger.exception("telegram_preflight_probe_failed")
-        return True
+    return True
 
 
 # --- Gate polling ---
@@ -692,13 +705,7 @@ async def async_main(args: argparse.Namespace) -> None:
             dry_run=args.dry_run,
         )
 
-        # Fail fast on a live conflict — the operator must kill the
-        # duplicate before this process can take the long-poll lock.
         if not await preflight_polling_safe(bot, offset):
-            logger.error(
-                "telegram_conflict_detected_exiting",
-                reason="another instance polling same bot token",
-            )
             sys.exit(1)
 
         # Run all tasks concurrently
