@@ -46,6 +46,7 @@ from dag_executor import run_pipeline_async  # noqa: E402
 from ensure_repo import DirtyTreeError  # noqa: E402
 from ntfy import ntfy_alert  # noqa: E402
 from sd_notify import sd_notify  # noqa: E402
+from telegram_bot import preflight_polling_safe  # noqa: E402
 
 logger = structlog.get_logger(__name__)
 
@@ -781,16 +782,15 @@ async def lifespan(app: FastAPI):
                         return
                     await handle_freetext(message, adapter, chat_id, conn)
 
-                # Clear stale webhook + pending updates before polling to avoid
-                # TelegramConflictError from a previous instance's lingering
-                # getUpdates session on Telegram's side (ADR-018).
-                try:
-                    await bot.delete_webhook(drop_pending_updates=True)
-                    logger.info("telegram_webhook_reset")
-                except Exception:
-                    logger.exception("delete_webhook_failed")
+                # Polling startup runs in the background so a Telegram
+                # outage or live conflict (which makes preflight wait up to
+                # 5s) doesn't delay FastAPI ready signal or the outbound
+                # notification tasks below.
+                async def _maybe_start_polling() -> None:
+                    if await preflight_polling_safe(bot, offset):
+                        await dp.start_polling(bot, offset=offset)
 
-                tg.create_task(dp.start_polling(bot, offset=offset))
+                tg.create_task(_maybe_start_polling())
                 tg.create_task(tg_gate_poller(adapter, chat_id, conn))
                 tg.create_task(gate_reminder(conn, adapter, chat_id, _shutdown_event))
 

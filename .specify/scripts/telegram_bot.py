@@ -26,6 +26,7 @@ import structlog
 from aiogram import Bot, Dispatcher, F
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+from aiogram.exceptions import TelegramConflictError
 from aiogram.types import CallbackQuery
 
 sys.path.insert(0, os.path.dirname(__file__))
@@ -68,6 +69,45 @@ def load_offset(conn: sqlite3.Connection) -> int | None:
     """Load last processed Telegram update_id from local_config."""
     row = conn.execute("SELECT value FROM local_config WHERE key='telegram_last_update_id'").fetchone()
     return int(row[0]) if row else None
+
+
+async def preflight_polling_safe(bot: Bot, offset: int | None) -> bool:
+    """Drop pending updates and probe for a live conflicting polling instance.
+
+    Aiogram's ``Dispatcher.start_polling`` retries TelegramConflictError on
+    backoff forever, spamming the log every ~5s. A single explicit
+    ``getUpdates`` call surfaces the conflict synchronously so the caller
+    can fail fast (standalone bot) or skip polling (easter daemon). The
+    accompanying ``delete_webhook(drop_pending_updates=True)`` clears stale
+    server-side state from a previous instance — without it, the probe
+    itself can fail spuriously (ADR-018).
+
+    Returns:
+        True if polling is safe to start (no conflict detected).
+        False if another live instance holds the long-poll lock; the
+            caller should log+exit (standalone) or skip ``start_polling``
+            (easter daemon) and let outbound notifications keep working.
+
+    Network errors and Telegram 5xx are logged and treated as safe — a
+    transient probe failure should not disable polling.
+    """
+    try:
+        await bot.delete_webhook(drop_pending_updates=True)
+    except Exception:
+        logger.exception("telegram_delete_webhook_failed")
+
+    try:
+        await bot.get_updates(offset=offset, limit=1, timeout=5)
+    except TelegramConflictError as exc:
+        logger.error(
+            "telegram_conflict_detected",
+            reason="another instance polling same bot token",
+            detail=str(exc)[:200],
+        )
+        return False
+    except Exception:
+        logger.exception("telegram_preflight_probe_failed")
+    return True
 
 
 # --- Gate polling ---
@@ -664,6 +704,9 @@ async def async_main(args: argparse.Namespace) -> None:
             platform=args.platform or "all",
             dry_run=args.dry_run,
         )
+
+        if not await preflight_polling_safe(bot, offset):
+            sys.exit(1)
 
         # Run all tasks concurrently
         async with asyncio.TaskGroup() as tg:

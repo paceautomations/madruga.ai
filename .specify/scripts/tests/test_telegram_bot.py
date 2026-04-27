@@ -635,3 +635,74 @@ class TestHandleFreetext:
         row = conn.execute("SELECT payload FROM events WHERE action='decision_resolved'").fetchone()
         assert "rejected" in row[0]
         assert "rejeitada" in callback.answer.call_args[0][0].lower()
+
+
+# ---------------------------------------------------------------------------
+# preflight_polling_safe — fail fast on a live conflicting polling instance
+# ---------------------------------------------------------------------------
+
+
+class TestPreflightPollingSafe:
+    """The probe surfaces TelegramConflictError synchronously so callers can
+    skip start_polling. Without it, aiogram retries forever (~5s per attempt)
+    and spams the log."""
+
+    def test_returns_true_when_no_conflict(self):
+        from telegram_bot import preflight_polling_safe
+
+        bot = AsyncMock()
+        bot.get_updates = AsyncMock(return_value=[])
+
+        assert asyncio.run(preflight_polling_safe(bot, offset=None)) is True
+        bot.get_updates.assert_awaited_once_with(offset=None, limit=1, timeout=5)
+
+    def test_returns_false_on_telegram_conflict(self):
+        from aiogram.exceptions import TelegramConflictError
+
+        from telegram_bot import preflight_polling_safe
+
+        bot = AsyncMock()
+        bot.get_updates = AsyncMock(
+            side_effect=TelegramConflictError(
+                method=MagicMock(), message="Conflict: terminated by other getUpdates request"
+            )
+        )
+
+        assert asyncio.run(preflight_polling_safe(bot, offset=42)) is False
+
+    def test_returns_true_on_transient_network_error(self):
+        """Network blips / Telegram 5xx must NOT disable polling. Aiogram's
+        own backoff handles transient errors once polling starts; the probe
+        only guards against the deterministic conflict case."""
+        from telegram_bot import preflight_polling_safe
+
+        bot = AsyncMock()
+        bot.get_updates = AsyncMock(side_effect=ConnectionError("DNS failure"))
+
+        assert asyncio.run(preflight_polling_safe(bot, offset=None)) is True
+
+    def test_passes_offset_through(self):
+        """Probe must use the same offset that polling will resume from."""
+        from telegram_bot import preflight_polling_safe
+
+        bot = AsyncMock()
+        bot.get_updates = AsyncMock(return_value=[])
+
+        asyncio.run(preflight_polling_safe(bot, offset=12345))
+        kwargs = bot.get_updates.await_args.kwargs
+        assert kwargs["offset"] == 12345
+        assert kwargs["limit"] == 1
+        assert kwargs["timeout"] == 5
+
+    def test_drops_pending_webhook_state(self):
+        """delete_webhook must run before the probe to clear server-side
+        residue from a previous instance (ADR-018) — without it the probe
+        itself can fail spuriously."""
+        from telegram_bot import preflight_polling_safe
+
+        bot = AsyncMock()
+        bot.delete_webhook = AsyncMock()
+        bot.get_updates = AsyncMock(return_value=[])
+
+        asyncio.run(preflight_polling_safe(bot, offset=None))
+        bot.delete_webhook.assert_awaited_once_with(drop_pending_updates=True)
