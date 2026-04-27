@@ -1,7 +1,8 @@
 ---
 title: 'ADR-037: HelpdeskAdapter pattern (bidirectional multi-helpdesk integration)'
 status: Accepted
-decision: Every helpdesk integration (Chatwoot, NoneAdapter, future Blip/Zendesk)
+decision: >-
+  Every helpdesk integration (Chatwoot, NoneAdapter, future Blip/Zendesk)
   implements the ``HelpdeskAdapter`` ``@runtime_checkable`` Protocol defined in
   ``prosauai.handoff.base``. Adapters are registered via a module-level registry
   (``prosauai.handoff.registry``) at application startup and dispatched by

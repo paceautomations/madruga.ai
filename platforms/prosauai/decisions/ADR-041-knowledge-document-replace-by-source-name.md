@@ -1,7 +1,8 @@
 ---
 title: 'ADR-041: Knowledge document lifecycle: atomic replace by source_name'
 status: Accepted
-decision: v1 do RAG (epic 012) NAO versiona documentos. Upload com
+decision: >-
+  v1 do RAG (epic 012) NAO versiona documentos. Upload com
   `source_name` ja existente e tratado como **atomic replace**: em
   uma unica transacao, DELETE chunks antigos -> DELETE row antiga em
   `documents` -> DELETE arquivo no Supabase Storage -> INSERT novo

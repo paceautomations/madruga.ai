@@ -11,7 +11,8 @@ decision: Bifrost (proxy LLM em Go, ADR-002) ate epic 011 so suportava
 alternatives: Chamada direta a OpenAI sem proxy, novo proxy dedicado
   para embeddings, BGE/Voyage self-hosted via API local, embeddings
   sync no api Python com biblioteca local
-rationale: Centraliza rate-limit + spend tracking + breaker sob a mesma
+rationale: >-
+  Centraliza rate-limit + spend tracking + breaker sob a mesma
   rede ja em prod (epic 005). Custo de extension <2 dias-pessoa-Go;
   maior gain e auditabilidade de custo OpenAI por tenant em uma so
   pagina (dashboard Bifrost). Cut-line: se >1 semana, fallback para

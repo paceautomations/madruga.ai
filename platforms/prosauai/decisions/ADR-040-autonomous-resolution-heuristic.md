@@ -1,7 +1,8 @@
 ---
 title: 'ADR-040: Autonomous resolution operational definition (heuristic A)'
 status: Accepted
-decision: Cron noturno `autonomous_resolution_cron` (03:00 UTC) popula
+decision: >-
+  Cron noturno `autonomous_resolution_cron` (03:00 UTC) popula
   `conversations.auto_resolved BOOLEAN` usando heuristica A canonica:
   (a) SEM mute em `handoff_events`, (b) SEM regex de escalacao
   (`humano|atendente|pessoa|alguem real`) em inbound direcionado ao bot,
