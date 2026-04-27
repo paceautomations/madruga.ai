@@ -805,8 +805,13 @@ def compose_task_prompt(
 
 
 _PHASE_USER_STORY_RE = re.compile(r"User Story\s+(\d+)", re.IGNORECASE)
-_SPEC_USER_STORY_HEADER_RE = re.compile(r"^##\s+User Story\s+(\d+)\b", re.MULTILINE | re.IGNORECASE)
-_SPEC_ANY_H2_RE = re.compile(r"^##\s+", re.MULTILINE)
+# Match the User Story header at H2 (`##`) or H3 (`###`). Specs in this repo
+# use H3 (under an H2 like `## User Scenarios & Testing`); H2 is supported for
+# back-compat with older or hand-written specs.
+_SPEC_USER_STORY_HEADER_RE = re.compile(r"^#{2,3}\s+User Story\s+(\d+)\b", re.MULTILINE | re.IGNORECASE)
+# Slice ends at the next H2 or H3 header — never a deeper header (e.g. `####
+# Acceptance Criteria` inside the US must NOT terminate the slice).
+_SPEC_NEXT_SECTION_RE = re.compile(r"^#{2,3}\s+", re.MULTILINE)
 _TASKS_HEADER_RE = re.compile(r"^#")
 _TASKS_ITEM_RE = re.compile(r"^\s*-\s*\[[ xX]\]\s+(T\d+)")
 _PHASE_SETUP_MARKERS = ("setup", "shared infrastructure", "polish", "cleanup", "phase 1")
@@ -834,15 +839,15 @@ def _phase_kind(phase_label: str, phase_tasks: list[TaskItem]) -> tuple[str, int
 
 
 def _slice_spec_for_user_story(spec_text: str, story_n: int) -> str | None:
-    """Return only ``## User Story N ...`` up to the next H2, or None if absent."""
+    """Return only ``### User Story N ...`` (or ``##``) up to the next H2/H3, or None if absent."""
     target = next(
         (m for m in _SPEC_USER_STORY_HEADER_RE.finditer(spec_text) if int(m.group(1)) == story_n),
         None,
     )
     if target is None:
         return None
-    next_h2 = _SPEC_ANY_H2_RE.search(spec_text, target.end())
-    end = next_h2.start() if next_h2 else len(spec_text)
+    next_section = _SPEC_NEXT_SECTION_RE.search(spec_text, target.end())
+    end = next_section.start() if next_section else len(spec_text)
     return spec_text[target.start() : end].rstrip() + "\n"
 
 

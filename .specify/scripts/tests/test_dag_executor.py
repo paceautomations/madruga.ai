@@ -3142,3 +3142,133 @@ def test_report_quality_check_fails_when_handoff_missing(tmp_path):
     report = tmp_path / "qa-report.md"
     report.write_text("## QA Report\n" + ("filler line\n" * 60))
     assert _report_quality_check(report, "qa") is False
+
+
+# ---------------------------------------------------------------------------
+# _slice_spec_for_user_story — regex must match both `### User Story N` (H3,
+# the format actually used by all 38+ epics in the repo) and `## User Story N`
+# (H2, supported for back-compat). End-of-slice must stop at the next H2/H3
+# section but never at a H4+ header inside the user story body.
+# ---------------------------------------------------------------------------
+
+
+def test_slice_spec_user_story_h3_format():
+    """Real-world specs use `### User Story N`. Regex must match this format."""
+    from dag_executor import _slice_spec_for_user_story
+
+    spec = (
+        "# Feature Specification\n"
+        "## User Scenarios & Testing\n"
+        "### User Story 1 — first one\n"
+        "Body of US1.\n"
+        "### User Story 2 — second one\n"
+        "Body of US2.\n"
+        "More US2 content.\n"
+        "## Requirements\n"
+        "Functional requirements.\n"
+    )
+    sliced = _slice_spec_for_user_story(spec, 2)
+    assert sliced is not None
+    assert sliced.startswith("### User Story 2")
+    assert "Body of US2." in sliced
+    assert "More US2 content." in sliced
+    assert "Functional requirements." not in sliced
+    assert "Body of US1." not in sliced
+
+
+def test_slice_spec_user_story_h2_back_compat():
+    """Older specs may use `## User Story N` (H2). Must continue to work."""
+    from dag_executor import _slice_spec_for_user_story
+
+    spec = (
+        "# Spec\n## User Story 1 — alpha\nalpha body.\n## User Story 2 — beta\nbeta body.\n## Edge Cases\nedge body.\n"
+    )
+    sliced = _slice_spec_for_user_story(spec, 2)
+    assert sliced is not None
+    assert sliced.startswith("## User Story 2")
+    assert "beta body." in sliced
+    assert "edge body." not in sliced
+    assert "alpha body." not in sliced
+
+
+def test_slice_spec_stops_at_next_h2_section():
+    """When the spec switches back to H2 (e.g. `## Requirements`), slice ends there."""
+    from dag_executor import _slice_spec_for_user_story
+
+    spec = (
+        "## User Scenarios\n"
+        "### User Story 1 — only US\n"
+        "US1 content.\n"
+        "More US1 content.\n"
+        "## Requirements\n"
+        "FR-001 must do X.\n"
+    )
+    sliced = _slice_spec_for_user_story(spec, 1)
+    assert sliced is not None
+    assert "More US1 content." in sliced
+    assert "FR-001" not in sliced
+    assert "## Requirements" not in sliced
+
+
+def test_slice_spec_ignores_h4_inside_user_story():
+    """H4 headers like `#### Acceptance Criteria` inside a US must NOT terminate the slice."""
+    from dag_executor import _slice_spec_for_user_story
+
+    spec = (
+        "## User Scenarios\n"
+        "### User Story 1 — with AC subsection\n"
+        "Why this matters.\n"
+        "#### Acceptance Criteria\n"
+        "- AC-1: criterion one\n"
+        "- AC-2: criterion two\n"
+        "#### Independent Test\n"
+        "Steps to validate.\n"
+        "### User Story 2 — next one\n"
+        "US2 body.\n"
+    )
+    sliced = _slice_spec_for_user_story(spec, 1)
+    assert sliced is not None
+    assert "AC-1: criterion one" in sliced  # H4 sections preserved inside US1
+    assert "Steps to validate." in sliced
+    assert "US2 body." not in sliced  # next H3 ends the slice
+
+
+def test_slice_spec_returns_none_when_user_story_missing():
+    from dag_executor import _slice_spec_for_user_story
+
+    spec = "## User Scenarios\n### User Story 1 — only one\nbody.\n"
+    assert _slice_spec_for_user_story(spec, 5) is None
+
+
+def test_slice_spec_for_real_epic_format(tmp_path):
+    """End-to-end: feed a spec mirroring the real prosauai/014 layout and
+    check that slicing US-2 yields a tight slice (~ tens of lines), not the
+    whole 200-line spec."""
+    from dag_executor import _slice_spec_for_user_story
+
+    big_spec = (
+        "# Feature Specification: Test\n\n"
+        "## Contexto\nBackground content.\n\n"
+        "## User Scenarios & Testing *(mandatory)*\n\n"
+        "### User Story 1 — Story alpha (Priority: P1)\n\n"
+        + ("US1 line\n" * 30)
+        + "\n### User Story 2 — Story beta (Priority: P1)\n\n"
+        + ("US2 line\n" * 25)
+        + "\n### User Story 3 — Story gamma (Priority: P2)\n\n"
+        + ("US3 line\n" * 30)
+        + "\n## Requirements *(mandatory)*\n\n"
+        + ("FR line\n" * 200)
+    )
+    sliced = _slice_spec_for_user_story(big_spec, 2)
+    assert sliced is not None
+    sliced_size = len(sliced.encode())
+    full_size = len(big_spec.encode())
+    # Slicing US-2 should drop at least 80% of the bytes — empirical floor that
+    # guards against a regression where the slice degenerates to ~full spec.
+    assert sliced_size < full_size * 0.2, (
+        f"slice too large: {sliced_size} vs full {full_size} ({sliced_size / full_size:.0%})"
+    )
+    assert "US2 line" in sliced
+    assert "US1 line" not in sliced
+    assert "US3 line" not in sliced
+    assert "FR line" not in sliced
