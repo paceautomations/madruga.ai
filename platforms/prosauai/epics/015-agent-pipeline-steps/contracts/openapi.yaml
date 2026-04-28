@@ -1,0 +1,269 @@
+openapi: 3.1.0
+info:
+  title: Admin API — Agent Pipeline Steps (epic 015)
+  version: 0.1.0
+  description: |
+    New endpoints introduced by epic 015 for the admin app.
+
+    All endpoints require an admin cookie (`get_current_admin`) and
+    operate via `pool_admin` (BYPASSRLS — admin surface, ADR-027).
+
+    Cross-tenant operations are scoped via the `?tenant=<slug>` URL param
+    (consistent with the rest of the admin API — épico 008).
+
+    PR-5 (P2) ships these endpoints. PR-6 (P2) adds `?group_by=agent_version`
+    to existing performance endpoints (not detailed here — see plan.md).
+servers:
+  - url: http://localhost:8050
+    description: Local dev
+tags:
+  - name: admin-pipeline-steps
+    description: Manage pipeline steps per agent
+
+paths:
+  /admin/agents/{agent_id}/pipeline-steps:
+    get:
+      tags: [admin-pipeline-steps]
+      summary: List pipeline steps for an agent
+      operationId: listPipelineSteps
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: agent_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Ordered list of pipeline steps
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PipelineStepsListResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+    put:
+      tags: [admin-pipeline-steps]
+      summary: Replace the entire pipeline steps list for an agent (atomic)
+      description: |
+        Atomic transaction:
+        1. BEGIN
+        2. DELETE FROM agent_pipeline_steps WHERE agent_id=$1
+        3. INSERT each step from request body
+        4. COMMIT or ROLLBACK on validation failure
+
+        Validation enforces:
+        - Maximum 5 steps (HTTP 422 with field `steps` if exceeded)
+        - `step_order` must be sequential 1..N without gaps or duplicates
+        - `step_type` must be one of the 5 supported types
+        - `config` must be ≤16 KB and match the discriminated schema for `step_type`
+        - At least one step must produce a customer response
+          (specialist, clarifier, or resolver)
+        - Models in `routing_map` and `default_model` must exist in pricing constant
+        - `prompt_slug` must reference an existing prompt version
+        - `condition` must use only supported operators (`<`, `>`, `<=`, `>=`, `==`, `!=`, `in`)
+
+        Emits an `audit_log` entry with the diff (added/removed/modified steps)
+        and the operator email.
+      operationId: replacePipelineSteps
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: agent_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PipelineStepsReplaceRequest' }
+      responses:
+        '200':
+          description: Steps replaced successfully
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PipelineStepsListResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: admin_session
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid admin cookie
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    NotFound:
+      description: Agent not found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    ValidationError:
+      description: Request body failed validation
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ValidationErrorResponse' }
+
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [detail]
+      properties:
+        detail: { type: string }
+
+    ValidationErrorResponse:
+      type: object
+      required: [detail, field_errors]
+      properties:
+        detail: { type: string, example: "validation failed" }
+        field_errors:
+          type: array
+          items:
+            type: object
+            required: [field, message]
+            properties:
+              field: { type: string, example: "steps[2].config.routing_map.greeting" }
+              message: { type: string, example: "model 'openai:nonexistent' not found in pricing table" }
+
+    PipelineStepsListResponse:
+      type: object
+      required: [agent_id, count, steps]
+      properties:
+        agent_id: { type: string, format: uuid }
+        count: { type: integer, minimum: 0, maximum: 5 }
+        steps:
+          type: array
+          maxItems: 5
+          items: { $ref: '#/components/schemas/PipelineStepResponse' }
+
+    PipelineStepsReplaceRequest:
+      type: object
+      required: [steps]
+      properties:
+        steps:
+          type: array
+          minItems: 0
+          maxItems: 5
+          items: { $ref: '#/components/schemas/PipelineStepWrite' }
+
+    PipelineStepResponse:
+      type: object
+      required: [id, step_order, step_type, config, is_active, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        step_order: { type: integer, minimum: 1, maximum: 5 }
+        step_type:
+          type: string
+          enum: [classifier, clarifier, resolver, specialist, summarizer]
+        config: { type: object, additionalProperties: true }
+        condition:
+          oneOf:
+            - { $ref: '#/components/schemas/PipelineCondition' }
+            - { type: 'null' }
+        is_active: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    PipelineStepWrite:
+      type: object
+      required: [step_order, step_type, config]
+      properties:
+        step_order: { type: integer, minimum: 1, maximum: 5 }
+        step_type:
+          type: string
+          enum: [classifier, clarifier, resolver, specialist, summarizer]
+        is_active: { type: boolean, default: true }
+        condition:
+          oneOf:
+            - { $ref: '#/components/schemas/PipelineCondition' }
+            - { type: 'null' }
+        config:
+          oneOf:
+            - { $ref: '#/components/schemas/ClassifierConfig' }
+            - { $ref: '#/components/schemas/ClarifierConfig' }
+            - { $ref: '#/components/schemas/ResolverConfig' }
+            - { $ref: '#/components/schemas/SpecialistConfig' }
+            - { $ref: '#/components/schemas/SummarizerConfig' }
+
+    PipelineCondition:
+      type: object
+      description: |
+        Map of dotted-paths to predicates. Multiple keys combine via implicit AND.
+        Operators: `<`, `>`, `<=`, `>=`, `==`, `!=`, `in [list,...]`.
+        Examples:
+        - `{"classifier.confidence": "<0.6"}`
+        - `{"classifier.intent": "==billing"}`
+        - `{"classifier.intent": "in [billing,ranking_query]"}`
+      additionalProperties:
+        type: string
+        pattern: '^(<=|>=|!=|==|<|>|in)\s*.+$'
+      example:
+        classifier.confidence: "<0.6"
+
+    ClassifierConfig:
+      type: object
+      required: [model, intent_labels]
+      properties:
+        model: { type: string, example: "openai:gpt-5-nano" }
+        intent_labels:
+          type: array
+          minItems: 2
+          items: { type: string }
+          example: [greeting, simple_query, billing, ranking_query, complex]
+        prompt_slug: { type: string, nullable: true }
+        timeout_seconds: { type: integer, minimum: 1, maximum: 60, default: 30 }
+
+    ClarifierConfig:
+      type: object
+      required: [model, prompt_slug]
+      properties:
+        model: { type: string, example: "openai:gpt-5-nano" }
+        prompt_slug: { type: string }
+        max_question_length: { type: integer, default: 140, minimum: 20, maximum: 500 }
+        timeout_seconds: { type: integer, minimum: 1, maximum: 60, default: 30 }
+
+    ResolverConfig:
+      type: object
+      required: [model, prompt_slug]
+      properties:
+        model: { type: string }
+        prompt_slug: { type: string }
+        tools_enabled:
+          type: array
+          items: { type: string }
+        timeout_seconds: { type: integer, minimum: 1, maximum: 60, default: 30 }
+
+    SpecialistConfig:
+      type: object
+      required: [default_model]
+      properties:
+        default_model: { type: string, example: "openai:gpt-5-mini" }
+        routing_map:
+          type: object
+          description: Map of intent label → model name. Falls back to default_model when intent missing.
+          additionalProperties: { type: string }
+          example:
+            greeting: "openai:gpt-5-nano"
+            billing: "openai:gpt-5-mini"
+        prompt_slug: { type: string, nullable: true }
+        tools_enabled:
+          type: array
+          items: { type: string }
+        timeout_seconds: { type: integer, minimum: 1, maximum: 60, default: 30 }
+
+    SummarizerConfig:
+      type: object
+      required: [model]
+      properties:
+        model: { type: string, example: "openai:gpt-5-nano" }
+        max_input_messages: { type: integer, default: 20, minimum: 5, maximum: 100 }
+        prompt_slug: { type: string, nullable: true }
+        timeout_seconds: { type: integer, minimum: 1, maximum: 60, default: 30 }

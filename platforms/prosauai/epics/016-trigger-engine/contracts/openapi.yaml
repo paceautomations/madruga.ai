@@ -1,0 +1,308 @@
+openapi: 3.0.3
+info:
+  title: ProsaUAI Admin API — Trigger Engine (Epic 016)
+  description: |
+    Admin endpoints exposed by epic 016 (Trigger Engine).
+    Reuses admin auth middleware from epic 008 (Bearer token validated against `admin_users`).
+    v1: super-admin only (sees all tenants). Tenant-scoped RBAC arrives in epic 018.
+  version: "0.1.0"
+
+servers:
+  - url: https://api.prosauai.com
+    description: Production (super-admin only in v1)
+  - url: http://localhost:8050
+    description: Local dev
+
+security:
+  - BearerAuth: []
+
+tags:
+  - name: triggers
+    description: Trigger engine (epic 016) — proactive message audit trail (admin-only ADR-027 carve-out)
+  - name: customers
+    description: Customer admin (epic 005, extended in 016)
+
+paths:
+  /admin/triggers/events:
+    get:
+      tags: [triggers]
+      operationId: listTriggerEvents
+      summary: List trigger execution events (audit trail)
+      description: |
+        Cursor-based pagination over `public.trigger_events` (admin-only ADR-027 carve-out).
+        Filters apply via WHERE clauses; index `(tenant_id, fired_at DESC)` covers most queries.
+        v1: super-admin only — `tenant` filter is cosmetic (no security boundary).
+      parameters:
+        - in: query
+          name: tenant
+          schema: { type: string, format: uuid }
+          description: Filter by tenant_id (cosmetic in v1, security boundary in epic 018)
+        - in: query
+          name: trigger_id
+          schema: { type: string, maxLength: 80 }
+          description: Exact match on triggers.list[].id
+        - in: query
+          name: customer_phone
+          schema: { type: string, example: "+5521987654321" }
+          description: phone_number_e164 lookup via JOIN customers
+        - in: query
+          name: customer_id
+          schema: { type: string, format: uuid }
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [queued, sent, failed, skipped, rejected, dry_run]
+          description: Filter by event status
+        - in: query
+          name: from
+          schema: { type: string, format: date-time }
+          description: fired_at >= from
+        - in: query
+          name: to
+          schema: { type: string, format: date-time }
+          description: fired_at < to
+        - in: query
+          name: cursor
+          schema: { type: string }
+          description: Opaque base64-encoded cursor (fired_at_iso|id) returned by previous page
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 200, default: 25 }
+      responses:
+        '200':
+          description: Page of trigger events
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TriggerEventsPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/triggers/events/{event_id}:
+    get:
+      tags: [triggers]
+      operationId: getTriggerEvent
+      summary: Get full detail of a single trigger event (drill-down)
+      description: Returns full payload JSON, error message, cost, timestamps, retry_count.
+      parameters:
+        - in: path
+          name: event_id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Trigger event detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TriggerEventDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /admin/customers/{customer_id}:
+    patch:
+      tags: [customers]
+      operationId: patchCustomer
+      summary: Patch customer (epic 005 endpoint extended in 016)
+      description: |
+        Extended in epic 016 to accept `scheduled_event_at` and `opt_out_at`.
+        Use `scheduled_event_at` to enable matcher `time_before_scheduled_event`.
+        Use `opt_out_at` to register manual opt-out (NLP detector deferred to 016.1+).
+      parameters:
+        - in: path
+          name: customer_id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerPatchRequest'
+      responses:
+        '200':
+          description: Customer updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT-or-OPAQUE
+
+  schemas:
+    TriggerEventStatus:
+      type: string
+      enum: [queued, sent, failed, skipped, rejected, dry_run]
+      description: |
+        - queued: persisted but not yet sent (stuck-detection scope)
+        - sent: Meta API confirmed delivery
+        - failed: 5xx/timeout exhausted retries OR breaker open OR warmup cap exceeded
+        - skipped: cooldown / daily_cap / handoff / opt_out / idempotent / idempotent_db_race / hard_cap / disabled
+        - rejected: Meta 4xx (template config invalid; no retry)
+        - dry_run: shadow mode (mode: dry_run on trigger config)
+
+    TriggerEventResponse:
+      type: object
+      required:
+        [id, tenant_id, customer_id, customer_phone, trigger_id, template_name, status, fired_at, retry_count]
+      properties:
+        id: { type: string, format: uuid }
+        tenant_id: { type: string, format: uuid }
+        customer_id: { type: string, format: uuid }
+        customer_phone:
+          type: string
+          example: "+5521987654321"
+          description: phone_number_e164 from JOIN customers
+        trigger_id:
+          type: string
+          example: ariel_match_reminder
+        template_name:
+          type: string
+          example: ariel_match_reminder_pt_BR
+        status:
+          $ref: '#/components/schemas/TriggerEventStatus'
+        fired_at: { type: string, format: date-time }
+        sent_at:
+          type: string
+          format: date-time
+          nullable: true
+        cost_usd_estimated:
+          type: number
+          format: float
+          nullable: true
+          example: 0.0085
+        error_short:
+          type: string
+          nullable: true
+          maxLength: 200
+          description: First 200 chars of error message
+        retry_count:
+          type: integer
+          minimum: 0
+          maximum: 3
+          example: 0
+
+    TriggerEventDetail:
+      allOf:
+        - $ref: '#/components/schemas/TriggerEventResponse'
+        - type: object
+          properties:
+            payload:
+              type: object
+              additionalProperties: true
+              nullable: true
+              description: |
+                Rendered template parameters (full JSONB).
+                Soft cap 8 KB enforced on insert.
+            error:
+              type: string
+              nullable: true
+              description: Full error message (no truncation)
+
+    TriggerEventsPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/TriggerEventResponse' }
+        next_cursor:
+          type: string
+          nullable: true
+          description: |
+            Opaque base64-encoded cursor for next page.
+            null when no more pages.
+
+    CustomerPatchRequest:
+      type: object
+      properties:
+        name: { type: string, maxLength: 100 }
+        scheduled_event_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: |
+            Set to enable trigger `time_before_scheduled_event` for this customer.
+            TIMESTAMPTZ — must include timezone.
+            Set to null to clear (customer no longer matches the trigger).
+        opt_out_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: |
+            Set to register manual opt-out (LGPD).
+            Customer is excluded from ALL triggers when set.
+            Set to null to revoke opt-out (customer becomes eligible again).
+            v1: manual only. NLP auto-detector deferred to 016.1+.
+
+    CustomerResponse:
+      type: object
+      required: [id, tenant_id, phone_number_e164, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        tenant_id: { type: string, format: uuid }
+        phone_number_e164: { type: string }
+        name:
+          type: string
+          nullable: true
+        created_at: { type: string, format: date-time }
+        scheduled_event_at:
+          type: string
+          format: date-time
+          nullable: true
+        opt_out_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string, example: validation_failed }
+            message: { type: string }
+            field_errors:
+              type: array
+              items:
+                type: object
+                properties:
+                  field: { type: string }
+                  message: { type: string }
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid Bearer token
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: Token lacks admin role
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    UnprocessableEntity:
+      description: Validation failed
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }

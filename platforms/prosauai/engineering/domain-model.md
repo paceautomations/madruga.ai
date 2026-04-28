@@ -239,18 +239,26 @@ ALTER TABLE agents ADD CONSTRAINT fk_active_version
     FOREIGN KEY (active_version_id) REFERENCES agent_config_versions(id);
 
 -- Agent Pipeline Steps — sub-routing configuravel (ADR-006 extensao)
+-- Implemented in epic 015 — see migration
+-- apps/api/db/migrations/20260601000010_create_agent_pipeline_steps.sql
+-- (was schema-draft until epic 015 PR-1).
 -- Agents SEM pipeline steps executam como single LLM call (backward compatible).
 -- Agents COM pipeline steps executam cada step em sequencia (ex: classifier → clarifier → resolver).
+-- Cap MAX_PIPELINE_STEPS_PER_AGENT = 5 (CHECK step_order BETWEEN 1 AND 5).
+-- Cap config <= 16 KB (CHECK octet_length); cap condition unrestricted (small dict).
+-- Index idx_pipeline_agent_active (agent_id, is_active, step_order) is the
+-- hot-path lookup index (SC-010 ≤5 ms p95).
 CREATE TABLE agent_pipeline_steps (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id       UUID NOT NULL REFERENCES tenants(id),
-    agent_id        UUID NOT NULL REFERENCES agents(id),
-    step_order      INT NOT NULL,
+    agent_id        UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+    step_order      INT NOT NULL CHECK (step_order BETWEEN 1 AND 5),
     step_type       TEXT NOT NULL CHECK (step_type IN (
         'classifier', 'clarifier', 'resolver', 'specialist', 'summarizer'
     )),
-    config          JSONB NOT NULL DEFAULT '{}',  -- model, prompt_slug, tools, thresholds, routing_map
-    condition       JSONB,                        -- opcional: quando executar (ex: {"classifier.intent": "billing"})
+    config          JSONB NOT NULL DEFAULT '{}'  -- model, prompt_slug, tools, thresholds, routing_map
+                    CHECK (octet_length(config::text) <= 16384),
+    condition       JSONB,                        -- opcional: quando executar (ex: {"classifier.confidence": "<0.6"})
     is_active       BOOLEAN NOT NULL DEFAULT TRUE,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -259,8 +267,13 @@ CREATE TABLE agent_pipeline_steps (
 
 ALTER TABLE agent_pipeline_steps ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON agent_pipeline_steps USING (tenant_id = public.tenant_id());
-CREATE INDEX idx_pipeline_agent ON agent_pipeline_steps (agent_id, step_order);
+CREATE INDEX idx_pipeline_agent_active ON agent_pipeline_steps (agent_id, is_active, step_order);
 CREATE INDEX idx_pipeline_tenant ON agent_pipeline_steps (tenant_id);
+
+-- Epic 015 also adds public.trace_steps.sub_steps JSONB (cap 32 KB total /
+-- 4 KB per sub-step) — populated only for the generate_response row when
+-- the agent has a pipeline configured. See migration
+-- apps/api/db/migrations/20260601000011_alter_trace_steps_sub_steps.sql.
 
 -- User Consents — LGPD (ADR-018)
 CREATE TABLE user_consents (
