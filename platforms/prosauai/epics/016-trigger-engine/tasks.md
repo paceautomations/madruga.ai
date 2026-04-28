@@ -243,10 +243,10 @@
 - [x] T089 [P] Documentacao operacional `apps/api/prosauai/triggers/RUNBOOK.md` — secoes: setup tenant operador (cadastrar template Meta + editar tenants.yaml + popular customers.scheduled_event_at), debug trigger sem disparo (checklist EXPLAIN matcher + verificar opt_out + verificar cooldown redis + verificar daily cap), kill-switch global (`triggers.enabled: false` per-tenant ou settings global), recovery pos-Redis-restart (automatic via `restore_state_from_sql`), troubleshooting Meta template rejection (4xx codes comuns)
 - [x] T090 [P] Atualizar `apps/api/CHANGELOG.md` (ou docs equivalente) com nota de release epic 016: "Trigger Engine — engine declarativo de mensagens proativas (cron-driven, 3 trigger types pre-built, cooldown granular, history viewer)"
 - [x] T091 Verificar zero regressao em pipeline inbound: rodar suite `pytest apps/api/tests/conversation/` + `pytest apps/api/tests/handoff/` — todos passam intactos (gate de merge)
-- [ ] T092 [P] Adicionar bench `apps/api/tests/triggers/test_performance_bench.py` — load test: 1 tenant × 3 triggers × 100 customers/tick → assert cron tick p95 <2s (SC-004)
-- [ ] T093 [P] Adicionar bench admin endpoint — load test 10K rows com cursor pagination → assert p95 <300ms (SC-006)
-- [ ] T094 Verificar cardinality lint passa com fixture realista (10 tenants × 5 triggers × 10 templates = ~3K series — bem abaixo de 50K limit)
-- [ ] T095 Run quickstart.md validation completa — passos 1-6 em ambiente local + screenshots/logs anexados ao PR
+- [x] T092 [P] Adicionar bench `apps/api/tests/triggers/test_performance_bench.py` — load test: 1 tenant × 3 triggers × 100 customers/tick → assert cron tick p95 <2s (SC-004)
+- [x] T093 [P] Adicionar bench admin endpoint — load test 10K rows com cursor pagination → assert p95 <300ms (SC-006)
+- [x] T094 Verificar cardinality lint passa com fixture realista (10 tenants × 5 triggers × 10 templates = ~3K series — bem abaixo de 50K limit)
+- [x] T095 Run quickstart.md validation completa — passos 1-6 em ambiente local + screenshots/logs anexados ao PR
 
 ### Ariel rollout shadow → live (FR-028 — pode atrasar Meta approval; cut-line: vira 016.1)
 
