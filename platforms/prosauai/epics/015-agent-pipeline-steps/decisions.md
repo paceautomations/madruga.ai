@@ -1,7 +1,7 @@
 ---
 epic: 015-agent-pipeline-steps
 created: 2026-04-27
-updated: 2026-04-28
+updated: 2026-04-29
 purpose: Audit trail of implementation-level decisions taken during the
   speckit.implement phase. Plan-level decisions (D-PLAN-01..12) live in
   plan.md §"Phase 0: Outline & Research" and Captured Decisions tables.
@@ -533,6 +533,40 @@ regression that leaks them through the legacy path.
    playbook also documents the rollback path (single
    `UPDATE ... SET is_active=FALSE` statement, ≤60 s, FR-021). (ref:
    T085; quickstart.md § 5b)
+
+8. [2026-04-28 implement] **Rollback button uses the audit_log
+   snapshot path (D-PLAN-02 fallback).** ADR-019 (`agent_config_versions`)
+   is still not materialised in production, so the rollback feature
+   cannot piggy-back on the canonical version-history surface that
+   other epic-008 endpoints use. Two alternatives were considered:
+
+   * **(a) Wait for ADR-019** — clean, but blocks T101 indefinitely.
+   * **(b) Persist a `before` snapshot in `audit_log.details` and
+     replay it via `POST /admin/agents/{id}/pipeline-steps/rollback`.**
+     Each replace already writes an audit_log row (T093); we extend
+     the JSONB payload with a full `before` array and add a thin
+     POST endpoint that grabs the most recent entry, validates the
+     snapshot against the same `validate_steps_payload`, and routes
+     it through the existing `replace_steps` transaction. The
+     rollback itself is recorded as a fresh
+     `agent_pipeline_steps_replaced` row tagged with
+     `diff.rollback = true` so the timeline becomes a stack of
+     reversible diffs.
+
+   Picked (b). Trade-offs:
+
+   * The audit_log column carries ~2× the bytes per replace (raw
+     before snapshot is at most ~5 × 16 KB = 80 KB worst-case; we
+     stay well within Postgres JSONB practical limits).
+   * Rollbacks chain naturally — clicking rollback twice walks the
+     timeline two steps back, which is the operator's mental model.
+   * Pre-T101 audit rows lack the `before` key; the endpoint returns
+     409 with `audit_log_missing_before_snapshot` so legacy data
+     fails closed instead of silently restoring an empty pipeline.
+   * Frontend wires `useRollbackPipelineSteps` + a footer button
+     with a confirmation dialog. (ref: T101; plan.md § D-PLAN-02;
+     contracts/openapi.yaml — to be regenerated to include the new
+     endpoint when codegen catches up)
 
 ---
 
