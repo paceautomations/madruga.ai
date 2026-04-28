@@ -1,7 +1,7 @@
 ---
 epic: 015-agent-pipeline-steps
 created: 2026-04-27
-updated: 2026-04-27
+updated: 2026-04-28
 purpose: Audit trail of implementation-level decisions taken during the
   speckit.implement phase. Plan-level decisions (D-PLAN-01..12) live in
   plan.md §"Phase 0: Outline & Research" and Captured Decisions tables.
@@ -489,6 +489,50 @@ ONLY when the executor branch ran — the tests in this file will catch any
 regression that leaks them through the legacy path.
 
 (ref: T055; spec.md FR-064; tasks.md § "Implementation safeguards for User Story 6")
+
+---
+
+8. [2026-04-27 implement] **PR-4 (T080–T085) — resolver + summarizer + FR-015
+   substitution wiring already in place from T026.** Implementing T084
+   reduced to *test-driving* the existing executor logic: lines
+   234, 366, 503–507 of `pipeline_executor.py` already initialise
+   `effective_context = list(context)`, swap it after a successful
+   summarizer run, and forward the swapped value to subsequent steps via
+   `_build_summary_context`. The substitution honours FR-015 at
+   three layers — (a) the step itself never mutates `PipelineState` (the
+   executor writes `state.summarized_context` after `result` is returned);
+   (b) the raw `context` list passed by the caller is never mutated (a
+   *new* list is built); (c) downstream steps see a synthetic 1-message
+   `ContextMessage` carrying the summary. Three new tests in
+   `TestExecutorSummarizerSubstitution` lock these properties down so a
+   future refactor can't silently break them. Trade-off: T084 collapses
+   to "add coverage" rather than "wire it" — accepted because the
+   executor was designed end-to-end in T026 and PR-4 only adds the new
+   step types. (ref: T084; plan.md PR-4 § "pipeline_executor.py";
+   spec.md FR-015)
+
+---
+
+9. [2026-04-27 implement] **T085 — Resolver+Summarizer staging validation
+   playbook captured in `quickstart.md § 5b`, not executed live.**
+   `/speckit.implement` runs in auto mode with no staging access; the
+   playbook for an operator to drive the 4-step pipeline (summarizer →
+   classifier → resolver → specialist) is now in
+   `quickstart.md § 5b "Validar Resolver+Summarizer"`. The validation
+   covers: (a) summarizer truncation honours `max_input_messages`
+   (default 20, FR-015); (b) the substitution semantic — Phoenix
+   `gen_ai.prompt` span on the specialist contains the summary, not
+   the 30-turn raw history; (c) the resolver's `entities` dict feeds
+   the specialist's `routing_map`; (d)
+   `messages.metadata.terminating_step='specialist'` and
+   `pipeline_step_count=4`. Trade-off: T085 ships as a *replayable
+   playbook* rather than a live measurement — accepted because the unit
+   tests in T080/T081 + the executor coverage in T084 already lock the
+   substitution semantic; live cost numbers require ≥1 tenant on the
+   pipeline path which the cut-line gates after PR-1..PR-4 ship. The
+   playbook also documents the rollback path (single
+   `UPDATE ... SET is_active=FALSE` statement, ≤60 s, FR-021). (ref:
+   T085; quickstart.md § 5b)
 
 ---
 
