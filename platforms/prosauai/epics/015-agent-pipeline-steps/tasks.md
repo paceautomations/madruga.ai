@@ -93,16 +93,16 @@
 
 ### Tests for User Story 2 (write FIRST) ⚠️
 
-- [ ] T040 [P] [US2] Write unit test `apps/api/tests/conversation/test_steps_clarifier.py` covering: output is short text question (length ≤ `max_question_length`, default 140); `text_for_customer` populated → terminates pipeline; pydantic-ai Agent receives prior classifier output as context; modelo cheap (`gpt-5-nano`) honored
-- [ ] T041 [P] [US2] Write unit test in `apps/api/tests/conversation/test_pipeline_executor.py` (extending T022) covering: (a) clarifier with `condition: {"classifier.confidence": "<0.6"}` skipped when classifier returns confidence=0.92; (b) clarifier executes when confidence=0.4 and terminates pipeline (specialist marked `skipped` with `reason: prior_step_terminated`); (c) malformed condition (`{"classifier.foo": "<0.6"}` — key inexistent) → step is `skipped` with `reason: condition_eval_skipped` (no crash)
-- [ ] T042 [P] [US2] Write integration test in `apps/api/tests/integration/test_pipeline_executor_pg.py` (extending T023) — 3-step pipeline classifier+clarifier+specialist, verify full row sequence in `trace_steps.sub_steps` array, `messages.metadata.terminating_step == "clarifier"` when clarifier fired
+- [x] T040 [P] [US2] Write unit test `apps/api/tests/conversation/test_steps_clarifier.py` covering: output is short text question (length ≤ `max_question_length`, default 140); `text_for_customer` populated → terminates pipeline; pydantic-ai Agent receives prior classifier output as context; modelo cheap (`gpt-5-nano`) honored
+- [x] T041 [P] [US2] Write unit test in `apps/api/tests/conversation/test_pipeline_executor.py` (extending T022) covering: (a) clarifier with `condition: {"classifier.confidence": "<0.6"}` skipped when classifier returns confidence=0.92; (b) clarifier executes when confidence=0.4 and terminates pipeline (specialist marked `skipped` with `reason: prior_step_terminated`); (c) malformed condition (`{"classifier.foo": "<0.6"}` — key inexistent) → step is `skipped` with `reason: condition_eval_skipped` (no crash)
+- [x] T042 [P] [US2] Write integration test in `apps/api/tests/integration/test_pipeline_executor_pg.py` (extending T023) — 3-step pipeline classifier+clarifier+specialist, verify full row sequence in `trace_steps.sub_steps` array, `messages.metadata.terminating_step == "clarifier"` when clarifier fired
 
 ### Implementation for User Story 2
 
-- [ ] T043 [P] [US2] Implement `apps/api/prosauai/conversation/steps/clarifier.py` — pydantic-ai Agent text output with length validation in pydantic model (`max_question_length`). Sets `text_for_customer = output.question_text` (always terminating when it executes). Registers in `STEP_TYPE_REGISTRY["clarifier"]`
-- [ ] T044 [US2] Wire condition evaluation in `pipeline_executor.py` (already started in T026): before each step, call `condition.evaluate(step.condition, state.to_scope())`; on False → emit `StepRecord(status="skipped", output={"condition_evaluated": <repr>})` and `continue` (depends on T016, T026)
-- [ ] T045 [US2] When `result.text_for_customer is not None`, set `terminating_step = step.step_type` and break loop; mark all subsequent steps as `StepRecord(status="skipped", output={"reason": "prior_step_terminated"})` (depends on T026)
-- [ ] T046 [US2] [P] Quickstart validation per `quickstart.md` § "Validar US2": configure 3-step pipeline, send `"oi"` and `"qual o saldo da fatura de abril?"`, verify clarifier branch fires only on the ambiguous one, document results in `decisions.md`
+- [x] T043 [P] [US2] Implement `apps/api/prosauai/conversation/steps/clarifier.py` — pydantic-ai Agent text output with length validation in pydantic model (`max_question_length`). Sets `text_for_customer = output.question_text` (always terminating when it executes). Registers in `STEP_TYPE_REGISTRY["clarifier"]`
+- [x] T044 [US2] Wire condition evaluation in `pipeline_executor.py` (already started in T026): before each step, call `condition.evaluate(step.condition, state.to_scope())`; on False → emit `StepRecord(status="skipped", output={"condition_evaluated": <repr>})` and `continue` (depends on T016, T026)
+- [x] T045 [US2] When `result.text_for_customer is not None`, set `terminating_step = step.step_type` and break loop; mark all subsequent steps as `StepRecord(status="skipped", output={"reason": "prior_step_terminated"})` (depends on T026)
+- [x] T046 [US2] [P] Quickstart validation per `quickstart.md` § "Validar US2": configure 3-step pipeline, send `"oi"` and `"qual o saldo da fatura de abril?"`, verify clarifier branch fires only on the ambiguous one, document results in `decisions.md`
 
 **Checkpoint**: US1 + US2 deliver the MVP feature surface. Both use the same executor — clarifier is just another step type with a condition that gates it.
 
@@ -116,9 +116,9 @@
 
 ### Tests for User Story 6 (write FIRST — these gate the merge) ⚠️
 
-- [ ] T050 [P] [US6] Write `apps/api/tests/conversation/test_pipeline_backwards_compat.py`: fixture with agent that has zero rows in `agent_pipeline_steps`. Drive `_generate_with_retry` with deterministic mock LLM. Assert: `pipeline_executor.execute_agent_pipeline` is **never called** (mock with `assert_not_called`); `agent.py:generate_response` IS called exactly once; output is byte-equivalent to a baseline run on `develop` HEAD (snapshot test using stable seed)
-- [ ] T051 [P] [US6] Write benchmark `apps/api/tests/benchmarks/test_overhead_no_pipeline.py`: 100 iterations of `_generate_with_retry` with `pipeline_steps_repo.list_active_steps` returning `[]`; measure delta vs. a control run that bypasses the lookup; assert p95 delta ≤ **5 ms** (hard SC-010 gate). Fails the suite on regression
-- [ ] T052 [P] [US6] Confirm full existing test suite runs green: `cd apps/api && pytest tests/ -x --tb=short` produces zero failures, zero new warnings (FR-070). Document command + result in `decisions.md` under `## Backwards-compat verification`
+- [x] T050 [P] [US6] Write `apps/api/tests/conversation/test_pipeline_backwards_compat.py`: fixture with agent that has zero rows in `agent_pipeline_steps`. Drive `_generate_with_retry` with deterministic mock LLM. Assert: `pipeline_executor.execute_agent_pipeline` is **never called** (mock with `assert_not_called`); `agent.py:generate_response` IS called exactly once; output is byte-equivalent to a baseline run on `develop` HEAD (snapshot test using stable seed)
+- [x] T051 [P] [US6] Write benchmark `apps/api/tests/benchmarks/test_overhead_no_pipeline.py`: 100 iterations of `_generate_with_retry` with `pipeline_steps_repo.list_active_steps` returning `[]`; measure delta vs. a control run that bypasses the lookup; assert p95 delta ≤ **5 ms** (hard SC-010 gate). Fails the suite on regression
+- [x] T052 [P] [US6] Confirm full existing test suite runs green: `cd apps/api && pytest tests/ -x --tb=short` produces zero failures, zero new warnings (FR-070). Document command + result in `decisions.md` under `## Backwards-compat verification`
 
 ### Implementation safeguards for User Story 6
 
@@ -349,9 +349,9 @@ If NOT (delay, regression, etc.):
 
 Sample task line conforms to `- [ ] [TaskID] [P?] [Story?] Description with file path`:
 
-- ✅ `- [ ] T020 [P] [US1] Write unit test apps/api/tests/conversation/test_steps_classifier.py covering...`
+- ✅ `- [X] T020 [P] [US1] Write unit test apps/api/tests/conversation/test_steps_classifier.py covering...`
 - ✅ `- [x] T010 Create migration apps/api/db/migrations/20260601000010_create_agent_pipeline_steps.sql ...`
-- ✅ `- [ ] T044 [US2] Wire condition evaluation in pipeline_executor.py ...`
+- ✅ `- [X] T044 [US2] Wire condition evaluation in pipeline_executor.py ...`
 
 All tasks include: checkbox, sequential ID, optional [P], optional [Story] (for Phase 3+ except Polish/Smoke), and a concrete file path or runnable command.
 

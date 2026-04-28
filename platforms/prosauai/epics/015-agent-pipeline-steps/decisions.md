@@ -228,6 +228,259 @@ COMMIT;
 
 ---
 
+7. [2026-04-28 implement] **US2 condition + termination wiring already
+   in place from T026 — no executor patch in T044/T045.** `pipeline_executor.py`
+   lines 260–305 (T044 surface) and lines 485–496 (T045 surface) were
+   already implemented as part of T026 to keep the executor's contract
+   uniform across step types. The US2 acceptance scenarios are exercised
+   by T041 (unit) and T042 (integration); both green without further code
+   changes. Trade-off: T044/T045 collapse into "verify the wiring" rather
+   than "wire it" — accepted because the executor was designed
+   end-to-end in T026, and US2 only adds a new step type (clarifier,
+   T043). The skipped sub-step shape stays consistent across the three
+   skip reasons (`condition_eval_skipped`, `prior_step_terminated`,
+   `prior_step_failed`): each carries `output={"reason": <reason>}` and,
+   when applicable, `condition_evaluated=<repr>`. (ref: T044, T045;
+   plan.md PR-2 § "pipeline_executor.py")
+
+## US2 staging validation
+
+T046 maps to live execution in staging — `/speckit.implement` runs in
+auto mode without staging access. The validation playbook is recorded
+here so an operator can replay it once PR-1..PR-2 are deployed (US1
+infra), then PR-2 follow-up adds the clarifier step type.
+
+### Setup
+
+```sql
+-- 1) Identify the test agent (same row used for T030 / US1).
+SELECT id, name FROM public.agents
+ WHERE tenant_id = '<pace-internal uuid>' AND name = 'ariel-test';
+
+-- 2) Insert the 3-step pipeline atomically — replaces the US1 layout.
+BEGIN;
+DELETE FROM public.agent_pipeline_steps WHERE agent_id = '<ariel-test uuid>';
+INSERT INTO public.agent_pipeline_steps
+    (tenant_id, agent_id, step_order, step_type, config, condition)
+VALUES
+    ('<pace-internal uuid>', '<ariel-test uuid>', 1, 'classifier',
+     '{"model":"gpt-4o-mini","intent_labels":["greeting","billing","support","ambiguous"]}'::jsonb,
+     NULL),
+    ('<pace-internal uuid>', '<ariel-test uuid>', 2, 'clarifier',
+     '{"model":"openai:gpt-5-nano","max_question_length":140}'::jsonb,
+     '{"classifier.confidence":"<0.6"}'::jsonb),
+    ('<pace-internal uuid>', '<ariel-test uuid>', 3, 'specialist',
+     '{"default_model":"gpt-4o-mini","routing_map":{"greeting":"gpt-4o-mini","billing":"gpt-4o","ambiguous":"gpt-4o-mini"}}'::jsonb,
+     NULL);
+COMMIT;
+```
+
+### Execution + verification
+
+1. Send the **ambiguous** message `"oi"` (or `"e ai"`). The classifier
+   should return `confidence ≤ 0.6` because the message carries no
+   actionable intent. The clarifier condition matches and the customer
+   receives a follow-up question (≤140 chars) instead of a guessed
+   billing/support reply.
+2. Send the **clear** message `"qual o saldo da fatura de abril?"`. The
+   classifier should return `confidence ≥ 0.7` (intent=`billing`). The
+   clarifier is skipped via the condition gate; the specialist runs and
+   produces the substantive answer using `routing_map['billing']` =
+   `gpt-4o`.
+3. Verify via SQL (after PR-3 wires T071/T073):
+
+   ```sql
+   -- 3.a) Ambiguous message → clarifier terminates.
+   SELECT m.id, m.content, m.metadata->>'terminating_step' AS terminating
+     FROM public.messages m
+     JOIN public.conversations c ON c.id = m.conversation_id
+    WHERE c.agent_id = '<ariel-test uuid>'
+      AND m.direction = 'outbound'
+      AND m.content LIKE '%?%'         -- clarifier always asks a question
+      AND m.created_at > now() - interval '5 minutes'
+    ORDER BY m.created_at DESC
+    LIMIT 1;
+   -- Expected: terminating='clarifier'.
+
+   -- 3.b) Clear billing message → specialist terminates.
+   SELECT m.id, m.content, m.metadata->>'terminating_step' AS terminating
+     FROM public.messages m
+     JOIN public.conversations c ON c.id = m.conversation_id
+    WHERE c.agent_id = '<ariel-test uuid>'
+      AND m.direction = 'outbound'
+      AND m.content NOT LIKE '%?%'
+      AND m.created_at > now() - interval '5 minutes'
+    ORDER BY m.created_at DESC
+    LIMIT 1;
+   -- Expected: terminating='specialist'.
+
+   -- 3.c) Clarifier skipped on high confidence — visible in trace_steps.sub_steps.
+   SELECT t.trace_id, ts.sub_steps
+     FROM public.traces t
+     JOIN public.trace_steps ts ON ts.trace_uuid = t.id
+    WHERE t.message_id IN (... clear billing message id ...)
+      AND ts.name = 'generate_response';
+   -- Expected: sub_steps[1].step_type='clarifier', status='skipped',
+   --           condition_evaluated='classifier.confidence<0.6',
+   --           output.reason='condition_eval_skipped'.
+   ```
+
+4. Roll back via `UPDATE public.agent_pipeline_steps SET is_active=FALSE
+   WHERE agent_id='<ariel-test uuid>' AND step_order=2;` — the clarifier
+   row is deactivated, so the next request runs only the
+   classifier+specialist pair (US1 layout).
+
+### Outcome (to be filled by ops)
+
+- [ ] Ambiguous `"oi"` → outbound message ends with `?` and
+      `metadata.terminating_step='clarifier'`.
+- [ ] Clear billing message → outbound message has no `?` and
+      `metadata.terminating_step='specialist'`.
+- [ ] `trace_steps.sub_steps[1]` for the clear billing message shows
+      `status='skipped'` with `condition_evaluated='classifier.confidence<0.6'`.
+- [ ] Conversation retomadas (rate of "não, não foi isso que perguntei"
+      type messages within 60 s of the bot reply) drop ≥30% over a
+      sample of 200 ambiguous-classified messages compared to the US1
+      baseline (SC-004).
+- [ ] Disabling step 2 via `is_active=FALSE` reverts to the US1
+      classifier+specialist pair within 60 s without restarting the API.
+
+(ref: T046; quickstart.md § "Validar US2"; spec.md US2 acceptance scenarios 1–4)
+
+---
+
+## Backwards-compat verification
+
+### T052 (FR-070) — full existing test suite green check
+
+Command run from `apps/api/`:
+
+```
+uv run --project apps/api python -m pytest apps/api/tests/ \
+    --tb=no -q \
+    --override-ini="addopts=--tb=no -m 'not benchmark and not e2e' --no-header"
+```
+
+Result (Phase 5, US6 hard gate):
+
+```
+1 failed, 3377 passed, 54 skipped, 20 deselected, 225 warnings in 151.44s (0:02:31)
+```
+
+The only failure is
+`apps/api/tests/unit/processors/test_document.py::TestOTelSpan::test_emits_processor_document_extract_span`.
+
+Confirmed **pre-existing flake** unrelated to epic 015:
+
+1. Re-running the test in isolation passes (`1 passed in 0.19s`) — it is
+   sensitive to test ordering / OTel global state, not to anything epic 015 touches.
+2. Re-running the full suite with epic 015 test files explicitly excluded
+   (`--ignore=apps/api/tests/conversation/test_pipeline_backwards_compat.py
+   --ignore=apps/api/tests/benchmarks/test_overhead_no_pipeline.py`)
+   reproduces the same single failure. Epic 015 does NOT introduce this regression.
+3. Last code change in `tests/unit/processors/test_document.py` is from epic 009
+   (commit `ed5d166 feat(009): harden processors + shared fire-and-forget helper`).
+
+Decision: T052 is satisfied — the only failure is an environmental flake that
+predates this epic. Tracked separately for the processors/observability team.
+The new tests added by epic 015 (8 in `test_pipeline_backwards_compat.py`,
+opt-in benchmark in `test_overhead_no_pipeline.py`) all pass and add zero new
+warnings.
+
+(ref: T052; spec.md FR-070; tasks.md § "Phase 5: User Story 6")
+
+### T051 (SC-010) — empty-pipeline lookup overhead measured
+
+Command:
+
+```
+.venv/bin/python -m pytest tests/benchmarks/test_overhead_no_pipeline.py \
+    -v -m benchmark --no-cov -s
+```
+
+Result on local dev box (Linux, Python 3.12.3):
+
+```
+[T051 SC-010 benchmark]
+  with_lookup   : min=0.066ms median=0.072ms p95=0.125ms max=0.334ms (n=100)
+  without_lookup: min=0.011ms median=0.014ms p95=0.027ms max=0.162ms (n=100)
+  Δ p95 (overhead): 0.098ms (budget: ≤5.0ms)
+```
+
+Δ p95 = **0.098 ms**, ~50× under the 5.0 ms budget. SC-010 satisfied.
+Re-validated in staging by T126 (Phase 10).
+
+(ref: T051; spec.md SC-010; tasks.md § "Phase 5: User Story 6")
+
+### T053 (FR-070) — `step_record.py` forward-compat probe
+
+Inspected `apps/api/prosauai/conversation/step_record.py` and confirmed:
+
+- The current `StepRecord` dataclass has no `sub_steps` field.
+- Per T070 (Phase 6, US5), the field will be added as
+  `sub_steps: list[StepRecord] | None = None`. The `None` default makes
+  every existing constructor call source-compatible — no fixture mass-update
+  is needed when T070 lands.
+- 36 existing constructor sites in `apps/api` (queried via grep `StepRecord(`)
+  use either keyword arguments matching the current dataclass shape or rely
+  on `_record_step` factory. None of them positionally pass a value at the
+  trailing slot, so adding a new keyword-only field with a default cannot
+  break them.
+
+Forward-compat invariant for T070: the field MUST be added at the END of the
+dataclass with `default=None`. No reordering, no required field. The added
+truncation/serialisation logic must short-circuit on `None`.
+
+(ref: T053; tasks.md § "Implementation safeguards for User Story 6")
+
+### T054 (FR-072) — migration idempotency probe
+
+Static probe (covered by `TestMigrationsIdempotency` in
+`apps/api/tests/conversation/test_pipeline_backwards_compat.py`) verifies that
+both epic 015 migrations are guarded with `IF NOT EXISTS` /
+`DROP ... IF EXISTS` so a second `dbmate up` is a no-op:
+
+- `20260601000010_create_agent_pipeline_steps.sql`:
+  `CREATE TABLE IF NOT EXISTS public.agent_pipeline_steps`,
+  `CREATE INDEX IF NOT EXISTS` (×2), `DROP POLICY IF EXISTS tenant_isolation`,
+  `DROP TRIGGER IF EXISTS trg_pipeline_steps_updated_at`,
+  `CREATE OR REPLACE FUNCTION public.set_updated_at`.
+- `20260601000011_alter_trace_steps_sub_steps.sql`:
+  `ALTER TABLE public.trace_steps ADD COLUMN IF NOT EXISTS sub_steps JSONB`.
+
+Both files include matching `migrate:down` blocks. The behavioural integration
+test (apply twice → second is no-op) lives in
+`apps/api/tests/integration/test_pipeline_steps_repository_pg.py` (T015) and
+is run during the testcontainers-backed integration job in CI. Verified
+indirectly by the static probe in this Phase.
+
+(ref: T054; spec.md FR-072; tasks.md § "Implementation safeguards for User Story 6")
+
+### T055 (FR-064) — `messages.metadata` write path probe (negative case)
+
+Verified that when `pipeline_steps == []`, none of `terminating_step`,
+`pipeline_step_count`, `pipeline_version` is written to `messages.metadata`:
+
+1. **Static probe** in `TestMessagesMetadataNegativePath::
+   test_pipeline_module_has_no_unconditional_metadata_writers`: scans
+   `pipeline.py` source for the 3 forbidden keys and asserts every
+   reference sits inside `_generate_via_pipeline_executor` (the executor
+   adapter helper) or downstream of an `exec_result.terminating_step`
+   guard. No bare/unconditional writes.
+2. **Behavioural probe** in `TestMessagesMetadataNegativePath::
+   test_save_message_metadata_empty_for_single_call`: drives
+   `_generate_with_retry` with empty pipeline_steps and asserts the
+   returned `GenerationResult.model_dump()` contains none of the 3 keys.
+
+Today the metadata writer (T073, Phase 6, US5) is not yet implemented, so
+the contract holds trivially. When T073 lands it MUST write those keys
+ONLY when the executor branch ran — the tests in this file will catch any
+regression that leaks them through the legacy path.
+
+(ref: T055; spec.md FR-064; tasks.md § "Implementation safeguards for User Story 6")
+
+---
+
 ## Future entries
 
 Add new entries below as PRs land. Number monotonically. Update the
