@@ -216,12 +216,12 @@
 
 **⚠️ Cut-line**: Phase 9 depends on Phase 8 (P2 frontend infra) AND on `agent_config_versions` actually existing. Per D-PLAN-02 the table doesn't exist in production — Phase 9 is **fully optional in this epic**. If `agent_config_versions` is not shipped before week 3, Phase 9 is deferred to a future epic. Document the branching decision in `decisions.md`.
 
-- [ ] T110 [US4] Confirm `agent_config_versions` table exists in production. If NOT, mark Phase 9 as DEFERRED in `decisions.md` and SKIP T111–T115
-- [ ] T111 [US4] Modify `apps/api/prosauai/admin/performance.py` (épico 008) — accept `?group_by=agent_version` query param; when set, GROUP BY `agent_version_id` and return parallel KPI series (QS, latency_p95, cost_avg, fallback_rate, message_count) per version
-- [ ] T112 [US4] Apply minimum-sample-size rule: any version with `message_count < 50` returns `kpis: null, sample_label: "amostra insuficiente — N=42"` instead of numbers (FR-052, ADR-019 item 16)
-- [ ] T113 [US4] [P] Modify `apps/admin/components/perf-ai-card.tsx` (épico 008) — add toggle "Group by version" (visible only when ≥2 active versions detected); when toggled, render side-by-side columns with version label + KPIs (or insufficient-sample placeholder)
-- [ ] T114 [US4] [P] Update trend charts (`apps/admin/components/perf-ai-charts.tsx` épico 008) — when `group_by=agent_version`, render distinct lines per version with legend
-- [ ] T115 [US4] [P] Write Playwright test `apps/admin/tests/perf-ai-canary.spec.ts` exercising the SC-013 flow: seed 2 versions of fake data with different distributions, navigate to perf-ai page, toggle group-by, verify both columns render with correct labels and small-sample handling
+- [x] T110 [US4] Confirm `agent_config_versions` table exists in production. If NOT, mark Phase 9 as DEFERRED in `decisions.md` and SKIP T111–T115 — **CONFIRMED ABSENT** (no migration in `apps/api/db/migrations/` references `agent_config_versions`; the symbol appears only in code docstrings acknowledging D-PLAN-02). Phase 9 deferred — see decisions.md entry #11
+- [x] T111 [US4] Modify `apps/api/prosauai/admin/performance.py` (épico 008) — accept `?group_by=agent_version` query param; when set, GROUP BY `agent_version_id` and return parallel KPI series (QS, latency_p95, cost_avg, fallback_rate, message_count) per version — **DEFERRED per T110** (see decisions.md entry #11)
+- [x] T112 [US4] Apply minimum-sample-size rule: any version with `message_count < 50` returns `kpis: null, sample_label: "amostra insuficiente — N=42"` instead of numbers (FR-052, ADR-019 item 16) — **DEFERRED per T110** (see decisions.md entry #11)
+- [x] T113 [US4] [P] Modify `apps/admin/components/perf-ai-card.tsx` (épico 008) — add toggle "Group by version" (visible only when ≥2 active versions detected); when toggled, render side-by-side columns with version label + KPIs (or insufficient-sample placeholder) — **DEFERRED per T110** (see decisions.md entry #11)
+- [x] T114 [US4] [P] Update trend charts (`apps/admin/components/perf-ai-charts.tsx` épico 008) — when `group_by=agent_version`, render distinct lines per version with legend — **DEFERRED per T110** (see decisions.md entry #11)
+- [x] T115 [US4] [P] Write Playwright test `apps/admin/tests/perf-ai-canary.spec.ts` exercising the SC-013 flow: seed 2 versions of fake data with different distributions, navigate to perf-ai page, toggle group-by, verify both columns render with correct labels and small-sample handling — **DEFERRED per T110** (see decisions.md entry #11)
 
 **Checkpoint**: US4 enables data-driven canary promotion decisions.
 

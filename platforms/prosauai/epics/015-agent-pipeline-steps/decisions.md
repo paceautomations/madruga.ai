@@ -1,7 +1,7 @@
 ---
 epic: 015-agent-pipeline-steps
 created: 2026-04-27
-updated: 2026-04-29
+updated: 2026-04-27
 purpose: Audit trail of implementation-level decisions taken during the
   speckit.implement phase. Plan-level decisions (D-PLAN-01..12) live in
   plan.md §"Phase 0: Outline & Research" and Captured Decisions tables.
@@ -567,6 +567,41 @@ regression that leaks them through the legacy path.
      with a confirmation dialog. (ref: T101; plan.md § D-PLAN-02;
      contracts/openapi.yaml — to be regenerated to include the new
      endpoint when codegen catches up)
+
+11. [2026-04-27 implement] **Phase 9 (US4 — group-by-version) DEFERRED.**
+    T110 gating decision. Verified: `agent_config_versions` table is NOT
+    present in `apps/api/db/migrations/` — `grep -r agent_config_versions
+    apps/api/db/migrations/` returns zero hits, and the only references in
+    the codebase (`pipeline.py`, `pipeline_steps.py`, `traces.py`) are
+    documentation strings acknowledging the absence per D-PLAN-02. Per
+    `tasks.md` Phase 9 cut-line ("Phase 9 depends on `agent_config_versions`
+    actually existing — if not shipped before week 3, Phase 9 is deferred
+    to a future epic"), tasks **T111, T112, T113, T114, T115 are SKIPPED**
+    in this epic. The Performance AI dashboard continues to render a
+    single-version view — no `?group_by=agent_version` query parameter,
+    no toggle in `perf-ai-card.tsx`, no parallel-version Playwright. The
+    follow-up scope (when ADR-019 lands) is:
+
+    * Backend: add `?group_by=agent_version` to
+      `apps/api/prosauai/admin/metrics/performance.py:get_performance`
+      with parallel KPI series per `agent_version_id` and the
+      minimum-sample-size rule (FR-052: any version with N<50 returns
+      `kpis: null, sample_label: "amostra insuficiente — N=42"`).
+    * Frontend: add a "Group by version" toggle to
+      `apps/admin/src/app/admin/(authenticated)/performance/page.tsx`
+      visible only when ≥2 active versions exist (read from agent
+      detail). Trend charts (`quality-trend.tsx`,
+      `latency-waterfall.tsx`) render distinct lines per version with a
+      legend.
+    * Tests: Playwright `apps/admin/tests/perf-ai-canary.spec.ts` exercises
+      SC-013 — seed 2 versions, navigate, toggle group-by, assert both
+      columns + small-sample handling.
+
+    Phase 9 is non-blocking for the MVP — operators continue to compare
+    versions via SQL ad-hoc queries on `messages.metadata.terminating_step`
+    and `traces.agent_id` until ADR-019 ships. Documented for the
+    `agent_config_versions` follow-up epic. (ref: T110; plan.md
+    § D-PLAN-02; tasks.md § Phase 9 Cut-line)
 
 ---
 
