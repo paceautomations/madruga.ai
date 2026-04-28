@@ -175,21 +175,21 @@
 
 ### Backend endpoint (FR-035, FR-036)
 
-- [ ] T060 [P] [US4] Escrever `apps/api/tests/triggers/test_admin_triggers_events.py` PRIMEIRO — fixtures com 1000 rows `trigger_events` em 3 tenants; assert: paginacao cursor walks 3 paginas consistente; filtros tenant/trigger_id/customer_phone/status/from/to combinaveis; p95 <300ms via load 10K rows; auth `require_admin` (Bearer token) rejeita sem header; phone_number_e164 join populado
-- [ ] T061 [US4] Implementar `apps/api/prosauai/admin/schemas/triggers.py` — Pydantic models `TriggerEventResponse` (lista resumida com error_short=first 200 chars) + `TriggerEventDetail` (allOf TriggerEventResponse + full payload + full error) + `TriggerEventsPage` (items + next_cursor) + helpers encode_cursor/decode_cursor (base64 fired_at_iso|id)
-- [ ] T062 [US4] Implementar `apps/api/prosauai/admin/triggers.py` — `@router.get("/admin/triggers/events")` async com query params `tenant`, `trigger_id`, `customer_phone`, `status`, `from`, `to`, `cursor`, `limit (1..200, default 25)` + dependency `require_admin` (reusa middleware epic 008); pool admin BYPASSRLS; cursor paginacao com `(fired_at, id) < (...)` ordering; SELECT JOIN customers para customer_phone_e164. Tests T060 passam.
-- [ ] T063 [US4] Registrar router em `apps/api/prosauai/main.py` — `app.include_router(admin_triggers.router, prefix='/admin', tags=['admin', 'triggers'])`
-- [ ] T064 [US4] Modificar `contracts/openapi.yaml` — adicionar path `/admin/triggers/events` com schemas `TriggerEventResponse`, `TriggerEventDetail`, `TriggerEventsPage`; opcional: estender `GET /admin/agents/{id}` para incluir `triggers_count` em response
-- [ ] T065 [US4] Regenerar types TypeScript via `pnpm gen:api` (executado em apps/admin); commit alteracoes em `apps/admin/lib/api/types.gen.ts`
+- [x] T060 [P] [US4] Escrever `apps/api/tests/triggers/test_admin_triggers_events.py` PRIMEIRO — fixtures com 1000 rows `trigger_events` em 3 tenants; assert: paginacao cursor walks 3 paginas consistente; filtros tenant/trigger_id/customer_phone/status/from/to combinaveis; p95 <300ms via load 10K rows; auth `require_admin` (Bearer token) rejeita sem header; phone_number_e164 join populado
+- [x] T061 [US4] Implementar `apps/api/prosauai/admin/schemas/triggers.py` — Pydantic models `TriggerEventResponse` (lista resumida com error_short=first 200 chars) + `TriggerEventDetail` (allOf TriggerEventResponse + full payload + full error) + `TriggerEventsPage` (items + next_cursor) + helpers encode_cursor/decode_cursor (base64 fired_at_iso|id)
+- [x] T062 [US4] Implementar `apps/api/prosauai/admin/triggers.py` — `@router.get("/admin/triggers/events")` async com query params `tenant`, `trigger_id`, `customer_phone`, `status`, `from`, `to`, `cursor`, `limit (1..200, default 25)` + dependency `require_admin` (reusa middleware epic 008); pool admin BYPASSRLS; cursor paginacao com `(fired_at, id) < (...)` ordering; SELECT JOIN customers para customer_phone_e164. Tests T060 passam.
+- [x] T063 [US4] Registrar router em `apps/api/prosauai/main.py` — `app.include_router(admin_triggers.router, prefix='/admin', tags=['admin', 'triggers'])`
+- [x] T064 [US4] Modificar `contracts/openapi.yaml` — adicionar path `/admin/triggers/events` com schemas `TriggerEventResponse`, `TriggerEventDetail`, `TriggerEventsPage`; opcional: estender `GET /admin/agents/{id}` para incluir `triggers_count` em response
+- [x] T065 [US4] Regenerar types TypeScript via `pnpm gen:api` (executado em apps/admin); commit alteracoes em `apps/admin/lib/api/types.gen.ts`
 
 ### Frontend admin viewer (FR-037, FR-038)
 
-- [ ] T066 [US4] Implementar `apps/admin/lib/api/triggers.ts` — TanStack Query hooks `useTriggerEvents(filters)` com `useInfiniteQuery` (cursor pagination via `pageParam`); helper `useTriggerEventDetail(id)` para drill-down (opcional v1: hidratar de `useTriggerEvents` cache)
-- [ ] T067 [US4] Implementar `apps/admin/app/(dashboard)/triggers/page.tsx` — page com header (filtros: shadcn Select tenant, Input trigger_id com debounce 300ms, Input customer_phone, MultiSelect status, DateRangePicker from/to + Reset button); shadcn DataTable com colunas `fired_at, customer_phone, trigger_id, template_name, status (badge), cost_usd, error_short, retry_count`; footer com "Load more" cursor button + count "Showing X events"
-- [ ] T068 [US4] Implementar `apps/admin/components/trigger-event-detail.tsx` — shadcn Dialog modal com: payload JSON pretty-print (react-json-view ou highlight); error full text; cost_usd_estimated formatado; timestamps `fired_at`/`sent_at`; retry_count; customer info card com `phone_number_e164` + link para customer page
-- [ ] T069 [US4] [P] Adicionar item `Triggers` no menu lateral admin (`apps/admin/components/sidebar.tsx`) com icone `Bell` (lucide-react)
-- [ ] T070 [US4] Escrever `apps/admin/tests/triggers.spec.ts` (Playwright E2E) — admin loga, navega `/triggers`, aplica filtro tenant=Ariel, ve lista paginada, clica row, ve modal com payload + cost; assert <500ms LCP carrega 25 rows
-- [ ] T071 [US4] Validar admin viewer end-to-end com fixture 1000 rows + p95 <300ms backend; documentar em RUNBOOK como debugar trigger event especifico
+- [x] T066 [US4] Implementar `apps/admin/lib/api/triggers.ts` — TanStack Query hooks `useTriggerEvents(filters)` com `useInfiniteQuery` (cursor pagination via `pageParam`); helper `useTriggerEventDetail(id)` para drill-down (opcional v1: hidratar de `useTriggerEvents` cache)
+- [x] T067 [US4] Implementar `apps/admin/app/(dashboard)/triggers/page.tsx` — page com header (filtros: shadcn Select tenant, Input trigger_id com debounce 300ms, Input customer_phone, MultiSelect status, DateRangePicker from/to + Reset button); shadcn DataTable com colunas `fired_at, customer_phone, trigger_id, template_name, status (badge), cost_usd, error_short, retry_count`; footer com "Load more" cursor button + count "Showing X events"
+- [x] T068 [US4] Implementar `apps/admin/components/trigger-event-detail.tsx` — shadcn Dialog modal com: payload JSON pretty-print (react-json-view ou highlight); error full text; cost_usd_estimated formatado; timestamps `fired_at`/`sent_at`; retry_count; customer info card com `phone_number_e164` + link para customer page
+- [x] T069 [US4] [P] Adicionar item `Triggers` no menu lateral admin (`apps/admin/components/sidebar.tsx`) com icone `Bell` (lucide-react)
+- [x] T070 [US4] Escrever `apps/admin/tests/triggers.spec.ts` (Playwright E2E) — admin loga, navega `/triggers`, aplica filtro tenant=Ariel, ve lista paginada, clica row, ve modal com payload + cost; assert <500ms LCP carrega 25 rows
+- [x] T071 [US4] Validar admin viewer end-to-end com fixture 1000 rows + p95 <300ms backend; documentar em RUNBOOK como debugar trigger event especifico
 
 **Checkpoint US4**: operador acessa `/admin/triggers` em <500ms, filtra por tenant em <2min find specifico (SC-005), drill-down completo. **PR-B mergeavel apos US4 (sem rollout Ariel).**
 
@@ -203,10 +203,10 @@
 
 ### Tests + alert wiring for US5
 
-- [ ] T072 [P] [US5] Escrever `apps/api/tests/triggers/test_invariants_us5.py` — cenario tsunami: trigger config errado matcheando 200 customers; assert: 100 processados (hard cap FR-011), 100 skipped reason='hard_cap', 0 customer com >3 envios/dia (daily cap FR-013), counter `trigger_daily_cap_blocked_total` incrementa
-- [ ] T073 [P] [US5] Escrever `apps/api/tests/triggers/test_lock_contention.py` — duas instances do scheduler em paralelo (multi-replica simulation); assert apenas 1 tick ativo por vez (FR-001); zero parallel sends para mesmo customer
-- [ ] T074 [US5] Escrever `apps/api/tests/triggers/test_hot_reload_atomicity.py` — cron tick em curso quando `tenants.yaml` muda; assert tick atual termina com config antiga (snapshot atomico FR-043); proximo tick usa config nova
-- [ ] T075 [US5] Adicionar test `apps/api/tests/triggers/test_consent_required_default.py` — assert default `match.consent_required=True` filtra `opt_out_at IS NOT NULL` mesmo quando `match` ausente em config
+- [x] T072 [P] [US5] Escrever `apps/api/tests/triggers/test_invariants_us5.py` — cenario tsunami: trigger config errado matcheando 200 customers; assert: 100 processados (hard cap FR-011), 100 skipped reason='hard_cap', 0 customer com >3 envios/dia (daily cap FR-013), counter `trigger_daily_cap_blocked_total` incrementa
+- [x] T073 [P] [US5] Escrever `apps/api/tests/triggers/test_lock_contention.py` — duas instances do scheduler em paralelo (multi-replica simulation); assert apenas 1 tick ativo por vez (FR-001); zero parallel sends para mesmo customer
+- [x] T074 [US5] Escrever `apps/api/tests/triggers/test_hot_reload_atomicity.py` — cron tick em curso quando `tenants.yaml` muda; assert tick atual termina com config antiga (snapshot atomico FR-043); proximo tick usa config nova
+- [x] T075 [US5] Adicionar test `apps/api/tests/triggers/test_consent_required_default.py` — assert default `match.consent_required=True` filtra `opt_out_at IS NOT NULL` mesmo quando `match` ausente em config
 
 **Checkpoint US5**: invariants explicitos via test suite — sistema impossivel de bipassar mesmo com config quebrada.
 
