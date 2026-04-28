@@ -275,7 +275,7 @@
 - [x] T901 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --start --platform prosauai` — todos os health_checks respondem dentro do `ready_timeout` (120s)
 - [x] T902 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --validate-env --platform prosauai` — zero `required_env` vars ausentes no `.env` (`JWT_SECRET`, `ADMIN_BOOTSTRAP_EMAIL`, `ADMIN_BOOTSTRAP_PASSWORD`, `DATABASE_URL`)
 - [x] T903 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --validate-urls --platform prosauai` — todas as 6 URLs declaradas em `testing.urls` acessiveis com status esperado
-- [ ] T904 Capturar screenshot de cada URL `type: frontend` declarada em `testing.urls` — conteudo nao e placeholder; admin `/triggers` renderiza lista (mesmo que vazia inicialmente)
+- [x] T904 Capturar screenshot de cada URL `type: frontend` declarada em `testing.urls` — conteudo nao e placeholder; admin `/triggers` renderiza lista (mesmo que vazia inicialmente)
 - [ ] T905 Executar Journey J-001 (happy path) declarado em `testing/journeys.md` — todos os steps com assertions OK, incluindo trigger smoke (configurar trigger dry_run + verificar row em `trigger_events` apos 1 tick)
 
 ---
