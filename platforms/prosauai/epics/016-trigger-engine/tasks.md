@@ -239,10 +239,10 @@
 ### Polish + observability final
 
 - [X] T087 Adicionar fixture `mock_evolution` completa em `apps/api/tests/conftest.py` (substituindo stub T004) — respx covering 6 paths via parametrize
-- [ ] T088 [P] Adicionar fixture `triggers_yaml` completa em `conftest.py` — base `tenants.yaml` com Ariel + 1 trigger + 1 template (Ariel match_reminder em mode dry_run)
-- [ ] T089 [P] Documentacao operacional `apps/api/prosauai/triggers/RUNBOOK.md` — secoes: setup tenant operador (cadastrar template Meta + editar tenants.yaml + popular customers.scheduled_event_at), debug trigger sem disparo (checklist EXPLAIN matcher + verificar opt_out + verificar cooldown redis + verificar daily cap), kill-switch global (`triggers.enabled: false` per-tenant ou settings global), recovery pos-Redis-restart (automatic via `restore_state_from_sql`), troubleshooting Meta template rejection (4xx codes comuns)
-- [ ] T090 [P] Atualizar `apps/api/CHANGELOG.md` (ou docs equivalente) com nota de release epic 016: "Trigger Engine — engine declarativo de mensagens proativas (cron-driven, 3 trigger types pre-built, cooldown granular, history viewer)"
-- [ ] T091 Verificar zero regressao em pipeline inbound: rodar suite `pytest apps/api/tests/conversation/` + `pytest apps/api/tests/handoff/` — todos passam intactos (gate de merge)
+- [x] T088 [P] Adicionar fixture `triggers_yaml` completa em `conftest.py` — base `tenants.yaml` com Ariel + 1 trigger + 1 template (Ariel match_reminder em mode dry_run)
+- [x] T089 [P] Documentacao operacional `apps/api/prosauai/triggers/RUNBOOK.md` — secoes: setup tenant operador (cadastrar template Meta + editar tenants.yaml + popular customers.scheduled_event_at), debug trigger sem disparo (checklist EXPLAIN matcher + verificar opt_out + verificar cooldown redis + verificar daily cap), kill-switch global (`triggers.enabled: false` per-tenant ou settings global), recovery pos-Redis-restart (automatic via `restore_state_from_sql`), troubleshooting Meta template rejection (4xx codes comuns)
+- [x] T090 [P] Atualizar `apps/api/CHANGELOG.md` (ou docs equivalente) com nota de release epic 016: "Trigger Engine — engine declarativo de mensagens proativas (cron-driven, 3 trigger types pre-built, cooldown granular, history viewer)"
+- [x] T091 Verificar zero regressao em pipeline inbound: rodar suite `pytest apps/api/tests/conversation/` + `pytest apps/api/tests/handoff/` — todos passam intactos (gate de merge)
 - [ ] T092 [P] Adicionar bench `apps/api/tests/triggers/test_performance_bench.py` — load test: 1 tenant × 3 triggers × 100 customers/tick → assert cron tick p95 <2s (SC-004)
 - [ ] T093 [P] Adicionar bench admin endpoint — load test 10K rows com cursor pagination → assert p95 <300ms (SC-006)
 - [ ] T094 Verificar cardinality lint passa com fixture realista (10 tenants × 5 triggers × 10 templates = ~3K series — bem abaixo de 50K limit)
