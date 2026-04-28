@@ -272,7 +272,7 @@
 > Nota: phase auto-gerada porque `platforms/prosauai/platform.yaml` declara bloco `testing:` (`startup.type: docker`).
 
 - [x] T900 Executar `docker compose build` no diretorio da plataforma — build sem erros
-- [ ] T901 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --start --platform prosauai` — todos os health_checks respondem dentro do `ready_timeout` (120s)
+- [x] T901 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --start --platform prosauai` — todos os health_checks respondem dentro do `ready_timeout` (120s)
 - [ ] T902 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --validate-env --platform prosauai` — zero `required_env` vars ausentes no `.env` (`JWT_SECRET`, `ADMIN_BOOTSTRAP_EMAIL`, `ADMIN_BOOTSTRAP_PASSWORD`, `DATABASE_URL`)
 - [ ] T903 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --validate-urls --platform prosauai` — todas as 6 URLs declaradas em `testing.urls` acessiveis com status esperado
 - [ ] T904 Capturar screenshot de cada URL `type: frontend` declarada em `testing.urls` — conteudo nao e placeholder; admin `/triggers` renderiza lista (mesmo que vazia inicialmente)
