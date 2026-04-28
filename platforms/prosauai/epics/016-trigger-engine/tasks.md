@@ -106,14 +106,14 @@
 - [x] T035 [US1] Implementar `apps/api/prosauai/triggers/engine.py` — funcao `execute_tick(*, tenant_id, tenant_config, redis, db_admin_pool, db_tenant_pool, evolution_client, now, mode_override='dry_run')` async conforme plan.md §A.7: snapshot atomico de config (FR-043); stuck-detection primeiro (FR-041) chamando `events.find_stuck_queued` + `events.reclaim_stuck`; loop por trigger ativo; matcher dispatch por `trigger.type`; aplicar filtros em ordem (handoff via filtro matcher → cooldown → daily cap → app-check idempotency); render; persist via `events.insert_trigger_event` com `status='dry_run'` (PR-A scope) ou `status='queued'` (PR-B); spans OTel children. Em PR-A: `mode_override='dry_run'` sempre — send NUNCA chamado.
 - [x] T036 [US1] Wirering scheduler→engine: `apps/api/prosauai/triggers/scheduler.py` chama `engine.execute_tick` para cada tenant em `get_tenants_with_triggers()`. Span root `trigger.cron.tick` aberto envolvendo tudo.
 - [x] T037 [US1] Adicionar logs structlog em `engine.py` com contexto `tenant_id, customer_id, trigger_id, template_name, status, error, cost_usd_estimated` (FR-032) — usar facade `logger.bind(...)`.
-- [ ] T038 [US1] Adicionar emit Prometheus em `engine.py` para US1 paths: `trigger_executions_total{...,status='dry_run'}.inc()`, `trigger_skipped_total{...,reason='cooldown'/'daily_cap'/'opt_out'/'handoff'/'idempotent'/'hard_cap'/'disabled'}.inc()`. Counters apenas — gauge cost vem em PR-B.
-- [ ] T039 [US1] Escrever `apps/api/tests/triggers/test_engine_unit.py` — mocks de matcher/redis/db; assert filtros aplicados em ordem correta; assert dry_run mode nao chama send_template; assert idempotency app-check skipa pre-INSERT
-- [ ] T040 [US1] Escrever `apps/api/tests/triggers/test_engine_pg.py` (integration testcontainers + fakeredis + mock evolution via respx) — fixture Ariel com `tenants.yaml triggers.list[ariel_match_reminder]` + 5 customers (3 cenarios distintos US1 acceptance scenarios 1, 4, 5); execute_tick gera rows esperadas; re-tick respeita idempotency
-- [ ] T041 [US1] Escrever `apps/api/tests/triggers/test_idempotency_db_race.py` — concurrent tasks INSERT mesma `(tenant, customer, trigger_id, date)`; um vence, outro captura `UniqueViolationError` → grava `status='skipped' reason='idempotent_db_race'`
-- [ ] T042 [US1] Escrever `apps/api/tests/triggers/test_chaos_redis_restart.py` — pre-condicao: 5 rows `trigger_events.status='sent'` ha 12h + Redis vazio; chamar `cooldown.restore_state_from_sql`; assert keys recriadas com TTL correto
-- [ ] T043 [US1] Smoke E2E manual seguindo `quickstart.md` §2: editar `tenants.yaml` Ariel + 1 trigger + 1 template em `mode: dry_run`; popular `customers.scheduled_event_at` em 3 fixtures; observar log `trigger.cron.tick` + verificar 1 row `trigger_events.status='dry_run'` via SQL direto
-- [ ] T044 [US1] Verificar EXPLAIN das queries matcher usa indexes (`idx_customers_scheduled_event` partial); documentar em `apps/api/prosauai/triggers/RUNBOOK.md` queries esperadas + plans
-- [ ] T045 [US1] Add validation que `cron tick p95 <2s` em load test 100 customers em fixture (SC-004 hard gate) — adicionar bench em `apps/api/tests/triggers/test_engine_perf.py`
+- [x] T038 [US1] Adicionar emit Prometheus em `engine.py` para US1 paths: `trigger_executions_total{...,status='dry_run'}.inc()`, `trigger_skipped_total{...,reason='cooldown'/'daily_cap'/'opt_out'/'handoff'/'idempotent'/'hard_cap'/'disabled'}.inc()`. Counters apenas — gauge cost vem em PR-B.
+- [x] T039 [US1] Escrever `apps/api/tests/triggers/test_engine_unit.py` — mocks de matcher/redis/db; assert filtros aplicados em ordem correta; assert dry_run mode nao chama send_template; assert idempotency app-check skipa pre-INSERT
+- [x] T040 [US1] Escrever `apps/api/tests/triggers/test_engine_pg.py` (integration testcontainers + fakeredis + mock evolution via respx) — fixture Ariel com `tenants.yaml triggers.list[ariel_match_reminder]` + 5 customers (3 cenarios distintos US1 acceptance scenarios 1, 4, 5); execute_tick gera rows esperadas; re-tick respeita idempotency
+- [x] T041 [US1] Escrever `apps/api/tests/triggers/test_idempotency_db_race.py` — concurrent tasks INSERT mesma `(tenant, customer, trigger_id, date)`; um vence, outro captura `UniqueViolationError` → grava `status='skipped' reason='idempotent_db_race'`
+- [x] T042 [US1] Escrever `apps/api/tests/triggers/test_chaos_redis_restart.py` — pre-condicao: 5 rows `trigger_events.status='sent'` ha 12h + Redis vazio; chamar `cooldown.restore_state_from_sql`; assert keys recriadas com TTL correto
+- [x] T043 [US1] Smoke E2E manual seguindo `quickstart.md` §2: editar `tenants.yaml` Ariel + 1 trigger + 1 template em `mode: dry_run`; popular `customers.scheduled_event_at` em 3 fixtures; observar log `trigger.cron.tick` + verificar 1 row `trigger_events.status='dry_run'` via SQL direto
+- [x] T044 [US1] Verificar EXPLAIN das queries matcher usa indexes (`idx_customers_scheduled_event` partial); documentar em `apps/api/prosauai/triggers/RUNBOOK.md` queries esperadas + plans
+- [x] T045 [US1] Add validation que `cron tick p95 <2s` em load test 100 customers em fixture (SC-004 hard gate) — adicionar bench em `apps/api/tests/triggers/test_engine_perf.py`
 
 **Checkpoint US1**: Ariel `tenants.yaml` com 1 trigger `mode: dry_run` ativo gera rows `trigger_events.status='dry_run'` automaticamente a cada tick; cooldown bloqueia 2a tentativa <24h; daily cap bloqueia 4o trigger por customer; opt_out bloqueia absoluto. **PR-A pode shipar parcialmente apos US1 + US2 + US3 + US5 (todos backbone foundation).**
 
@@ -127,16 +127,16 @@
 
 ### Tests for User Story 2
 
-- [ ] T046 [P] [US2] Escrever `apps/api/tests/triggers/test_matcher_time_after_conversation_closed.py` — fixtures de 5 conversations (1 fechada ha 23h em janela 24h, 1 fechada ha 25h fora, 1 fechada ha 10h cedo, 1 reaberta apos closed_at, 1 com cliente opt_out); assert matcher retorna apenas 1; assert idempotency reusa logica do US1; assert hard cap 100 aplicado
+- [x] T046 [P] [US2] Escrever `apps/api/tests/triggers/test_matcher_time_after_conversation_closed.py` — fixtures de 5 conversations (1 fechada ha 23h em janela 24h, 1 fechada ha 25h fora, 1 fechada ha 10h cedo, 1 reaberta apos closed_at, 1 com cliente opt_out); assert matcher retorna apenas 1; assert idempotency reusa logica do US1; assert hard cap 100 aplicado
 
 ### Implementation for User Story 2
 
-- [ ] T047 [US2] Adicionar funcao `match_time_after_conversation_closed(conn, trigger, now)` em `apps/api/prosauai/triggers/matchers.py` — query SQL JOIN `conversations` + `customers`: `WHERE c.closed_at >= NOW() - lookahead_hours - tick_jitter_seconds AND c.closed_at < NOW() - lookahead_hours AND customers.opt_out_at IS NULL AND c.ai_active=false` (conversa fechada implica ai_active=false). Tests T046 passam.
-- [ ] T048 [US2] Estender `dispatch_matcher` em `engine.py` para rotear `TriggerType.time_after_conversation_closed` → `match_time_after_conversation_closed`
-- [ ] T049 [US2] Adicionar fixture `tenants.yaml` em `apps/api/tests/conftest.py` para US2 (clinic-style trigger `consult_reminder`)
-- [ ] T050 [US2] Estender `test_engine_pg.py` com cenario US2 acceptance scenarios 1-5 (incluindo cooldown 168h bloqueia conversa reaberta; janela `[NOW-lookahead-jitter, NOW-lookahead]` estrita; hard cap 100 emite counter `trigger_skipped_total{reason='hard_cap'}`)
-- [ ] T051 [US2] Verificar que existe (ou criar) index suficiente em `conversations.closed_at` — adicionar `CREATE INDEX IF NOT EXISTS idx_conversations_closed_at ON public.conversations (tenant_id, closed_at) WHERE closed_at IS NOT NULL` em migration nova `20260601000024_index_conversations_closed_at.sql` se ausente; documentar EXPLAIN em RUNBOOK
-- [ ] T052 [US2] Smoke manual seguindo `quickstart.md` §3 — Ariel adiciona 2o trigger `consult_reminder` em `tenants.yaml`; verifica row `dry_run` correta
+- [x] T047 [US2] Adicionar funcao `match_time_after_conversation_closed(conn, trigger, now)` em `apps/api/prosauai/triggers/matchers.py` — query SQL JOIN `conversations` + `customers`: `WHERE c.closed_at >= NOW() - lookahead_hours - tick_jitter_seconds AND c.closed_at < NOW() - lookahead_hours AND customers.opt_out_at IS NULL AND c.ai_active=false` (conversa fechada implica ai_active=false). Tests T046 passam.
+- [x] T048 [US2] Estender `dispatch_matcher` em `engine.py` para rotear `TriggerType.time_after_conversation_closed` → `match_time_after_conversation_closed`
+- [x] T049 [US2] Adicionar fixture `tenants.yaml` em `apps/api/tests/conftest.py` para US2 (clinic-style trigger `consult_reminder`)
+- [x] T050 [US2] Estender `test_engine_pg.py` com cenario US2 acceptance scenarios 1-5 (incluindo cooldown 168h bloqueia conversa reaberta; janela `[NOW-lookahead-jitter, NOW-lookahead]` estrita; hard cap 100 emite counter `trigger_skipped_total{reason='hard_cap'}`)
+- [x] T051 [US2] Verificar que existe (ou criar) index suficiente em `conversations.closed_at` — adicionar `CREATE INDEX IF NOT EXISTS idx_conversations_closed_at ON public.conversations (tenant_id, closed_at) WHERE closed_at IS NOT NULL` em migration nova `20260601000024_index_conversations_closed_at.sql` se ausente; documentar EXPLAIN em RUNBOOK
+- [x] T052 [US2] Smoke manual seguindo `quickstart.md` §3 — Ariel adiciona 2o trigger `consult_reminder` em `tenants.yaml`; verifica row `dry_run` correta
 
 **Checkpoint US2**: matcher `time_after_conversation_closed` funcional em dry_run. US1 + US2 ambos funcionais independentemente.
 
@@ -150,16 +150,16 @@
 
 ### Tests for User Story 3
 
-- [ ] T053 [P] [US3] Escrever `apps/api/tests/triggers/test_matcher_time_after_last_inbound.py` — fixtures 5 customers conforme acceptance scenarios US3: A com ultima inbound 48h em conv aberta (deve match), B com closed_at NOT NULL (skip), C com ai_active=false handoff (skip), D com ultima inbound 70h fora janela (skip), E com opt_out (skip)
+- [x] T053 [P] [US3] Escrever `apps/api/tests/triggers/test_matcher_time_after_last_inbound.py` — fixtures 5 customers conforme acceptance scenarios US3: A com ultima inbound 48h em conv aberta (deve match), B com closed_at NOT NULL (skip), C com ai_active=false handoff (skip), D com ultima inbound 70h fora janela (skip), E com opt_out (skip)
 
 ### Implementation for User Story 3
 
-- [ ] T054 [US3] Adicionar funcao `match_time_after_last_inbound(conn, trigger, now)` em `apps/api/prosauai/triggers/matchers.py` — subquery latest inbound message por customer + JOIN conversations: `WHERE last_inbound.created_at < NOW() - lookahead_hours AND last_inbound.created_at >= NOW() - lookahead_hours - tick_jitter_seconds AND conversations.closed_at IS NULL AND conversations.ai_active=true AND customers.opt_out_at IS NULL`. Tests T053 passam.
-- [ ] T055 [US3] Estender `dispatch_matcher` em `engine.py` para rotear `TriggerType.time_after_last_inbound` → `match_time_after_last_inbound`
-- [ ] T056 [US3] Adicionar contador `trigger_skipped_handoff_total{trigger_id}` em `observability/metrics.py` para visibilizar US3 acceptance scenario 3 (cliente em handoff humano e excluido)
-- [ ] T057 [US3] Estender `test_engine_pg.py` com cenario US3 acceptance scenarios 1-4 (incluindo template rejection 4xx setando `status='rejected'` + counter `trigger_template_rejected_total`)
-- [ ] T058 [US3] Validar que indexes em `messages.created_at` + `conversations.ai_active` + `conversations.closed_at` permitem matcher rodar sem table scan; documentar EXPLAIN em RUNBOOK
-- [ ] T059 [US3] Smoke manual seguindo `quickstart.md` §4 — adicionar 3o trigger `cart_recovery` em fixture; observar `dry_run` row apenas para customer que satisfaz todas condicoes
+- [x] T054 [US3] Adicionar funcao `match_time_after_last_inbound(conn, trigger, now)` em `apps/api/prosauai/triggers/matchers.py` — subquery latest inbound message por customer + JOIN conversations: `WHERE last_inbound.created_at < NOW() - lookahead_hours AND last_inbound.created_at >= NOW() - lookahead_hours - tick_jitter_seconds AND conversations.closed_at IS NULL AND conversations.ai_active=true AND customers.opt_out_at IS NULL`. Tests T053 passam.
+- [x] T055 [US3] Estender `dispatch_matcher` em `engine.py` para rotear `TriggerType.time_after_last_inbound` → `match_time_after_last_inbound`
+- [x] T056 [US3] Adicionar contador `trigger_skipped_handoff_total{trigger_id}` em `observability/metrics.py` para visibilizar US3 acceptance scenario 3 (cliente em handoff humano e excluido)
+- [x] T057 [US3] Estender `test_engine_pg.py` com cenario US3 acceptance scenarios 1-4 (incluindo template rejection 4xx setando `status='rejected'` + counter `trigger_template_rejected_total`)
+- [x] T058 [US3] Validar que indexes em `messages.created_at` + `conversations.ai_active` + `conversations.closed_at` permitem matcher rodar sem table scan; documentar EXPLAIN em RUNBOOK
+- [x] T059 [US3] Smoke manual seguindo `quickstart.md` §4 — adicionar 3o trigger `cart_recovery` em fixture; observar `dry_run` row apenas para customer que satisfaz todas condicoes
 
 **Checkpoint US3**: 3 matchers pre-built funcionais + dry_run completo. PR-A backbone end-to-end.
 
