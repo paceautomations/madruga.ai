@@ -1,7 +1,7 @@
 ---
 epic: 015-agent-pipeline-steps
 created: 2026-04-27
-updated: 2026-04-27
+updated: 2026-04-28
 purpose: Audit trail of implementation-level decisions taken during the
   speckit.implement phase. Plan-level decisions (D-PLAN-01..12) live in
   plan.md §"Phase 0: Outline & Research" and Captured Decisions tables.
@@ -602,6 +602,80 @@ regression that leaks them through the legacy path.
     and `traces.agent_id` until ADR-019 ships. Documented for the
     `agent_config_versions` follow-up epic. (ref: T110; plan.md
     § D-PLAN-02; tasks.md § Phase 9 Cut-line)
+
+---
+
+## D-PLAN-XX consolidated audit trail (T124, follow-up scoping for ADR-019)
+
+This section repeats the plan-level decisions in execution order so the
+follow-up team scoping `agent_config_versions` (ADR-019) and the
+PR-5/PR-6 cut-line resumption has a single linear digest of every
+trade-off taken without re-reading `plan.md`. Wording mirrors
+`plan.md §"Phase 0: Outline & Research"` — keep them in sync if either
+is edited.
+
+### How D-PLAN-XX landed
+
+| D-PLAN | Decision | Status in code | Evidence |
+|--------|---------|----------------|----------|
+| **D-PLAN-01** | `sub_steps` as a NEW JSONB column on `trace_steps` (not a child table, not nested in `output`) | Shipped | `apps/api/db/migrations/20260601000011_alter_trace_steps_sub_steps.sql`; persistence in `apps/api/prosauai/conversation/trace_persist.py` |
+| **D-PLAN-02** | `agent_config_versions` (ADR-019) NOT implemented this epic — `agent_pipeline_steps` bound directly to `agents.id`; rollback via `is_active=FALSE`; history via `audit_log` | Shipped + Phase 9 deferred | Implementation Decision #11 above; runbook §7 (Known limitations) |
+| **D-PLAN-03** | Pipeline executor lives in a separate module `pipeline_executor.py` — not inline in `_generate_with_retry` | Shipped | `apps/api/prosauai/conversation/pipeline_executor.py`; branch in `pipeline.py:_generate_with_retry` lines 535-537 area; Implementation Decision #1 |
+| **D-PLAN-04** | Each sub-step is an object inside the `sub_steps` array (NOT a new top-level `step_name`) | Shipped | Implementation Decision #4 (`SubStepRecord` dataclass, no `STEP_NAMES` mutation) |
+| **D-PLAN-05** | NO Redis cache for `pipeline_steps` lookup — direct asyncpg query relies on the `(agent_id, is_active, step_order)` index | Shipped | `apps/api/prosauai/db/queries/pipeline_steps.py:list_active_steps`; bench T051 measured 0.098 ms p95 overhead (50× under the 5 ms budget — see backwards-compat verification §T051) |
+| **D-PLAN-06** | Steps snapshot is captured atomically at the start of `_generate_with_retry` (no concurrent reload mid-execution) | Shipped | `pipeline_executor.execute_agent_pipeline` receives `steps` as an argument; `pipeline.py` resolves once before the executor branch |
+| **D-PLAN-07** | Condition evaluator uses regex parser + dict scope — NO AST, NO `eval()`, NO `pyparsing` | Shipped | `apps/api/prosauai/conversation/condition.py`; tests in `tests/conversation/test_condition.py` (30+ cases) |
+| **D-PLAN-08** | `routing_map` is a dict literal in the specialist `config` JSONB (`{intent_label: model_name}`) with mandatory `default_model`; modelo desconhecido → 422 ao validar via `pricing.PRICING_TABLE` (ADR-029) | Shipped | `apps/api/prosauai/conversation/steps/specialist.py`; runbook §1.2 |
+| **D-PLAN-09** | `prompt_slug` referencia `prompts.version` existente (chave `(agent_id, version)`) — sem tabela nova `pipeline_step_prompts` | Shipped | Validator in `apps/api/prosauai/db/queries/pipeline_steps.py:validate_steps_payload`; reusa epic 005 |
+| **D-PLAN-10** | Admin PUT replace-all (DELETE + INSERT atomic) instead of PATCH per-step — evita race entre múltiplos PATCHes simultâneos | Shipped (PR-5 backend); UI (PR-5) gated behind cut-line | `apps/api/prosauai/admin/pipeline_steps.py`; tests in `tests/integration/test_admin_pipeline_steps.py` |
+| **D-PLAN-11** | Step types implementados como classes em arquivos separados com Protocol comum — registry simples `_STEP_TYPES = {"classifier": ClassifierStep, ...}` | Shipped | `apps/api/prosauai/conversation/steps/{base,classifier,clarifier,resolver,specialist,summarizer}.py` |
+| **D-PLAN-12** | Fallback canned reusa `FALLBACK_MESSAGE` existente do `_generate_with_retry`; trace registra `error_type` para debug; `messages.metadata.terminating_step` registra step que abortou | Shipped | `pipeline_executor.execute_agent_pipeline` error path; runbook §5.1 ("Why did this trace terminate where it did?") |
+
+### Follow-up scope for ADR-019
+
+When the `agent_config_versions` epic ships, the following hooks need
+revisiting (D-PLAN-02 reopens):
+
+1. **Versioning surface in `agent_pipeline_steps`** — either add an
+   `agent_version_id UUID` column with FK → `agent_config_versions(id)`
+   or carry the binding through `agents.active_version_id` and snapshot
+   pipeline_steps inside `agent_config_versions.config_snapshot`. Pick
+   one to avoid double-source-of-truth.
+2. **`messages.metadata.pipeline_version`** — currently hard-coded to
+   `"unversioned-v1"` (see runbook §7). Replace with the live
+   `agent_version_id` so canary metrics can group by version.
+3. **Rollback semantics** — today rollback is an `is_active=FALSE`
+   UPDATE plus the audit_log replay (Implementation Decision #8 on
+   T101). With ADR-019 the canonical rollback should walk the
+   `agent_config_versions` timeline (`status: active → rolled_back`)
+   instead of the audit_log fallback. Keep the audit_log replay as a
+   secondary recovery surface for pre-versioning data.
+4. **Phase 9 (US4 — group-by-version)** — backend + frontend +
+   Playwright work itemised in Implementation Decision #11 (the
+   T110/T111/T112/T113/T114/T115 set deferred this epic).
+5. **Audit log shape change** — Implementation Decision #8 (T101)
+   notes that pre-versioning audit rows lack a `before` snapshot. With
+   ADR-019 we may simplify by linking each replace to a parent version
+   id; existing pre-versioning rows can stay readable via the legacy
+   replay path.
+
+### Performance / kill-criteria audit (T126 follow-up)
+
+T126 (Phase 10) runs the bench in staging end-to-end. Success criteria:
+
+- SC-010 — overhead p95 ≤5 ms for the empty-pipeline lookup. Local
+  number: 0.098 ms (see §T051). Staging is expected within the same
+  order of magnitude; if it regresses to >3 ms p95, reopen D-PLAN-05
+  (cache + lazy-load alternative).
+- SC-008 — no regression in existing tests. Local pass: 308/308 in
+  `tests/conversation/`. The single processor flake noted in §T052 is
+  pre-existing (epic 009) and unrelated.
+- SC-007 / SC-006 — debug + admin UX gates. Both cut-line sensitive
+  (PR-5/PR-6). Phase 8 backend shipped; Phase 9 deferred.
+
+When T126 finishes in staging, append the realistic load numbers
+inline to this audit section so the next epic has a single source for
+the regression baseline.
 
 ---
 

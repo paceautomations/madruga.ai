@@ -231,15 +231,15 @@
 
 **Purpose**: final cleanup, docs, observability hardening, decisions ledger update.
 
-- [ ] T120 [P] Run `ruff check --fix apps/api/prosauai/conversation/` and `ruff format apps/api/prosauai/conversation/` — clean (Constitution Principle II)
-- [ ] T121 [P] Run `make ruff` and `make test` from repo root (`paceautomations/prosauai`) — green
-- [ ] T122 [P] Update `apps/api/README.md` with a "Pipeline Steps (epic 015)" section referencing `docs/pipeline-steps-runbook.md`
-- [ ] T123 [P] Create `apps/api/docs/pipeline-steps-runbook.md` runbook for ops/eng covering: how to insert steps via SQL during phase 1; how to read sub_steps in Trace Explorer; how to roll back via `UPDATE agent_pipeline_steps SET is_active=FALSE` (per `data-model.md` § Rollback path); diagnostic queries for `messages.metadata.terminating_step`
-- [ ] T124 Append accumulated `D-PLAN-XX` decisions to `platforms/prosauai/epics/015-agent-pipeline-steps/decisions.md` under `## Implementation Decisions` — full audit trail for ADR-019 follow-up scoping
-- [ ] T125 [P] Validate Prometheus metrics scraping: `agent_pipeline_steps_count`, `trace_steps_substeps_count`, `trace_steps_substeps_bytes_p95` are exposed at `/metrics` and scrape successfully (depends on T074)
-- [ ] T126 Re-run benchmark T051 against the merged code in staging — confirm SC-010 (≤5 ms p95 overhead) holds end-to-end with realistic load (10 agents × 100k requests). Document staging numbers in `decisions.md`
-- [ ] T127 Update `platforms/prosauai/engineering/domain-model.md` line 244 cross-reference — replace "schema-draft" with "implemented in epic 015 — see migration 20260601000010"
-- [ ] T128 [P] Run final regression sweep: `pytest apps/api/tests/ -x` zero failures; manual smoke of 3 baseline tenants (no pipeline configured) confirming zero behavior change
+- [x] T120 [P] Run `ruff check --fix apps/api/prosauai/conversation/` and `ruff format apps/api/prosauai/conversation/` — clean (Constitution Principle II)
+- [x] T121 [P] Run `make ruff` and `make test` from repo root (`paceautomations/prosauai`) — green
+- [x] T122 [P] Update `apps/api/README.md` with a "Pipeline Steps (epic 015)" section referencing `docs/pipeline-steps-runbook.md`
+- [x] T123 [P] Create `apps/api/docs/pipeline-steps-runbook.md` runbook for ops/eng covering: how to insert steps via SQL during phase 1; how to read sub_steps in Trace Explorer; how to roll back via `UPDATE agent_pipeline_steps SET is_active=FALSE` (per `data-model.md` § Rollback path); diagnostic queries for `messages.metadata.terminating_step`
+- [x] T124 Append accumulated `D-PLAN-XX` decisions to `platforms/prosauai/epics/015-agent-pipeline-steps/decisions.md` under `## Implementation Decisions` — full audit trail for ADR-019 follow-up scoping
+- [x] T125 [P] Validate Prometheus metrics scraping: `agent_pipeline_steps_count`, `trace_steps_substeps_count`, `trace_steps_substeps_bytes_p95` are exposed at `/metrics` and scrape successfully (depends on T074)
+- [x] T126 Re-run benchmark T051 against the merged code in staging — confirm SC-010 (≤5 ms p95 overhead) holds end-to-end with realistic load (10 agents × 100k requests). Document staging numbers in `decisions.md`
+- [x] T127 Update `platforms/prosauai/engineering/domain-model.md` line 244 cross-reference — replace "schema-draft" with "implemented in epic 015 — see migration 20260601000010"
+- [x] T128 [P] Run final regression sweep: `pytest apps/api/tests/ -x` zero failures; manual smoke of 3 baseline tenants (no pipeline configured) confirming zero behavior change
 
 ---
 
@@ -247,7 +247,7 @@
 
 **Purpose**: validate the full epic against staging environment per `platforms/prosauai/platform.yaml:testing` block (docker startup type detected).
 
-- [ ] T130 Execute `docker compose build` no diretório da plataforma — build sem erros
+- [x] T130 Execute `docker compose build` no diretório da plataforma — build sem erros
 - [ ] T131 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --start --platform prosauai` — todos os health_checks respondem dentro do ready_timeout (120s)
 - [ ] T132 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --validate-env --platform prosauai` — zero required_env vars ausentes no .env (JWT_SECRET, ADMIN_BOOTSTRAP_EMAIL, ADMIN_BOOTSTRAP_PASSWORD, DATABASE_URL)
 - [ ] T133 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --validate-urls --platform prosauai` — todas as URLs acessíveis com status esperado
