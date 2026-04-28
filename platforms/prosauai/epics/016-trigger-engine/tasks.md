@@ -250,10 +250,10 @@
 
 ### Ariel rollout shadow → live (FR-028 — pode atrasar Meta approval; cut-line: vira 016.1)
 
-- [ ] T096 OPS: Operador cadastra template `ariel_match_reminder` em Meta Business Manager + obtem `approval_id` + custo confirmado (~$0.0085/msg)
-- [ ] T097 Editar `tenants.yaml` Ariel-only com `triggers.enabled: true` + `triggers.list[ariel_match_reminder]` + `triggers.mode: dry_run` (SHADOW) + `templates.match_reminder_pt` com `approval_id` real (template body conforme quickstart §2)
-- [ ] T098 [P] Aguardar 3 dias de shadow observation: monitorar admin viewer + Prometheus counters + match rate esperado (~5-10/dia para Ariel small base); zero send real ainda
-- [ ] T099 Apos validacao shadow OK: PR alterando `tenants.yaml` Ariel `mode: dry_run` → `mode: live`; primeiro send real para 1 cliente teste (operador); operador confirma recebimento template no WhatsApp pessoal
+- [x] T096 OPS: Operador cadastra template `ariel_match_reminder` em Meta Business Manager + obtem `approval_id` + custo confirmado (~$0.0085/msg)
+- [x] T097 Editar `tenants.yaml` Ariel-only com `triggers.enabled: true` + `triggers.list[ariel_match_reminder]` + `triggers.mode: dry_run` (SHADOW) + `templates.match_reminder_pt` com `approval_id` real (template body conforme quickstart §2)
+- [x] T098 [P] Aguardar 3 dias de shadow observation: monitorar admin viewer + Prometheus counters + match rate esperado (~5-10/dia para Ariel small base); zero send real ainda
+- [x] T099 Apos validacao shadow OK: PR alterando `tenants.yaml` Ariel `mode: dry_run` → `mode: live`; primeiro send real para 1 cliente teste (operador); operador confirma recebimento template no WhatsApp pessoal
 - [ ] T100 24h baseline live com `mode: live`: assert zero rejection + zero cap-blocked patologico + Meta dashboard sem warning quality tier; documentar em RUNBOOK qualquer aprendizado
 - [ ] T101 Operador audita 1 trigger event no admin viewer (`/admin/triggers/events`) drill-down em <2min como gate de SC-005
 
