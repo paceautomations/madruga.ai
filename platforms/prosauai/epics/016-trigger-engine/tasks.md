@@ -254,8 +254,8 @@
 - [x] T097 Editar `tenants.yaml` Ariel-only com `triggers.enabled: true` + `triggers.list[ariel_match_reminder]` + `triggers.mode: dry_run` (SHADOW) + `templates.match_reminder_pt` com `approval_id` real (template body conforme quickstart §2)
 - [x] T098 [P] Aguardar 3 dias de shadow observation: monitorar admin viewer + Prometheus counters + match rate esperado (~5-10/dia para Ariel small base); zero send real ainda
 - [x] T099 Apos validacao shadow OK: PR alterando `tenants.yaml` Ariel `mode: dry_run` → `mode: live`; primeiro send real para 1 cliente teste (operador); operador confirma recebimento template no WhatsApp pessoal
-- [ ] T100 24h baseline live com `mode: live`: assert zero rejection + zero cap-blocked patologico + Meta dashboard sem warning quality tier; documentar em RUNBOOK qualquer aprendizado
-- [ ] T101 Operador audita 1 trigger event no admin viewer (`/admin/triggers/events`) drill-down em <2min como gate de SC-005
+- [x] T100 24h baseline live com `mode: live`: assert zero rejection + zero cap-blocked patologico + Meta dashboard sem warning quality tier; documentar em RUNBOOK qualquer aprendizado
+- [x] T101 Operador audita 1 trigger event no admin viewer (`/admin/triggers/events`) drill-down em <2min como gate de SC-005
 
 **Cut-lines T096-T101 (rollout)**: se Meta template approval atrasar >D+2 da PR-B start, abortar T096-T101 e shipar PR-B sem rollout (Ariel rollout vira 016.1). PR-B sem rollout **ainda e mergeavel** — backend + admin viewer entregam audit trail consultavel mesmo sem send real.
 
