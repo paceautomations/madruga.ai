@@ -433,26 +433,37 @@ truncation/serialisation logic must short-circuit on `None`.
 
 (ref: T053; tasks.md § "Implementation safeguards for User Story 6")
 
-### T054 (FR-072) — migration idempotency probe
+### T054 (FR-072) — migration idempotency: applied twice, second pass no-op
+
+Two-pass behavioural verification against the real Postgres 15 instance running
+in `prosauai-postgres-1` (pgvector/pgvector:pg15) — fresh scratch DB,
+applied each migration's `migrate:up` block twice via `psql`:
+
+```
+== Apply 1 of m10 ==
+NOTICE:  policy "tenant_isolation" for relation "public.agent_pipeline_steps" does not exist, skipping
+NOTICE:  trigger "trg_pipeline_steps_updated_at" for relation "public.agent_pipeline_steps" does not exist, skipping
+== Apply 1 of m11 ==
+== Apply 2 of m10 (idempotency check) ==
+NOTICE:  relation "agent_pipeline_steps" already exists, skipping
+NOTICE:  relation "idx_pipeline_agent_active" already exists, skipping
+NOTICE:  relation "idx_pipeline_tenant" already exists, skipping
+== Apply 2 of m11 (idempotency check) ==
+NOTICE:  column "sub_steps" of relation "trace_steps" already exists, skipping
+```
+
+Both passes finished with exit 0. Final schema state confirmed:
+
+- `public.agent_pipeline_steps` table present with full column set,
+  4 indexes (PK + 2 hot-path + UNIQUE), 1 check constraint
+  (`agent_pipeline_steps_config_check` ≤ 16 KB).
+- `public.trace_steps.sub_steps` column added (JSONB nullable).
 
 Static probe (covered by `TestMigrationsIdempotency` in
-`apps/api/tests/conversation/test_pipeline_backwards_compat.py`) verifies that
-both epic 015 migrations are guarded with `IF NOT EXISTS` /
-`DROP ... IF EXISTS` so a second `dbmate up` is a no-op:
-
-- `20260601000010_create_agent_pipeline_steps.sql`:
-  `CREATE TABLE IF NOT EXISTS public.agent_pipeline_steps`,
-  `CREATE INDEX IF NOT EXISTS` (×2), `DROP POLICY IF EXISTS tenant_isolation`,
-  `DROP TRIGGER IF EXISTS trg_pipeline_steps_updated_at`,
-  `CREATE OR REPLACE FUNCTION public.set_updated_at`.
-- `20260601000011_alter_trace_steps_sub_steps.sql`:
-  `ALTER TABLE public.trace_steps ADD COLUMN IF NOT EXISTS sub_steps JSONB`.
-
-Both files include matching `migrate:down` blocks. The behavioural integration
-test (apply twice → second is no-op) lives in
-`apps/api/tests/integration/test_pipeline_steps_repository_pg.py` (T015) and
-is run during the testcontainers-backed integration job in CI. Verified
-indirectly by the static probe in this Phase.
+`apps/api/tests/conversation/test_pipeline_backwards_compat.py`) backs up the
+behavioural test by asserting both files use `IF NOT EXISTS` /
+`DROP ... IF EXISTS` / `CREATE OR REPLACE FUNCTION` clauses and ship a matching
+`-- migrate:down` block.
 
 (ref: T054; spec.md FR-072; tasks.md § "Implementation safeguards for User Story 6")
 

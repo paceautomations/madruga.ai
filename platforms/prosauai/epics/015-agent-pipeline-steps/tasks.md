@@ -122,9 +122,9 @@
 
 ### Implementation safeguards for User Story 6
 
-- [ ] T053 [US6] Inspect `step_record.py` modification (from T070 below) and verify `sub_steps: list[StepRecord] | None = None` default keeps existing constructor calls source-compatible (no fixture mass-update)
-- [ ] T054 [US6] Verify migration idempotency: run `dbmate up` twice on the same DB; second run is no-op (FR-072)
-- [ ] T055 [US6] Verify `messages.metadata` write path: when `pipeline_steps == []`, neither `terminating_step` nor `pipeline_step_count` nor `pipeline_version` is written (FR-064 negative case) — assert via direct SQL probe in T050
+- [x] T053 [US6] Inspect `step_record.py` modification (from T070 below) and verify `sub_steps: list[StepRecord] | None = None` default keeps existing constructor calls source-compatible (no fixture mass-update)
+- [x] T054 [US6] Verify migration idempotency: run `dbmate up` twice on the same DB; second run is no-op (FR-072)
+- [x] T055 [US6] Verify `messages.metadata` write path: when `pipeline_steps == []`, neither `terminating_step` nor `pipeline_step_count` nor `pipeline_version` is written (FR-064 negative case) — assert via direct SQL probe in T050
 
 **Checkpoint**: 🛡️ HARD GATE. SC-008 + SC-010 verified. PR-2 mergeable. NO subsequent work proceeds if this phase fails.
 
