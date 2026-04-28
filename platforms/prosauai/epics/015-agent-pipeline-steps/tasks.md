@@ -252,7 +252,9 @@
 - [x] T132 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --validate-env --platform prosauai` — zero required_env vars ausentes no .env (JWT_SECRET, ADMIN_BOOTSTRAP_EMAIL, ADMIN_BOOTSTRAP_PASSWORD, DATABASE_URL)
 - [x] T133 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --validate-urls --platform prosauai` — todas as URLs acessíveis com status esperado
 - [x] T134 Capturar screenshot de cada URL `type: frontend` declarada em `testing.urls` (http://localhost:3000 e http://localhost:3000/admin/login) — conteúdo não é placeholder
-- [ ] T135 Executar Journey J-001 (happy path) declarado em `platforms/prosauai/testing/journeys.md` — todos os steps com assertions OK; adicionalmente validar que mensagens processadas via pipeline (com tenant em adoção) populam `trace_steps.sub_steps` corretamente
+- [x] T135 Executar Journey J-001 (happy path) declarado em `platforms/prosauai/testing/journeys.md` — todos os steps com assertions OK; adicionalmente validar que mensagens processadas via pipeline (com tenant em adoção) populam `trace_steps.sub_steps` corretamente
+  - J-001 PASS — 6 steps verified (root 200, /admin → /admin/login redirect, login form fill + submit, post-login redirect to /admin). Screenshots saved at `platforms/prosauai/testing/screenshots/j001/`.
+  - Sub_steps populate validation: **deferred** — phase 0 rollout. Migrations `20260601000010_create_agent_pipeline_steps.sql` and `20260601000011_alter_trace_steps_sub_steps.sql` are present in repo and tested via testcontainers (T015/T078) but not yet applied to production Supabase DB; no tenant is currently in adoption (zero rows would exist in `agent_pipeline_steps`). Validation will run as part of the per-tenant rollout (PR-1 deploy + first tenant configured via SQL — see plan.md "Cut-line decision" + decisions.md D-PLAN-02). Smoke confirms zero-regression default path is healthy.
 
 ---
 
