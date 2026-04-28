@@ -64,20 +64,20 @@
 
 ### Scheduler skeleton + advisory lock (FR-001)
 
-- [ ] T018 Escrever `apps/api/tests/triggers/test_scheduler_unit.py` PRIMEIRO — testar: (a) `pg_try_advisory_lock(hashtext('triggers_engine_cron'))` adquirido no inicio do tick + liberado no fim; (b) standby behavior (lock held por outra connection retorna false → tick skipa); (c) cadence sleep correto; (d) graceful shutdown (shutdown_event encerra loop) — devem FALHAR antes de T019
-- [ ] T019 Implementar `apps/api/prosauai/triggers/scheduler.py` — `async def trigger_engine_loop(app: FastAPI)`: lifespan periodic task com cadence `settings.triggers_cadence_seconds` (default 15); `pg_try_advisory_lock` singleton; tenant-isolated try/except (proximo tenant continua se um falhar); helper `_advisory_lock_key()` retornando hashtext int4 de `'triggers_engine_cron'`. Stub `engine.execute_tick()` ainda nao chamado (sera wired em T035). Tests T018 passam.
-- [ ] T020 Modificar `apps/api/prosauai/main.py` — registrar `trigger_engine_loop` no lifespan startup gated por `settings.triggers_enabled` global (default False — feature flag de seguranca). Zero impacto em tenants sem `triggers.list`.
+- [x] T018 Escrever `apps/api/tests/triggers/test_scheduler_unit.py` PRIMEIRO — testar: (a) `pg_try_advisory_lock(hashtext('triggers_engine_cron'))` adquirido no inicio do tick + liberado no fim; (b) standby behavior (lock held por outra connection retorna false → tick skipa); (c) cadence sleep correto; (d) graceful shutdown (shutdown_event encerra loop) — devem FALHAR antes de T019
+- [x] T019 Implementar `apps/api/prosauai/triggers/scheduler.py` — `async def trigger_engine_loop(app: FastAPI)`: lifespan periodic task com cadence `settings.triggers_cadence_seconds` (default 15); `pg_try_advisory_lock` singleton; tenant-isolated try/except (proximo tenant continua se um falhar); helper `_advisory_lock_key()` retornando hashtext int4 de `'triggers_engine_cron'`. Stub `engine.execute_tick()` ainda nao chamado (sera wired em T035). Tests T018 passam.
+- [x] T020 Modificar `apps/api/prosauai/main.py` — registrar `trigger_engine_loop` no lifespan startup gated por `settings.triggers_enabled` global (default False — feature flag de seguranca). Zero impacto em tenants sem `triggers.list`.
 
 ### Observability foundation (FR-029, FR-031, FR-032, FR-033)
 
-- [ ] T021 [P] Modificar `apps/api/prosauai/observability/metrics.py` — registrar 5 Counters + 1 Gauge + 1 error counter conforme plan.md §B.3: `trigger_executions_total`, `trigger_template_sent_total`, `trigger_skipped_total`, `trigger_cooldown_blocked_total`, `trigger_template_rejected_total`, `trigger_cost_today_usd` (Gauge), `trigger_cost_gauge_errors_total`. Labels exatos por FR-029.
-- [ ] T022 [P] Implementar `apps/api/prosauai/observability/cardinality_lint.py` (ou estender existente) — startup check soma combinations por counter; abort com erro claro se >50K series projetadas (FR-033). Lint config: `tenant<=100`, `trigger_id<=20/tenant`, `template_name<=50/tenant`, `reason<=10`, `status<=6`.
-- [ ] T023 [P] Modificar `apps/api/prosauai/observability/otel.py` — registrar nomes de span: `trigger.cron.tick` (root), `trigger.match`, `trigger.cooldown_check`, `trigger.send`. Atributos OTel conforme FR-031.
-- [ ] T024 [P] Adicionar test `apps/api/tests/triggers/test_metrics_lint.py` — fixture com 200 tenants × 30 triggers × 100 templates (>50K series projetadas) → assert lint aborta startup com mensagem clara.
+- [x] T021 [P] Modificar `apps/api/prosauai/observability/metrics.py` — registrar 5 Counters + 1 Gauge + 1 error counter conforme plan.md §B.3: `trigger_executions_total`, `trigger_template_sent_total`, `trigger_skipped_total`, `trigger_cooldown_blocked_total`, `trigger_template_rejected_total`, `trigger_cost_today_usd` (Gauge), `trigger_cost_gauge_errors_total`. Labels exatos por FR-029.
+- [x] T022 [P] Implementar `apps/api/prosauai/observability/cardinality_lint.py` (ou estender existente) — startup check soma combinations por counter; abort com erro claro se >50K series projetadas (FR-033). Lint config: `tenant<=100`, `trigger_id<=20/tenant`, `template_name<=50/tenant`, `reason<=10`, `status<=6`.
+- [x] T023 [P] Modificar `apps/api/prosauai/observability/otel.py` — registrar nomes de span: `trigger.cron.tick` (root), `trigger.match`, `trigger.cooldown_check`, `trigger.send`. Atributos OTel conforme FR-031.
+- [x] T024 [P] Adicionar test `apps/api/tests/triggers/test_metrics_lint.py` — fixture com 200 tenants × 30 triggers × 100 templates (>50K series projetadas) → assert lint aborta startup com mensagem clara.
 
 ### Config exposure
 
-- [ ] T025 Adicionar settings em `apps/api/prosauai/config/settings.py`: `triggers_enabled: bool = False` (kill-switch global), `triggers_cadence_seconds: int = 15`, `triggers_cost_gauge_cadence_seconds: int = 60`, `triggers_max_customers_per_tick: int = 100` (constante FR-011), `triggers_default_cooldown_hours: int = 24`, `triggers_default_daily_cap: int = 3`, `triggers_stuck_threshold_minutes: int = 5`, `triggers_max_retries: int = 3`.
+- [x] T025 Adicionar settings em `apps/api/prosauai/config/settings.py`: `triggers_enabled: bool = False` (kill-switch global), `triggers_cadence_seconds: int = 15`, `triggers_cost_gauge_cadence_seconds: int = 60`, `triggers_max_customers_per_tick: int = 100` (constante FR-011), `triggers_default_cooldown_hours: int = 24`, `triggers_default_daily_cap: int = 3`, `triggers_stuck_threshold_minutes: int = 5`, `triggers_max_retries: int = 3`.
 
 **Checkpoint Phase 2**: schema migrations aplicadas + Pydantic models exhaustivos + cross-ref validation funcional + repository idempotente + scheduler skeleton com advisory lock + Prometheus/OTel registrados + cardinality lint ativo. **Phase 3+ pode comecar.**
 
