@@ -248,9 +248,9 @@
 **Purpose**: validate the full epic against staging environment per `platforms/prosauai/platform.yaml:testing` block (docker startup type detected).
 
 - [x] T130 Execute `docker compose build` no diretório da plataforma — build sem erros
-- [ ] T131 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --start --platform prosauai` — todos os health_checks respondem dentro do ready_timeout (120s)
-- [ ] T132 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --validate-env --platform prosauai` — zero required_env vars ausentes no .env (JWT_SECRET, ADMIN_BOOTSTRAP_EMAIL, ADMIN_BOOTSTRAP_PASSWORD, DATABASE_URL)
-- [ ] T133 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --validate-urls --platform prosauai` — todas as URLs acessíveis com status esperado
+- [x] T131 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --start --platform prosauai` — todos os health_checks respondem dentro do ready_timeout (120s)
+- [x] T132 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --validate-env --platform prosauai` — zero required_env vars ausentes no .env (JWT_SECRET, ADMIN_BOOTSTRAP_EMAIL, ADMIN_BOOTSTRAP_PASSWORD, DATABASE_URL)
+- [x] T133 Executar `python3 $REPO_ROOT/.specify/scripts/qa_startup.py --validate-urls --platform prosauai` — todas as URLs acessíveis com status esperado
 - [ ] T134 Capturar screenshot de cada URL `type: frontend` declarada em `testing.urls` (http://localhost:3000 e http://localhost:3000/admin/login) — conteúdo não é placeholder
 - [ ] T135 Executar Journey J-001 (happy path) declarado em `platforms/prosauai/testing/journeys.md` — todos os steps com assertions OK; adicionalmente validar que mensagens processadas via pipeline (com tenant em adoção) populam `trace_steps.sub_steps` corretamente
 
