@@ -632,6 +632,19 @@ def _analyze_report_slice(path: Path, task_id: str) -> str | None:
     return f"\n---\n\n## Pre-Implementation Analysis (filtered to {task_id})\n\n{body}"
 
 
+def _analyze_report_slice_multi(path: Path, task_ids: list[str]) -> str | None:
+    """Return paragraphs of analyze-report.md mentioning any task in ``task_ids``."""
+    if not path.exists():
+        return None
+    content = path.read_text(encoding="utf-8")
+    paras = content.split("\n\n")
+    relevant = [p for p in paras if any(tid in p for tid in task_ids)]
+    if not relevant:
+        return None
+    body = "\n\n".join(relevant)
+    return f"\n---\n\n## Pre-Implementation Analysis (phase-scoped)\n\n{body}"
+
+
 def _format_context(content: str, header: str) -> str:
     """Format pre-loaded content as a prompt section (truncated at MAX_FILE_CONTEXT_BYTES)."""
     return f"\n---\n\n## {header}\n\n{content[:MAX_FILE_CONTEXT_BYTES]}"
@@ -923,6 +936,9 @@ def _add_epic_docs_phase_scoped(
     if contracts_dir.is_dir():
         for cf in sorted(contracts_dir.glob("*.md")):
             add(f"contract:{cf.name}", _read_context(cf, f"Contract: {cf.name}"))
+    slice_ = _analyze_report_slice_multi(epic_dir / "analyze-report.md", [t.id for t in phase_tasks])
+    if slice_ is not None:
+        add("analyze_report", slice_)
 
 
 def compose_phase_prompt(

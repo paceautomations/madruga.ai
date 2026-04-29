@@ -2712,6 +2712,41 @@ def test_compose_phase_prompt_execution_instructions(tmp_path):
     assert "Git commit" in prompt
 
 
+def test_compose_phase_prompt_includes_analyze_report_when_relevant(tmp_path):
+    """analyze-report.md paragraphs mentioning a phase task are included in prompt."""
+    from dag_executor import TaskItem, compose_phase_prompt
+
+    epic_dir = tmp_path / "epics" / "001-test"
+    epic_dir.mkdir(parents=True)
+    (epic_dir / "tasks.md").write_text("## Phase 1\n- [ ] T001 a\n")
+    (epic_dir / "analyze-report.md").write_text("## Findings\n\nT001 has a missing index.\n\nT999 unrelated finding.")
+
+    tasks = [TaskItem("T001", "a", False, "Phase 1", False)]
+    with patch("dag_executor._epic_output_dir", return_value="/out"):
+        prompt = compose_phase_prompt("Phase 1", tasks, epic_dir, "plat", "001-test")
+
+    assert "Pre-Implementation Analysis" in prompt
+    assert "T001 has a missing index" in prompt
+    assert "T999 unrelated finding" not in prompt
+
+
+def test_compose_phase_prompt_omits_analyze_report_when_no_match(tmp_path):
+    """analyze-report.md with no mention of phase tasks is excluded from prompt."""
+    from dag_executor import TaskItem, compose_phase_prompt
+
+    epic_dir = tmp_path / "epics" / "001-test"
+    epic_dir.mkdir(parents=True)
+    (epic_dir / "tasks.md").write_text("## Phase 1\n- [ ] T001 a\n")
+    (epic_dir / "analyze-report.md").write_text("## Findings\n\nT999 unrelated finding.")
+
+    tasks = [TaskItem("T001", "a", False, "Phase 1", False)]
+    with patch("dag_executor._epic_output_dir", return_value="/out"):
+        prompt = compose_phase_prompt("Phase 1", tasks, epic_dir, "plat", "001-test")
+
+    assert "Pre-Implementation Analysis" not in prompt
+    assert "T999 unrelated finding" not in prompt
+
+
 @pytest.mark.asyncio
 async def test_circuit_breaker_same_error_deterministic():
     """2x deterministic error → early stop (no 3rd/4th attempt)."""
