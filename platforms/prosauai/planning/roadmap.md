@@ -85,18 +85,18 @@ gantt
 
 ### Epics Futuros (criados conforme necessidade)
 
+> **Nota de numeracao (2026-04-29):** Slots 009-016 foram todos preenchidos durante a execucao do roadmap. Proximos epics partem do slot 017.
+
 | Epic | Descricao | Deps Provavel | Prioridade |
 |------|-----------|---------------|------------|
-| 013: Multi-Tenant Public API (Fase 2) | Caddy edge proxy + admin API (CRUD tenants) + rate limiting per-tenant + onboarding externo. **Trigger: primeiro cliente externo pagante.** | 003, 012 | Later |
-| 014: TenantStore Postgres + Ops (Fase 3) | Migracao YAML → Postgres com schema gerenciado; circuit breaker per-tenant; billing/usage tracking; alertas Prometheus. **Trigger: >=5 tenants reais ou dor operacional.** | 013, 018 | Later |
-| 015: Evals Offline | Score automatico por conversa (faithfulness, relevance, toxicity) — **fundacao em 002** | 006, 002 | Next |
-| 016: Evals Online | Guardrails pre/pos-LLM em tempo real — **traces em 002** | 006, 002 | Next |
-| 017: Data Flywheel | Ciclo semanal de melhoria com revisao humana | 015, 016 | Later |
-| 018: Multi-Tenant Self-Service | Cadastro self-service, onboarding autonomo (depende de Admin API do 013) | 013, 011 | Later |
-| 019: RAG pgvector | Base de conhecimento com embeddings por tenant | 006 | Later |
-| 020: Billing Stripe | Cobranca automatica com tiers e consumo medido | 014, 018 | Later |
-| 021: WhatsApp Flows | Formularios estruturados dentro do WhatsApp | 006 | Later |
-| 022: Agent Pipeline Steps | Pipeline de processamento configuravel por agente (classifier → clarifier → resolver → specialist) | 008 | Later |
+| 017: Reconcile 010+011+012 | Fechar ciclo L2 dos epics implementados sem reconcile formal (Handoff Engine, Evals, Knowledge Base RAG) | 010, 011, 012 | **Next** |
+| 018: Primeiro Deploy Producao VPS | Docker compose prod (2 vCPU, 4GB, 40GB). Validar rollout Ariel shadow → live (trigger engine). DPO sign-off LGPD S1. | 016, 017 | **Next** |
+| 019: Trigger Engine 016.1 | intent_filter/agent_id_filter SQL matchers reais; editor config form-based admin UI; auto-sync Graph API templates; circuit breaker load test W5 | 016 | Later |
+| 020: Multi-Tenant Public API (Fase 2) | Caddy edge proxy + admin API (CRUD tenants) + rate limiting per-tenant + onboarding externo. **Trigger: primeiro cliente externo pagante.** | 003 | Later |
+| 021: TenantStore Postgres + Ops (Fase 3) | Migracao YAML → Postgres com schema gerenciado; circuit breaker per-tenant; billing/usage tracking; alertas Prometheus. **Trigger: >=5 tenants reais ou dor operacional.** | 020 | Later |
+| 022: Multi-Tenant Self-Service | Cadastro self-service, onboarding autonomo (depende de Admin API do 020) | 020 | Later |
+| 023: Billing Stripe | Cobranca automatica com tiers e consumo medido | 021, 022 | Later |
+| 024: WhatsApp Flows | Formularios estruturados dentro do WhatsApp | 016 | Later |
 
 ---
 
