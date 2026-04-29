@@ -442,7 +442,7 @@ export default function OverviewTab({ runs, stats, sessions, connected, platform
             </thead>
             <tbody>
               {filtered.map((run) => (
-                <RunRow key={run.run_id} run={run} showPlatform={showPlatformCol} />
+                <RunRow key={run.run_id ?? `${run.platform_id}-${run.epic_id}-${run.node_id}-${run.started_at}`} run={run} showPlatform={showPlatformCol} />
               ))}
             </tbody>
           </table>
