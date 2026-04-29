@@ -174,6 +174,14 @@ prosauai/
 │   │   ├── chatwoot.py        # ChatwootAdapter (HMAC + API v1 + private notes + operator reply)
 │   │   ├── none.py            # NoneAdapter (fromMe hook + bot_sent_messages echo check, ADR-038)
 │   │   └── scheduler.py       # Periodic tasks: auto_resume + bot_sent_messages_cleanup + handoff_events_cleanup
+│   ├── triggers/              # Epic 016: Trigger Engine (proactive sends)
+│   │   ├── scheduler.py       # Cron loop singleton (pg_advisory_lock, 15s cadence)
+│   │   ├── engine.py          # execute_tick: match → cooldown/cap → render → send → metrics
+│   │   ├── matchers.py        # SQL matchers: time_before_event, conv_closed, last_inbound
+│   │   ├── cooldown.py        # Redis cooldown + daily-cap gates (FR-012/013/015)
+│   │   ├── events.py          # trigger_events repository (persist, find_stuck, load_stuck_for_retry)
+│   │   ├── template_renderer.py # Jinja2 SandboxedEnvironment para parameter rendering
+│   │   └── cost_gauge.py      # Prometheus gauge trigger_cost_today_usd per tenant (60s cadence)
 │   ├── db/                    # Epic 005: Database layer
 │   │   └── pool.py            # asyncpg pool (min=2, max=10, JSONB codec, search_path)
 │   ├── ops/                   # Epic 006: Operations tooling
@@ -211,7 +219,7 @@ prosauai/
 
 | Convencao | Regra |
 |-----------|-------|
-| Packages por concern | `core/` (dominio base), `conversation/` (LLM pipeline), `safety/` (guardrails), `tools/` (registry), `api/` (endpoints), `channels/` (adapters), `handoff/` (helpdesk integration — epic 010), `db/` (pool), `ops/` (migrations, retention), `observability/` (cross-cutting), `core/router/` (routing engine) |
+| Packages por concern | `core/` (dominio base), `conversation/` (LLM pipeline), `safety/` (guardrails), `tools/` (registry), `api/` (endpoints), `channels/` (adapters), `handoff/` (helpdesk integration — epic 010), `triggers/` (proactive sends engine — epic 016), `db/` (pool), `ops/` (migrations, retention), `observability/` (cross-cutting), `core/router/` (routing engine) |
 | Config per-tenant | `config/tenants.yaml` (identidade) + `config/routing/*.yaml` (regras de roteamento) |
 | RLS tests | Obrigatorios para toda nova tabela com tenant_id |
 | Secrets | Nunca em codigo; sempre via env vars (.env) — Infisical SDK em fase futura |
@@ -226,7 +234,7 @@ prosauai/
 |--------|----------|----------------|
 | `prosauai` | 7 tabelas de negocio: customers, conversations, conversation_states, messages (particionada), agents, prompts, eval_scores | Migrations da app (`migrations/*.sql`) |
 | `prosauai_ops` | `schema_migrations` (tracking de migrations aplicadas) | Migrations da app |
-| `public` | `tenant_id()` SECURITY DEFINER STABLE (funcao RLS helper). Usa `gen_random_uuid()` built-in — **sem extensoes adicionais**. **Epic 008**: tabelas admin-only sem RLS: `traces` (pipeline execution — 12 steps cada), `trace_steps` (FK CASCADE; JSONB input/output truncados 8 KB), `routing_decisions` (append-only, incluindo DROPs invisiveis no epic 004). **Epic 010**: mais duas tabelas admin-only sob o mesmo carve-out: `handoff_events` (append-only, audit trail dos mutes/resumes/breakers, retention 90d via cron FR-047a) + `bot_sent_messages` (tracking 48h usado pelo NoneAdapter para evitar bot echo, retention 48h). Acessiveis exclusivamente via `pool_admin` (BYPASSRLS) — carve-out documentado em ADR-027 | Migrations da app (funcao) + Supabase (schema) |
+| `public` | `tenant_id()` SECURITY DEFINER STABLE (funcao RLS helper). Usa `gen_random_uuid()` built-in — **sem extensoes adicionais**. **Epic 008**: tabelas admin-only sem RLS: `traces` (pipeline execution — 12 steps cada), `trace_steps` (FK CASCADE; JSONB input/output truncados 8 KB), `routing_decisions` (append-only, incluindo DROPs invisiveis no epic 004). **Epic 010**: mais duas tabelas admin-only sob o mesmo carve-out: `handoff_events` (append-only, audit trail dos mutes/resumes/breakers, retention 90d via cron FR-047a) + `bot_sent_messages` (tracking 48h usado pelo NoneAdapter para evitar bot echo, retention 48h). **Epic 016**: mais uma tabela admin-only: `trigger_events` (append-only audit trail de proactive sends, retention 90d; campos: `customer_id, trigger_id, template_name, fired_at, sent_at, status, error, cost_usd_estimated, payload, retry_count`). Colunas novas em `customers`: `scheduled_event_at TIMESTAMPTZ` (gatilho time_before_scheduled_event) + `opt_out_at TIMESTAMPTZ` (opt-out proativo). Acessiveis exclusivamente via `pool_admin` (BYPASSRLS) — carve-out documentado em ADR-027 | Migrations da app (funcao) + Supabase (schema) |
 | `observability` | Tabelas Phoenix (traces, spans) | Phoenix auto-managed (`PHOENIX_SQL_DATABASE_SCHEMA`) |
 | `admin` | Reservado — tenants, audit_log (epic 013) | Futuro |
 | `auth` | Supabase-managed (GoTrue) — **NAO TOCAR** | Supabase |

@@ -6,9 +6,9 @@ updated: 2026-04-28 (implement: T026-T037)
 
 # Registro de Decisoes — Epic 016 (Trigger Engine)
 
-1. `[2026-04-26 epic-context]` Mecanismo de source: cron-only em v1 (15s cadence + advisory lock singleton). PG NOTIFY listener (ADR-004) adiado para 016.1+ quando demanda real-time aparecer. Pattern epic 010/011/014. (ref: Q1-A; ADR-049 novo; ADR-004 deferred)
+1. `[2026-04-26 epic-context]` Mecanismo de source: cron-only em v1 (15s cadence + advisory lock singleton). PG NOTIFY listener (ADR-004) adiado para 016.1+ quando demanda real-time aparecer. Pattern epic 010/011/014. (ref: Q1-A; [ADR-049](../decisions/ADR-049-trigger-engine-cron-design.md); ADR-004 deferred)
 2. `[2026-04-26 epic-context]` Trigger definition storage: `tenants.yaml triggers.*` blocks (per-tenant). Hot reload <60s via config_poller existente. Zero infra nova. Pattern consolidado em 4 epics. (ref: Q2-A; ADR-049; pattern epic 010/013/014)
-3. `[2026-04-26 epic-context]` Template catalog: `tenants.yaml templates.*` blocks com `name, language, components, approval_id, cost_usd`. Manual ops cadastra apos approval Meta Business Manager. Auto-sync Graph API adiado. (ref: Q3-A; ADR-050 novo)
+3. `[2026-04-26 epic-context]` Template catalog: `tenants.yaml templates.*` blocks com `name, language, components, approval_id, cost_usd`. Manual ops cadastra apos approval Meta Business Manager. Auto-sync Graph API adiado. (ref: Q3-A; [ADR-050](../decisions/ADR-050-template-catalog-yaml.md))
 4. `[2026-04-26 epic-context]` Cooldown granularity: per `(tenant, customer, trigger_id)` cooldown (default 24h) + global daily cap per `(tenant, customer)` (default 3 proativos/dia). Anti-spam + anti-ban risk #4. (ref: Q4-A)
 5. `[2026-04-26 epic-context]` Admin UI: YAML-only config + history viewer read-only (lista filtravel + drill-down). Editor de config form-based vira 016.1+. (ref: Q5-B)
 6. `[2026-04-26 epic-context]` Trigger types pre-built v1: 3 types — `time_before_scheduled_event`, `time_after_conversation_closed`, `time_after_last_inbound`. Engine generico aceita `custom` em 016.1+. (ref: Q6-A; ADR-049)

@@ -968,63 +968,88 @@ classDiagram
 
 </details>
 
-### M13 — Triggers
+### M13 — Triggers (Epic 016)
 
 <details>
 <summary><strong>Class Diagram — Triggers (L4)</strong></summary>
 
 ```mermaid
 classDiagram
-    class TriggerRule {
+    class TriggerConfig {
+        <<YAML-only — tenants.yaml>>
+        +string id
+        +TriggerType type
+        +bool enabled
+        +json match
+        +string template_ref
+        +int cooldown_hours
+        +int lookahead_hours
+    }
+
+    class TriggerEvent {
         +uuid id
+        +uuid tenant_id
+        +uuid customer_id
+        +string trigger_id
+        +string template_name
+        +timestamptz fired_at
+        +timestamptz sent_at
+        +TriggerStatus status
+        +string error
+        +float cost_usd_estimated
+        +json payload
+        +int retry_count
+    }
+
+    class TriggerType {
+        <<enumeration>>
+        time_before_scheduled_event
+        time_after_conversation_closed
+        time_after_last_inbound
+    }
+
+    class TriggerStatus {
+        <<enumeration>>
+        queued
+        sent
+        failed
+        skipped
+        dry_run
+    }
+
+    class TemplateCatalog {
+        <<YAML-only — tenants.yaml>>
         +string name
-        +string event_type
-        +json conditions
-        +string action_type
-        +json action_config
-        +bool is_active
-        +int priority
-        +timestamp created_at
-        +evaluate(event: json) bool
-        +execute(context: json)
+        +string language
+        +list components
+        +string approval_id
+        +float cost_usd
     }
 
-    class TriggerLog {
-        +uuid id
-        +uuid rule_id
-        +uuid conversation_id
-        +string event_type
-        +json event_payload
-        +string result
-        +string error_detail
-        +timestamp triggered_at
+    class CooldownGate {
+        <<Redis key>>
+        +key cooldown:{tenant}:{customer}:{trigger_id}
+        +int ttl_seconds
     }
 
-    class EventType {
-        <<enumeration>>
-        MESSAGE_RECEIVED
-        CLASSIFICATION_CHANGED
-        CONFIDENCE_LOW
-        CUSTOMER_INACTIVE
-        HANDOFF_TIMEOUT
-        CONVERSATION_CLOSED
+    class DailyCapGate {
+        <<Redis key>>
+        +key daily_cap:{tenant}:{customer}:{date}
+        +int counter
+        +int ttl_26h
     }
 
-    class ActionType {
-        <<enumeration>>
-        SEND_MESSAGE
-        HANDOFF
-        TAG_CONVERSATION
-        NOTIFY_WEBHOOK
-        UPDATE_STATE
-    }
-
-    TriggerRule --> EventType : listens to
-    TriggerRule --> ActionType : executes
-    TriggerRule "1" --> "*" TriggerLog : produces
+    TriggerConfig --> TriggerType : type
+    TriggerConfig --> TemplateCatalog : template_ref
+    TriggerConfig "1" --> "*" TriggerEvent : produces
+    TriggerEvent --> TriggerStatus : status
+    TriggerEvent --> CooldownGate : checked before send
+    TriggerEvent --> DailyCapGate : checked before send
 ```
 
 </details>
+
+> **Armazenamento**: `TriggerConfig` e `TemplateCatalog` vivem apenas em `config/tenants.yaml` (zero tabelas no BD para config). Hot-reload <60s via config_poller existente. `TriggerEvent` persiste na tabela `public.trigger_events` (admin-only ADR-027 carve-out — **sem RLS**). Retention 90d via retention-cron (epic 006). [ADR-049](../decisions/ADR-049-trigger-engine-cron-design.md) · [ADR-050](../decisions/ADR-050-template-catalog-yaml.md)
 
 ### Structs de Pipeline (Safety)
 
@@ -1072,50 +1097,38 @@ CREATE INDEX idx_handoff_conversation ON handoff_requests (tenant_id, conversati
 CREATE INDEX idx_handoff_pending ON handoff_requests (tenant_id, status) WHERE status = 'PENDING';
 CREATE INDEX idx_handoff_assigned ON handoff_requests (assigned_to) WHERE assigned_to IS NOT NULL;
 
--- M13: Trigger rules
-CREATE TABLE trigger_rules (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id       UUID NOT NULL REFERENCES tenants(id),
-    name            TEXT NOT NULL,
-    event_type      TEXT NOT NULL CHECK (event_type IN (
-        'MESSAGE_RECEIVED', 'CLASSIFICATION_CHANGED', 'CONFIDENCE_LOW',
-        'CUSTOMER_INACTIVE', 'HANDOFF_TIMEOUT', 'CONVERSATION_CLOSED'
-    )),
-    conditions      JSONB NOT NULL DEFAULT '{}',
-    action_type     TEXT NOT NULL CHECK (action_type IN (
-        'SEND_MESSAGE', 'HANDOFF', 'TAG_CONVERSATION',
-        'NOTIFY_WEBHOOK', 'UPDATE_STATE'
-    )),
-    action_config   JSONB NOT NULL DEFAULT '{}',
-    is_active       BOOLEAN NOT NULL DEFAULT TRUE,
-    priority        INT NOT NULL DEFAULT 100,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+-- M13: Trigger events (append-only audit trail — admin-only, sem RLS, ADR-027)
+CREATE TABLE public.trigger_events (
+    id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id             UUID NOT NULL,
+    customer_id           UUID NOT NULL,
+    trigger_id            TEXT NOT NULL,
+    template_name         TEXT,
+    fired_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
+    sent_at               TIMESTAMPTZ,
+    status                TEXT NOT NULL CHECK (status IN (
+                              'queued', 'sent', 'failed', 'skipped', 'dry_run'
+                          )),
+    error                 TEXT,
+    cost_usd_estimated    NUMERIC(10,6),
+    payload               JSONB,
+    retry_count           INT NOT NULL DEFAULT 0
 );
 
-ALTER TABLE trigger_rules ENABLE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON trigger_rules USING (tenant_id = public.tenant_id());
-CREATE INDEX idx_trigger_tenant ON trigger_rules (tenant_id);
-CREATE INDEX idx_trigger_active ON trigger_rules (tenant_id, event_type, is_active) WHERE is_active = TRUE;
-
--- M13: Trigger execution logs
-CREATE TABLE trigger_logs (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id       UUID NOT NULL REFERENCES tenants(id),
-    rule_id         UUID NOT NULL REFERENCES trigger_rules(id),
-    conversation_id UUID REFERENCES conversations(id),
-    event_type      TEXT NOT NULL,
-    event_payload   JSONB NOT NULL,
-    result          TEXT NOT NULL CHECK (result IN ('success', 'failure', 'skipped')),
-    error_detail    TEXT,
-    triggered_at    TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-ALTER TABLE trigger_logs ENABLE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON trigger_logs USING (tenant_id = public.tenant_id());
-CREATE INDEX idx_trigger_log_tenant ON trigger_logs (tenant_id);
-CREATE INDEX idx_trigger_log_rule ON trigger_logs (tenant_id, rule_id, triggered_at DESC);
-CREATE INDEX idx_trigger_log_conversation ON trigger_logs (conversation_id) WHERE conversation_id IS NOT NULL;
+-- Acesso exclusivamente via pool_admin (BYPASSRLS) — sem ALTER TABLE ENABLE RLS
+CREATE INDEX idx_trigger_events_tenant_fired
+    ON public.trigger_events (tenant_id, fired_at DESC);
+CREATE INDEX idx_trigger_events_customer
+    ON public.trigger_events (tenant_id, customer_id, fired_at DESC);
+-- Idempotencia camada 2 (FR-017): partial UNIQUE impede double-send sob race
+CREATE UNIQUE INDEX idx_trigger_events_idempotent
+    ON public.trigger_events (tenant_id, customer_id, trigger_id, date(fired_at))
+    WHERE status IN ('sent', 'queued');
+CREATE INDEX idx_trigger_events_global_pagination
+    ON public.trigger_events (tenant_id, id DESC);
+CREATE INDEX idx_trigger_events_stuck
+    ON public.trigger_events (tenant_id, fired_at)
+    WHERE status = 'queued';
 ```
 
 ### Invariantes
@@ -1130,11 +1143,11 @@ CREATE INDEX idx_trigger_log_conversation ON trigger_logs (conversation_id) WHER
 
 #### Triggers (M13)
 
-1. **Regras avaliadas por prioridade** — menor numero = maior prioridade
-2. **First-match wins** — apenas a primeira regra que match executa
-3. **Execucao e idempotente** — retry seguro sem efeitos duplicados
-4. **Logs nunca deletados** — auditoria completa de todas execucoes
-5. **Conditions usa JSONPath** — `$.classification == "billing"` etc.
+1. **Config YAML-only** — zero tabelas DB para config; hot-reload <60s
+2. **Cron singleton** — `pg_try_advisory_lock` garante at-most-one executor por tenant
+3. **Anti-spam duplo** — cooldown per `(tenant,customer,trigger_id)` + daily cap per `(tenant,customer,date)`
+4. **Idempotencia camada 2** — partial UNIQUE index impede double-send sob race condition
+5. **Audit trail imutavel** — `trigger_events` append-only; retention 90d; sem RLS (pool_admin only)
 
 ---
 

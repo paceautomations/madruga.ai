@@ -69,7 +69,7 @@ Em grupos WhatsApp, o agente participa quando mencionado — publica ranking, re
 | **PDF escaneado (OCR automatico)** | Proximo — epic 011 | Hoje o agente retorna aviso claro de que nao conseguiu ler. OCR remoto destrava PDFs de boletos, contratos e documentos fotografados. |
 | **Instagram DM + Telegram** | Proximo — epic 010 | Mesmo agente passa a responder em outros canais reusando o adaptador do epic 009 — validacao de que integrar novo canal nao muda o core da plataforma. |
 | **Agent tools (APIs externas)** | Proximo — epic 013 | Agente consulta dados reais do tenant (estoque, ranking, agenda), chama APIs e cria registros em nome do cliente. |
-| **Triggers proativos** | Proximo — epic 015 | Plataforma inicia conversa com o cliente (lembrete de agendamento, follow-up de pedido, boas-vindas) em vez de so reagir. |
+| **Triggers proativos** | **Entregue — epic 016** | Plataforma inicia conversa com o cliente via WhatsApp template (lembrete de agendamento, follow-up de conversa fechada, follow-up de inatividade). 3 tipos de trigger; cooldown 24h + daily cap 3/dia por cliente; config YAML per-tenant; rollout shadow→live por agente-piloto. |
 | **Streaming transcription** | Proximo — epic 012 | Audios transcritos em tempo real durante a fala. Ganho marginal em pt-BR curto — avaliar demanda antes de priorizar. |
 | **Medicao e melhoria continua de qualidade** | Longo prazo | Score automatico por conversa, deteccao de respostas fracas, ciclo semanal de revisao e aprovacao de melhoria com gate humano. |
 | **Cadastro self-service** | Longo prazo | Novo cliente se cadastra, configura agente e conecta WhatsApp sozinho — escala sem equipe de onboarding. |

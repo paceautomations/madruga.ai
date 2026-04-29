@@ -10,11 +10,11 @@ updated: 2026-04-17
 
 ## Status
 
-**Lifecycle:** building — **MVP completo** (6/6 epics shipped) + **Admin Evolution in-progress**. Proximo: merge epic 008 + primeiro deploy de producao VPS.
+**Lifecycle:** building — **MVP completo** (6/6 epics shipped) + **Admin + Post-MVP implementados**.
 **L1 Pipeline:** 12/13 nodes completos. Revisao completa realizada em 2026-04-07.
 **L1 Pendente:** codebase-map (opcional — plataforma greenfield, sem valor agregado).
-**L2 Status:** Epic 001 shipped (52 tasks, 122 testes, judge 92%, QA 97%). Epic 002 shipped (Phoenix + OTel). Epic 003 shipped (multi-tenant auth + parser reality + deploy). Epic 004 shipped (MECE routing engine + agent resolution). Epic 005 shipped (conversation pipeline 12-step, LLM agent pydantic-ai, safety guards, tool registry, 52 test files). Epic 006 shipped (schema isolation, migration runner, data retention, log persistence, host monitoring — 34 tasks, 67 testes, judge 88%, QA 100%). **Epic 007 shipped** (admin front foundation — sidebar, login, pool_admin BYPASSRLS, dbmate migrations). **Epic 008 in-progress** (Admin Evolution — 8 abas operacionais, 3 tabelas admin-only [traces/trace_steps/routing_decisions], ~25 endpoints, pipeline instrumentation fire-and-forget, denorm inbox — 152/158 tasks, 5 BLOCKERs herdados no repo externo).
-**Proximo marco:** merge epic 008 para develop + primeiro deploy de producao VPS (2 vCPU, 4GB RAM, 40GB SSD).
+**L2 Status:** Epics 001–009 shipped. **Epics 010–012 implementados** (tasks.md completo, reconcile pendente). **Epic 015 shipped**. **Epic 016 shipped** (Trigger Engine — 3 trigger types, cooldown + daily cap, evolution send_template, 231 testes, judge 82%, QA pass).
+**Proximo marco:** reconcile epics 010–012 + primeiro deploy de producao VPS.
 
 ---
 
@@ -74,12 +74,14 @@ gantt
 | 5 | 005: Conversation Core | 004 | medio | MVP | **shipped** (conversation pipeline 12-step, LLM agent pydantic-ai, safety guards 3-layer, tool registry, 52 test files) |
 | 6 | 006: Production Readiness | 005 | baixo | MVP | **shipped** (schema isolation, migration runner, data retention LGPD, log persistence, host monitoring Netdata — 34 tasks, 67 testes, judge 88%, QA 100%) |
 | 7 | 007: Admin Front Foundation | 006 | baixo | Admin | **shipped** (sidebar+login Next.js 15, pool_admin BYPASSRLS, dbmate migrations, dashboard inicial) |
-| 8 | **008: Admin Evolution** | 006, 007 | medio | Admin | **in-progress** (152/158 tasks — 8 abas, 3 tabelas admin-only, ~25 endpoints, pipeline instrumentation fire-and-forget, 5 BLOCKERs abertos no repo externo) |
-| 9 | 009: Agent Tools | 006 | medio | Post-MVP | sugerido |
-| 10 | 010: Handoff Engine | 006 | medio | Post-MVP | sugerido |
-| 11 | 011: Trigger Engine | 010 | baixo | Post-MVP | sugerido |
-| 12 | 012: Admin Dashboard | — | — | Admin | **absorvido por 008** (8 abas superam escopo original) |
+| 8 | **008: Admin Evolution** | 006, 007 | medio | Admin | **shipped** (8 abas, traces/trace_steps/routing_decisions, ~25 endpoints, pipeline instrumentation — judge pass, QA pass, reconcile 2026-04-28) |
+| 9 | **009: Channel Ingestion + Content Processing** | 006 | medio | Post-MVP | **shipped** (multi-source channel adapter ADR-031, content processing pipeline ADR-032 — judge pass, QA pass, reconcile 2026-04-28) |
+| 10 | **010: Handoff Engine + Inbox** | 006 | medio | Post-MVP | **implementado** (HelpdeskAdapter Protocol ADR-037, ChatwootAdapter + NoneAdapter ADR-038, ai_active unified state ADR-036, handoff_events + bot_sent_messages — reconcile pendente) |
+| 11 | **011: Evals** | 006 | medio | Post-MVP | **implementado** (reconcile pendente) |
+| 12 | **012: Tenant Knowledge Base RAG** | 006 | medio | Post-MVP | **implementado** (reconcile pendente) |
 | 13 | 013: Admin Handoff Inbox | 010 | baixo | Admin | sugerido (depende de 010 Handoff Engine) |
+| 15 | **015: Agent Pipeline Steps** | 008, 005 | medio | Post-MVP | **shipped** (agent pipeline steps configuravel, sub-steps — judge pass, QA pass, reconcile 2026-04-28) |
+| 16 | **016: Trigger Engine** | 010 | baixo | Post-MVP | **shipped** (3 trigger types, YAML config, cooldown+daily cap Redis, send_template Evolution, 231 testes, judge 82%, QA pass — reconcile 2026-04-29) |
 
 ### Epics Futuros (criados conforme necessidade)
 
@@ -111,7 +113,10 @@ graph LR
   E007 --> E008[008 Admin Evolution - IN PROGRESS]
   E006 --> E009[009 Agent Tools]
   E006 --> E010[010 Handoff Engine]
-  E010 --> E011[011 Trigger Engine]
+  E010 --> E016[016 Trigger Engine - DONE]
+  E010 --> E011[011 Evals]
+  E010 --> E012[012 Knowledge Base RAG]
+  E008 --> E015[015 Agent Pipeline Steps - DONE]
   E010 --> E013[013 Admin Handoff Inbox]
   E009 --> E022[022 Agent Pipeline Steps]
   E003 -.-> E013[013 Public API Fase 2]
@@ -128,7 +133,7 @@ graph LR
 |-----------|-------|---------------------|------------|
 | **MVP** | 001, 002, 003, 004, 005, 006 | ✅ **COMPLETO.** Agente responde mensagens WhatsApp **multi-tenant** com IA, parseia 100% dos payloads reais, persiste conversas, funciona em grupo, **com observabilidade total + router MECE provado em CI + infra production-ready** (schema isolation, logs, retention, monitoring) | realizado |
 | **Admin** | 007, 008, 013 | 007 ✅ shipped (foundation) · **008 in-progress** (Admin Evolution — 8 abas operacionais, 152/158 tasks) · 013 sugerido (Handoff Inbox, depende de 010) | ~8 semanas (007+008 realizadas) |
-| **Post-MVP** | 009, 010, 011 | Agent Tools, Handoff Engine, Trigger Engine (renumerados de 008-010 antigos) | ~6 semanas |
+| **Post-MVP** | 009, 010, 011, 012, 015, 016 | ✅ **Ciclo concluido**: Channel Ingestion (009), Handoff Engine (010), Evals (011), Knowledge Base RAG (012), Agent Pipeline Steps (015), Trigger Engine (016) — todos implementados ou shipped. | realizado |
 | **Public API (Fase 2)** | 013 | Caddy + Admin API + onboarding de cliente externo. Trigger: primeiro cliente pagante. | ~2 semanas |
 | **Ops (Fase 3)** | 014 | TenantStore Postgres + circuit breaker + billing + alertas. Trigger: >=5 tenants reais ou dor operacional | ~3 semanas |
 
@@ -159,13 +164,15 @@ graph LR
 | **Phase 12 smoke (epic 008) nunca executado em container real** | **ABERTO (epic 008 B4)** | Alto | Certeza | Executar runbook `benchmarks/pipeline_instrumentation_smoke.md` no primeiro deploy staging |
 | **Cost sparkline O(N) round-trips em dashboard** | **Aberto (epic 008 W2)** | Medio | Alta (hit em qualquer dashboard view) | Consolidar em single JOIN ou VIEW materializada antes do epic 009 |
 | **ILIKE sem trigram GIN index degrada inbox >10k conversas** | **Aberto (epic 008 W7)** | Medio | Media | Adicionar `pg_trgm` + GIN index antes de 10k conversas; SC-005 inbox <100ms nao garantido em escala |
+| **`trigger_events ON DELETE CASCADE` sem DPO sign-off (epic 016 S1)** | **ABERTO** | Alto | Media | DPO/juridico deve validar que hard-delete e aceitavel antes de `mode: live` em Ariel. Alternativa (set NULL + redact) disponivel em 016.1+. |
+| **Circuit breaker Evolution nao verificado sob 5xx storm (epic 016 W5)** | **A verificar em QA** | Medio | Baixa | Load sintetico com Evolution retornando 5xx consecutivos — confirmar se breaker abre apos N falhas antes de rollout live. |
 
 ---
 
-*MVP completo: todos 6 epics shipped (001-006). Admin: 007 shipped, 008 in-progress (152/158 tasks). Proximo: merge 008 + primeiro deploy de producao VPS.*
+*MVP completo: todos 6 epics shipped (001-006). Admin: 007 e 008 shipped. Post-MVP: 009 shipped; 010-012 implementados (reconcile pendente); 015 e 016 shipped. Proximo: reconcile 010-012 + primeiro deploy de producao VPS.*
 
 ---
 
-> **Proximo passo:** Resolver 5 BLOCKERs herdados do epic 008 no repo externo `paceautomations/prosauai` (pool_admin size, UTF-8 truncation, kill switch, audit_log, smoke Phase 12) → merge `epic/prosauai/008-admin-evolution` para `develop` → primeiro deploy de producao VPS (2 vCPU, 4GB RAM, 40GB SSD) com `docker compose -f docker-compose.yml -f docker-compose.prod.yml up`. Post-MVP: epic 009 (Agent Tools) ou epic 010 (Handoff Engine) conforme prioridade.
+> **Proximo passo:** Reconcile dos epics 010, 011, 012 (implementados sem reconcile formal). Primeiro deploy de producao VPS apos validacao Ariel shadow (epic 016 rollout). DPO sign-off para `trigger_events ON DELETE CASCADE` antes de `mode: live` (judge-report S1). ADRs 049 e 050 a promover de draft → reviewed.
 >
 > **Supabase deployment readiness (epic 006):** Migrations hardened (idempotent, `gen_random_uuid()`, sem `uuid-ossp`), tenants table (008) created, dual slug/UUID tenant identity implemented. Schema isolation (`prosauai` + `prosauai_ops`) pronto para Supabase managed.

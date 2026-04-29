@@ -129,7 +129,7 @@ flowchart LR
 | 13 | Conversation (M9) → Operations (M12) | Customer-Supplier | ESCALATE — handoff quando score < 0.5 |
 | 14 | Safety (M10) → Channel (M11) | Customer-Supplier | Payload formatado segue para entrega |
 | 15 | Operations (M12) → Channel (M11) | Intra-flow | Resposta humana entregue via bot |
-| 16 | Operations (M13) → Channel (M11) | Customer-Supplier | Triggers proativos enviados via entrega |
+| 16 | Operations (M13) → Channel (M11) | Customer-Supplier | Trigger Engine (cron 15s) identifica clientes elegíveis via SQL matchers → verifica cooldown/daily-cap Redis → renderiza template (Jinja2 sandbox) → `EvolutionProvider.send_template()` → persiste `trigger_events`. Anti-spam: cooldown per `(tenant,customer,trigger_id)` + daily cap `(tenant,customer,date)` (FR-012/013). ADR-049. |
 | 17 | Channel (M11) → Evolution API | Conformist | Entrega outbound via WhatsApp gateway |
 | 18 | Conversation (M8) → Bifrost | ACL | Traduz para formato OpenAI-compatible |
 | 19 | Conversation (M8) → Supabase ResenhAI | ACL | Acesso read-only com ACL isolando schema externo |
