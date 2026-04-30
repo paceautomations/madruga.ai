@@ -85,12 +85,11 @@ gantt
 
 ### Epics Futuros (criados conforme necessidade)
 
-> **Nota de numeracao (2026-04-29):** Slots 009-016 foram todos preenchidos durante a execucao do roadmap. Proximos epics partem do slot 017.
+> **Nota de numeracao (2026-04-29):** Slots 009-016 foram todos preenchidos durante a execucao do roadmap. Proximos epics partem do slot 018. O reconcile dos epics 010/011/012 foi executado inline (sem epic formal) em 2026-04-29.
 
 | Epic | Descricao | Deps Provavel | Prioridade |
 |------|-----------|---------------|------------|
-| 017: Reconcile 010+011+012 | Fechar ciclo L2 dos epics implementados sem reconcile formal (Handoff Engine, Evals, Knowledge Base RAG) | 010, 011, 012 | **Next** |
-| 018: Primeiro Deploy Producao VPS | Docker compose prod (2 vCPU, 4GB, 40GB). Validar rollout Ariel shadow → live (trigger engine). DPO sign-off LGPD S1. | 016, 017 | **Next** |
+| 018: Primeiro Deploy Producao VPS | Docker compose prod (2 vCPU, 4GB, 40GB). Validar rollout Ariel shadow → live (trigger engine). DPO sign-off LGPD S1. | 016 | **Next** |
 | 019: Trigger Engine 016.1 | intent_filter/agent_id_filter SQL matchers reais; editor config form-based admin UI; auto-sync Graph API templates; circuit breaker load test W5 | 016 | Later |
 | 020: Multi-Tenant Public API (Fase 2) | Caddy edge proxy + admin API (CRUD tenants) + rate limiting per-tenant + onboarding externo. **Trigger: primeiro cliente externo pagante.** | 003 | Later |
 | 021: TenantStore Postgres + Ops (Fase 3) | Migracao YAML → Postgres com schema gerenciado; circuit breaker per-tenant; billing/usage tracking; alertas Prometheus. **Trigger: >=5 tenants reais ou dor operacional.** | 020 | Later |
@@ -169,10 +168,10 @@ graph LR
 
 ---
 
-*MVP completo: todos 6 epics shipped (001-006). Admin: 007 e 008 shipped. Post-MVP: 009 shipped; 010-012 implementados (reconcile pendente); 015 e 016 shipped. Proximo: reconcile 010-012 + primeiro deploy de producao VPS.*
+*MVP completo: todos 6 epics shipped (001-006). Admin: 007 e 008 shipped. Post-MVP: 009 shipped; 010-012 implementados e reconciliados (2026-04-29); 015 e 016 shipped. Proximo: primeiro deploy de producao VPS (epic 018).*
 
 ---
 
-> **Proximo passo:** Reconcile dos epics 010, 011, 012 (implementados sem reconcile formal). Primeiro deploy de producao VPS apos validacao Ariel shadow (epic 016 rollout). DPO sign-off para `trigger_events ON DELETE CASCADE` antes de `mode: live` (judge-report S1). ADRs 049 e 050 a promover de draft → reviewed.
+> **Proximo passo:** Primeiro deploy de producao VPS (epic 018) apos validacao Ariel shadow (epic 016 rollout). DPO sign-off para `trigger_events ON DELETE CASCADE` antes de `mode: live` (judge-report S1). ADRs 049 e 050 a promover de draft → reviewed. Reconcile dos epics 010/011/012 executado inline em 2026-04-29.
 >
 > **Supabase deployment readiness (epic 006):** Migrations hardened (idempotent, `gen_random_uuid()`, sem `uuid-ossp`), tenants table (008) created, dual slug/UUID tenant identity implemented. Schema isolation (`prosauai` + `prosauai_ops`) pronto para Supabase managed.

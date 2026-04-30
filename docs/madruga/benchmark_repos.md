@@ -2,7 +2,6 @@ OpenClaw - https://github.com/openclaw/openclaw
 
 ClaudeCode - https://github.com/chatgptprojects/clear-code/tree/642c7f944bbe5f7e57c05d756ab7fa7c9c5035cc
 
-RTK AI - https://github.com/rtk-ai/rtk
 
 Paper Clip - https://github.com/paperclipai/paperclip
 
@@ -11,7 +10,17 @@ GasTown - https://github.com/gastownhall/gastown
 everything claude - https://github.com/affaan-m/everything-claude-code
 agent scope - https://github.com/agentscope-ai/agentscope
 
+RTK AI - https://github.com/rtk-ai/rtk
+Caveman - https://github.com/juliusbrussee/caveman
+
 transforma para md - https://github.com/microsoft/markitdown
+
+Design extract: https://github.com/Manavarya09/design-extract
+
+
+
+
+
 
 Bench tech
 Arquitetura e Engenharia
