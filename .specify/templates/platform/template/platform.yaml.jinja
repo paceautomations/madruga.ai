@@ -3,19 +3,20 @@ title: "{{ platform_title }}"
 description: "{{ platform_description }}"
 lifecycle: {{ lifecycle }}
 version: "0.1.0"
-{%- if repo_name %}
 repo:
-  org: {{ repo_org }}
+  org: {{ repo_org or "paceautomations" }}
   name: {{ repo_name }}
   base_branch: {{ repo_base_branch }}
   epic_branch_prefix: "epic/{{ platform_name }}/"
+{%- if tags %}
+tags: [{{ tags.split(',') | map('trim') | join(', ') }}]
 {%- endif %}
-{%- if testing_startup_type is defined and testing_startup_type != 'none' %}
+{%- if testing_startup_type and testing_startup_type != 'none' %}
 testing:
   startup:
     type: {{ testing_startup_type }}
-    command: null
-    ready_timeout: 60
+    command: null  # TODO: comando para subir o app (ex: "docker compose up -d", "npm run dev")
+    ready_timeout: {% if testing_startup_type == 'docker' %}120{% elif testing_startup_type == 'npm' %}30{% else %}60{% endif %}
   health_checks: []
   urls: []
   required_env: []

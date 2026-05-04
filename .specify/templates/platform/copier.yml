@@ -4,6 +4,7 @@ _templates_suffix: .jinja
 _answers_file: .copier-answers.yml
 
 _skip_if_exists:
+  - "decisions.md"
   - "decisions/*"
   - "epics/*"
   - "research/*"
@@ -13,12 +14,12 @@ _skip_if_exists:
   - "engineering/blueprint.md"
   - "engineering/context-map.md"
   - "engineering/containers.md"
-  - "engineering/integrations.md"
   - "business/process.md"
   - "engineering/folder-structure.md"
   - "planning/*"
   - "research/codebase-context.md"
   - "research/tech-alternatives.md"
+  - "testing/journeys.md"
 
 _exclude:
   - tests/
@@ -72,6 +73,21 @@ repo_base_branch:
   type: str
   help: "Branch base para PRs (main, develop)"
   default: "main"
+
+tags:
+  type: str
+  help: "Tags (CSV, opcional, ex: 'whatsapp,multi-tenant'). Vazio = sem tags."
+  default: ""
+
+testing_startup_type:
+  type: str
+  help: "Como o app sobe localmente para testes E2E?"
+  choices:
+    None (sem testes E2E): none
+    Docker Compose: docker
+    NPM (package.json): npm
+    Python (uvicorn/fastapi): python
+  default: none
 
 register_portal:
   type: bool

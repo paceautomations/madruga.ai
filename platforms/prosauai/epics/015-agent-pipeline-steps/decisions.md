@@ -2,9 +2,10 @@
 epic: 015-agent-pipeline-steps
 created: 2026-04-27
 updated: 2026-04-28
-purpose: Audit trail of implementation-level decisions taken during the
+purpose: >-
+  Audit trail of implementation-level decisions taken during the
   speckit.implement phase. Plan-level decisions (D-PLAN-01..12) live in
-  plan.md §"Phase 0: Outline & Research" and Captured Decisions tables.
+  plan.md §"Phase 0 - Outline & Research" and Captured Decisions tables.
 ---
 
 

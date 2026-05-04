@@ -13,7 +13,11 @@ DEFAULT_DATA = {
     "platform_title": "Acme Platform",
     "platform_description": "Plataforma de teste automatizado",
     "lifecycle": "design",
-    "include_business_flow": True,
+    "repo_org": "paceautomations",
+    "repo_name": "",
+    "repo_base_branch": "main",
+    "tags": "",
+    "testing_startup_type": "none",
     "register_portal": False,
 }
 

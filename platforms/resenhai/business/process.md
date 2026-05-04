@@ -1,16 +1,16 @@
 ---
 title: "Business Process"
-updated: {{ "%Y-%m-%d" | strftime }}
+updated: 2026-05-03
 sidebar:
   order: 3
 ---
-# {{ platform_title }} — Business Process
+# ResenhAI — Business Process
 
 > Fluxos core de negócio com happy path e exceções.
 
 ---
 
-<!-- ACTION REQUIRED: Use `/business-process {{ platform_name }}` para gerar automaticamente. -->
+<!-- ACTION REQUIRED: Use `/business-process resenhai` para gerar automaticamente. -->
 <!-- Cada fluxo deve ter: diagrama Mermaid (sequence), happy path, exceções, atores envolvidos. -->
 <!-- CONVENÇÃO: O E2E flowchart deve anotar skills inline ("\n(/command)") e cada flow deve ter uma Skill Map table (ver pipeline-dag-knowledge.md). -->
 

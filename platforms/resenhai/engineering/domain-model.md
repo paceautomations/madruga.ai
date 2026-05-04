@@ -22,7 +22,7 @@ Consolidacao dos dominios taticos: bounded contexts, entidades, diagramas de cla
 ---
 
 <!-- Adicione UMA secao por bounded context usando o template abaixo.
-     Use `/domain-model {{ platform_name }}` para gerar. Pre-requisitos: blueprint + business-process. -->
+     Use `/domain-model resenhai` para gerar. Pre-requisitos: blueprint + business-process. -->
 
 <!-- ==== TEMPLATE PARA CADA BOUNDED CONTEXT (copiar e preencher) ==== -->
 

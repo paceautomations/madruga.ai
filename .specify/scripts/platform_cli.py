@@ -42,18 +42,21 @@ log = logging.getLogger("platform_cli")
 
 
 REQUIRED_DIRS = ["business", "engineering", "decisions", "epics"]
+PORTAL_SECTIONS = ["business", "engineering", "decisions", "research", "planning"]
+PORTAL_DOCS_DIR = PORTAL_DIR / "src" / "content" / "docs"
+LIFECYCLES = ["design", "development", "production"]
+TESTING_STARTUP_TYPES = ["none", "docker", "npm", "python"]
+
 REQUIRED_FILES = [
     "platform.yaml",
     "business/vision.md",
     "business/solution-overview.md",
     "engineering/domain-model.md",
     "engineering/context-map.md",
-    "engineering/integrations.md",
     "engineering/blueprint.md",
 ]
 AUTO_MARKERS = {
     "engineering/context-map.md": ["domains", "relations"],
-    "engineering/integrations.md": ["integrations"],
 }
 ADR_REQUIRED_FIELDS = ["title", "status", "decision", "alternatives", "rationale"]
 EPIC_REQUIRED_FIELDS = ["title", "status"]
@@ -69,6 +72,90 @@ def _warn(msg: str) -> None:
 
 def _error(msg: str) -> None:
     log.error(msg)
+
+
+def _create_portal_symlinks(name: str) -> None:
+    """Create portal symlinks for a platform — mirrors astro.config.mjs:syncPlatformSymlinks()."""
+    docs_dir = PORTAL_DOCS_DIR / name
+    docs_dir.mkdir(parents=True, exist_ok=True)
+    platform_dir = PLATFORMS_DIR / name
+    targets = {section: platform_dir / section for section in PORTAL_SECTIONS}
+    targets["platform.yaml"] = platform_dir / "platform.yaml"
+    for link_name, target in targets.items():
+        link = docs_dir / link_name
+        if link.is_symlink() and not link.exists():
+            link.unlink()
+        if target.exists() and not link.exists():
+            link.symlink_to(target)
+    (docs_dir / "epics").mkdir(exist_ok=True)
+    _ok(f"Portal symlinks created at {docs_dir}")
+
+
+def _seed_platform_db(name: str) -> None:
+    """Seed SQLite DB for a platform via post_save.reseed (in-process)."""
+    from post_save import reseed
+
+    result = reseed(name)
+    if result.get("status") == "error":
+        _warn(f"DB seed failed for '{name}': {result.get('reason')} (non-blocking)")
+    else:
+        _ok(f"DB seeded for '{name}'")
+
+
+def _refresh_status_json() -> None:
+    """Regenerate portal/src/data/pipeline-status.json with all platforms."""
+    # Drop the lru_cache so a freshly-scaffolded platform appears in the JSON.
+    _discover_platforms.cache_clear()
+    output_file = str(PORTAL_DIR / "src" / "data" / "pipeline-status.json")
+    cmd_status(name=None, show_all=True, as_json=True, output_file=output_file)
+    _ok("pipeline-status.json refreshed")
+
+
+def _notify_dev_server(_verify_attempts: int = 15, _verify_interval: float = 1.0) -> None:
+    """If Astro dev server is running on :4321, touch astro.config.mjs to trigger soft restart
+    and verify it recovers. Astro's content layer doesn't auto-detect newly-symlinked dirs;
+    a config touch forces a full restart that re-indexes content collections.
+
+    Verifies the server returns 200 within ~15 attempts. If recovery fails, prints an actionable
+    message instead of leaving the user with a silently-broken dev server.
+
+    Test hooks: `_verify_attempts` and `_verify_interval` keep the verify loop bounded.
+    """
+    import socket
+    import time
+    import urllib.error
+    import urllib.request
+
+    def _port_open() -> bool:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(0.2)
+        try:
+            return sock.connect_ex(("127.0.0.1", 4321)) == 0
+        finally:
+            sock.close()
+
+    if not _port_open():
+        return
+
+    config = PORTAL_DIR / "astro.config.mjs"
+    if not config.exists():
+        return
+
+    config.touch()
+    for _ in range(_verify_attempts):
+        time.sleep(_verify_interval)
+        try:
+            with urllib.request.urlopen("http://127.0.0.1:4321/", timeout=2) as resp:
+                if resp.status == 200:
+                    _ok("Dev server on :4321 — soft restart succeeded (refresh browser)")
+                    return
+        except (urllib.error.URLError, OSError):
+            continue
+
+    _warn(
+        "Dev server on :4321 was touched but did not recover within ~15s. "
+        "Restart manually: Ctrl+C in the dev terminal, then `cd portal && npm run dev`."
+    )
 
 
 @lru_cache(maxsize=None)
@@ -117,8 +204,18 @@ def cmd_list() -> None:
             print(f"\n  * = active platform ({active})")
 
 
-def cmd_new(name: str) -> None:
-    """Scaffold a new platform via copier copy and register in portal."""
+def cmd_new(
+    name: str,
+    title: str | None = None,
+    description: str | None = None,
+    lifecycle: str | None = None,
+    repo_org: str | None = None,
+    repo_name: str | None = None,
+    repo_branch: str | None = None,
+    tags: str | None = None,
+    testing_startup: str | None = None,
+) -> None:
+    """Scaffold a new platform via copier copy, create portal symlinks, and seed DB."""
     if not re.match(r"^[a-z][a-z0-9-]*$", name):
         _error(
             f"Invalid platform name '{name}'. "
@@ -135,28 +232,42 @@ def cmd_new(name: str) -> None:
         _error(f"Template directory not found: {TEMPLATE_DIR}")
         sys.exit(1)
 
-    # 1. Scaffold via copier
     log.info("Scaffolding platform '%s'...", name)
-    result = subprocess.run(
-        ["copier", "copy", str(TEMPLATE_DIR), str(dst), "--trust"],
-        check=False,
-    )
+    copier_cmd = ["copier", "copy", str(TEMPLATE_DIR), str(dst), "--trust"]
+    cli_fields = {
+        "platform_title": title,
+        "platform_description": description,
+        "lifecycle": lifecycle,
+        "repo_org": repo_org,
+        "repo_name": repo_name,
+        "repo_base_branch": repo_branch,
+        "tags": tags,
+        "testing_startup_type": testing_startup,
+    }
+    if any(v is not None for v in cli_fields.values()):
+        copier_cmd += ["--defaults", "-d", f"platform_name={name}", "-d", "register_portal=false"]
+        for key, value in cli_fields.items():
+            if value is not None:
+                copier_cmd += ["-d", f"{key}={value}"]
+    result = subprocess.run(copier_cmd, check=False)
     if result.returncode != 0:
         _error("copier copy failed")
         sys.exit(1)
     _ok(f"Platform scaffolded at {dst}")
 
-    # 2. Portal symlinks are auto-managed by Vite plugin in astro.config.mjs
-    _ok("Portal symlinks auto-managed by Vite plugin (no manual step needed)")
+    # Vite plugin only runs at dev-server startup; create symlinks eagerly so
+    # already-running portals see the new platform immediately.
+    _create_portal_symlinks(name)
+    _seed_platform_db(name)
+    _refresh_status_json()
+    _notify_dev_server()
 
-    # 4. Validate
     print(f"\n{'=' * 50}")
     print(f"Platform '{name}' created successfully!")
     print(f"{'=' * 50}")
     print("\nNext steps:")
-    print("  cd portal && npm run dev              # see it in the portal")
-    print(f"  /pipeline {name}                      # see pipeline status and next step")
-    print(f"  python3 .specify/scripts/platform_cli.py lint {name}  # validate")
+    print(f"  /vision {name}                        # start documentation pipeline")
+    print(f"  /pipeline {name}                      # see pipeline DAG status")
 
 
 def cmd_lint(name: str | None, lint_all: bool = False) -> None:
@@ -391,16 +502,17 @@ def cmd_sync(name: str | None) -> None:
 
 
 def cmd_register(name: str) -> None:
-    """Register platform. Portal symlinks are auto-managed by Vite plugin."""
+    """Register platform: create portal symlinks, seed DB, refresh status JSON."""
     pdir = PLATFORMS_DIR / name
     if not pdir.exists():
         _error(f"Platform '{name}' not found")
         sys.exit(1)
 
-    # Portal symlinks are auto-managed by Vite plugin in astro.config.mjs
-    _ok("Portal symlinks auto-managed by Vite plugin")
-
-    log.info("Platform '%s' registered. Run: cd portal && npm run dev", name)
+    _create_portal_symlinks(name)
+    _seed_platform_db(name)
+    _refresh_status_json()
+    _notify_dev_server()
+    log.info("Platform '%s' registered.", name)
 
 
 # -- Main --
@@ -710,6 +822,19 @@ def _build_parser():  # -> argparse.ArgumentParser
     # new
     p = sub.add_parser("new", help="Scaffold a new platform via copier")
     p.add_argument("name", help="Platform name (kebab-case)")
+    p.add_argument("--title", default=None, help="Platform title (any flag triggers non-interactive mode)")
+    p.add_argument("--description", default=None, help="Platform description")
+    p.add_argument("--lifecycle", default=None, choices=LIFECYCLES)
+    p.add_argument("--repo-org", default=None, help="GitHub org")
+    p.add_argument("--repo-name", default=None, help="GitHub repo name")
+    p.add_argument("--repo-branch", default=None, help="Base branch (main/develop)")
+    p.add_argument("--tags", default=None, help="Tags as CSV (e.g., 'whatsapp,multi-tenant'). Empty = no tags.")
+    p.add_argument(
+        "--testing-startup",
+        default=None,
+        choices=TESTING_STARTUP_TYPES,
+        help="App startup type for E2E tests (renders testing block in platform.yaml).",
+    )
 
     # lint
     p = sub.add_parser("lint", help="Validate platform structure")
@@ -790,7 +915,17 @@ def main() -> None:
     if args.command == "list":
         cmd_list()
     elif args.command == "new":
-        cmd_new(args.name)
+        cmd_new(
+            args.name,
+            title=args.title,
+            description=args.description,
+            lifecycle=args.lifecycle,
+            repo_org=args.repo_org,
+            repo_name=args.repo_name,
+            repo_branch=args.repo_branch,
+            tags=args.tags,
+            testing_startup=args.testing_startup,
+        )
         _discover_platforms.cache_clear()
     elif args.command == "lint":
         if not args.name and not args.lint_all:

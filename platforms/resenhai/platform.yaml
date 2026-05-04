@@ -1,0 +1,11 @@
+name: resenhai
+title: "ResenhAI"
+description: "Melhor plataforma para jogos de areia (futevolei, beachtennis etc.) do mundo"
+lifecycle: production
+version: "0.1.0"
+repo:
+  org: paceautomations
+  name: resenhai-expo
+  base_branch: develop
+  epic_branch_prefix: "epic/resenhai/"
+tags: [futevolei, beachtennis, sandbox-sports]

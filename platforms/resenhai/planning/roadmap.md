@@ -1,14 +1,14 @@
 ---
 title: "Roadmap"
-updated: {{ "%Y-%m-%d" | strftime }}
+updated: 2026-05-03
 ---
-# {{ platform_title }} — Delivery Roadmap
+# ResenhAI — Delivery Roadmap
 
 > Sequência de épicos, dependências e milestones.
 
 ---
 
-<!-- ACTION REQUIRED: Use `/madruga:roadmap {{ platform_name }}` para gerar automaticamente. -->
+<!-- ACTION REQUIRED: Use `/madruga:roadmap resenhai` para gerar automaticamente. -->
 
 ## Status
 

@@ -1,10 +1,10 @@
 ---
 title: "Vision"
-updated: {{ "%Y-%m-%d" | strftime }}
+updated: 2026-05-03
 sidebar:
   order: 1
 ---
-# {{ platform_title }} — Business Vision
+# ResenhAI — Business Vision
 
 > Framework: Playing to Win (Lafley & Martin).
 
@@ -13,7 +13,7 @@ sidebar:
 ## 1. Tese & Aspiracao
 
 <!-- Descreva: o que faz, para quem, como. Diferencial estrutural. North Star Metric. -->
-<!-- Use `/vision {{ platform_name }}` para gerar automaticamente. -->
+<!-- Use `/vision resenhai` para gerar automaticamente. -->
 
 ---
 

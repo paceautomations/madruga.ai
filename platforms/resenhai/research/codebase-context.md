@@ -1,9 +1,9 @@
 ---
 title: "Codebase Context"
 ---
-# {{ platform_title }} — Codebase Context
+# ResenhAI — Codebase Context
 
-<!-- ACTION REQUIRED: Use `/madruga:codebase-map {{ platform_name }}` para gerar automaticamente. -->
+<!-- ACTION REQUIRED: Use `/madruga:codebase-map resenhai` para gerar automaticamente. -->
 <!-- Se greenfield: marcar Status como "Greenfield — sem codebase existente" e deixar demais secoes vazias. -->
 <!-- Se brownfield: documentar stack, patterns, conventions, integrations. -->
 

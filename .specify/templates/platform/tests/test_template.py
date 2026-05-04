@@ -17,7 +17,9 @@ def test_scaffold_structure(scaffold: Path):
         "business/solution-overview.md",
         "engineering/domain-model.md",
         "engineering/context-map.md",
-        "engineering/integrations.md",
+        "engineering/blueprint.md",
+        "engineering/containers.md",
+        "decisions.md",
     ]
     expected_dirs = ["decisions", "epics", "research"]
 
@@ -26,6 +28,13 @@ def test_scaffold_structure(scaffold: Path):
 
     for d in expected_dirs:
         assert (scaffold / d).is_dir(), f"Missing directory: {d}"
+
+
+def test_orphan_files_removed(scaffold: Path):
+    """Regression: integrations.md was removed (orphan, no skill produces it)."""
+    assert not (scaffold / "engineering" / "integrations.md").exists(), (
+        "integrations.md should not be in template (orphan removed in template realignment)"
+    )
 
 
 def test_platform_yaml_values(scaffold: Path, default_data: dict):
@@ -40,16 +49,12 @@ def test_platform_yaml_values(scaffold: Path, default_data: dict):
 
 
 def test_auto_markers_present(scaffold: Path):
-    """All AUTO markers exist in engineering docs."""
+    """AUTO markers exist in engineering docs (used by reconcile/reverse-reconcile)."""
     context_map = (scaffold / "engineering" / "context-map.md").read_text()
     assert "<!-- AUTO:domains -->" in context_map
     assert "<!-- /AUTO:domains -->" in context_map
     assert "<!-- AUTO:relations -->" in context_map
     assert "<!-- /AUTO:relations -->" in context_map
-
-    integrations = (scaffold / "engineering" / "integrations.md").read_text()
-    assert "<!-- AUTO:integrations -->" in integrations
-    assert "<!-- /AUTO:integrations -->" in integrations
 
 
 def test_kebab_case_validation(tmp_path: Path, template_root: Path):
@@ -100,20 +105,35 @@ def test_skip_if_exists_config(template_root: Path):
     )
 
 
-def test_conditional_business_flow(tmp_path: Path, template_root: Path, default_data: dict):
-    """include_business_flow=false omits business flow from platform.yaml views."""
+def _scaffold_yaml(tmp_path: Path, template_root: Path, default_data: dict, name: str, **overrides) -> dict:
+    """Scaffold the template with overrides into tmp_path/<name> and return parsed platform.yaml."""
     from copier import run_copy
 
-    data = dict(default_data)
-    data["include_business_flow"] = False
-    dst = tmp_path / "no-flow"
-
+    data = {**default_data, "platform_name": name, **overrides}
+    dst = tmp_path / name
     run_copy(str(template_root), str(dst), data=data, unsafe=True, defaults=True)
+    return yaml.safe_load((dst / "platform.yaml").read_text())
 
-    platform_yaml = yaml.safe_load((dst / "platform.yaml").read_text())
-    # Views block no longer exists in platform.yaml (diagrams are Mermaid inline)
-    views = platform_yaml.get("views", {})
-    assert not views, "platform.yaml should not have views block after Mermaid migration"
+
+def test_conditional_tags_block(tmp_path: Path, template_root: Path, default_data: dict):
+    """tags='' omits tags block; tags='a,b,c' renders as YAML list."""
+    yaml_empty = _scaffold_yaml(tmp_path, template_root, default_data, "no-tags", tags="")
+    assert "tags" not in yaml_empty, "Empty tags should omit the field"
+
+    yaml_full = _scaffold_yaml(tmp_path, template_root, default_data, "with-tags", tags="alpha,beta,gamma")
+    assert yaml_full.get("tags") == ["alpha", "beta", "gamma"]
+
+
+def test_conditional_testing_block(tmp_path: Path, template_root: Path, default_data: dict):
+    """testing_startup_type=none omits testing block; non-none renders skeleton."""
+    yaml_none = _scaffold_yaml(tmp_path, template_root, default_data, "no-testing", testing_startup_type="none")
+    assert "testing" not in yaml_none, "testing_startup_type=none should omit testing block"
+
+    yaml_docker = _scaffold_yaml(tmp_path, template_root, default_data, "with-docker", testing_startup_type="docker")
+    testing = yaml_docker.get("testing", {})
+    assert testing.get("startup", {}).get("type") == "docker"
+    assert testing.get("startup", {}).get("ready_timeout") == 120
+    assert testing.get("journeys_file") == "testing/journeys.md"
 
 
 def test_no_jinja_artifacts(scaffold: Path):

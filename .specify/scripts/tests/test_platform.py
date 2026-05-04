@@ -350,18 +350,17 @@ def test_cmd_register_nonexistent_exits(tmp_path):
         plat.PLATFORMS_DIR = old
 
 
-def test_cmd_register_valid(tmp_path, caplog):
+def test_cmd_register_valid(tmp_path, caplog, monkeypatch):
     """cmd_register succeeds for existing platform."""
-    old = plat.PLATFORMS_DIR
-    plat.PLATFORMS_DIR = tmp_path
+    monkeypatch.setattr(plat, "PLATFORMS_DIR", tmp_path)
+    monkeypatch.setattr(plat, "PORTAL_DOCS_DIR", tmp_path / "portal-docs")
+    monkeypatch.setattr(plat, "_seed_platform_db", lambda name: None)
+    monkeypatch.setattr(plat, "_refresh_status_json", lambda: None)
     _create_platform(tmp_path, "my-plat")
 
-    try:
-        with caplog.at_level(logging.INFO, logger="platform_cli"):
-            plat.cmd_register("my-plat")
-        assert "registered" in caplog.text
-    finally:
-        plat.PLATFORMS_DIR = old
+    with caplog.at_level(logging.INFO, logger="platform_cli"):
+        plat.cmd_register("my-plat")
+    assert "registered" in caplog.text
 
 
 # ══════════════════════════════════════
@@ -662,3 +661,135 @@ def test_lint_platform_testing_block_invalid_fails(tmp_path):
         assert result is False
     finally:
         plat.PLATFORMS_DIR = old
+
+
+# ══════════════════════════════════════
+# Template realignment regression tests
+# ══════════════════════════════════════
+
+
+def test_template_no_orphan_integrations_jinja():
+    """Regression: integrations.md.jinja was removed (orphan, no skill produces it)."""
+    template_dir = plat.TEMPLATE_DIR / "template"
+    assert not (template_dir / "engineering" / "integrations.md.jinja").exists(), (
+        "engineering/integrations.md.jinja should be removed (orphan template)"
+    )
+
+
+def test_copier_yml_has_new_questions():
+    """Regression: copier.yml must define tags + testing_startup_type questions."""
+    copier_yml = (plat.TEMPLATE_DIR / "copier.yml").read_text()
+    assert "tags:" in copier_yml, "copier.yml must define tags question"
+    assert "testing_startup_type:" in copier_yml, (
+        "copier.yml must define testing_startup_type question (else testing block is unreachable)"
+    )
+
+
+def test_required_files_excludes_integrations():
+    """Regression: REQUIRED_FILES no longer references engineering/integrations.md."""
+    assert "engineering/integrations.md" not in plat.REQUIRED_FILES
+    assert "engineering/integrations.md" not in plat.AUTO_MARKERS
+
+
+# ══════════════════════════════════════
+# _notify_dev_server (Astro soft-restart trigger)
+# ══════════════════════════════════════
+
+
+def _patch_socket(monkeypatch, connect_ex_returns: int) -> None:
+    """Stub socket.socket() so connect_ex returns a fixed value (0=open, !=0=closed)."""
+    import socket as real_socket
+
+    class _FakeSocket:
+        def settimeout(self, _):
+            pass
+
+        def connect_ex(self, _addr):
+            return connect_ex_returns
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(real_socket, "socket", lambda *_a, **_k: _FakeSocket())
+
+
+def test_notify_dev_server_no_op_when_port_closed(tmp_path, monkeypatch):
+    """No dev server on :4321 → no touch, no error."""
+    _patch_socket(monkeypatch, connect_ex_returns=1)
+    fake_config = tmp_path / "astro.config.mjs"
+    fake_config.write_text("// dummy")
+    original_mtime = fake_config.stat().st_mtime
+    monkeypatch.setattr(plat, "PORTAL_DIR", tmp_path)
+
+    plat._notify_dev_server()
+
+    assert fake_config.stat().st_mtime == original_mtime, "config should NOT be touched when port is closed"
+
+
+def _patch_urlopen(monkeypatch, status_code: int) -> None:
+    """Stub urllib.request.urlopen to return a fake response with given status."""
+    import urllib.request as real_urlreq
+
+    class _FakeResp:
+        status = status_code
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            pass
+
+    monkeypatch.setattr(real_urlreq, "urlopen", lambda *_a, **_k: _FakeResp())
+
+
+def _patch_urlopen_failing(monkeypatch) -> None:
+    """Stub urllib.request.urlopen to always raise URLError (simulates server still down)."""
+    import urllib.error as real_urlerr
+    import urllib.request as real_urlreq
+
+    def _raise(*_a, **_k):
+        raise real_urlerr.URLError("simulated: server not ready")
+
+    monkeypatch.setattr(real_urlreq, "urlopen", _raise)
+
+
+def test_notify_dev_server_touches_and_verifies_recovery(tmp_path, monkeypatch):
+    """Dev server on :4321 + recovery → touch happens + verify loop exits cleanly."""
+    import time
+
+    _patch_socket(monkeypatch, connect_ex_returns=0)
+    _patch_urlopen(monkeypatch, status_code=200)
+    fake_config = tmp_path / "astro.config.mjs"
+    fake_config.write_text("// dummy")
+    original_mtime = fake_config.stat().st_mtime
+    monkeypatch.setattr(plat, "PORTAL_DIR", tmp_path)
+
+    time.sleep(0.01)
+    plat._notify_dev_server()
+
+    assert fake_config.stat().st_mtime > original_mtime, "config SHOULD be touched when dev server is running"
+
+
+def test_notify_dev_server_warns_when_recovery_fails(tmp_path, monkeypatch, caplog):
+    """Touch happens but server stays down → warns instead of staying silent."""
+    import logging
+
+    _patch_socket(monkeypatch, connect_ex_returns=0)
+    _patch_urlopen_failing(monkeypatch)
+    fake_config = tmp_path / "astro.config.mjs"
+    fake_config.write_text("// dummy")
+    monkeypatch.setattr(plat, "PORTAL_DIR", tmp_path)
+
+    with caplog.at_level(logging.WARNING, logger="platform_cli"):
+        plat._notify_dev_server(_verify_attempts=2, _verify_interval=0)
+
+    assert "did not recover" in caplog.text, "should warn when server stays down"
+    assert "Restart manually" in caplog.text, "warning should be actionable"
+
+
+def test_notify_dev_server_silent_when_portal_missing(tmp_path, monkeypatch):
+    """Portal dir without astro.config.mjs → silent no-op (no exception)."""
+    _patch_socket(monkeypatch, connect_ex_returns=0)
+    monkeypatch.setattr(plat, "PORTAL_DIR", tmp_path)  # tmp_path has no astro.config.mjs
+
+    plat._notify_dev_server()  # Must not raise

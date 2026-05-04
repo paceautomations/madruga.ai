@@ -1,7 +1,7 @@
 ---
 epic: 016-trigger-engine
 created: 2026-04-26
-updated: 2026-04-28 (implement: T026-T037)
+updated: "2026-04-28 (implement T026-T037)"
 ---
 
 # Registro de Decisoes — Epic 016 (Trigger Engine)

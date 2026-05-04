@@ -5,7 +5,7 @@ sidebar:
 ---
 # Blueprint de Engenharia
 
-Referencia tecnica consolidada da plataforma **{{ platform_title }}**: stack, topologia, concerns transversais, NFRs, mapa de dados e glossario.
+Referencia tecnica consolidada da plataforma **ResenhAI**: stack, topologia, concerns transversais, NFRs, mapa de dados e glossario.
 
 > **Convencao**: esta pagina consolida o **O QUE** e **COMO**. Para o **POR QUE** de cada decisao, consulte os [ADRs](../decisions/).
 

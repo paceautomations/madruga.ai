@@ -1,14 +1,14 @@
 ---
 title: "Tech Alternatives"
-updated: {{ "%Y-%m-%d" | strftime }}
+updated: 2026-05-03
 ---
-# {{ platform_title }} — Alternativas Tecnológicas
+# ResenhAI — Alternativas Tecnológicas
 
 > Matriz de decisão para cada escolha tecnológica. 1-way-door — alimenta os ADRs.
 
 ---
 
-<!-- ACTION REQUIRED: Use `/madruga:tech-research {{ platform_name }}` para gerar automaticamente. -->
+<!-- ACTION REQUIRED: Use `/madruga:tech-research resenhai` para gerar automaticamente. -->
 
 ## Resumo Executivo
 

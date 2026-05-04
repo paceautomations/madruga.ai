@@ -3,7 +3,7 @@ title: "Containers"
 sidebar:
   order: 4
 ---
-# {{ platform_title }} — Container Architecture (C4 Level 2)
+# ResenhAI — Container Architecture (C4 Level 2)
 
 > C4 Level 2: containers, responsabilidades e comunicacao entre componentes.
 

@@ -1,15 +1,15 @@
 ---
 title: "Solution Overview"
-updated: {{ "%Y-%m-%d" | strftime }}
+updated: 2026-05-03
 sidebar:
   order: 2
 ---
-# {{ platform_title }} — Solution Overview
+# ResenhAI — Solution Overview
 
 ## Visao de Solucao
 
 <!-- Narrativa do produto na visão do usuário. 2-3 parágrafos curtos. -->
-<!-- Use `/solution-overview {{ platform_name }}` para gerar automaticamente. -->
+<!-- Use `/solution-overview resenhai` para gerar automaticamente. -->
 
 ---
 
