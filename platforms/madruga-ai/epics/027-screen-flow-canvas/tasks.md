@@ -293,7 +293,7 @@ sidebar:
 
 ### Tests for User Story 7
 
-- [ ] T100 [P] [US7] Criar `tests/integration/test_doc_self_edit_no_cascade.py` — pytest: commit com 100% files sob `platforms/<p>/{business|engineering|decisions|planning}/` é classificado `doc-self-edit` e auto-reconciliado sem chamar `screen_flow_mark_pending` (FR-038). Commit misto (doc + app) separa em ambos paths.
+- [x] T100 [P] [US7] Criar `tests/integration/test_doc_self_edit_no_cascade.py` — pytest: commit com 100% files sob `platforms/<p>/{business|engineering|decisions|planning}/` é classificado `doc-self-edit` e auto-reconciliado sem chamar `screen_flow_mark_pending` (FR-038). Commit misto (doc + app) separa em ambos paths.
 
 ### Implementation for User Story 7
 
