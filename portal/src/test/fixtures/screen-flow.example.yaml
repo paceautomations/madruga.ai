@@ -1,0 +1,311 @@
+# Screen Flow Canvas — Phase 2 dogfooding fixture (epic 027).
+#
+# Coverage:
+#   - 8 screens (mobile profile)
+#   - 10 body component types (heading, text, input, button, link, list, card,
+#     image, divider, badge)
+#   - 4 edge styles (success, error, neutral, modal)
+#   - mix of capture states (5 captured / 2 pending / 1 failed)
+#   - hotspots derived from flows referencing components by `on`/`testid`
+#
+# Used by portal/src/test/visual/screen-flow-canvas.spec.ts and the dev-server
+# render harness (`/<platform>/screens?fixture=true`) before phase 4 produces
+# real screenshots from resenhai-expo. Resolves the "renderer waits on
+# capture script" gray area documented in pitch.md.
+
+schema_version: 1
+
+meta:
+  device: mobile
+  capture_profile: iphone-15
+  layout_direction: DOWN
+
+screens:
+  # ─── 1. Splash (heading + image, neutral exit) ───────────────────
+  - id: splash
+    title: "Splash"
+    status: captured
+    image: business/shots/splash.png
+    meta:
+      route: /
+      capture_profile: iphone-15
+    capture:
+      captured_at: "2026-05-05T10:00:00Z"
+      app_version: "9c4f1a2"
+      image_md5: "0123456789abcdef0123456789abcdef"
+      viewport: { w: 393, h: 852 }
+    body:
+      - type: image
+        text: "Logo"
+        meta: { aspect: "1:1" }
+      - type: heading
+        text: "Resenhai"
+      - type: text
+        text: "Carregando..."
+      - type: button
+        id: continue_button
+        text: "Continuar"
+        testid: "splash.continueButton"
+
+  # ─── 2. Login (heading, text, 2 inputs, button, link) ────────────
+  - id: login
+    title: "Login"
+    status: captured
+    image: business/shots/login.png
+    meta:
+      route: /login
+      capture_profile: iphone-15
+    capture:
+      captured_at: "2026-05-05T10:01:00Z"
+      app_version: "9c4f1a2"
+      image_md5: "1123456789abcdef0123456789abcdef"
+      viewport: { w: 393, h: 852 }
+    body:
+      - type: heading
+        text: "Entrar"
+      - type: text
+        text: "Use seu e-mail e senha"
+      - type: input
+        id: email_field
+        text: "E-mail"
+        testid: "auth.login.emailInput"
+      - type: input
+        id: password_field
+        text: "Senha"
+        testid: "auth.login.passwordInput"
+      - type: button
+        id: submit
+        text: "Entrar"
+        testid: "auth.login.submitButton"
+        meta: { variant: primary }
+      - type: link
+        id: forgot_password
+        text: "Esqueceu sua senha?"
+        testid: "auth.login.forgotLink"
+
+  # ─── 3. Login error (text + badge for FALHOU rendering coverage) ─
+  - id: login_error
+    title: "Login — erro"
+    status: pending
+    body:
+      - type: heading
+        text: "Não foi possível entrar"
+      - type: text
+        text: "Verifique e-mail e senha e tente novamente"
+      - type: badge
+        text: "ERRO"
+        meta: { variant: error }
+      - type: button
+        id: retry
+        text: "Tentar novamente"
+        testid: "auth.loginError.retryButton"
+
+  # ─── 4. Forgot password (input + button, neutral back) ──────────
+  - id: forgot_password
+    title: "Recuperar senha"
+    status: failed
+    body:
+      - type: heading
+        text: "Recuperar senha"
+      - type: text
+        text: "Enviaremos um e-mail com instruções"
+      - type: input
+        id: recover_email
+        text: "E-mail"
+        testid: "auth.forgot.emailInput"
+      - type: button
+        id: send
+        text: "Enviar"
+        testid: "auth.forgot.sendButton"
+    failure:
+      reason: timeout
+      occurred_at: "2026-05-05T10:02:00Z"
+      retry_count: 3
+      last_error_message: "page.goto timed out after 30000ms while waiting for [data-testid=auth.forgot.emailInput]"
+
+  # ─── 5. Home (card + list + divider) ─────────────────────────────
+  - id: home
+    title: "Home"
+    status: captured
+    image: business/shots/home.png
+    meta:
+      route: /home
+      capture_profile: iphone-15
+    capture:
+      captured_at: "2026-05-05T10:03:00Z"
+      app_version: "9c4f1a2"
+      image_md5: "2123456789abcdef0123456789abcdef"
+      viewport: { w: 393, h: 852 }
+    body:
+      - type: heading
+        text: "Olá!"
+      - type: card
+        meta:
+          title: "Saldo disponível"
+          body: "R$ 1.230,45"
+      - type: divider
+      - type: list
+        meta:
+          items:
+            - "Pedido #1234 — R$ 49,90"
+            - "Pedido #1235 — R$ 99,80"
+            - "Pedido #1236 — R$ 12,40"
+      - type: button
+        id: bell_icon
+        text: "🔔"
+        testid: "home.bellButton"
+      - type: button
+        id: profile_button
+        text: "Perfil"
+        testid: "home.profileButton"
+
+  # ─── 6. Profile (heading + image + text + button) ────────────────
+  - id: profile
+    title: "Perfil"
+    status: captured
+    image: business/shots/profile.png
+    meta:
+      route: /profile
+      capture_profile: iphone-15
+    capture:
+      captured_at: "2026-05-05T10:04:00Z"
+      app_version: "9c4f1a2"
+      image_md5: "3123456789abcdef0123456789abcdef"
+      viewport: { w: 393, h: 852 }
+    body:
+      - type: heading
+        text: "Meu perfil"
+      - type: image
+        text: "Avatar"
+        meta: { aspect: "1:1" }
+      - type: text
+        text: "demo+playwright@resenhai.com"
+      - type: divider
+      - type: button
+        id: back_button
+        text: "Voltar"
+        testid: "profile.backButton"
+
+  # ─── 7. Notifications modal (badge inline + list, modal in flow) ─
+  - id: notifications_modal
+    title: "Notificações"
+    status: pending
+    body:
+      - type: heading
+        text: "Notificações"
+      - type: badge
+        text: "3 novas"
+        meta: { variant: success }
+      - type: list
+        meta:
+          items:
+            - "Pedido #1234 confirmado"
+            - "Promoção de fim de semana"
+            - "Atualização disponível"
+      - type: button
+        id: close_modal
+        text: "Fechar"
+        testid: "notifications.closeButton"
+
+  # ─── 8. Settings (heading + divider + list + link) ────────────────
+  - id: settings
+    title: "Configurações"
+    status: captured
+    image: business/shots/settings.png
+    meta:
+      route: /settings
+      capture_profile: iphone-15
+    capture:
+      captured_at: "2026-05-05T10:05:00Z"
+      app_version: "9c4f1a2"
+      image_md5: "4123456789abcdef0123456789abcdef"
+      viewport: { w: 393, h: 852 }
+    body:
+      - type: heading
+        text: "Configurações"
+      - type: divider
+      - type: list
+        meta:
+          items:
+            - "Notificações"
+            - "Privacidade"
+            - "Idioma"
+      - type: link
+        id: logout
+        text: "Sair"
+        testid: "settings.logoutLink"
+
+flows:
+  # neutral — splash continua para login
+  - from: splash
+    to: login
+    "on": continue_button
+    style: neutral
+    label: "Pronto"
+
+  # success — login OK
+  - from: login
+    to: home
+    "on": submit
+    style: success
+    label: "Login OK"
+
+  # error — credenciais inválidas
+  - from: login
+    to: login_error
+    "on": submit
+    style: error
+    label: "Credenciais inválidas"
+
+  # neutral — link de recuperar senha
+  - from: login
+    to: forgot_password
+    "on": forgot_password
+    style: neutral
+    label: "Recuperar"
+
+  # success — retry após erro
+  - from: login_error
+    to: login
+    "on": retry
+    style: success
+
+  # neutral — voltar do perfil
+  - from: profile
+    to: home
+    "on": back_button
+    style: neutral
+    label: "Voltar"
+
+  # modal — abrir notificações
+  - from: home
+    to: notifications_modal
+    "on": bell_icon
+    style: modal
+    label: "Sino"
+
+  # neutral — fechar modal
+  - from: notifications_modal
+    to: home
+    "on": close_modal
+    style: neutral
+
+  # neutral — abrir perfil
+  - from: home
+    to: profile
+    "on": profile_button
+    style: neutral
+
+  # neutral — abrir configurações a partir do perfil (cobertura de flow extra)
+  - from: profile
+    to: settings
+    "on": back_button
+    style: neutral
+    label: "Config"
+
+  # success — logout fecha sessão e volta a login
+  - from: settings
+    to: login
+    "on": logout
+    style: success
+    label: "Sair"
