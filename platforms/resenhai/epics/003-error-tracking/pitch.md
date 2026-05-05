@@ -3,6 +3,7 @@ id: "003"
 title: "Epic 003: Error tracking — adotar Sentry para visibilidade de crashes"
 status: planned
 priority: P1
+phase: now
 date: 2026-05-04
 ---
 # Epic 003: Error tracking — adotar Sentry para visibilidade de crashes

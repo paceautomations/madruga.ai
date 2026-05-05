@@ -3,6 +3,7 @@ id: "001"
 title: "Epic 001: Cobrança Stripe — destrava receita e classifica usuários em tier"
 status: planned
 priority: P1
+phase: next
 date: 2026-05-04
 ---
 # Epic 001: Cobrança Stripe — destrava receita e classifica usuários em tier

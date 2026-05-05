@@ -1,9 +1,10 @@
 ---
 id: "000"
 title: "Epic 000: Foundation — construir base do produto"
-status: done
+status: shipped
 priority: P0
 date: 2026-05-04
+delivered_at: 2026-03-24
 ---
 # Epic 000: Foundation — construir base do produto
 

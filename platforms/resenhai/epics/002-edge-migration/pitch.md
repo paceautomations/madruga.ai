@@ -3,6 +3,7 @@ id: "002"
 title: "Epic 002: Migração n8n → Supabase Edge Functions"
 status: planned
 priority: P1
+phase: next
 date: 2026-05-04
 ---
 # Epic 002: Migração n8n → Supabase Edge Functions
