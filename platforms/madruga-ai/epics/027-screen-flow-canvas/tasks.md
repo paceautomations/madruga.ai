@@ -241,7 +241,7 @@ sidebar:
 
 - [x] T080 [P] [US5] Criar `portal/src/test/unit/Hotspot.test.tsx` — vitest+RTL: badge numerado renderiza, outline 1px tracejado, aria-label correta ("Vai para tela <id>"), keyboard focus + Enter dispara onClick (FR-024, FR-025).
 
-- [ ] T081 [P] [US5] Criar `portal/src/test/visual/hotspot-interaction.spec.ts` — Playwright: carregar fixture, clicar hotspot, medir tempo total via Performance API até `fitView` completo, assertion <700ms (FR-026, SC-004). Pressionar `H`, validar visibilidade toggla em <50ms.
+- [x] T081 [P] [US5] Criar `portal/src/test/visual/hotspot-interaction.spec.ts` — Playwright: carregar fixture, clicar hotspot, medir tempo total via Performance API até `fitView` completo, assertion <700ms (FR-026, SC-004). Pressionar `H`, validar visibilidade toggla em <50ms.
 
 ### Implementation for User Story 5
 
