@@ -315,7 +315,7 @@ sidebar:
 
 ### Tests for User Story 8
 
-- [ ] T110 [P] [US8] Criar `portal/src/test/visual/colorblind.spec.ts` — Playwright: aplicar filtro CSS `filter: url(#deuteranopia)` (definido inline) na fixture, snapshot diff dos 4 edges, validar que pattern (sólido/tracejado/pontilhado) mantém distinguibilidade (FR-021, SC-008).
+- [x] T110 [P] [US8] Criar `portal/src/test/visual/colorblind.spec.ts` — Playwright: aplicar filtro CSS `filter: url(#deuteranopia)` (definido inline) na fixture, snapshot diff dos 4 edges, validar que pattern (sólido/tracejado/pontilhado) mantém distinguibilidade (FR-021, SC-008). **Implemented at `portal/src/test/visual/colorblind.spec.ts`. Three tests: (a) SVG-level guard asserting 4 distinct `(stroke-dasharray, stroke-width)` tuples — catches regressions where someone collapses pattern channel and relies on colour alone; (b) deuteranopia visual snapshot via inline `feColorMatrix` filter (Brettel/Vienot/Mollon coefficients); (c) protanopia idem. Snapshots at `__snapshots__/colorblind-{deuteranopia,protanopia}.png`. Failure threshold loosened to 0.5% (vs baseline 0.05%) to absorb anti-aliasing shifts introduced by the SVG filter while still catching pattern regressions.**
 
 - [ ] T111 [P] [US8] Criar `portal/src/test/e2e/a11y-canvas.spec.ts` — Playwright + `@axe-core/playwright`: navegar `/[fixture]/screens?fixture=true`, rodar `accessibilityScan()`, assertion zero violations P1. Validar Tab navega entre nodes, Enter aciona hotspot focado (FR-019, SC-008).
 
