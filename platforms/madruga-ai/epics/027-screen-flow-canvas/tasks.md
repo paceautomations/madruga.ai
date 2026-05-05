@@ -103,7 +103,7 @@ sidebar:
 
 ### Implementation for User Story 1
 
-- [ ] T024 [P] [US1] Implementar `portal/src/lib/screen-flow.ts` — loader YAML build-time + fixture fallback (`?fixture=true` em dev) + invocador de `elk-layout.ts`. Lê `platforms/<name>/business/screen-flow.yaml` via `js-yaml`. ~120 LOC.
+- [X] T024 [P] [US1] Implementar `portal/src/lib/screen-flow.ts` — loader YAML build-time + fixture fallback (`?fixture=true` em dev) + invocador de `elk-layout.ts`. Lê `platforms/<name>/business/screen-flow.yaml` via `js-yaml`. ~120 LOC.
 
 - [ ] T025 [P] [US1] Implementar `portal/src/lib/elk-layout.ts` — config ELK `layered`, direction parametrizado por `meta.layout_direction` (DOWN/RIGHT). Pré-computa coords node em build-time, exporta JSON. ELK timeout 30s, warn em >5s (FR-049). Zero `elkjs` no bundle client.
 
