@@ -179,7 +179,7 @@ sidebar:
 
 - [x] T053 [P] [US3] Modificar `platforms/prosauai/platform.yaml` — adicionar bloco `screen_flow: {enabled: false, skip_reason: "Admin frontend é evolução futura (epic 008-admin-evolution em flight, ainda não estabilizado)..."}` (texto completo da pitch.md). **Implemented: block placed between `tags:` and `testing:` with the full pitch.md skip_reason text (admin frontend lifecycle + WhatsApp/Chatwoot out-of-scope clause). `python3 .specify/scripts/platform_cli.py lint prosauai` reports `screen_flow: block valid` (no BLOCKERs).**
 
-- [ ] T054 [US3] Validar opt-out end-to-end: rodar `python3 .specify/scripts/platform_cli.py lint madruga-ai` e `lint prosauai` — ambos sucesso. Rodar `cd portal && npm run build` — verificar que `dist/madruga-ai/screens/` e `dist/prosauai/screens/` NÃO existem. **Dependência**: T034, T051, T052, T053.
+- [x] T054 [US3] Validar opt-out end-to-end: rodar `python3 .specify/scripts/platform_cli.py lint madruga-ai` e `lint prosauai` — ambos sucesso. Rodar `cd portal && npm run build` — verificar que `dist/madruga-ai/screens/` e `dist/prosauai/screens/` NÃO existem. **Dependência**: T034, T051, T052, T053. **Validated 2026-05-05: `lint madruga-ai` exit 0 + `screen_flow: block valid`; `lint prosauai` exit 0 + `screen_flow: block valid`. Portal `npm run build` (Node v22.22.1) produced 158 pages — `find portal/dist -type d -name screens` returns zero matches; `dist/madruga-ai/` and `dist/prosauai/` lack a `screens/` subtree as required (FR-016, US-03 cenário 3).**
 
 **Checkpoint**: ambas plataformas opt-out passam lint; rota `/screens` não é gerada para elas; T050 verde.
 
