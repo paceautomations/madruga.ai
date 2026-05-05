@@ -1,0 +1,3768 @@
+{
+  "generated_at": "2026-05-05T11:43:13Z",
+  "platforms": [
+    {
+      "id": "madruga-ai",
+      "title": "Madruga AI — Architecture Documentation & Spec-to-Code System",
+      "lifecycle": "development",
+      "l1": {
+        "total": 13,
+        "done": 13,
+        "pending": 0,
+        "stale": 4,
+        "blocked": 0,
+        "skipped": 0,
+        "progress_pct": 100.0,
+        "nodes": [
+          {
+            "id": "platform-new",
+            "status": "done",
+            "layer": "business",
+            "gate": "human",
+            "depends": [],
+            "optional": false,
+            "outputs": [
+              "platform.yaml"
+            ],
+            "completed_at": "2026-04-08T17:13:56Z"
+          },
+          {
+            "id": "vision",
+            "status": "stale",
+            "layer": "business",
+            "gate": "human",
+            "depends": [
+              "platform-new"
+            ],
+            "optional": false,
+            "outputs": [
+              "business/vision.md"
+            ],
+            "completed_at": "2026-04-07T16:35:14Z"
+          },
+          {
+            "id": "solution-overview",
+            "status": "done",
+            "layer": "business",
+            "gate": "human",
+            "depends": [
+              "vision"
+            ],
+            "optional": false,
+            "outputs": [
+              "business/solution-overview.md"
+            ],
+            "completed_at": "2026-04-07T16:35:14Z"
+          },
+          {
+            "id": "business-process",
+            "status": "stale",
+            "layer": "business",
+            "gate": "human",
+            "depends": [
+              "solution-overview"
+            ],
+            "optional": false,
+            "outputs": [
+              "business/process.md"
+            ],
+            "completed_at": "2026-04-06T18:39:17Z"
+          },
+          {
+            "id": "tech-research",
+            "status": "stale",
+            "layer": "research",
+            "gate": "1-way-door",
+            "depends": [
+              "business-process"
+            ],
+            "optional": false,
+            "outputs": [
+              "research/tech-alternatives.md"
+            ],
+            "completed_at": "2026-04-05T21:08:43Z"
+          },
+          {
+            "id": "codebase-map",
+            "status": "done",
+            "layer": "research",
+            "gate": "auto",
+            "depends": [
+              "vision"
+            ],
+            "optional": true,
+            "outputs": [
+              "research/codebase-context.md"
+            ],
+            "completed_at": "2026-04-07T16:35:14Z"
+          },
+          {
+            "id": "adr",
+            "status": "stale",
+            "layer": "engineering",
+            "gate": "1-way-door",
+            "depends": [
+              "tech-research"
+            ],
+            "optional": false,
+            "outputs": [],
+            "completed_at": "2026-03-30T18:57:19Z"
+          },
+          {
+            "id": "blueprint",
+            "status": "done",
+            "layer": "engineering",
+            "gate": "human",
+            "depends": [
+              "adr"
+            ],
+            "optional": false,
+            "outputs": [
+              "engineering/blueprint.md"
+            ],
+            "completed_at": "2026-04-06T18:39:17Z"
+          },
+          {
+            "id": "domain-model",
+            "status": "done",
+            "layer": "engineering",
+            "gate": "human",
+            "depends": [
+              "blueprint",
+              "business-process"
+            ],
+            "optional": false,
+            "outputs": [
+              "engineering/domain-model.md"
+            ],
+            "completed_at": "2026-04-06T18:39:17Z"
+          },
+          {
+            "id": "containers",
+            "status": "done",
+            "layer": "engineering",
+            "gate": "human",
+            "depends": [
+              "domain-model",
+              "blueprint"
+            ],
+            "optional": false,
+            "outputs": [
+              "engineering/containers.md"
+            ],
+            "completed_at": "2026-04-06T18:39:17Z"
+          },
+          {
+            "id": "context-map",
+            "status": "done",
+            "layer": "engineering",
+            "gate": "human",
+            "depends": [
+              "domain-model",
+              "containers"
+            ],
+            "optional": false,
+            "outputs": [
+              "engineering/context-map.md"
+            ],
+            "completed_at": "2026-04-06T18:39:17Z"
+          },
+          {
+            "id": "epic-breakdown",
+            "status": "done",
+            "layer": "planning",
+            "gate": "1-way-door",
+            "depends": [
+              "domain-model",
+              "containers",
+              "context-map"
+            ],
+            "optional": false,
+            "outputs": [],
+            "completed_at": "2026-04-08T17:13:56Z"
+          },
+          {
+            "id": "roadmap",
+            "status": "done",
+            "layer": "planning",
+            "gate": "human",
+            "depends": [
+              "epic-breakdown"
+            ],
+            "optional": false,
+            "outputs": [
+              "planning/roadmap.md"
+            ],
+            "completed_at": "2026-04-08T17:13:56Z"
+          }
+        ]
+      },
+      "l2": {
+        "epics": [
+          {
+            "id": "001-inicio-de-tudo",
+            "title": "001 — Inicio de Tudo",
+            "status": "shipped",
+            "updated_at": "2026-05-02T22:51:16Z",
+            "total": 12,
+            "done": 1,
+            "skipped": 11,
+            "pending": 0,
+            "progress_pct": 100.0,
+            "nodes": [
+              {
+                "id": "analyze",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "analyze-post",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "clarify",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "epic-context",
+                "status": "done",
+                "completed_at": "2026-04-08T17:13:56Z"
+              },
+              {
+                "id": "implement",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "judge",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "plan",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "qa",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "reconcile",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "roadmap-reassess",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "specify",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "tasks",
+                "status": "skipped",
+                "completed_at": null
+              }
+            ]
+          },
+          {
+            "id": "006-sqlite-foundation",
+            "title": "SQLite Foundation — BD para Estado do Pipeline",
+            "status": "shipped",
+            "updated_at": "2026-05-02T22:51:16Z",
+            "total": 12,
+            "done": 5,
+            "skipped": 7,
+            "pending": 0,
+            "progress_pct": 100.0,
+            "nodes": [
+              {
+                "id": "analyze",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "analyze-post",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "clarify",
+                "status": "done",
+                "completed_at": "2026-04-07T16:35:14Z"
+              },
+              {
+                "id": "epic-context",
+                "status": "done",
+                "completed_at": "2026-04-08T17:13:56Z"
+              },
+              {
+                "id": "implement",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "judge",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "plan",
+                "status": "done",
+                "completed_at": "2026-04-07T16:35:14Z"
+              },
+              {
+                "id": "qa",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "reconcile",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "roadmap-reassess",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "specify",
+                "status": "done",
+                "completed_at": "2026-04-07T16:35:14Z"
+              },
+              {
+                "id": "tasks",
+                "status": "done",
+                "completed_at": "2026-04-07T16:35:14Z"
+              }
+            ]
+          },
+          {
+            "id": "007-directory-unification",
+            "title": "Directory Unification — SpecKit Opera em epics/, DAG Dois Níveis",
+            "status": "shipped",
+            "updated_at": "2026-05-02T22:51:16Z",
+            "total": 12,
+            "done": 5,
+            "skipped": 7,
+            "pending": 0,
+            "progress_pct": 100.0,
+            "nodes": [
+              {
+                "id": "analyze",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "analyze-post",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "clarify",
+                "status": "done",
+                "completed_at": "2026-04-07T16:35:14Z"
+              },
+              {
+                "id": "epic-context",
+                "status": "done",
+                "completed_at": "2026-04-08T17:13:56Z"
+              },
+              {
+                "id": "implement",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "judge",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "plan",
+                "status": "done",
+                "completed_at": "2026-03-29T20:03:50Z"
+              },
+              {
+                "id": "qa",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "reconcile",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "roadmap-reassess",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "specify",
+                "status": "done",
+                "completed_at": "2026-04-07T16:35:14Z"
+              },
+              {
+                "id": "tasks",
+                "status": "done",
+                "completed_at": "2026-04-07T16:35:14Z"
+              }
+            ]
+          },
+          {
+            "id": "008-quality-dx",
+            "title": "Epic 008 — Quality & DX",
+            "status": "shipped",
+            "updated_at": "2026-05-02T22:51:16Z",
+            "total": 12,
+            "done": 5,
+            "skipped": 7,
+            "pending": 0,
+            "progress_pct": 100.0,
+            "nodes": [
+              {
+                "id": "analyze",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "analyze-post",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "clarify",
+                "status": "done",
+                "completed_at": "2026-03-29T20:30:57Z"
+              },
+              {
+                "id": "epic-context",
+                "status": "done",
+                "completed_at": "2026-04-08T17:13:56Z"
+              },
+              {
+                "id": "implement",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "judge",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "plan",
+                "status": "done",
+                "completed_at": "2026-03-29T20:31:33Z"
+              },
+              {
+                "id": "qa",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "reconcile",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "roadmap-reassess",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "specify",
+                "status": "done",
+                "completed_at": "2026-03-29T20:30:57Z"
+              },
+              {
+                "id": "tasks",
+                "status": "done",
+                "completed_at": "2026-03-29T20:57:19Z"
+              }
+            ]
+          },
+          {
+            "id": "009-decision-log-bd",
+            "title": "Decision Log BD",
+            "status": "shipped",
+            "updated_at": "2026-05-02T22:51:16Z",
+            "total": 12,
+            "done": 6,
+            "skipped": 6,
+            "pending": 0,
+            "progress_pct": 100.0,
+            "nodes": [
+              {
+                "id": "analyze",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "analyze-post",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "clarify",
+                "status": "done",
+                "completed_at": "2026-04-07T16:35:14Z"
+              },
+              {
+                "id": "epic-context",
+                "status": "done",
+                "completed_at": "2026-04-08T17:13:56Z"
+              },
+              {
+                "id": "implement",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "judge",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "plan",
+                "status": "done",
+                "completed_at": "2026-03-30T00:51:45Z"
+              },
+              {
+                "id": "qa",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "reconcile",
+                "status": "done",
+                "completed_at": "2026-03-30T00:51:45Z"
+              },
+              {
+                "id": "roadmap-reassess",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "specify",
+                "status": "done",
+                "completed_at": "2026-04-07T16:35:14Z"
+              },
+              {
+                "id": "tasks",
+                "status": "done",
+                "completed_at": "2026-04-07T16:35:14Z"
+              }
+            ]
+          },
+          {
+            "id": "010-pipeline-dashboard",
+            "title": "Pipeline Dashboard",
+            "status": "shipped",
+            "updated_at": "2026-05-02T22:51:16Z",
+            "total": 12,
+            "done": 8,
+            "skipped": 4,
+            "pending": 0,
+            "progress_pct": 100.0,
+            "nodes": [
+              {
+                "id": "analyze",
+                "status": "done",
+                "completed_at": "2026-03-30T18:02:05Z"
+              },
+              {
+                "id": "analyze-post",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "clarify",
+                "status": "done",
+                "completed_at": "2026-04-07T16:35:14Z"
+              },
+              {
+                "id": "epic-context",
+                "status": "done",
+                "completed_at": "2026-04-08T17:13:56Z"
+              },
+              {
+                "id": "implement",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "judge",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "plan",
+                "status": "done",
+                "completed_at": "2026-04-07T16:35:14Z"
+              },
+              {
+                "id": "qa",
+                "status": "done",
+                "completed_at": "2026-04-07T16:35:14Z"
+              },
+              {
+                "id": "reconcile",
+                "status": "done",
+                "completed_at": "2026-03-30T18:02:05Z"
+              },
+              {
+                "id": "roadmap-reassess",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "specify",
+                "status": "done",
+                "completed_at": "2026-04-07T16:35:14Z"
+              },
+              {
+                "id": "tasks",
+                "status": "done",
+                "completed_at": "2026-03-30T18:02:05Z"
+              }
+            ]
+          },
+          {
+            "id": "012-multi-repo-implement",
+            "title": "Multi-repo Implement",
+            "status": "shipped",
+            "updated_at": "2026-05-02T22:51:16Z",
+            "total": 12,
+            "done": 6,
+            "skipped": 6,
+            "pending": 0,
+            "progress_pct": 100.0,
+            "nodes": [
+              {
+                "id": "analyze",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "analyze-post",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "clarify",
+                "status": "done",
+                "completed_at": "2026-04-07T16:35:14Z"
+              },
+              {
+                "id": "epic-context",
+                "status": "done",
+                "completed_at": "2026-04-08T17:13:56Z"
+              },
+              {
+                "id": "implement",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "judge",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "plan",
+                "status": "done",
+                "completed_at": "2026-03-31T21:53:25Z"
+              },
+              {
+                "id": "qa",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "reconcile",
+                "status": "done",
+                "completed_at": "2026-04-07T16:35:14Z"
+              },
+              {
+                "id": "roadmap-reassess",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "specify",
+                "status": "done",
+                "completed_at": "2026-04-07T16:35:14Z"
+              },
+              {
+                "id": "tasks",
+                "status": "done",
+                "completed_at": "2026-04-07T16:35:14Z"
+              }
+            ]
+          },
+          {
+            "id": "013-dag-executor-bridge",
+            "title": "DAG Executor + SpeckitBridge",
+            "status": "shipped",
+            "updated_at": "2026-05-02T22:51:16Z",
+            "total": 12,
+            "done": 6,
+            "skipped": 6,
+            "pending": 0,
+            "progress_pct": 100.0,
+            "nodes": [
+              {
+                "id": "analyze",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "analyze-post",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "clarify",
+                "status": "done",
+                "completed_at": "2026-04-01T09:42:39Z"
+              },
+              {
+                "id": "epic-context",
+                "status": "done",
+                "completed_at": "2026-04-08T17:13:56Z"
+              },
+              {
+                "id": "implement",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "judge",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "plan",
+                "status": "done",
+                "completed_at": "2026-04-05T21:08:43Z"
+              },
+              {
+                "id": "qa",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "reconcile",
+                "status": "done",
+                "completed_at": "2026-04-05T21:08:43Z"
+              },
+              {
+                "id": "roadmap-reassess",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "specify",
+                "status": "done",
+                "completed_at": "2026-04-01T09:42:39Z"
+              },
+              {
+                "id": "tasks",
+                "status": "done",
+                "completed_at": "2026-04-01T09:42:39Z"
+              }
+            ]
+          },
+          {
+            "id": "014-telegram-notifications",
+            "title": "Telegram Notifications",
+            "status": "shipped",
+            "updated_at": "2026-05-02T22:51:16Z",
+            "total": 12,
+            "done": 6,
+            "skipped": 6,
+            "pending": 0,
+            "progress_pct": 100.0,
+            "nodes": [
+              {
+                "id": "analyze",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "analyze-post",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "clarify",
+                "status": "done",
+                "completed_at": "2026-04-01T13:14:37Z"
+              },
+              {
+                "id": "epic-context",
+                "status": "done",
+                "completed_at": "2026-04-08T17:13:56Z"
+              },
+              {
+                "id": "implement",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "judge",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "plan",
+                "status": "done",
+                "completed_at": "2026-04-01T13:14:37Z"
+              },
+              {
+                "id": "qa",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "reconcile",
+                "status": "done",
+                "completed_at": "2026-04-07T16:35:14Z"
+              },
+              {
+                "id": "roadmap-reassess",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "specify",
+                "status": "done",
+                "completed_at": "2026-04-01T13:14:37Z"
+              },
+              {
+                "id": "tasks",
+                "status": "done",
+                "completed_at": "2026-04-01T13:14:37Z"
+              }
+            ]
+          },
+          {
+            "id": "015-subagent-judge",
+            "title": "Subagent Judge + Decision Classifier",
+            "status": "shipped",
+            "updated_at": "2026-05-02T22:51:16Z",
+            "total": 12,
+            "done": 8,
+            "skipped": 4,
+            "pending": 0,
+            "progress_pct": 100.0,
+            "nodes": [
+              {
+                "id": "analyze",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "analyze-post",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "clarify",
+                "status": "done",
+                "completed_at": "2026-04-05T21:08:43Z"
+              },
+              {
+                "id": "epic-context",
+                "status": "done",
+                "completed_at": "2026-04-08T17:13:56Z"
+              },
+              {
+                "id": "implement",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "judge",
+                "status": "done",
+                "completed_at": "2026-04-01T18:01:20Z"
+              },
+              {
+                "id": "plan",
+                "status": "done",
+                "completed_at": "2026-04-07T16:35:14Z"
+              },
+              {
+                "id": "qa",
+                "status": "done",
+                "completed_at": "2026-04-01T18:01:20Z"
+              },
+              {
+                "id": "reconcile",
+                "status": "done",
+                "completed_at": "2026-04-05T21:08:43Z"
+              },
+              {
+                "id": "roadmap-reassess",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "specify",
+                "status": "done",
+                "completed_at": "2026-04-05T21:08:43Z"
+              },
+              {
+                "id": "tasks",
+                "status": "done",
+                "completed_at": "2026-04-07T16:35:14Z"
+              }
+            ]
+          },
+          {
+            "id": "016-easter-24-7",
+            "title": "Easter 24/7",
+            "status": "shipped",
+            "updated_at": "2026-05-02T22:51:16Z",
+            "total": 12,
+            "done": 8,
+            "skipped": 4,
+            "pending": 0,
+            "progress_pct": 100.0,
+            "nodes": [
+              {
+                "id": "analyze",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "analyze-post",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "clarify",
+                "status": "done",
+                "completed_at": "2026-04-05T21:08:43Z"
+              },
+              {
+                "id": "epic-context",
+                "status": "done",
+                "completed_at": "2026-04-08T17:13:56Z"
+              },
+              {
+                "id": "implement",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "judge",
+                "status": "done",
+                "completed_at": "2026-04-05T21:08:43Z"
+              },
+              {
+                "id": "plan",
+                "status": "done",
+                "completed_at": "2026-04-05T21:08:43Z"
+              },
+              {
+                "id": "qa",
+                "status": "done",
+                "completed_at": "2026-04-05T21:08:43Z"
+              },
+              {
+                "id": "reconcile",
+                "status": "done",
+                "completed_at": "2026-04-07T16:35:14Z"
+              },
+              {
+                "id": "roadmap-reassess",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "specify",
+                "status": "done",
+                "completed_at": "2026-04-05T21:08:43Z"
+              },
+              {
+                "id": "tasks",
+                "status": "done",
+                "completed_at": "2026-04-05T21:08:43Z"
+              }
+            ]
+          },
+          {
+            "id": "017-observability-tracing-evals",
+            "title": "Observability, Tracing & Evals",
+            "status": "shipped",
+            "updated_at": "2026-05-02T22:51:16Z",
+            "total": 12,
+            "done": 7,
+            "skipped": 5,
+            "pending": 0,
+            "progress_pct": 100.0,
+            "nodes": [
+              {
+                "id": "analyze",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "analyze-post",
+                "status": "done",
+                "completed_at": "2026-04-05T21:08:43Z"
+              },
+              {
+                "id": "clarify",
+                "status": "done",
+                "completed_at": "2026-04-05T21:08:43Z"
+              },
+              {
+                "id": "epic-context",
+                "status": "done",
+                "completed_at": "2026-04-08T17:13:56Z"
+              },
+              {
+                "id": "implement",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "judge",
+                "status": "done",
+                "completed_at": "2026-04-05T21:08:43Z"
+              },
+              {
+                "id": "plan",
+                "status": "done",
+                "completed_at": "2026-04-05T21:08:43Z"
+              },
+              {
+                "id": "qa",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "reconcile",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "roadmap-reassess",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "specify",
+                "status": "done",
+                "completed_at": "2026-04-05T21:08:43Z"
+              },
+              {
+                "id": "tasks",
+                "status": "done",
+                "completed_at": "2026-04-05T21:08:43Z"
+              }
+            ]
+          },
+          {
+            "id": "018-pipeline-hardening",
+            "title": "Pipeline Hardening & Safety",
+            "status": "shipped",
+            "updated_at": "2026-05-02T22:51:16Z",
+            "total": 12,
+            "done": 9,
+            "skipped": 3,
+            "pending": 0,
+            "progress_pct": 100.0,
+            "nodes": [
+              {
+                "id": "analyze",
+                "status": "done",
+                "completed_at": "2026-04-05T21:08:43Z"
+              },
+              {
+                "id": "analyze-post",
+                "status": "done",
+                "completed_at": "2026-04-05T21:08:43Z"
+              },
+              {
+                "id": "clarify",
+                "status": "done",
+                "completed_at": "2026-04-05T21:08:43Z"
+              },
+              {
+                "id": "epic-context",
+                "status": "done",
+                "completed_at": "2026-04-08T17:13:56Z"
+              },
+              {
+                "id": "implement",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "judge",
+                "status": "done",
+                "completed_at": "2026-04-05T21:08:43Z"
+              },
+              {
+                "id": "plan",
+                "status": "done",
+                "completed_at": "2026-04-05T21:08:43Z"
+              },
+              {
+                "id": "qa",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "reconcile",
+                "status": "done",
+                "completed_at": "2026-04-05T21:08:43Z"
+              },
+              {
+                "id": "roadmap-reassess",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "specify",
+                "status": "done",
+                "completed_at": "2026-04-05T21:08:43Z"
+              },
+              {
+                "id": "tasks",
+                "status": "done",
+                "completed_at": "2026-04-05T21:08:43Z"
+              }
+            ]
+          },
+          {
+            "id": "019-ai-infra-as-code",
+            "title": "AI Infrastructure as Code",
+            "status": "shipped",
+            "updated_at": "2026-05-02T22:51:16Z",
+            "total": 12,
+            "done": 8,
+            "skipped": 4,
+            "pending": 0,
+            "progress_pct": 100.0,
+            "nodes": [
+              {
+                "id": "analyze",
+                "status": "done",
+                "completed_at": "2026-04-05T21:08:43Z"
+              },
+              {
+                "id": "analyze-post",
+                "status": "done",
+                "completed_at": "2026-04-05T21:08:43Z"
+              },
+              {
+                "id": "clarify",
+                "status": "done",
+                "completed_at": "2026-04-05T21:08:43Z"
+              },
+              {
+                "id": "epic-context",
+                "status": "done",
+                "completed_at": "2026-04-09T10:54:18Z"
+              },
+              {
+                "id": "implement",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "judge",
+                "status": "done",
+                "completed_at": "2026-04-05T21:08:43Z"
+              },
+              {
+                "id": "plan",
+                "status": "done",
+                "completed_at": "2026-04-09T10:54:18Z"
+              },
+              {
+                "id": "qa",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "reconcile",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "roadmap-reassess",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "specify",
+                "status": "done",
+                "completed_at": "2026-04-05T21:08:43Z"
+              },
+              {
+                "id": "tasks",
+                "status": "done",
+                "completed_at": "2026-04-09T10:54:18Z"
+              }
+            ]
+          },
+          {
+            "id": "020-code-quality-dx",
+            "title": "Code Quality & DX",
+            "status": "shipped",
+            "updated_at": "2026-05-02T22:51:16Z",
+            "total": 12,
+            "done": 8,
+            "skipped": 4,
+            "pending": 0,
+            "progress_pct": 100.0,
+            "nodes": [
+              {
+                "id": "analyze",
+                "status": "done",
+                "completed_at": "2026-04-05T21:08:43Z"
+              },
+              {
+                "id": "analyze-post",
+                "status": "done",
+                "completed_at": "2026-04-05T21:08:43Z"
+              },
+              {
+                "id": "clarify",
+                "status": "done",
+                "completed_at": "2026-04-05T21:08:43Z"
+              },
+              {
+                "id": "epic-context",
+                "status": "done",
+                "completed_at": "2026-04-08T17:13:56Z"
+              },
+              {
+                "id": "implement",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "judge",
+                "status": "done",
+                "completed_at": "2026-04-05T21:08:43Z"
+              },
+              {
+                "id": "plan",
+                "status": "done",
+                "completed_at": "2026-04-05T21:08:43Z"
+              },
+              {
+                "id": "qa",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "reconcile",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "roadmap-reassess",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "specify",
+                "status": "done",
+                "completed_at": "2026-04-05T21:08:43Z"
+              },
+              {
+                "id": "tasks",
+                "status": "done",
+                "completed_at": "2026-04-05T21:08:43Z"
+              }
+            ]
+          },
+          {
+            "id": "021-pipeline-intelligence",
+            "title": "Pipeline Intelligence",
+            "status": "shipped",
+            "updated_at": "2026-05-02T22:51:16Z",
+            "total": 12,
+            "done": 8,
+            "skipped": 4,
+            "pending": 0,
+            "progress_pct": 100.0,
+            "nodes": [
+              {
+                "id": "analyze",
+                "status": "done",
+                "completed_at": "2026-04-05T21:08:43Z"
+              },
+              {
+                "id": "analyze-post",
+                "status": "done",
+                "completed_at": "2026-04-05T21:08:43Z"
+              },
+              {
+                "id": "clarify",
+                "status": "done",
+                "completed_at": "2026-04-05T21:08:43Z"
+              },
+              {
+                "id": "epic-context",
+                "status": "done",
+                "completed_at": "2026-04-08T17:13:56Z"
+              },
+              {
+                "id": "implement",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "judge",
+                "status": "done",
+                "completed_at": "2026-04-05T21:08:43Z"
+              },
+              {
+                "id": "plan",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "qa",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "reconcile",
+                "status": "done",
+                "completed_at": "2026-04-07T16:35:14Z"
+              },
+              {
+                "id": "roadmap-reassess",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "specify",
+                "status": "done",
+                "completed_at": "2026-04-05T21:08:43Z"
+              },
+              {
+                "id": "tasks",
+                "status": "done",
+                "completed_at": "2026-04-05T21:08:43Z"
+              }
+            ]
+          },
+          {
+            "id": "022-mermaid-migration",
+            "title": "Mermaid Migration — LikeC4 to Mermaid Inline",
+            "status": "shipped",
+            "updated_at": "2026-05-02T22:51:16Z",
+            "total": 12,
+            "done": 12,
+            "skipped": 0,
+            "pending": 0,
+            "progress_pct": 100.0,
+            "nodes": [
+              {
+                "id": "analyze",
+                "status": "done",
+                "completed_at": "2026-04-07T16:35:14Z"
+              },
+              {
+                "id": "analyze-post",
+                "status": "done",
+                "completed_at": "2026-04-07T16:35:14Z"
+              },
+              {
+                "id": "clarify",
+                "status": "done",
+                "completed_at": "2026-04-07T16:35:14Z"
+              },
+              {
+                "id": "epic-context",
+                "status": "done",
+                "completed_at": "2026-04-08T17:13:56Z"
+              },
+              {
+                "id": "implement",
+                "status": "done",
+                "completed_at": null
+              },
+              {
+                "id": "judge",
+                "status": "done",
+                "completed_at": "2026-04-07T16:35:14Z"
+              },
+              {
+                "id": "plan",
+                "status": "done",
+                "completed_at": "2026-04-07T16:35:14Z"
+              },
+              {
+                "id": "qa",
+                "status": "done",
+                "completed_at": "2026-04-07T16:35:14Z"
+              },
+              {
+                "id": "reconcile",
+                "status": "done",
+                "completed_at": "2026-04-06T18:39:17Z"
+              },
+              {
+                "id": "roadmap-reassess",
+                "status": "done",
+                "completed_at": "2026-04-07T16:35:14Z"
+              },
+              {
+                "id": "specify",
+                "status": "done",
+                "completed_at": "2026-04-07T16:35:14Z"
+              },
+              {
+                "id": "tasks",
+                "status": "done",
+                "completed_at": "2026-04-07T16:35:14Z"
+              }
+            ]
+          },
+          {
+            "id": "023-commit-traceability",
+            "title": "023 — Commit Traceability",
+            "status": "shipped",
+            "updated_at": "2026-05-02T22:51:16Z",
+            "total": 12,
+            "done": 11,
+            "skipped": 1,
+            "pending": 0,
+            "progress_pct": 100.0,
+            "nodes": [
+              {
+                "id": "analyze",
+                "status": "done",
+                "completed_at": "2026-04-08T17:13:56Z"
+              },
+              {
+                "id": "analyze-post",
+                "status": "done",
+                "completed_at": "2026-04-08T17:13:56Z"
+              },
+              {
+                "id": "clarify",
+                "status": "done",
+                "completed_at": "2026-04-08T17:13:56Z"
+              },
+              {
+                "id": "epic-context",
+                "status": "done",
+                "completed_at": "2026-04-08T17:13:56Z"
+              },
+              {
+                "id": "implement",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "judge",
+                "status": "done",
+                "completed_at": "2026-04-08T17:13:56Z"
+              },
+              {
+                "id": "plan",
+                "status": "done",
+                "completed_at": "2026-04-08T17:13:56Z"
+              },
+              {
+                "id": "qa",
+                "status": "done",
+                "completed_at": "2026-04-08T17:13:56Z"
+              },
+              {
+                "id": "reconcile",
+                "status": "done",
+                "completed_at": "2026-04-08T17:13:56Z"
+              },
+              {
+                "id": "roadmap-reassess",
+                "status": "done",
+                "completed_at": "2026-04-08T17:13:56Z"
+              },
+              {
+                "id": "specify",
+                "status": "done",
+                "completed_at": "2026-04-08T17:13:56Z"
+              },
+              {
+                "id": "tasks",
+                "status": "done",
+                "completed_at": "2026-04-08T17:13:56Z"
+              }
+            ]
+          },
+          {
+            "id": "024-sequential-execution-ux",
+            "title": "024 — Sequential Execution UX",
+            "status": "shipped",
+            "updated_at": "2026-05-02T22:51:16Z",
+            "total": 12,
+            "done": 7,
+            "skipped": 5,
+            "pending": 0,
+            "progress_pct": 100.0,
+            "nodes": [
+              {
+                "id": "analyze",
+                "status": "done",
+                "completed_at": "2026-04-11T12:04:27Z"
+              },
+              {
+                "id": "analyze-post",
+                "status": "skipped",
+                "completed_at": "2026-04-16T17:41:21Z"
+              },
+              {
+                "id": "clarify",
+                "status": "done",
+                "completed_at": "2026-04-11T11:45:48Z"
+              },
+              {
+                "id": "epic-context",
+                "status": "done",
+                "completed_at": "2026-04-11T11:35:46Z"
+              },
+              {
+                "id": "implement",
+                "status": "skipped",
+                "completed_at": "2026-04-16T17:41:21Z"
+              },
+              {
+                "id": "judge",
+                "status": "done",
+                "completed_at": "2026-04-12T10:17:06Z"
+              },
+              {
+                "id": "plan",
+                "status": "done",
+                "completed_at": "2026-04-11T11:49:24Z"
+              },
+              {
+                "id": "qa",
+                "status": "skipped",
+                "completed_at": "2026-04-16T17:41:21Z"
+              },
+              {
+                "id": "reconcile",
+                "status": "skipped",
+                "completed_at": "2026-04-16T17:41:21Z"
+              },
+              {
+                "id": "roadmap-reassess",
+                "status": "skipped",
+                "completed_at": "2026-04-16T17:41:21Z"
+              },
+              {
+                "id": "specify",
+                "status": "done",
+                "completed_at": "2026-04-11T11:39:17Z"
+              },
+              {
+                "id": "tasks",
+                "status": "done",
+                "completed_at": "2026-04-11T12:00:49Z"
+              }
+            ]
+          },
+          {
+            "id": "026-runtime-qa-testing-pyramid",
+            "title": "026 — Runtime QA & Testing Pyramid",
+            "status": "shipped",
+            "updated_at": "2026-05-02T22:51:16Z",
+            "total": 13,
+            "done": 13,
+            "skipped": 0,
+            "pending": 0,
+            "progress_pct": 100.0,
+            "nodes": [
+              {
+                "id": "analyze",
+                "status": "done",
+                "completed_at": "2026-04-16T23:45:34Z"
+              },
+              {
+                "id": "analyze-post",
+                "status": "done",
+                "completed_at": "2026-04-16T22:53:33Z"
+              },
+              {
+                "id": "clarify",
+                "status": "done",
+                "completed_at": "2026-04-16T15:48:13Z"
+              },
+              {
+                "id": "epic-context",
+                "status": "done",
+                "completed_at": "2026-04-16T15:44:05Z"
+              },
+              {
+                "id": "implement",
+                "status": "done",
+                "completed_at": "2026-04-16T22:47:58Z"
+              },
+              {
+                "id": "judge",
+                "status": "done",
+                "completed_at": "2026-04-16T23:54:16Z"
+              },
+              {
+                "id": "plan",
+                "status": "done",
+                "completed_at": "2026-04-16T15:55:41Z"
+              },
+              {
+                "id": "qa",
+                "status": "done",
+                "completed_at": "2026-04-17T01:53:05Z"
+              },
+              {
+                "id": "reconcile",
+                "status": "done",
+                "completed_at": "2026-04-17T02:46:04Z"
+              },
+              {
+                "id": "roadmap",
+                "status": "done",
+                "completed_at": "2026-04-17T02:52:57Z"
+              },
+              {
+                "id": "roadmap-reassess",
+                "status": "done",
+                "completed_at": "2026-04-17T02:52:54Z"
+              },
+              {
+                "id": "specify",
+                "status": "done",
+                "completed_at": "2026-04-16T15:44:50Z"
+              },
+              {
+                "id": "tasks",
+                "status": "done",
+                "completed_at": "2026-04-16T16:02:38Z"
+              }
+            ]
+          }
+        ]
+      },
+      "decisions": []
+    },
+    {
+      "id": "prosauai",
+      "title": "ProsaUAI — Agentes WhatsApp",
+      "lifecycle": "building",
+      "l1": {
+        "total": 14,
+        "done": 13,
+        "pending": 1,
+        "stale": 3,
+        "blocked": 0,
+        "skipped": 0,
+        "progress_pct": 92.9,
+        "nodes": [
+          {
+            "id": "platform-new",
+            "status": "done",
+            "layer": "business",
+            "gate": "human",
+            "depends": [],
+            "optional": false,
+            "outputs": [
+              "platform.yaml"
+            ],
+            "completed_at": "2026-04-10T15:36:51Z"
+          },
+          {
+            "id": "vision",
+            "status": "done",
+            "layer": "business",
+            "gate": "human",
+            "depends": [
+              "platform-new"
+            ],
+            "optional": false,
+            "outputs": [
+              "business/vision.md"
+            ],
+            "completed_at": "2026-04-10T15:36:51Z"
+          },
+          {
+            "id": "solution-overview",
+            "status": "done",
+            "layer": "business",
+            "gate": "human",
+            "depends": [
+              "vision"
+            ],
+            "optional": false,
+            "outputs": [
+              "business/solution-overview.md"
+            ],
+            "completed_at": "2026-04-10T15:36:51Z"
+          },
+          {
+            "id": "business-process",
+            "status": "done",
+            "layer": "business",
+            "gate": "human",
+            "depends": [
+              "solution-overview"
+            ],
+            "optional": false,
+            "outputs": [
+              "business/process.md"
+            ],
+            "completed_at": "2026-04-10T15:36:51Z"
+          },
+          {
+            "id": "tech-research",
+            "status": "stale",
+            "layer": "research",
+            "gate": "1-way-door",
+            "depends": [
+              "business-process"
+            ],
+            "optional": false,
+            "outputs": [
+              "research/tech-alternatives.md"
+            ],
+            "completed_at": "2026-04-08T17:13:56Z"
+          },
+          {
+            "id": "codebase-map",
+            "status": "pending",
+            "layer": "research",
+            "gate": "auto",
+            "depends": [
+              "vision"
+            ],
+            "optional": true,
+            "outputs": [
+              "research/codebase-context.md"
+            ],
+            "completed_at": null
+          },
+          {
+            "id": "adr",
+            "status": "done",
+            "layer": "engineering",
+            "gate": "1-way-door",
+            "depends": [
+              "tech-research"
+            ],
+            "optional": false,
+            "outputs": [],
+            "completed_at": "2026-04-10T15:36:51Z"
+          },
+          {
+            "id": "blueprint",
+            "status": "done",
+            "layer": "engineering",
+            "gate": "human",
+            "depends": [
+              "adr"
+            ],
+            "optional": false,
+            "outputs": [
+              "engineering/blueprint.md"
+            ],
+            "completed_at": "2026-04-10T15:36:51Z"
+          },
+          {
+            "id": "domain-model",
+            "status": "stale",
+            "layer": "engineering",
+            "gate": "human",
+            "depends": [
+              "blueprint",
+              "business-process"
+            ],
+            "optional": false,
+            "outputs": [
+              "engineering/domain-model.md"
+            ],
+            "completed_at": "2026-04-09T14:04:34Z"
+          },
+          {
+            "id": "containers",
+            "status": "done",
+            "layer": "engineering",
+            "gate": "human",
+            "depends": [
+              "domain-model",
+              "blueprint"
+            ],
+            "optional": false,
+            "outputs": [
+              "engineering/containers.md"
+            ],
+            "completed_at": "2026-04-10T15:36:51Z"
+          },
+          {
+            "id": "context-map",
+            "status": "stale",
+            "layer": "engineering",
+            "gate": "human",
+            "depends": [
+              "domain-model",
+              "containers"
+            ],
+            "optional": false,
+            "outputs": [
+              "engineering/context-map.md"
+            ],
+            "completed_at": "2026-04-07T19:22:54Z"
+          },
+          {
+            "id": "epic-breakdown",
+            "status": "done",
+            "layer": "planning",
+            "gate": "1-way-door",
+            "depends": [
+              "domain-model",
+              "containers",
+              "context-map"
+            ],
+            "optional": false,
+            "outputs": [],
+            "completed_at": "2026-04-10T15:36:51Z"
+          },
+          {
+            "id": "roadmap",
+            "status": "done",
+            "layer": "planning",
+            "gate": "human",
+            "depends": [
+              "epic-breakdown"
+            ],
+            "optional": false,
+            "outputs": [
+              "planning/roadmap.md"
+            ],
+            "completed_at": "2026-04-10T15:36:51Z"
+          }
+        ]
+      },
+      "l2": {
+        "epics": [
+          {
+            "id": "001-channel-pipeline",
+            "title": "Channel Pipeline",
+            "status": "shipped",
+            "updated_at": "2026-05-02T22:51:16Z",
+            "total": 12,
+            "done": 11,
+            "skipped": 1,
+            "pending": 0,
+            "progress_pct": 100.0,
+            "nodes": [
+              {
+                "id": "analyze",
+                "status": "done",
+                "completed_at": "2026-04-10T10:34:04Z"
+              },
+              {
+                "id": "analyze-post",
+                "status": "done",
+                "completed_at": "2026-04-10T10:34:04Z"
+              },
+              {
+                "id": "clarify",
+                "status": "done",
+                "completed_at": "2026-04-10T10:34:04Z"
+              },
+              {
+                "id": "epic-context",
+                "status": "done",
+                "completed_at": "2026-04-10T10:34:04Z"
+              },
+              {
+                "id": "implement",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "judge",
+                "status": "done",
+                "completed_at": "2026-04-10T10:34:04Z"
+              },
+              {
+                "id": "plan",
+                "status": "done",
+                "completed_at": "2026-04-10T10:34:04Z"
+              },
+              {
+                "id": "qa",
+                "status": "done",
+                "completed_at": "2026-04-10T10:34:04Z"
+              },
+              {
+                "id": "reconcile",
+                "status": "done",
+                "completed_at": "2026-04-10T10:34:04Z"
+              },
+              {
+                "id": "roadmap-reassess",
+                "status": "done",
+                "completed_at": "2026-04-10T10:34:04Z"
+              },
+              {
+                "id": "specify",
+                "status": "done",
+                "completed_at": "2026-04-10T10:34:04Z"
+              },
+              {
+                "id": "tasks",
+                "status": "done",
+                "completed_at": "2026-04-10T10:34:04Z"
+              }
+            ]
+          },
+          {
+            "id": "002-observability",
+            "title": "Observability — Tracing total da jornada de mensagem",
+            "status": "shipped",
+            "updated_at": "2026-05-02T22:51:16Z",
+            "total": 12,
+            "done": 10,
+            "skipped": 2,
+            "pending": 0,
+            "progress_pct": 100.0,
+            "nodes": [
+              {
+                "id": "analyze",
+                "status": "done",
+                "completed_at": "2026-04-10T15:36:51Z"
+              },
+              {
+                "id": "analyze-post",
+                "status": "done",
+                "completed_at": "2026-04-10T15:36:51Z"
+              },
+              {
+                "id": "clarify",
+                "status": "done",
+                "completed_at": "2026-04-10T15:36:51Z"
+              },
+              {
+                "id": "epic-context",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "implement",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "judge",
+                "status": "done",
+                "completed_at": "2026-04-10T15:36:51Z"
+              },
+              {
+                "id": "plan",
+                "status": "done",
+                "completed_at": "2026-04-10T15:36:51Z"
+              },
+              {
+                "id": "qa",
+                "status": "done",
+                "completed_at": "2026-04-10T15:36:51Z"
+              },
+              {
+                "id": "reconcile",
+                "status": "done",
+                "completed_at": "2026-04-10T15:36:51Z"
+              },
+              {
+                "id": "roadmap-reassess",
+                "status": "done",
+                "completed_at": "2026-04-10T15:36:51Z"
+              },
+              {
+                "id": "specify",
+                "status": "done",
+                "completed_at": "2026-04-10T15:36:51Z"
+              },
+              {
+                "id": "tasks",
+                "status": "done",
+                "completed_at": "2026-04-10T15:36:51Z"
+              }
+            ]
+          },
+          {
+            "id": "003-multi-tenant-foundation",
+            "title": "Multi-Tenant Foundation — Auth + Parser Reality + Deploy",
+            "status": "shipped",
+            "updated_at": "2026-05-02T22:51:16Z",
+            "total": 15,
+            "done": 15,
+            "skipped": 0,
+            "pending": 0,
+            "progress_pct": 100.0,
+            "nodes": [
+              {
+                "id": "T004",
+                "status": "done",
+                "completed_at": "2026-04-10T16:23:52Z"
+              },
+              {
+                "id": "analyze",
+                "status": "done",
+                "completed_at": "2026-04-10T16:16:39Z"
+              },
+              {
+                "id": "analyze-post",
+                "status": "done",
+                "completed_at": "2026-04-10T21:28:57Z"
+              },
+              {
+                "id": "clarify",
+                "status": "done",
+                "completed_at": "2026-04-10T15:58:58Z"
+              },
+              {
+                "id": "config",
+                "status": "done",
+                "completed_at": "2026-04-10T16:25:36Z"
+              },
+              {
+                "id": "conftest",
+                "status": "done",
+                "completed_at": "2026-04-10T16:52:21Z"
+              },
+              {
+                "id": "epic-context",
+                "status": "done",
+                "completed_at": "2026-04-10T15:53:12Z"
+              },
+              {
+                "id": "implement",
+                "status": "done",
+                "completed_at": null
+              },
+              {
+                "id": "judge",
+                "status": "done",
+                "completed_at": "2026-04-10T21:41:35Z"
+              },
+              {
+                "id": "plan",
+                "status": "done",
+                "completed_at": "2026-04-10T16:07:48Z"
+              },
+              {
+                "id": "qa",
+                "status": "done",
+                "completed_at": "2026-04-10T21:47:54Z"
+              },
+              {
+                "id": "reconcile",
+                "status": "done",
+                "completed_at": "2026-04-10T21:55:11Z"
+              },
+              {
+                "id": "roadmap-reassess",
+                "status": "done",
+                "completed_at": "2026-04-10T21:58:10Z"
+              },
+              {
+                "id": "specify",
+                "status": "done",
+                "completed_at": "2026-04-10T15:56:09Z"
+              },
+              {
+                "id": "tasks",
+                "status": "done",
+                "completed_at": "2026-04-10T16:12:04Z"
+              }
+            ]
+          },
+          {
+            "id": "004-router-mece",
+            "title": "Router MECE — Classificacao pura + regras externalizadas + agent resolution",
+            "status": "shipped",
+            "updated_at": "2026-05-02T22:51:16Z",
+            "total": 13,
+            "done": 13,
+            "skipped": 0,
+            "pending": 0,
+            "progress_pct": 100.0,
+            "nodes": [
+              {
+                "id": "analyze",
+                "status": "done",
+                "completed_at": "2026-04-10T23:38:06Z"
+              },
+              {
+                "id": "analyze-post",
+                "status": "done",
+                "completed_at": "2026-04-11T13:52:20Z"
+              },
+              {
+                "id": "clarify",
+                "status": "done",
+                "completed_at": "2026-04-10T23:15:40Z"
+              },
+              {
+                "id": "epic-context",
+                "status": "done",
+                "completed_at": "2026-04-10T23:11:09Z"
+              },
+              {
+                "id": "implement",
+                "status": "done",
+                "completed_at": "2026-04-11T12:10:15Z"
+              },
+              {
+                "id": "judge",
+                "status": "done",
+                "completed_at": "2026-04-11T14:05:17Z"
+              },
+              {
+                "id": "plan",
+                "status": "done",
+                "completed_at": "2026-04-10T23:27:28Z"
+              },
+              {
+                "id": "qa",
+                "status": "done",
+                "completed_at": "2026-04-11T14:14:56Z"
+              },
+              {
+                "id": "reconcile",
+                "status": "done",
+                "completed_at": "2026-04-11T14:22:36Z"
+              },
+              {
+                "id": "roadmap",
+                "status": "done",
+                "completed_at": "2026-04-11T14:25:55Z"
+              },
+              {
+                "id": "roadmap-reassess",
+                "status": "done",
+                "completed_at": "2026-04-11T14:25:48Z"
+              },
+              {
+                "id": "specify",
+                "status": "done",
+                "completed_at": "2026-04-10T23:12:14Z"
+              },
+              {
+                "id": "tasks",
+                "status": "done",
+                "completed_at": "2026-04-10T23:33:25Z"
+              }
+            ]
+          },
+          {
+            "id": "005-conversation-core",
+            "title": "Epic 005 — Conversation Core",
+            "status": "shipped",
+            "updated_at": "2026-05-02T22:51:16Z",
+            "total": 13,
+            "done": 13,
+            "skipped": 0,
+            "pending": 0,
+            "progress_pct": 100.0,
+            "nodes": [
+              {
+                "id": "analyze",
+                "status": "done",
+                "completed_at": "2026-04-12T12:35:10Z"
+              },
+              {
+                "id": "analyze-post",
+                "status": "done",
+                "completed_at": "2026-04-12T16:26:04Z"
+              },
+              {
+                "id": "clarify",
+                "status": "done",
+                "completed_at": "2026-04-12T12:12:10Z"
+              },
+              {
+                "id": "epic-context",
+                "status": "done",
+                "completed_at": "2026-04-12T12:04:35Z"
+              },
+              {
+                "id": "implement",
+                "status": "done",
+                "completed_at": "2026-04-12T15:59:29Z"
+              },
+              {
+                "id": "judge",
+                "status": "done",
+                "completed_at": "2026-04-12T16:38:30Z"
+              },
+              {
+                "id": "plan",
+                "status": "done",
+                "completed_at": "2026-04-12T12:24:03Z"
+              },
+              {
+                "id": "qa",
+                "status": "done",
+                "completed_at": "2026-04-12T16:46:21Z"
+              },
+              {
+                "id": "reconcile",
+                "status": "done",
+                "completed_at": "2026-04-12T16:53:28Z"
+              },
+              {
+                "id": "roadmap",
+                "status": "done",
+                "completed_at": "2026-04-12T16:56:07Z"
+              },
+              {
+                "id": "roadmap-reassess",
+                "status": "done",
+                "completed_at": "2026-04-12T16:56:02Z"
+              },
+              {
+                "id": "specify",
+                "status": "done",
+                "completed_at": "2026-04-12T12:07:29Z"
+              },
+              {
+                "id": "tasks",
+                "status": "done",
+                "completed_at": "2026-04-12T12:28:32Z"
+              }
+            ]
+          },
+          {
+            "id": "006-production-readiness",
+            "title": "Production Readiness — Schema isolation, log persistence, data retention, VPS deploy",
+            "status": "shipped",
+            "updated_at": "2026-05-02T22:51:16Z",
+            "total": 14,
+            "done": 14,
+            "skipped": 0,
+            "pending": 0,
+            "progress_pct": 100.0,
+            "nodes": [
+              {
+                "id": "analyze",
+                "status": "done",
+                "completed_at": "2026-04-12T22:08:13Z"
+              },
+              {
+                "id": "analyze-post",
+                "status": "done",
+                "completed_at": "2026-04-12T23:02:47Z"
+              },
+              {
+                "id": "clarify",
+                "status": "done",
+                "completed_at": "2026-04-12T21:49:56Z"
+              },
+              {
+                "id": "epic-context",
+                "status": "done",
+                "completed_at": "2026-04-12T20:51:11Z"
+              },
+              {
+                "id": "implement",
+                "status": "done",
+                "completed_at": "2026-04-12T22:54:07Z"
+              },
+              {
+                "id": "judge",
+                "status": "done",
+                "completed_at": "2026-04-12T23:14:32Z"
+              },
+              {
+                "id": "plan",
+                "status": "done",
+                "completed_at": "2026-04-12T22:01:02Z"
+              },
+              {
+                "id": "qa",
+                "status": "done",
+                "completed_at": "2026-04-12T23:23:28Z"
+              },
+              {
+                "id": "reconcile",
+                "status": "done",
+                "completed_at": "2026-04-12T23:30:41Z"
+              },
+              {
+                "id": "roadmap",
+                "status": "done",
+                "completed_at": "2026-04-12T23:33:45Z"
+              },
+              {
+                "id": "roadmap-reassess",
+                "status": "done",
+                "completed_at": "2026-04-12T23:33:39Z"
+              },
+              {
+                "id": "specify",
+                "status": "done",
+                "completed_at": "2026-04-12T21:45:29Z"
+              },
+              {
+                "id": "tasks",
+                "status": "done",
+                "completed_at": "2026-04-12T22:04:36Z"
+              },
+              {
+                "id": "verify",
+                "status": "done",
+                "completed_at": "2026-04-12T22:30:29Z"
+              }
+            ]
+          },
+          {
+            "id": "007-admin-front-dashboard",
+            "title": "Admin Front — Dashboard Inicial",
+            "status": "shipped",
+            "updated_at": "2026-05-02T22:51:16Z",
+            "total": 13,
+            "done": 13,
+            "skipped": 0,
+            "pending": 0,
+            "progress_pct": 100.0,
+            "nodes": [
+              {
+                "id": "analyze",
+                "status": "done",
+                "completed_at": "2026-04-15T20:46:05Z"
+              },
+              {
+                "id": "analyze-post",
+                "status": "done",
+                "completed_at": "2026-04-15T21:52:47Z"
+              },
+              {
+                "id": "clarify",
+                "status": "done",
+                "completed_at": "2026-04-15T20:32:31Z"
+              },
+              {
+                "id": "epic-context",
+                "status": "done",
+                "completed_at": "2026-04-15T20:13:54Z"
+              },
+              {
+                "id": "implement",
+                "status": "done",
+                "completed_at": "2026-04-15T21:46:35Z"
+              },
+              {
+                "id": "judge",
+                "status": "done",
+                "completed_at": "2026-04-15T22:07:12Z"
+              },
+              {
+                "id": "plan",
+                "status": "done",
+                "completed_at": "2026-04-15T20:39:58Z"
+              },
+              {
+                "id": "qa",
+                "status": "done",
+                "completed_at": "2026-04-15T22:33:59Z"
+              },
+              {
+                "id": "reconcile",
+                "status": "done",
+                "completed_at": "2026-04-15T22:41:07Z"
+              },
+              {
+                "id": "roadmap",
+                "status": "done",
+                "completed_at": "2026-04-15T22:44:54Z"
+              },
+              {
+                "id": "roadmap-reassess",
+                "status": "done",
+                "completed_at": "2026-04-15T22:44:41Z"
+              },
+              {
+                "id": "specify",
+                "status": "done",
+                "completed_at": "2026-04-15T20:29:28Z"
+              },
+              {
+                "id": "tasks",
+                "status": "done",
+                "completed_at": "2026-04-15T20:43:15Z"
+              }
+            ]
+          },
+          {
+            "id": "008-admin-evolution",
+            "title": "Admin Evolution — Plataforma Operacional Completa",
+            "status": "shipped",
+            "updated_at": "2026-05-02T22:51:16Z",
+            "total": 12,
+            "done": 12,
+            "skipped": 0,
+            "pending": 0,
+            "progress_pct": 100.0,
+            "nodes": [
+              {
+                "id": "analyze",
+                "status": "done",
+                "completed_at": "2026-04-17T12:09:07Z"
+              },
+              {
+                "id": "analyze-post",
+                "status": "done",
+                "completed_at": "2026-04-17T17:31:22Z"
+              },
+              {
+                "id": "clarify",
+                "status": "done",
+                "completed_at": "2026-04-17T11:48:35Z"
+              },
+              {
+                "id": "epic-context",
+                "status": "done",
+                "completed_at": "2026-04-17T11:33:18Z"
+              },
+              {
+                "id": "implement",
+                "status": "done",
+                "completed_at": "2026-04-17T17:29:04Z"
+              },
+              {
+                "id": "judge",
+                "status": "done",
+                "completed_at": "2026-04-17T17:51:03Z"
+              },
+              {
+                "id": "plan",
+                "status": "done",
+                "completed_at": "2026-04-17T12:00:07Z"
+              },
+              {
+                "id": "qa",
+                "status": "done",
+                "completed_at": "2026-04-17T18:00:27Z"
+              },
+              {
+                "id": "reconcile",
+                "status": "done",
+                "completed_at": "2026-04-17T18:05:16Z"
+              },
+              {
+                "id": "roadmap-reassess",
+                "status": "done",
+                "completed_at": "2026-04-17T18:10:09Z"
+              },
+              {
+                "id": "specify",
+                "status": "done",
+                "completed_at": "2026-04-17T11:44:36Z"
+              },
+              {
+                "id": "tasks",
+                "status": "done",
+                "completed_at": "2026-04-17T12:06:47Z"
+              }
+            ]
+          },
+          {
+            "id": "009-channel-ingestion-and-content-processing",
+            "title": "Channel Ingestion Normalization + Content Processing",
+            "status": "shipped",
+            "updated_at": "2026-05-02T22:51:16Z",
+            "total": 12,
+            "done": 12,
+            "skipped": 0,
+            "pending": 0,
+            "progress_pct": 100.0,
+            "nodes": [
+              {
+                "id": "analyze",
+                "status": "done",
+                "completed_at": "2026-04-19T20:56:37Z"
+              },
+              {
+                "id": "analyze-post",
+                "status": "done",
+                "completed_at": "2026-04-20T03:17:57Z"
+              },
+              {
+                "id": "clarify",
+                "status": "done",
+                "completed_at": "2026-04-19T20:30:21Z"
+              },
+              {
+                "id": "epic-context",
+                "status": "done",
+                "completed_at": "2026-04-19T20:14:23Z"
+              },
+              {
+                "id": "implement",
+                "status": "done",
+                "completed_at": "2026-04-20T03:14:59Z"
+              },
+              {
+                "id": "judge",
+                "status": "done",
+                "completed_at": "2026-04-20T04:10:30Z"
+              },
+              {
+                "id": "plan",
+                "status": "done",
+                "completed_at": "2026-04-19T20:44:25Z"
+              },
+              {
+                "id": "qa",
+                "status": "done",
+                "completed_at": "2026-04-20T04:25:03Z"
+              },
+              {
+                "id": "reconcile",
+                "status": "done",
+                "completed_at": "2026-04-20T04:28:34Z"
+              },
+              {
+                "id": "roadmap-reassess",
+                "status": "done",
+                "completed_at": "2026-04-20T04:32:30Z"
+              },
+              {
+                "id": "specify",
+                "status": "done",
+                "completed_at": "2026-04-19T20:25:53Z"
+              },
+              {
+                "id": "tasks",
+                "status": "done",
+                "completed_at": "2026-04-19T20:53:32Z"
+              }
+            ]
+          },
+          {
+            "id": "010-handoff-engine-inbox",
+            "title": "Handoff Engine + Multi-Helpdesk Integration",
+            "status": "shipped",
+            "updated_at": "2026-04-24T01:34:33Z",
+            "total": 13,
+            "done": 13,
+            "skipped": 0,
+            "pending": 0,
+            "progress_pct": 100.0,
+            "nodes": [
+              {
+                "id": "analyze",
+                "status": "done",
+                "completed_at": "2026-04-23T14:27:00Z"
+              },
+              {
+                "id": "analyze-post",
+                "status": "done",
+                "completed_at": "2026-04-24T01:04:04Z"
+              },
+              {
+                "id": "clarify",
+                "status": "done",
+                "completed_at": "2026-04-23T13:57:09Z"
+              },
+              {
+                "id": "epic-context",
+                "status": "done",
+                "completed_at": "2026-04-23T11:05:15Z"
+              },
+              {
+                "id": "implement",
+                "status": "done",
+                "completed_at": null
+              },
+              {
+                "id": "judge",
+                "status": "done",
+                "completed_at": "2026-04-24T01:17:44Z"
+              },
+              {
+                "id": "plan",
+                "status": "done",
+                "completed_at": "2026-04-23T14:03:15Z"
+              },
+              {
+                "id": "qa",
+                "status": "done",
+                "completed_at": "2026-04-24T01:24:04Z"
+              },
+              {
+                "id": "reconcile",
+                "status": "done",
+                "completed_at": "2026-04-24T01:27:27Z"
+              },
+              {
+                "id": "roadmap",
+                "status": "done",
+                "completed_at": "2026-04-24T01:34:43Z"
+              },
+              {
+                "id": "roadmap-reassess",
+                "status": "done",
+                "completed_at": "2026-04-24T01:34:33Z"
+              },
+              {
+                "id": "specify",
+                "status": "done",
+                "completed_at": "2026-04-23T13:52:42Z"
+              },
+              {
+                "id": "tasks",
+                "status": "done",
+                "completed_at": "2026-04-23T14:21:02Z"
+              }
+            ]
+          },
+          {
+            "id": "011-evals",
+            "title": "Evals — Offline (DeepEval) + Online (heuristico) + Dataset incremental",
+            "status": "shipped",
+            "updated_at": "2026-04-25T13:42:41Z",
+            "total": 13,
+            "done": 13,
+            "skipped": 0,
+            "pending": 0,
+            "progress_pct": 100.0,
+            "nodes": [
+              {
+                "id": "analyze",
+                "status": "done",
+                "completed_at": "2026-04-24T17:48:54Z"
+              },
+              {
+                "id": "analyze-post",
+                "status": "done",
+                "completed_at": "2026-04-25T13:00:35Z"
+              },
+              {
+                "id": "clarify",
+                "status": "done",
+                "completed_at": "2026-04-24T17:07:54Z"
+              },
+              {
+                "id": "epic-context",
+                "status": "done",
+                "completed_at": "2026-04-24T13:40:52Z"
+              },
+              {
+                "id": "implement",
+                "status": "done",
+                "completed_at": null
+              },
+              {
+                "id": "judge",
+                "status": "done",
+                "completed_at": "2026-04-25T13:19:17Z"
+              },
+              {
+                "id": "plan",
+                "status": "done",
+                "completed_at": "2026-04-24T17:16:53Z"
+              },
+              {
+                "id": "qa",
+                "status": "done",
+                "completed_at": "2026-04-25T13:35:35Z"
+              },
+              {
+                "id": "reconcile",
+                "status": "done",
+                "completed_at": "2026-04-25T13:38:13Z"
+              },
+              {
+                "id": "roadmap",
+                "status": "done",
+                "completed_at": "2026-04-25T13:42:52Z"
+              },
+              {
+                "id": "roadmap-reassess",
+                "status": "done",
+                "completed_at": "2026-04-25T13:42:41Z"
+              },
+              {
+                "id": "specify",
+                "status": "done",
+                "completed_at": "2026-04-24T17:02:27Z"
+              },
+              {
+                "id": "tasks",
+                "status": "done",
+                "completed_at": "2026-04-24T17:31:51Z"
+              }
+            ]
+          },
+          {
+            "id": "012-tenant-knowledge-base-rag",
+            "title": "Tenant Knowledge Base — RAG pgvector + upload admin",
+            "status": "shipped",
+            "updated_at": "2026-04-26T17:16:47Z",
+            "total": 13,
+            "done": 13,
+            "skipped": 0,
+            "pending": 0,
+            "progress_pct": 100.0,
+            "nodes": [
+              {
+                "id": "analyze",
+                "status": "done",
+                "completed_at": "2026-04-26T12:29:56Z"
+              },
+              {
+                "id": "analyze-post",
+                "status": "done",
+                "completed_at": "2026-04-26T16:27:39Z"
+              },
+              {
+                "id": "clarify",
+                "status": "done",
+                "completed_at": "2026-04-26T12:06:00Z"
+              },
+              {
+                "id": "epic-context",
+                "status": "done",
+                "completed_at": "2026-04-24T16:28:00Z"
+              },
+              {
+                "id": "implement",
+                "status": "done",
+                "completed_at": "2026-04-26T16:26:00Z"
+              },
+              {
+                "id": "judge",
+                "status": "done",
+                "completed_at": "2026-04-26T16:53:18Z"
+              },
+              {
+                "id": "plan",
+                "status": "done",
+                "completed_at": "2026-04-26T12:11:20Z"
+              },
+              {
+                "id": "qa",
+                "status": "done",
+                "completed_at": "2026-04-26T17:09:05Z"
+              },
+              {
+                "id": "reconcile",
+                "status": "done",
+                "completed_at": "2026-04-26T17:12:30Z"
+              },
+              {
+                "id": "roadmap",
+                "status": "done",
+                "completed_at": "2026-04-26T17:16:55Z"
+              },
+              {
+                "id": "roadmap-reassess",
+                "status": "done",
+                "completed_at": "2026-04-26T17:16:47Z"
+              },
+              {
+                "id": "specify",
+                "status": "done",
+                "completed_at": "2026-04-26T12:00:24Z"
+              },
+              {
+                "id": "tasks",
+                "status": "done",
+                "completed_at": "2026-04-26T12:26:50Z"
+              }
+            ]
+          },
+          {
+            "id": "013-agent-tools-v2",
+            "title": "Agent Tools v2 — Connector framework declarativo + Google Calendar lighthouse + admin UI",
+            "status": "shipped",
+            "updated_at": "2026-04-27T13:05:24Z",
+            "total": 13,
+            "done": 13,
+            "skipped": 0,
+            "pending": 0,
+            "progress_pct": 100.0,
+            "nodes": [
+              {
+                "id": "analyze",
+                "status": "done",
+                "completed_at": "2026-04-26T22:08:49Z"
+              },
+              {
+                "id": "analyze-post",
+                "status": "done",
+                "completed_at": "2026-04-27T12:13:47Z"
+              },
+              {
+                "id": "clarify",
+                "status": "done",
+                "completed_at": "2026-04-26T21:49:13Z"
+              },
+              {
+                "id": "epic-context",
+                "status": "done",
+                "completed_at": "2026-04-25T11:31:15Z"
+              },
+              {
+                "id": "implement",
+                "status": "done",
+                "completed_at": "2026-04-27T12:11:30Z"
+              },
+              {
+                "id": "judge",
+                "status": "done",
+                "completed_at": "2026-04-27T12:39:31Z"
+              },
+              {
+                "id": "plan",
+                "status": "done",
+                "completed_at": "2026-04-26T21:59:39Z"
+              },
+              {
+                "id": "qa",
+                "status": "done",
+                "completed_at": "2026-04-27T12:51:34Z"
+              },
+              {
+                "id": "reconcile",
+                "status": "done",
+                "completed_at": "2026-04-27T13:01:17Z"
+              },
+              {
+                "id": "roadmap",
+                "status": "done",
+                "completed_at": "2026-04-27T13:05:35Z"
+              },
+              {
+                "id": "roadmap-reassess",
+                "status": "done",
+                "completed_at": "2026-04-27T13:05:24Z"
+              },
+              {
+                "id": "specify",
+                "status": "done",
+                "completed_at": "2026-04-26T21:44:05Z"
+              },
+              {
+                "id": "tasks",
+                "status": "done",
+                "completed_at": "2026-04-26T22:06:02Z"
+              }
+            ]
+          },
+          {
+            "id": "014-alerting-whatsapp-quality",
+            "title": "Alerting + WhatsApp Quality — Prometheus self-hosted + quality monitoring dual-path + per-number breaker + warm-up cap + admin Saude tab",
+            "status": "shipped",
+            "updated_at": "2026-04-27T19:32:09Z",
+            "total": 13,
+            "done": 13,
+            "skipped": 0,
+            "pending": 0,
+            "progress_pct": 100.0,
+            "nodes": [
+              {
+                "id": "analyze",
+                "status": "done",
+                "completed_at": "2026-04-27T14:52:34Z"
+              },
+              {
+                "id": "analyze-post",
+                "status": "done",
+                "completed_at": "2026-04-27T18:44:23Z"
+              },
+              {
+                "id": "clarify",
+                "status": "done",
+                "completed_at": "2026-04-27T14:08:14Z"
+              },
+              {
+                "id": "epic-context",
+                "status": "done",
+                "completed_at": "2026-04-26T11:56:41Z"
+              },
+              {
+                "id": "implement",
+                "status": "done",
+                "completed_at": "2026-04-27T18:40:01Z"
+              },
+              {
+                "id": "judge",
+                "status": "done",
+                "completed_at": null
+              },
+              {
+                "id": "plan",
+                "status": "done",
+                "completed_at": "2026-04-27T14:20:18Z"
+              },
+              {
+                "id": "qa",
+                "status": "done",
+                "completed_at": "2026-04-27T18:57:28Z"
+              },
+              {
+                "id": "reconcile",
+                "status": "done",
+                "completed_at": "2026-04-27T19:29:30Z"
+              },
+              {
+                "id": "roadmap",
+                "status": "done",
+                "completed_at": "2026-04-27T19:32:13Z"
+              },
+              {
+                "id": "roadmap-reassess",
+                "status": "done",
+                "completed_at": "2026-04-27T19:32:09Z"
+              },
+              {
+                "id": "specify",
+                "status": "done",
+                "completed_at": "2026-04-27T14:02:55Z"
+              },
+              {
+                "id": "tasks",
+                "status": "done",
+                "completed_at": "2026-04-27T14:32:11Z"
+              }
+            ]
+          },
+          {
+            "id": "015-agent-pipeline-steps",
+            "title": "Agent Pipeline Steps — multi-step reasoning declarativo (classifier + clarifier + resolver + specialist) com eval/trace per step",
+            "status": "shipped",
+            "updated_at": "2026-04-28T02:57:59Z",
+            "total": 13,
+            "done": 13,
+            "skipped": 0,
+            "pending": 0,
+            "progress_pct": 100.0,
+            "nodes": [
+              {
+                "id": "analyze",
+                "status": "done",
+                "completed_at": "2026-04-27T23:20:11Z"
+              },
+              {
+                "id": "analyze-post",
+                "status": "done",
+                "completed_at": "2026-04-28T02:18:45Z"
+              },
+              {
+                "id": "clarify",
+                "status": "done",
+                "completed_at": "2026-04-27T22:51:43Z"
+              },
+              {
+                "id": "epic-context",
+                "status": "done",
+                "completed_at": "2026-04-26T20:53:20Z"
+              },
+              {
+                "id": "implement",
+                "status": "done",
+                "completed_at": "2026-04-28T02:16:59Z"
+              },
+              {
+                "id": "judge",
+                "status": "done",
+                "completed_at": "2026-04-28T02:36:58Z"
+              },
+              {
+                "id": "plan",
+                "status": "done",
+                "completed_at": "2026-04-27T23:01:20Z"
+              },
+              {
+                "id": "qa",
+                "status": "done",
+                "completed_at": "2026-04-28T02:47:53Z"
+              },
+              {
+                "id": "reconcile",
+                "status": "done",
+                "completed_at": "2026-04-28T02:51:33Z"
+              },
+              {
+                "id": "roadmap",
+                "status": "done",
+                "completed_at": "2026-04-28T02:58:05Z"
+              },
+              {
+                "id": "roadmap-reassess",
+                "status": "done",
+                "completed_at": "2026-04-28T02:57:59Z"
+              },
+              {
+                "id": "specify",
+                "status": "done",
+                "completed_at": "2026-04-27T22:47:37Z"
+              },
+              {
+                "id": "tasks",
+                "status": "done",
+                "completed_at": "2026-04-27T23:17:59Z"
+              }
+            ]
+          },
+          {
+            "id": "016-trigger-engine",
+            "title": "Trigger Engine — engine declarativo de mensagens proativas (cron-driven, 3 trigger types pre-built, cooldown granular, history viewer)",
+            "status": "shipped",
+            "updated_at": "2026-05-02T22:51:16Z",
+            "total": 13,
+            "done": 13,
+            "skipped": 0,
+            "pending": 0,
+            "progress_pct": 100.0,
+            "nodes": [
+              {
+                "id": "analyze",
+                "status": "done",
+                "completed_at": "2026-04-28T11:14:50Z"
+              },
+              {
+                "id": "analyze-post",
+                "status": "done",
+                "completed_at": "2026-04-28T16:41:44Z"
+              },
+              {
+                "id": "clarify",
+                "status": "done",
+                "completed_at": "2026-04-28T10:50:34Z"
+              },
+              {
+                "id": "epic-context",
+                "status": "done",
+                "completed_at": "2026-04-29T12:53:11Z"
+              },
+              {
+                "id": "implement",
+                "status": "done",
+                "completed_at": "2026-04-28T16:39:48Z"
+              },
+              {
+                "id": "judge",
+                "status": "done",
+                "completed_at": "2026-04-28T20:56:37Z"
+              },
+              {
+                "id": "plan",
+                "status": "done",
+                "completed_at": "2026-04-28T10:58:52Z"
+              },
+              {
+                "id": "qa",
+                "status": "done",
+                "completed_at": "2026-04-28T18:22:40Z"
+              },
+              {
+                "id": "reconcile",
+                "status": "done",
+                "completed_at": "2026-04-29T12:51:25Z"
+              },
+              {
+                "id": "roadmap",
+                "status": "done",
+                "completed_at": "2026-04-29T12:53:10Z"
+              },
+              {
+                "id": "roadmap-reassess",
+                "status": "done",
+                "completed_at": "2026-04-29T13:13:38Z"
+              },
+              {
+                "id": "specify",
+                "status": "done",
+                "completed_at": "2026-04-28T10:45:07Z"
+              },
+              {
+                "id": "tasks",
+                "status": "done",
+                "completed_at": "2026-04-28T11:12:18Z"
+              }
+            ]
+          }
+        ]
+      },
+      "decisions": []
+    },
+    {
+      "id": "resenhai",
+      "title": "ResenhAI",
+      "lifecycle": "production",
+      "l1": {
+        "total": 13,
+        "done": 13,
+        "pending": 0,
+        "stale": 1,
+        "blocked": 0,
+        "skipped": 0,
+        "progress_pct": 100.0,
+        "nodes": [
+          {
+            "id": "platform-new",
+            "status": "done",
+            "layer": "business",
+            "gate": "human",
+            "depends": [],
+            "optional": false,
+            "outputs": [
+              "platform.yaml"
+            ],
+            "completed_at": "2026-05-03T23:51:51Z"
+          },
+          {
+            "id": "vision",
+            "status": "done",
+            "layer": "business",
+            "gate": "human",
+            "depends": [
+              "platform-new"
+            ],
+            "optional": false,
+            "outputs": [
+              "business/vision.md"
+            ],
+            "completed_at": "2026-05-04T13:40:20Z"
+          },
+          {
+            "id": "solution-overview",
+            "status": "done",
+            "layer": "business",
+            "gate": "human",
+            "depends": [
+              "vision"
+            ],
+            "optional": false,
+            "outputs": [
+              "business/solution-overview.md"
+            ],
+            "completed_at": "2026-05-04T13:47:39Z"
+          },
+          {
+            "id": "business-process",
+            "status": "done",
+            "layer": "business",
+            "gate": "human",
+            "depends": [
+              "solution-overview"
+            ],
+            "optional": false,
+            "outputs": [
+              "business/process.md"
+            ],
+            "completed_at": "2026-05-04T14:10:16Z"
+          },
+          {
+            "id": "tech-research",
+            "status": "done",
+            "layer": "research",
+            "gate": "1-way-door",
+            "depends": [
+              "business-process"
+            ],
+            "optional": false,
+            "outputs": [
+              "research/tech-alternatives.md"
+            ],
+            "completed_at": "2026-05-04T17:20:01Z"
+          },
+          {
+            "id": "codebase-map",
+            "status": "stale",
+            "layer": "research",
+            "gate": "auto",
+            "depends": [
+              "vision"
+            ],
+            "optional": true,
+            "outputs": [
+              "research/codebase-context.md"
+            ],
+            "completed_at": "2026-05-04T12:07:18Z"
+          },
+          {
+            "id": "adr",
+            "status": "done",
+            "layer": "engineering",
+            "gate": "1-way-door",
+            "depends": [
+              "tech-research"
+            ],
+            "optional": false,
+            "outputs": [],
+            "completed_at": "2026-05-04T17:47:36Z"
+          },
+          {
+            "id": "blueprint",
+            "status": "done",
+            "layer": "engineering",
+            "gate": "human",
+            "depends": [
+              "adr"
+            ],
+            "optional": false,
+            "outputs": [
+              "engineering/blueprint.md"
+            ],
+            "completed_at": "2026-05-04T17:57:49Z"
+          },
+          {
+            "id": "domain-model",
+            "status": "done",
+            "layer": "engineering",
+            "gate": "human",
+            "depends": [
+              "blueprint",
+              "business-process"
+            ],
+            "optional": false,
+            "outputs": [
+              "engineering/domain-model.md"
+            ],
+            "completed_at": "2026-05-05T10:48:38Z"
+          },
+          {
+            "id": "containers",
+            "status": "done",
+            "layer": "engineering",
+            "gate": "human",
+            "depends": [
+              "domain-model",
+              "blueprint"
+            ],
+            "optional": false,
+            "outputs": [
+              "engineering/containers.md"
+            ],
+            "completed_at": "2026-05-05T10:50:37Z"
+          },
+          {
+            "id": "context-map",
+            "status": "done",
+            "layer": "engineering",
+            "gate": "human",
+            "depends": [
+              "domain-model",
+              "containers"
+            ],
+            "optional": false,
+            "outputs": [
+              "engineering/context-map.md"
+            ],
+            "completed_at": "2026-05-05T10:51:54Z"
+          },
+          {
+            "id": "epic-breakdown",
+            "status": "done",
+            "layer": "planning",
+            "gate": "1-way-door",
+            "depends": [
+              "domain-model",
+              "containers",
+              "context-map"
+            ],
+            "optional": false,
+            "outputs": [],
+            "completed_at": "2026-05-05T11:05:33Z"
+          },
+          {
+            "id": "roadmap",
+            "status": "done",
+            "layer": "planning",
+            "gate": "human",
+            "depends": [
+              "epic-breakdown"
+            ],
+            "optional": false,
+            "outputs": [
+              "planning/roadmap.md"
+            ],
+            "completed_at": "2026-05-05T11:07:21Z"
+          }
+        ]
+      },
+      "l2": {
+        "epics": [
+          {
+            "id": "000-foundation",
+            "title": "Epic 000: Foundation — construir base do produto",
+            "status": "shipped",
+            "updated_at": "2026-05-05T11:41:06Z",
+            "total": 12,
+            "done": 1,
+            "skipped": 11,
+            "pending": 0,
+            "progress_pct": 100.0,
+            "nodes": [
+              {
+                "id": "analyze",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "analyze-post",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "clarify",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "epic-context",
+                "status": "done",
+                "completed_at": "2026-05-05T11:40:22Z"
+              },
+              {
+                "id": "implement",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "judge",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "plan",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "qa",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "reconcile",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "roadmap-reassess",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "specify",
+                "status": "skipped",
+                "completed_at": null
+              },
+              {
+                "id": "tasks",
+                "status": "skipped",
+                "completed_at": null
+              }
+            ]
+          },
+          {
+            "id": "001-stripe",
+            "title": "Epic 001: Cobrança Stripe — destrava receita e classifica usuários em tier",
+            "status": "in_progress",
+            "updated_at": "2026-05-05T11:43:02Z",
+            "total": 12,
+            "done": 1,
+            "skipped": 0,
+            "pending": 11,
+            "progress_pct": 8.3,
+            "nodes": [
+              {
+                "id": "analyze",
+                "status": "pending",
+                "completed_at": null
+              },
+              {
+                "id": "analyze-post",
+                "status": "pending",
+                "completed_at": null
+              },
+              {
+                "id": "clarify",
+                "status": "pending",
+                "completed_at": null
+              },
+              {
+                "id": "epic-context",
+                "status": "done",
+                "completed_at": "2026-05-05T11:43:02Z"
+              },
+              {
+                "id": "implement",
+                "status": "pending",
+                "completed_at": null
+              },
+              {
+                "id": "judge",
+                "status": "pending",
+                "completed_at": null
+              },
+              {
+                "id": "plan",
+                "status": "pending",
+                "completed_at": null
+              },
+              {
+                "id": "qa",
+                "status": "pending",
+                "completed_at": null
+              },
+              {
+                "id": "reconcile",
+                "status": "pending",
+                "completed_at": null
+              },
+              {
+                "id": "roadmap-reassess",
+                "status": "pending",
+                "completed_at": null
+              },
+              {
+                "id": "specify",
+                "status": "pending",
+                "completed_at": null
+              },
+              {
+                "id": "tasks",
+                "status": "pending",
+                "completed_at": null
+              }
+            ]
+          },
+          {
+            "id": "002-edge-migration",
+            "title": "Epic 002: Migração n8n → Supabase Edge Functions",
+            "status": "in_progress",
+            "updated_at": "2026-05-05T11:43:04Z",
+            "total": 12,
+            "done": 1,
+            "skipped": 0,
+            "pending": 11,
+            "progress_pct": 8.3,
+            "nodes": [
+              {
+                "id": "analyze",
+                "status": "pending",
+                "completed_at": null
+              },
+              {
+                "id": "analyze-post",
+                "status": "pending",
+                "completed_at": null
+              },
+              {
+                "id": "clarify",
+                "status": "pending",
+                "completed_at": null
+              },
+              {
+                "id": "epic-context",
+                "status": "done",
+                "completed_at": "2026-05-05T11:43:04Z"
+              },
+              {
+                "id": "implement",
+                "status": "pending",
+                "completed_at": null
+              },
+              {
+                "id": "judge",
+                "status": "pending",
+                "completed_at": null
+              },
+              {
+                "id": "plan",
+                "status": "pending",
+                "completed_at": null
+              },
+              {
+                "id": "qa",
+                "status": "pending",
+                "completed_at": null
+              },
+              {
+                "id": "reconcile",
+                "status": "pending",
+                "completed_at": null
+              },
+              {
+                "id": "roadmap-reassess",
+                "status": "pending",
+                "completed_at": null
+              },
+              {
+                "id": "specify",
+                "status": "pending",
+                "completed_at": null
+              },
+              {
+                "id": "tasks",
+                "status": "pending",
+                "completed_at": null
+              }
+            ]
+          },
+          {
+            "id": "003-error-tracking",
+            "title": "Epic 003: Error tracking — adotar Sentry para visibilidade de crashes",
+            "status": "in_progress",
+            "updated_at": "2026-05-05T11:43:00Z",
+            "total": 12,
+            "done": 1,
+            "skipped": 0,
+            "pending": 11,
+            "progress_pct": 8.3,
+            "nodes": [
+              {
+                "id": "analyze",
+                "status": "pending",
+                "completed_at": null
+              },
+              {
+                "id": "analyze-post",
+                "status": "pending",
+                "completed_at": null
+              },
+              {
+                "id": "clarify",
+                "status": "pending",
+                "completed_at": null
+              },
+              {
+                "id": "epic-context",
+                "status": "done",
+                "completed_at": "2026-05-05T11:43:00Z"
+              },
+              {
+                "id": "implement",
+                "status": "pending",
+                "completed_at": null
+              },
+              {
+                "id": "judge",
+                "status": "pending",
+                "completed_at": null
+              },
+              {
+                "id": "plan",
+                "status": "pending",
+                "completed_at": null
+              },
+              {
+                "id": "qa",
+                "status": "pending",
+                "completed_at": null
+              },
+              {
+                "id": "reconcile",
+                "status": "pending",
+                "completed_at": null
+              },
+              {
+                "id": "roadmap-reassess",
+                "status": "pending",
+                "completed_at": null
+              },
+              {
+                "id": "specify",
+                "status": "pending",
+                "completed_at": null
+              },
+              {
+                "id": "tasks",
+                "status": "pending",
+                "completed_at": null
+              }
+            ]
+          },
+          {
+            "id": "004-resenha-refactor",
+            "title": "Epic 004: Refactor god-screen `resenha.tsx`",
+            "status": "proposed",
+            "updated_at": "2026-05-05T11:41:06Z",
+            "total": 0,
+            "done": 0,
+            "skipped": 0,
+            "pending": 0,
+            "progress_pct": 0,
+            "nodes": []
+          },
+          {
+            "id": "005-database-decomposition",
+            "title": "Epic 005: Decomposição de `database.ts` por bounded context",
+            "status": "proposed",
+            "updated_at": "2026-05-05T11:41:06Z",
+            "total": 0,
+            "done": 0,
+            "skipped": 0,
+            "pending": 0,
+            "progress_pct": 0,
+            "nodes": []
+          },
+          {
+            "id": "006-observability",
+            "title": "Epic 006: Observabilidade — painel de saúde + NFR dashboards",
+            "status": "proposed",
+            "updated_at": "2026-05-05T11:41:06Z",
+            "total": 0,
+            "done": 0,
+            "skipped": 0,
+            "pending": 0,
+            "progress_pct": 0,
+            "nodes": []
+          },
+          {
+            "id": "007-maestro-native-e2e",
+            "title": "Epic 007: E2E nativo iOS/Android via Maestro",
+            "status": "proposed",
+            "updated_at": "2026-05-05T11:41:06Z",
+            "total": 0,
+            "done": 0,
+            "skipped": 0,
+            "pending": 0,
+            "progress_pct": 0,
+            "nodes": []
+          }
+        ]
+      },
+      "decisions": [
+        {
+          "num": "001",
+          "slug": "mobile-framework-expo-rn",
+          "title": "ADR-001: Mobile framework — Expo + React Native",
+          "status": "accepted",
+          "decision": "Adotar Expo SDK + React Native como framework cliente único para iOS, Android e Web, com Expo Router file-based para navegação e EAS Build/Update para CI e OTA.\n",
+          "alternatives": "Alternative A: Expo + React Native (chosen), Alternative B: Flutter 3.x, Alternative C: Native (Swift + Kotlin)",
+          "rationale": ""
+        },
+        {
+          "num": "002",
+          "slug": "state-data-tanstack-query-zod",
+          "title": "ADR-002: State/data layer — TanStack Query + Zod",
+          "status": "accepted",
+          "decision": "Adotar TanStack Query (com persist) como camada de estado server e Zod como schema/validação compartilhada entre cliente e backend.\n",
+          "alternatives": "Alternative A: TanStack Query + Zod (chosen), Alternative B: SWR, Alternative C: Apollo Client, Alternative D: Redux Toolkit Query",
+          "rationale": ""
+        },
+        {
+          "num": "003",
+          "slug": "form-react-hook-form-zod",
+          "title": "ADR-003: Form library — React Hook Form + Zod",
+          "status": "accepted",
+          "decision": "Adotar React Hook Form (uncontrolled) + Zod (schema/validação) para todos os formulários do app (cadastro, perfil, registrar jogo, criar campeonato, cobrança).\n",
+          "alternatives": "Alternative A: RHF + Zod (chosen), Alternative B: Formik + Yup, Alternative C: Final Form",
+          "rationale": ""
+        },
+        {
+          "num": "004",
+          "slug": "styling-nativewind",
+          "title": "ADR-004: Styling system — NativeWind 4 (Tailwind para RN)",
+          "status": "accepted",
+          "decision": "Adotar NativeWind 4 + Tailwind CSS 3 como sistema único de estilização para iOS, Android e Web, com tokens centralizados em `lib/design-system.ts`.\n",
+          "alternatives": "Alternative A: NativeWind 4 (chosen), Alternative B: Tamagui, Alternative C: Restyle (Shopify), Alternative D: StyleSheet.create nativo",
+          "rationale": ""
+        },
+        {
+          "num": "005",
+          "slug": "baas-supabase",
+          "title": "ADR-005: Backend-as-a-Service consolidado — Supabase",
+          "status": "accepted",
+          "decision": "Adotar Supabase como BaaS único cobrindo Postgres, Auth, Storage, Realtime e Edge Functions. Decisão consolidada — 5 capabilities sob 1 ADR.\n",
+          "alternatives": "Alternative A: Supabase (chosen), Alternative B: Firebase, Alternative C: AWS Amplify, Alternative D: Pocketbase / Appwrite (descartados rapidamente)",
+          "rationale": ""
+        },
+        {
+          "num": "006",
+          "slug": "workflow-orchestration-edge-functions",
+          "title": "ADR-006: Workflow orchestration — Supabase Edge Functions (n8n é transitório)",
+          "status": "accepted",
+          "decision": "Adotar Supabase Edge Functions Deno como runtime único para todos os workflows de orquestração (Magic Link OTP, Create User Invite, WhatsApp group sync). n8n self-hosted Easypanel é estado transitório e será deprecated pelo épico-002-edge-migration.\n",
+          "alternatives": "Alternative A: Supabase Edge Functions (chosen), Alternative B: n8n self-hosted (legado, rejeitado para o futuro), Alternative C: Inngest, Alternative D: Cloudflare Workers",
+          "rationale": ""
+        },
+        {
+          "num": "007",
+          "slug": "whatsapp-gateway-evolution-api",
+          "title": "ADR-007: WhatsApp Gateway — Evolution API (não-oficial, com risco regulatório)",
+          "status": "accepted",
+          "decision": "Adotar Evolution API self-hosted (protocolo Baileys, WhatsApp Web não-oficial) como gateway de mensagens WhatsApp para envio de OTP, ranking público e sync de grupos.\n",
+          "alternatives": "Alternative A: Evolution API (chosen), Alternative B: WhatsApp Cloud API (Meta oficial), Alternative C: Z-API, Alternative D: Twilio (incluído como referência global)",
+          "rationale": ""
+        },
+        {
+          "num": "008",
+          "slug": "payment-processor-stripe",
+          "title": "ADR-008: Payment Processor — Stripe (planejado, épico-001-stripe)",
+          "status": "proposed",
+          "decision": "Adotar Stripe como payment processor para subscriptions (Free/Dono/Rei/Enterprise), cupons, pro-rata upgrades e webhooks idempotentes. Cobre cartão + PIX + Boleto no mercado BR.\n",
+          "alternatives": "Alternative A: Stripe (chosen), Alternative B: Pagar.me, Alternative C: Iugu, Alternative D: Asaas, Alternative E: MercadoPago",
+          "rationale": ""
+        },
+        {
+          "num": "009",
+          "slug": "test-stack-jest-playwright-maestro",
+          "title": "ADR-009: Test stack — Jest + Playwright (atual) + Maestro (proposto para native E2E)",
+          "status": "accepted",
+          "decision": "Manter Jest + Playwright como test stack core (1695 unit + 203 E2E web). Adicionar Maestro (mobile.dev) para cobrir gap de E2E nativo iOS/Android — não substitui Playwright web.\n",
+          "alternatives": "Alternative A: Jest + Playwright + Maestro (chosen), Alternative B: Vitest + Playwright (mantido + Maestro), Alternative C: Jest + Playwright + Detox (Wix)",
+          "rationale": ""
+        },
+        {
+          "num": "010",
+          "slug": "build-deploy-eas-github-actions",
+          "title": "ADR-010: Build & Deploy — EAS (Expo) + GitHub Actions",
+          "status": "accepted",
+          "decision": "Adotar EAS Build/Submit/Update (Expo) para mobile + GitHub Actions para web (Hostinger via SSH+Docker) e Supabase deployments (paths-filtered).\n",
+          "alternatives": "Alternative A: EAS + GitHub Actions (chosen), Alternative B: Codemagic, Alternative C: fastlane + GitHub Actions, Alternative D: App Center (Microsoft, descartado)",
+          "rationale": ""
+        },
+        {
+          "num": "011",
+          "slug": "product-analytics-posthog",
+          "title": "ADR-011: Product analytics — PostHog (combo analytics + flags + replays)",
+          "status": "accepted",
+          "decision": "Adotar PostHog (US Cloud) como product analytics, feature flags e session replay no mesmo SDK (`posthog-react-native`). PII masking obrigatório (email/phone/userId).\n",
+          "alternatives": "Alternative A: PostHog (chosen), Alternative B: Mixpanel, Alternative C: Amplitude, Alternative D: Google Analytics 4",
+          "rationale": ""
+        },
+        {
+          "num": "012",
+          "slug": "error-tracking-sentry",
+          "title": "ADR-012: Error tracking — Sentry (gap atual; adoção proposta)",
+          "status": "proposed",
+          "decision": "Adotar Sentry como error tracking + release health + performance tracing para RN + web, com source maps Hermes automáticos via integração EAS Build oficial.\n",
+          "alternatives": "Alternative A: Sentry (proposed), Alternative B: Bugsnag, Alternative C: Rollbar, Alternative D: Manter logging ad-hoc atual (`services/supabase/logging.ts`) — descartado",
+          "rationale": ""
+        }
+      ]
+    }
+  ]
+}
