@@ -123,7 +123,7 @@ sidebar:
 
 - [X] T033 [P] [US1] Modificar `portal/src/lib/platforms.mjs` — descobrir `screen_flow.enabled` per-platform parseando `platform.yaml`; expor flag pra `routeData.ts`.
 
-- [ ] T034 [US1] Modificar `portal/src/routeData.ts` — adicionar entry condicional "Screens" no sidebar SOMENTE se `platforms.<name>.screen_flow.enabled === true`. Opt-out invisível (FR-016, US-03 cenário 3). **Dependência**: T033.
+- [X] T034 [US1] Modificar `portal/src/routeData.ts` — adicionar entry condicional "Screens" no sidebar SOMENTE se `platforms.<name>.screen_flow.enabled === true`. Opt-out invisível (FR-016, US-03 cenário 3). **Dependência**: T033.
 
 **Checkpoint**: `cd portal && npm run dev` → abrir `http://localhost:4321/[fixture-platform]/screens?fixture=true` → canvas com 8 telas renderiza, pan/zoom funciona, T020-T023 verdes, snapshot test verde em ambos os temas.
 
