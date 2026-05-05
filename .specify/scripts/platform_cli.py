@@ -322,6 +322,16 @@ def _lint_platform(name: str) -> bool:
                 ok = False
             else:
                 _ok("testing: block valid")
+
+        # Validate screen_flow: block if present (epic 027 — FR-005..010, FR-047)
+        if "screen_flow" in manifest:
+            sf_errors = _lint_screen_flow_block(manifest["screen_flow"], name)
+            if sf_errors:
+                for err in sf_errors:
+                    _error(err)
+                ok = False
+            else:
+                _ok("screen_flow: block valid")
     else:
         _error("platform.yaml not found")
         ok = False
@@ -473,6 +483,33 @@ def _lint_testing_block(testing_data: dict, platform_name: str) -> list[str]:
             if not isinstance(var, str):
                 errors.append(f"{platform_name}: testing.required_env[{i}] must be a string, got {type(var).__name__}")
 
+    return errors
+
+
+def _lint_screen_flow_block(block: object, platform_name: str) -> list[str]:
+    """Validate the optional `screen_flow:` block in platform.yaml.
+
+    Delegates to `screen_flow_validator.validate_platform_screen_flow_block` (epic 027:
+    FR-005..010, FR-047). Returns a list of error strings shaped like the testing-block
+    output for consistent CLI rendering. Each string carries the offending JSON pointer
+    so authors can locate the field.
+    """
+    errors: list[str] = []
+    try:
+        import screen_flow_validator as sfv  # local import — script lives next to us
+    except ImportError as exc:  # pragma: no cover — repo invariant
+        errors.append(
+            f"{platform_name}: screen_flow validator unavailable ({exc}); install jsonschema and pyyaml"
+        )
+        return errors
+
+    findings = sfv.validate_platform_screen_flow_block(block)
+    for f in findings:
+        if f.get("severity") != "BLOCKER":
+            continue
+        path = f.get("path") or "screen_flow"
+        message = f.get("message") or "invalid screen_flow block"
+        errors.append(f"{platform_name}: screen_flow.{path}: {message}")
     return errors
 
 

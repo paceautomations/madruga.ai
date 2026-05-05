@@ -173,7 +173,7 @@ sidebar:
 
 ### Implementation for User Story 3
 
-- [ ] T051 [US3] Modificar `.specify/scripts/platform_cli.py` (função `lint`) — estender pra carregar `.specify/schemas/platform-yaml-screen-flow.schema.json` e validar bloco `screen_flow` quando presente. Reportar erros com path JSON pointer. **Dependência**: T011, T050.
+- [x] T051 [US3] Modificar `.specify/scripts/platform_cli.py` (função `lint`) — estender pra carregar `.specify/schemas/platform-yaml-screen-flow.schema.json` e validar bloco `screen_flow` quando presente. Reportar erros com path JSON pointer. **Dependência**: T011, T050. **Implemented: added `_lint_screen_flow_block(block, platform_name)` helper that delegates to `screen_flow_validator.validate_platform_screen_flow_block`. `_lint_platform` invokes it whenever `screen_flow` is present in the manifest. Errors carry the JSON pointer (e.g. `screen_flow.capture.test_user_marker: ...`). All 22 T050 cases now pass; 109 regression tests still green.**
 
 - [ ] T052 [P] [US3] Modificar `platforms/madruga-ai/platform.yaml` — adicionar bloco `screen_flow: {enabled: false, skip_reason: "Plataforma de tooling/orquestração — não tem app de usuário no sentido tradicional. Portal Astro é interno..."}` (texto completo da pitch.md).
 
