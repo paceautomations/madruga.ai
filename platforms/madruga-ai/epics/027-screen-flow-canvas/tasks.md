@@ -95,7 +95,7 @@ sidebar:
 
 - [X] T020 [P] [US1] Criar `portal/src/test/unit/ScreenNode.test.tsx` — teste vitest+RTL com 3 estados (wireframe, captured, failed): renderização, aria-label, classes CSS aplicadas, badge correto. Falha sem `ScreenNode.tsx`.
 
-- [ ] T021 [P] [US1] Criar `portal/src/test/unit/ActionEdge.test.tsx` — teste vitest+RTL: 4 styles (success/error/neutral/modal) renderizam pattern visual distinto (sólido/tracejado/pontilhado), label clicável, aria-label coerente. Falha sem `ActionEdge.tsx`.
+- [X] T021 [P] [US1] Criar `portal/src/test/unit/ActionEdge.test.tsx` — teste vitest+RTL: 4 styles (success/error/neutral/modal) renderizam pattern visual distinto (sólido/tracejado/pontilhado), label clicável, aria-label coerente. Falha sem `ActionEdge.tsx`.
 
 - [ ] T022 [P] [US1] Criar `portal/src/test/visual/screen-flow-canvas.spec.ts` — Playwright + jest-image-snapshot carregando fixture com 8 telas; gera baseline em light + dark mode (toleração 1px). Falha sem renderer.
 
