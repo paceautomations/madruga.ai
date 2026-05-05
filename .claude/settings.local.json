@@ -73,7 +73,9 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(git push:*)",
-      "mcp__playwright__browser_network_requests"
+      "mcp__playwright__browser_network_requests",
+      "Bash(cp .claude/commands/madruga/codebase-map.md /tmp/codebase-map.before.md)",
+      "Bash(rtk wc *)"
     ],
     "deny": [],
     "defaultMode": "dontAsk"

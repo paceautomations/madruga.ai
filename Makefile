@@ -69,6 +69,7 @@ install-hooks: ## Install git hooks (post-commit traceability)
 # --- Service management (systemd) ---
 
 SERVICES := madruga-easter madruga-portal
+PORTS := 4321 18789
 SERVICE_DIR := etc/systemd
 USER_SYSTEMD := $(HOME)/.config/systemd/user
 
@@ -79,16 +80,56 @@ install-services: ## Install systemd user services (symlink + reload)
 	@systemctl --user daemon-reload
 	@echo "Services installed. Run 'make up' to start."
 
-up: install-services ## Start all services (easter + portal)
+_pre-up-clean:
+	@for svc in $(SERVICES); do \
+	  if systemctl --user is-active --quiet $$svc; then \
+	    echo "Detected running service $$svc — cleaning up first..."; \
+	    exec $(MAKE) --no-print-directory down; \
+	  fi; \
+	done; \
+	for port in $(PORTS); do \
+	  if [ -n "$$(lsof -ti :$$port 2>/dev/null)" ]; then \
+	    echo "Detected stale process on port $$port — cleaning up first..."; \
+	    exec $(MAKE) --no-print-directory down; \
+	  fi; \
+	done; \
+	echo "Nothing running — proceeding to start."
+
+up: _pre-up-clean install-services ## Start all services (easter + portal). Auto-cleans if anything is already running.
 	@systemctl --user start $(SERVICES)
 	@echo "Started: $(SERVICES)"
 	@systemctl --user --no-pager status $(SERVICES) | head -20
 
-down: ## Stop all services
-	@systemctl --user stop $(SERVICES) 2>/dev/null || true
-	@for port in 4321 18789; do \
-	  pid=$$(lsof -ti :$$port 2>/dev/null); \
-	  [ -n "$$pid" ] && kill $$pid && echo "Killed orphan on port $$port (PID $$pid)" || true; \
+down: ## Stop all services and free their ports (idempotent, fails loud if a port stays held)
+	@systemctl --user stop $(SERVICES) 2>/dev/null
+	@waited=0; \
+	while [ $$waited -lt 8 ]; do \
+	  any_active=0; \
+	  for svc in $(SERVICES); do \
+	    systemctl --user is-active --quiet $$svc && any_active=1; \
+	  done; \
+	  [ "$$any_active" = "0" ] && break; \
+	  sleep 1; waited=$$((waited+1)); \
+	done
+	@for port in $(PORTS); do \
+	  pids="$$(lsof -ti :$$port 2>/dev/null)"; \
+	  if [ -n "$$pids" ]; then \
+	    echo "Port $$port held by PIDs: $$pids — sending SIGTERM"; \
+	    kill $$pids 2>/dev/null || true; \
+	    sleep 2; \
+	    survivors="$$(lsof -ti :$$port 2>/dev/null)"; \
+	    if [ -n "$$survivors" ]; then \
+	      echo "Port $$port still held by $$survivors — sending SIGKILL"; \
+	      kill -9 $$survivors 2>/dev/null || true; \
+	      sleep 1; \
+	    fi; \
+	    final="$$(lsof -ti :$$port 2>/dev/null)"; \
+	    if [ -n "$$final" ]; then \
+	      echo "ERROR: port $$port still held by PIDs $$final after SIGKILL" >&2; \
+	      exit 1; \
+	    fi; \
+	    echo "Port $$port freed."; \
+	  fi; \
 	done
 	@echo "Stopped: $(SERVICES)"
 
