@@ -1,0 +1,79 @@
+/* ════════════════════════════════════════════════════════════════
+   Screen Flow Canvas — Design Tokens (epic 027)
+
+   CSS variables consumed by ScreenNode, ActionEdge, Hotspot, Badge,
+   and the wireframe sub-renderers. Light + dark variants enforce
+   FR-043 (a11y) and FR-044 (dark mode parity).
+
+   Edge styles add a line-pattern property in addition to color so
+   color-blind viewers can distinguish styles (FR-021):
+     - success → solid
+     - error   → dashed
+     - neutral → dotted
+     - modal   → solid + 3px width
+   Pattern is applied in ActionEdge.tsx; this file only declares
+   the token surface.
+   ════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* — Screen / wireframe surface — */
+  --screen-bg: #ffffff;
+  --screen-fg: #0f172a;          /* slate-900 */
+  --screen-accent: #0284c7;      /* sky-600, matches Starlight accent */
+  --screen-muted: #94a3b8;       /* slate-400 — borders, dividers */
+
+  /* — Edge palette (paired with line-pattern in ActionEdge) — */
+  --edge-success: #16a34a;       /* green-600  | solid */
+  --edge-error:   #dc2626;       /* red-600    | dashed */
+  --edge-neutral: #64748b;       /* slate-500  | dotted */
+  --edge-modal:   #2563eb;       /* blue-600   | solid 3px */
+
+  /* — Hotspots — */
+  --hotspot-outline: #f59e0b;    /* amber-500 — high contrast on captured PNGs */
+
+  /* — Visual badges (renderer-derived from screen.status) — */
+  --badge-wireframe: #94a3b8;    /* slate-400 — pending / WIREFRAME / AGUARDANDO */
+  --badge-captured:  #16a34a;    /* green-600 — WEB BUILD vX, iOS vX, WEB vX */
+  --badge-failed:    #dc2626;    /* red-600 — FALHOU */
+}
+
+/* Starlight applies data-theme="dark" on <html> when dark mode is active.
+   Tokens here invert luminance while preserving hue / contrast ratios. */
+:root[data-theme='dark'] {
+  --screen-bg: #1e293b;          /* slate-800 */
+  --screen-fg: #f1f5f9;          /* slate-100 */
+  --screen-accent: #38bdf8;      /* sky-400 */
+  --screen-muted: #475569;       /* slate-600 */
+
+  --edge-success: #4ade80;       /* green-400 */
+  --edge-error:   #f87171;       /* red-400   */
+  --edge-neutral: #94a3b8;       /* slate-400 */
+  --edge-modal:   #60a5fa;       /* blue-400  */
+
+  --hotspot-outline: #fbbf24;    /* amber-400 */
+
+  --badge-wireframe: #64748b;    /* slate-500 */
+  --badge-captured:  #4ade80;    /* green-400 */
+  --badge-failed:    #f87171;    /* red-400   */
+}
+
+/* Respect users that prefer dark via OS without an explicit data-theme override. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --screen-bg: #1e293b;
+    --screen-fg: #f1f5f9;
+    --screen-accent: #38bdf8;
+    --screen-muted: #475569;
+
+    --edge-success: #4ade80;
+    --edge-error:   #f87171;
+    --edge-neutral: #94a3b8;
+    --edge-modal:   #60a5fa;
+
+    --hotspot-outline: #fbbf24;
+
+    --badge-wireframe: #64748b;
+    --badge-captured:  #4ade80;
+    --badge-failed:    #f87171;
+  }
+}

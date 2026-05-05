@@ -73,7 +73,7 @@ sidebar:
 
 - [ ] T014 [P] Criar `.claude/knowledge/screen-flow-vocabulary.md` cobrindo 10 components + 4 edges + 6 badges + 3 capture states com 1 exemplo YAML por entrada (~200-300 linhas). Referência única para autores e renderer (FR-016 do contrato de skill).
 
-- [ ] T015 [P] Criar `portal/src/styles/screen-flow-tokens.css` declarando CSS variables: `--screen-bg`, `--screen-fg`, `--screen-accent`, `--screen-muted`, `--edge-success`, `--edge-error`, `--edge-neutral`, `--edge-modal`, `--hotspot-outline`, `--badge-wireframe`, `--badge-captured`, `--badge-failed`. Variantes `[data-theme="dark"]` definidas. Importar em `portal/src/styles/global.css` (FR-043, FR-044).
+- [x] T015 [P] Criar `portal/src/styles/screen-flow-tokens.css` declarando CSS variables: `--screen-bg`, `--screen-fg`, `--screen-accent`, `--screen-muted`, `--edge-success`, `--edge-error`, `--edge-neutral`, `--edge-modal`, `--hotspot-outline`, `--badge-wireframe`, `--badge-captured`, `--badge-failed`. Variantes `[data-theme="dark"]` definidas. Importar em `portal/src/styles/global.css` (FR-043, FR-044).
 
 - [ ] T016 Criar `portal/src/test/fixtures/screen-flow.example.yaml` — fixture válida cobrindo 8 telas, 10 component types, 4 edge styles, hotspots numerados, mix wireframe/captured. Usado pra fase 2 dogfooding sem depender da fase 4 (Resolved Gray Area da pitch). `schema_version: 1` no topo.
 
