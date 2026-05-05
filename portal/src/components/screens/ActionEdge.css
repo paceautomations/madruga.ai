@@ -1,0 +1,34 @@
+/* ActionEdge — floating label rendered via EdgeLabelRenderer. */
+.action-edge__label {
+  position: absolute;
+  pointer-events: all;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--screen-bg);
+  border: 1px solid var(--screen-muted);
+  color: var(--screen-fg);
+  white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.action-edge__label--success {
+  border-color: var(--edge-success);
+  color: var(--edge-success);
+}
+
+.action-edge__label--error {
+  border-color: var(--edge-error);
+  color: var(--edge-error);
+}
+
+.action-edge__label--neutral {
+  border-color: var(--edge-neutral);
+  color: var(--edge-neutral);
+}
+
+.action-edge__label--modal {
+  border-color: var(--edge-modal);
+  color: var(--edge-modal);
+}
