@@ -47,9 +47,51 @@ export function discoverPlatforms(platformsDir) {
       const manifest = yaml.load(
         fs.readFileSync(path.join(dir, d.name, 'platform.yaml'), 'utf8'),
       );
+      // Epic 027 — T033: surface the screen_flow opt-in flag so the
+      // sidebar (routeData.ts) and the screens.astro getStaticPaths can
+      // both reach it without re-parsing platform.yaml. The full
+      // `screen_flow` block is preserved on the manifest (capture/auth/
+      // determinism/path_rules) — callers should treat it as authoritative.
+      const sf = manifest?.screen_flow;
+      manifest.screen_flow_enabled = sf?.enabled === true;
+      if (sf && sf.enabled === false && typeof sf.skip_reason === 'string') {
+        manifest.screen_flow_skip_reason = sf.skip_reason;
+      }
       return manifest;
     })
     .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * Convenience helper used by routeData.ts to decide whether to mount
+ * the "Screens" entry in the sidebar (FR-016 + US-03 cenário 3). Returns
+ * `true` only when the bloco screen_flow has `enabled: true` — missing
+ * bloco or `enabled: false` both yield `false` (opt-out invisível).
+ *
+ * Reads platform.yaml directly (no manifest cache) so it stays correct
+ * during dev when authors toggle the flag without restarting Astro.
+ */
+export function isScreenFlowEnabled(platformName, platformsDir) {
+  const dir = platformsDir ?? PLATFORMS_DIR;
+  const yamlPath = path.join(dir, platformName, 'platform.yaml');
+  if (!fs.existsSync(yamlPath)) return false;
+  try {
+    const manifest = yaml.load(fs.readFileSync(yamlPath, 'utf8'));
+    return manifest?.screen_flow?.enabled === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Returns the set of platform names that opted into screen-flow.
+ * Used by routeData.ts (browser context) where path filtering is
+ * cheaper than a per-link platform.yaml read.
+ */
+export function listScreenFlowPlatforms(platformsDir) {
+  return discoverPlatforms(platformsDir)
+    .filter((p) => p.screen_flow_enabled === true)
+    .map((p) => p.name);
 }
 
 /**

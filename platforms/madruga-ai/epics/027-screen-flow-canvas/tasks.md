@@ -121,7 +121,7 @@ sidebar:
 
 - [X] T032 [US1] Criar `portal/src/pages/[platform]/screens.astro` — rota SSG via `renderToStaticMarkup` + ilha React `client:visible`. Lê YAML via `screen-flow.ts`, renderiza `ScreenFlowCanvas`. Suporte a `?fixture=true` em dev mode. Falha graciosa quando YAML ausente. **Dependência**: T031, T024.
 
-- [ ] T033 [P] [US1] Modificar `portal/src/lib/platforms.mjs` — descobrir `screen_flow.enabled` per-platform parseando `platform.yaml`; expor flag pra `routeData.ts`.
+- [X] T033 [P] [US1] Modificar `portal/src/lib/platforms.mjs` — descobrir `screen_flow.enabled` per-platform parseando `platform.yaml`; expor flag pra `routeData.ts`.
 
 - [ ] T034 [US1] Modificar `portal/src/routeData.ts` — adicionar entry condicional "Screens" no sidebar SOMENTE se `platforms.<name>.screen_flow.enabled === true`. Opt-out invisível (FR-016, US-03 cenário 3). **Dependência**: T033.
 
