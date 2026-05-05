@@ -67,7 +67,7 @@ sidebar:
 
 - [x] T011 Criar `.specify/schemas/platform-yaml-screen-flow.schema.json` para validar bloco `screen_flow` em `platform.yaml`: `enabled: bool`, `skip_reason?: str`, `capture: {base_url, serve?, device_profile, auth, determinism, expo_web?, path_rules, test_user_marker}`. Inclui regras condicionais: `enabled=false` → exige `skip_reason`, proíbe `capture`; `enabled=true` → exige todos campos `capture` + `test_user_marker` (FR-006, FR-007, FR-047).
 
-- [ ] T012 Atualizar `.specify/pipeline.yaml` para incluir nó L1 `business-screen-flow`: layer=business, gate=human, optional=true, depends_on=[business-process], outputs=`business/screen-flow.yaml`. Posicionar entre `business-process` e `tech-research`. Validar com `python3 .specify/scripts/dag_executor.py --platform madruga-ai --dry-run`.
+- [x] T012 Atualizar `.specify/pipeline.yaml` para incluir nó L1 `business-screen-flow`: layer=business, gate=human, optional=true, depends_on=[business-process], outputs=`business/screen-flow.yaml`. Posicionar entre `business-process` e `tech-research`. Validar com `python3 .specify/scripts/dag_executor.py --platform madruga-ai --dry-run`.
 
 - [ ] T013 Atualizar `.claude/knowledge/pipeline-dag-knowledge.md` adicionando 14ª linha à tabela L1 (business-screen-flow, optional=YES, gate=human, depends=business-process, output=business/screen-flow.yaml). Manter ordem alfabética dentro do layer business.
 

@@ -30,6 +30,14 @@ nodes:
     layer: business
     gate: human
 
+  - id: business-screen-flow
+    skill: "madruga:business-screen-flow"
+    outputs: ["business/screen-flow.yaml"]
+    depends: ["business-process"]
+    layer: business
+    gate: human
+    optional: true
+
   - id: tech-research
     skill: "madruga:tech-research"
     outputs: ["research/tech-alternatives.md"]
