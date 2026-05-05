@@ -1,0 +1,230 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://madruga.ai/schemas/screen-flow/v1.json",
+  "title": "ScreenFlow",
+  "description": "Runtime version of the screen-flow YAML schema, consumed by screen_flow_validator.py. Mirrors platforms/madruga-ai/epics/027-screen-flow-canvas/contracts/screen-flow.schema.json (the formal contract). Closed vocabulary v1: 10 body component types, 4 edge styles, 3 capture states. Renderer additionally derives 6 visual badges (WIREFRAME, AGUARDANDO, FALHOU, WEB BUILD v<x>, iOS v<x>, WEB v<x>) from screen.status + capture metadata — those are not stored in the YAML.",
+  "type": "object",
+  "required": ["schema_version", "meta", "screens", "flows"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "enum": [1],
+      "description": "Schema version. Validator rejects missing or unknown values (FR-002)."
+    },
+    "meta": {
+      "type": "object",
+      "required": ["device", "capture_profile"],
+      "additionalProperties": false,
+      "properties": {
+        "device": {
+          "type": "string",
+          "enum": ["mobile", "desktop"]
+        },
+        "capture_profile": {
+          "type": "string",
+          "enum": ["iphone-15", "desktop"]
+        },
+        "layout_direction": {
+          "type": "string",
+          "enum": ["DOWN", "RIGHT"],
+          "default": "DOWN"
+        }
+      }
+    },
+    "screens": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "description": "Hard reject above 100; validator emits warn above 50 (FR-049).",
+      "items": { "$ref": "#/$defs/Screen" }
+    },
+    "flows": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Flow" }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,63}$",
+      "description": "Locked charset: lowercase, starts with letter, max 64 chars, underscore-only separator (FR-048). Applies to screen.id, body.id, and flow.on."
+    },
+    "Screen": {
+      "type": "object",
+      "required": ["id", "title", "status", "body"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "captured", "failed"],
+          "description": "3 capture states (Decision #5). State machine: pending → captured | failed; captured → pending (drift); failed → captured | pending."
+        },
+        "body": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/BodyComponent" }
+        },
+        "image": {
+          "type": "string",
+          "description": "Path relative to platform repo of the captured PNG (LFS-tracked)."
+        },
+        "position": {
+          "type": "object",
+          "required": ["x", "y"],
+          "additionalProperties": false,
+          "properties": {
+            "x": { "type": "number" },
+            "y": { "type": "number" }
+          },
+          "description": "Manual coordinates override — used when ELK cannot place a cyclic node."
+        },
+        "meta": { "$ref": "#/$defs/ScreenMeta" },
+        "capture": { "$ref": "#/$defs/CaptureRecord" },
+        "failure": { "$ref": "#/$defs/CaptureFailure" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "status": { "const": "captured" } }, "required": ["status"] },
+          "then": { "required": ["image", "capture"] }
+        },
+        {
+          "if": { "properties": { "status": { "const": "failed" } }, "required": ["status"] },
+          "then": { "required": ["failure"] }
+        }
+      ]
+    },
+    "ScreenMeta": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "route": { "type": "string" },
+        "entrypoint": { "type": "string" },
+        "capture_profile": {
+          "type": "string",
+          "enum": ["iphone-15", "desktop"]
+        },
+        "wait_for": {
+          "type": "string",
+          "description": "CSS selector to await before capturing."
+        }
+      }
+    },
+    "BodyComponent": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "heading",
+            "text",
+            "input",
+            "button",
+            "link",
+            "list",
+            "card",
+            "image",
+            "divider",
+            "badge"
+          ],
+          "description": "Closed vocabulary of 10 (Decision #5)."
+        },
+        "id": { "$ref": "#/$defs/id" },
+        "text": { "type": "string" },
+        "testid": {
+          "type": "string",
+          "description": "Reference to an EXISTING testID in the app (no new convention). Capture uses [data-testid=<this>] for hotspot boundingBox (FR-028)."
+        },
+        "meta": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    "Flow": {
+      "type": "object",
+      "required": ["from", "to", "on", "style"],
+      "additionalProperties": false,
+      "properties": {
+        "from": { "$ref": "#/$defs/id" },
+        "to": { "$ref": "#/$defs/id" },
+        "on": { "$ref": "#/$defs/id" },
+        "style": {
+          "type": "string",
+          "enum": ["success", "error", "neutral", "modal"],
+          "description": "Closed vocabulary of 4 edge styles (Decision #5). Renderer adds line pattern (solid/dashed/dotted/thick) on top of color for color-blind accessibility (FR-021)."
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50
+        }
+      }
+    },
+    "CaptureRecord": {
+      "type": "object",
+      "required": ["captured_at", "app_version", "image_md5", "viewport"],
+      "additionalProperties": false,
+      "properties": {
+        "captured_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "app_version": {
+          "type": "string",
+          "description": "Short git SHA of the app at capture time."
+        },
+        "image_md5": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$"
+        },
+        "viewport": {
+          "type": "object",
+          "required": ["w", "h"],
+          "additionalProperties": false,
+          "properties": {
+            "w": { "type": "integer", "minimum": 1 },
+            "h": { "type": "integer", "minimum": 1 }
+          }
+        }
+      }
+    },
+    "CaptureFailure": {
+      "type": "object",
+      "required": ["reason", "occurred_at", "retry_count"],
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "type": "string",
+          "enum": [
+            "timeout",
+            "auth_expired",
+            "network_error",
+            "app_crash",
+            "sw_cleanup_failed",
+            "mock_route_unmatched",
+            "unknown"
+          ],
+          "description": "FR-045 — known failure reasons surfaced by the capture script."
+        },
+        "occurred_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "retry_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3
+        },
+        "last_error_message": {
+          "type": "string",
+          "maxLength": 500
+        }
+      }
+    }
+  }
+}
