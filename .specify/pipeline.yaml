@@ -48,7 +48,7 @@ nodes:
   - id: codebase-map
     skill: "madruga:codebase-map"
     outputs: ["research/codebase-context.md"]
-    depends: ["vision"]
+    depends: ["platform-new"]
     layer: research
     gate: auto
     optional: true
