@@ -1,60 +1,136 @@
 ---
 title: "Codebase Context"
+updated: null
+repo_sha: null
+repo_branch: null
 ---
 # {{ platform_title }} — Codebase Context
 
-<!-- ACTION REQUIRED: Use `/madruga:codebase-map {{ platform_name }}` para gerar automaticamente. -->
-<!-- Se greenfield: marcar Status como "Greenfield — sem codebase existente" e deixar demais secoes vazias. -->
-<!-- Se brownfield: documentar stack, patterns, conventions, integrations. -->
+<!-- ACTION REQUIRED: Run `/madruga:codebase-map {{ platform_name }}` to populate. -->
+<!-- This stub mirrors the 14-section template enforced by codebase-map's Tier 1 auto-review. -->
+<!-- Greenfield path collapses sections 3-14 into a 10-line Implications block. -->
 
-## Status
+## 1. Status
 
-<!-- [GREENFIELD] ou [BROWNFIELD] -->
-
----
-
-## Summary
-
-<!-- 1-2 paragrafos: o que o codigo faz, qual o estado de saude, principais areas. -->
+<!-- [BROWNFIELD] ou [GREENFIELD] — uma linha justificando com evidência (ex: package.json:N declara framework X). -->
 
 ---
 
-## File Structure
+## 2. Resumo Executivo
+
+<!-- 3-5 linhas: o que faz, stack primário, escala (LOC/arquivos/idade), saúde (commits últimos 30d, contributors 90d). Cada número com evidência ou marcador [ESTIMAR]. -->
+
+---
+
+## 3. Repo Context
+
+| Campo | Valor | Evidência |
+|-------|-------|-----------|
+| Org/Name | | platform.yaml:repo |
+| Branch base | | platform.yaml:repo.base_branch |
+| HEAD SHA | | git rev-parse --short HEAD |
+| Último commit | | git log -1 --format=%cI |
+| Total commits | | git rev-list --count HEAD |
+| Contributors (90d) | | git shortlog -sn --since=90.days |
+| Commits (30d) | | git log --since=30.days |
+
+---
+
+## 4. Stack & Versões
+
+| Categoria | Tecnologia | Versão | Evidência |
+|-----------|-----------|--------|-----------|
+| Linguagem | | | |
+| Framework | | | |
+| Runtime | | | |
+| DB | | | |
+| Build | | | |
+| Test runner | | | |
+
+---
+
+## 5. Folder Structure
 
 ```text
-<!-- arvore anotada com proposito de cada modulo principal -->
+<!-- Tree anotado (max 3 níveis), com propósito + LOC aproximado por dir top-level. -->
 ```
 
 ---
 
-## Technology Stack
+## 6. Entrypoints
 
-| Aspecto | Valor |
-|---------|-------|
-| Linguagem principal | <!-- Preencher --> |
-| Framework | |
-| Banco de dados | |
-| Build/CI | |
-| Hosting | |
-
----
-
-## Detected Patterns
-
-<!-- Padroes arquiteturais, design patterns, conventions detectadas no codigo. -->
+| Tipo | Comando/Arquivo | Evidência |
+|------|----------------|-----------|
+| Dev start | | |
+| Prod start | | |
+| App entry | | |
+| Build | | |
 
 ---
 
-## Integrations
+## 7. Data Schemas
 
-<!-- Integrações externas (APIs, webhooks, filas, terceiros) detectadas. -->
-
-| Integracao | Tipo | Modulo |
-|-----------|------|--------|
-| <!-- Preencher --> | | |
+| Entidade | Arquivo | Tipo |
+|----------|---------|------|
+| | | |
 
 ---
 
-## Observations
+## 8. Integrações Externas
 
-<!-- Smells, debts, oportunidades detectadas. Sem prescrever solucao aqui. -->
+| Serviço | Tipo | SDK/Protocolo | Evidência |
+|---------|------|---------------|-----------|
+| | | | |
+
+---
+
+## 9. CI/CD & Deploy
+
+| Pipeline | Trigger | Target | Evidência |
+|----------|---------|--------|-----------|
+| | | | |
+
+---
+
+## 10. Env & Secrets
+
+<!-- Lista de variáveis declaradas em .env.example (sem valores). -->
+
+---
+
+## 11. Tests
+
+| Aspecto | Valor | Evidência |
+|---------|-------|-----------|
+| Framework | | |
+| Suites | | |
+| Coverage | | |
+
+---
+
+## 12. Decisões Pré-Existentes
+
+<!-- Citações curtas de CLAUDE.md / AGENTS.md / docs/ com source. -->
+
+---
+
+## 13. Hot Spots
+
+| Arquivo | LOC | Commits 90d | Sinal |
+|---------|-----|-------------|-------|
+| | | | |
+
+---
+
+## 14. Observações
+
+<!-- Riscos / débitos / oportunidades — cada bullet com referência file:line. Sem prescrever solução. -->
+
+---
+handoff:
+  from: codebase-map
+  to: tech-research
+  context: "<preencher após codebase-map executar>"
+  blockers: []
+  confidence: null
+  kill_criteria: "Repo migra para outra stack primária OU base_branch muda OU >50% dos arquivos mapeados são deletados"

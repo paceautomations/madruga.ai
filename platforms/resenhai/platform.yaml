@@ -9,3 +9,27 @@ repo:
   base_branch: develop
   epic_branch_prefix: "epic/resenhai/"
 tags: [futevolei, beachtennis, sandbox-sports]
+
+testing:
+  startup:
+    type: npm
+    command: npm run web
+    ready_timeout: 240
+  health_checks:
+    - url: http://localhost:8081
+      method: GET
+      expect_status: 200
+      label: Expo Web Dev Server
+  urls:
+    - url: http://localhost:8081
+      type: frontend
+      label: Expo Web Root
+      expect_status: 200
+  required_env:
+    - EXPO_PUBLIC_ENVIRONMENT
+    - EXPO_PUBLIC_PRODUCTION_SUPABASE_URL
+    - EXPO_PUBLIC_PRODUCTION_SUPABASE_ANON_KEY
+    - EXPO_PUBLIC_POSTHOG_API_KEY
+    - EXPO_PUBLIC_POSTHOG_HOST
+  env_file: .env.example
+  journeys_file: testing/journeys.md
