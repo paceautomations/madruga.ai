@@ -1,0 +1,16 @@
+/* ScreenFlowCanvas — full-bleed wrapper with Starlight-friendly background. */
+.screen-flow-canvas {
+  position: relative;
+  width: 100%;
+  height: calc(100vh - var(--sl-nav-height, 0px));
+  min-height: 600px;
+  background: var(--screen-bg);
+}
+
+.screen-flow-canvas .react-flow__node {
+  /* Allow our ScreenNode chrome to render its own border/padding. */
+  background: transparent;
+  border: none;
+  padding: 0;
+  box-shadow: none;
+}

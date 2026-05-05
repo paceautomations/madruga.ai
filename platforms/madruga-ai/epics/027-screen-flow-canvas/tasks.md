@@ -117,7 +117,7 @@ sidebar:
 
 - [X] T030 [US1] Implementar `portal/src/components/screens/ActionEdge.tsx` — custom xyflow edge com 4 styles, label flutuante via `EdgeLabelRenderer`, pattern visual adicional à cor (sólido/tracejado/pontilhado). Cor via tokens `--edge-*`. ~80 LOC. FR-021.
 
-- [ ] T031 [US1] Implementar `portal/src/components/screens/ScreenFlowCanvas.tsx` — wrapper xyflow com Background dots, Controls non-interactive, MiniMap pannable. Flags fixos: `nodesDraggable=false`, `nodesConnectable=false`, `elementsSelectable`, `onlyRenderVisibleElements`. Keyboard navigation: Tab move foco entre nodes, Enter aciona primeiro hotspot focado (FR-019). ~150 LOC. **Dependência**: T029, T030.
+- [X] T031 [US1] Implementar `portal/src/components/screens/ScreenFlowCanvas.tsx` — wrapper xyflow com Background dots, Controls non-interactive, MiniMap pannable. Flags fixos: `nodesDraggable=false`, `nodesConnectable=false`, `elementsSelectable`, `onlyRenderVisibleElements`. Keyboard navigation: Tab move foco entre nodes, Enter aciona primeiro hotspot focado (FR-019). ~150 LOC. **Dependência**: T029, T030.
 
 - [ ] T032 [US1] Criar `portal/src/pages/[platform]/screens.astro` — rota SSG via `renderToStaticMarkup` + ilha React `client:visible`. Lê YAML via `screen-flow.ts`, renderiza `ScreenFlowCanvas`. Suporte a `?fixture=true` em dev mode. Falha graciosa quando YAML ausente. **Dependência**: T031, T024.
 
