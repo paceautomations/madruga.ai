@@ -1,0 +1,39 @@
+/* Device chrome — minimal, label discreet, no fake status bar (Decision #15). */
+.screen-chrome {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: var(--chrome-w);
+  height: var(--chrome-h);
+  border-radius: 24px;
+  border: 2px solid var(--screen-muted);
+  background: var(--screen-bg);
+  overflow: hidden;
+  box-sizing: content-box;
+  padding: 8px;
+}
+
+.screen-chrome--desktop {
+  border-radius: 12px;
+  padding: 6px;
+}
+
+.screen-chrome__body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 16px;
+  background: var(--screen-bg);
+}
+
+.screen-chrome__label {
+  position: absolute;
+  bottom: -22px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  color: var(--screen-muted);
+  white-space: nowrap;
+}

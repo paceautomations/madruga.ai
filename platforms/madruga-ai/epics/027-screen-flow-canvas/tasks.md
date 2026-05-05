@@ -109,7 +109,7 @@ sidebar:
 
 - [X] T026 [P] [US1] Implementar `portal/src/components/screens/Badge.tsx` — 5 variants visuais (`WIREFRAME`, `AGUARDANDO`, `FALHOU`, `WEB BUILD`, `iOS`/`WEB`) + 1 versão genérica para `vX`. Tokens CSS variables. ~40 LOC.
 
-- [ ] T027 [P] [US1] Implementar `portal/src/components/screens/Chrome.tsx` — moldura minimal: border-radius + label discreto (`iPhone 15 / 393×852` ou `Desktop / 1440×900`). SEM status bar fake (Decision #15). ~50 LOC.
+- [X] T027 [P] [US1] Implementar `portal/src/components/screens/Chrome.tsx` — moldura minimal: border-radius + label discreto (`iPhone 15 / 393×852` ou `Desktop / 1440×900`). SEM status bar fake (Decision #15). ~50 LOC.
 
 - [ ] T028 [P] [US1] Implementar `portal/src/components/screens/WireframeBody.tsx` — 10 sub-renderers (heading, text, input, button, link, list, card, image, divider, badge) com paleta wireframe-only (cinza + accent suave) e tipografia distinta (Caveat ou Architects Daughter via Google Fonts preloaded). Decision #14, FR-022. ~150 LOC.
 
