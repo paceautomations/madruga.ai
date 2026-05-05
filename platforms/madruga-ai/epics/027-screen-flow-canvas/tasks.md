@@ -277,7 +277,7 @@ sidebar:
 
 - [x] T093 [US6] Estender `.specify/scripts/reverse_reconcile_aggregate.py` — ler `platform.yaml.screen_flow.capture.path_rules` quando plataforma tem `enabled: true`. Para cada arquivo modificado, aplicar regex em ordem; primeira casada extrai `screen_id` via template (`{N}` substitui grupos). Enfileirar patch JSON pra `screen_flow_mark_pending.py`. Skip silencioso para plataformas com `enabled: false` (FR-039). **Dependência**: T090, T092.
 
-- [ ] T094 [US6] Validação end-to-end: simular commit em `app/(auth)/login.tsx` (mock fixture), rodar `python3 .specify/scripts/reverse_reconcile_aggregate.py --platform resenhai-expo --triage <fixture>`, validar patch gerado. Aplicar via `screen_flow_mark_pending.py`, validar YAML final tem `status: pending`. **Dependência**: T093.
+- [x] T094 [US6] Validação end-to-end: simular commit em `app/(auth)/login.tsx` (mock fixture), rodar `python3 .specify/scripts/reverse_reconcile_aggregate.py --platform resenhai-expo --triage <fixture>`, validar patch gerado. Aplicar via `screen_flow_mark_pending.py`, validar YAML final tem `status: pending`. **Dependência**: T093.
 
 **Checkpoint**: T090 + T091 verdes; drift detection mapeia commit → screen.id corretamente; YAML re-escrito preserva comentários.
 
