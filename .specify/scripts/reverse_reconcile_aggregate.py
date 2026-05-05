@@ -26,6 +26,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import yaml
+
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT / ".specify" / "scripts"))
 
@@ -33,6 +35,16 @@ import db_core  # noqa: E402,F401  (used inside _assert_no_reconciled_leak)
 import ensure_repo as ensure_repo_mod  # noqa: E402
 
 log = logging.getLogger("reverse_reconcile_aggregate")
+
+# ── Screen-flow drift detection (epic 027 — FR-036/039) ─────────────────────
+# Charset enforced on screen.id (FR-048). resolve_screen_id_from_rules refuses
+# to emit a patch if the resolved id would not be valid in screen-flow.yaml.
+_SCREEN_ID_RE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
+# `{1}`, `{2}`, … placeholders in screen_id_template (referenced groups of the
+# matched regex). Captured here so resolve_screen_id_from_rules can detect a
+# template that requests a group the regex does NOT have, instead of silently
+# emitting the literal placeholder.
+_TEMPLATE_GROUP_RE = re.compile(r"\{(\d+)\}")
 
 # First N lines + last M lines kept in the HEAD snippet (avoids token blowup on large files).
 _HEAD_SNIPPET_HEAD = 50
@@ -225,6 +237,118 @@ def _candidate_docs(file_path: str, platform_id: str) -> list[str]:
     return [f"platforms/{platform_id}/engineering/blueprint.md"]
 
 
+# ── Screen-flow drift mapping (epic 027 — FR-036/037/039) ──────────────────
+
+
+def _load_platform_screen_flow(platform_id: str) -> dict | None:
+    """Read `screen_flow:` block from `platforms/<platform>/platform.yaml`.
+
+    Returns the block dict (or None when the file or the block is absent). Errors
+    parsing the YAML are swallowed and logged — drift detection should be a
+    silent enrichment, never a blocker for the rest of the aggregate output.
+    """
+    manifest = REPO_ROOT / "platforms" / platform_id / "platform.yaml"
+    if not manifest.exists():
+        return None
+    try:
+        data = yaml.safe_load(manifest.read_text(encoding="utf-8")) or {}
+    except yaml.YAMLError as exc:
+        log.warning("could not parse platform.yaml for %s: %s", platform_id, exc)
+        return None
+    block = data.get("screen_flow")
+    return block if isinstance(block, dict) else None
+
+
+def resolve_screen_id_from_rules(file_path: str, rules: list[dict]) -> str | None:
+    """Apply path_rules in order; return the resolved screen_id of the first match.
+
+    Skips:
+    - rules with invalid regex (cannot compile)
+    - templates referencing groups absent in the regex (bad config — emit nothing)
+    - resolved ids that violate the FR-048 charset (defensive — never write
+      malformed ids into screen-flow.yaml)
+    """
+    if not rules:
+        return None
+    for rule in rules:
+        if not isinstance(rule, dict):
+            continue
+        pattern = rule.get("pattern")
+        template = rule.get("screen_id_template")
+        if not isinstance(pattern, str) or not isinstance(template, str):
+            continue
+        try:
+            compiled = re.compile(pattern)
+        except re.error:
+            continue
+        m = compiled.search(file_path)
+        if not m:
+            continue
+        groups = m.groups()
+        # Validate that the template only references existing groups before substituting.
+        ok = True
+        for ref in _TEMPLATE_GROUP_RE.findall(template):
+            idx = int(ref)
+            if idx < 1 or idx > len(groups) or groups[idx - 1] is None:
+                ok = False
+                break
+        if not ok:
+            continue
+        resolved = _TEMPLATE_GROUP_RE.sub(lambda mo: groups[int(mo.group(1)) - 1] or "", template)
+        if not _SCREEN_ID_RE.match(resolved):
+            log.debug(
+                "screen-flow path_rule pattern %r resolved %r → invalid id %r — skipped",
+                pattern,
+                file_path,
+                resolved,
+            )
+            continue
+        return resolved
+    return None
+
+
+def _collect_screen_flow_patches(
+    triage: dict, platform_id: str, screen_flow: dict | None
+) -> list[dict]:
+    """Build deduplicated screen_flow_pending_patches from a triage payload.
+
+    Returns one patch per distinct screen_id, with merged sha_refs + source_files
+    across every commit that touched any matching file. Silently returns [] when
+    the platform has `screen_flow.enabled: false` or no `path_rules` (FR-039).
+    """
+    if not screen_flow or not screen_flow.get("enabled"):
+        return []
+    capture = screen_flow.get("capture") or {}
+    rules = capture.get("path_rules") or []
+    if not rules:
+        return []
+
+    grouped: dict[str, dict] = {}
+    clusters = triage.get("triage", {}).get("clusters", {})
+    for commits in clusters.values():
+        for commit in commits:
+            sha = commit.get("sha")
+            for f in commit.get("files", []):
+                sid = resolve_screen_id_from_rules(f, rules)
+                if not sid:
+                    continue
+                bucket = grouped.setdefault(
+                    sid,
+                    {
+                        "platform": platform_id,
+                        "screen_id": sid,
+                        "sha_refs": [],
+                        "source_files": [],
+                    },
+                )
+                if sha and sha not in bucket["sha_refs"]:
+                    bucket["sha_refs"].append(sha)
+                if f not in bucket["source_files"]:
+                    bucket["source_files"].append(f)
+    # Stable order across runs: sort by screen_id
+    return [grouped[k] for k in sorted(grouped)]
+
+
 def _collect_file_work(
     triage: dict,
 ) -> tuple[dict[str, list[dict]], list[str]]:
@@ -354,6 +478,12 @@ def aggregate(platform_id: str, triage: dict, branch: str | None = None, db_path
         )
         (code_items if path in head_files else deleted_files).append(entry)
 
+    # Screen-flow drift: enrich the work list with patches for `screen_flow_mark_pending.py`.
+    # Skipped silently when the platform has `screen_flow.enabled: false` (FR-039).
+    screen_flow_patches = _collect_screen_flow_patches(
+        triage, platform_id, _load_platform_screen_flow(platform_id)
+    )
+
     return {
         "platform": platform_id,
         "branch": branch,
@@ -365,10 +495,12 @@ def aggregate(platform_id: str, triage: dict, branch: str | None = None, db_path
         },
         "code_items": code_items,
         "deleted_files": deleted_files,
+        "screen_flow_pending_patches": screen_flow_patches,
         "summary": {
             "doc_self_edits": len(doc_self_edit_shas),
             "code_items": len(code_items),
             "deleted_files": len(deleted_files),
+            "screen_flow_pending_patches": len(screen_flow_patches),
         },
     }
 

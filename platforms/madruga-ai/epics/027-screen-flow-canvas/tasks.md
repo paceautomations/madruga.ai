@@ -267,7 +267,7 @@ sidebar:
 
 ### Tests for User Story 6
 
-- [ ] T090 [P] [US6] Criar `tests/integration/test_reverse_reconcile_screen_flow.py` — pytest mock: arquivo modificado `app/(auth)/login.tsx` com path_rules da resenhai-expo → mapeia para `screen.id="login"` (FR-036). Arquivo não-casado segue fluxo normal (FR-039). Plataforma opt-out skipped (FR-039).
+- [x] T090 [P] [US6] Criar `tests/integration/test_reverse_reconcile_screen_flow.py` — pytest mock: arquivo modificado `app/(auth)/login.tsx` com path_rules da resenhai-expo → mapeia para `screen.id="login"` (FR-036). Arquivo não-casado segue fluxo normal (FR-039). Plataforma opt-out skipped (FR-039).
 
 - [x] T091 [P] [US6] Criar `tests/integration/test_screen_flow_mark_pending.py` — pytest: `screen_flow_mark_pending.py` reescreve YAML preservando ordem de chaves e comentários (`ruamel.yaml` round-trip), modifica APENAS `screens[id=X].capture.status` de `captured` para `pending` (FR-037).
 
@@ -275,7 +275,7 @@ sidebar:
 
 - [x] T092 [US6] Implementar `.specify/scripts/screen_flow_mark_pending.py` (~80 LOC) — recebe patch JSON `{platform, screen_id}`, abre YAML, modifica em-place preservando comentários (usar `ruamel.yaml` se disponível, fallback regex line-based). CLI: `python3 screen_flow_mark_pending.py --platform <p> --screen-id <id>`. **Dependência**: T091.
 
-- [ ] T093 [US6] Estender `.specify/scripts/reverse_reconcile_aggregate.py` — ler `platform.yaml.screen_flow.capture.path_rules` quando plataforma tem `enabled: true`. Para cada arquivo modificado, aplicar regex em ordem; primeira casada extrai `screen_id` via template (`{N}` substitui grupos). Enfileirar patch JSON pra `screen_flow_mark_pending.py`. Skip silencioso para plataformas com `enabled: false` (FR-039). **Dependência**: T090, T092.
+- [x] T093 [US6] Estender `.specify/scripts/reverse_reconcile_aggregate.py` — ler `platform.yaml.screen_flow.capture.path_rules` quando plataforma tem `enabled: true`. Para cada arquivo modificado, aplicar regex em ordem; primeira casada extrai `screen_id` via template (`{N}` substitui grupos). Enfileirar patch JSON pra `screen_flow_mark_pending.py`. Skip silencioso para plataformas com `enabled: false` (FR-039). **Dependência**: T090, T092.
 
 - [ ] T094 [US6] Validação end-to-end: simular commit em `app/(auth)/login.tsx` (mock fixture), rodar `python3 .specify/scripts/reverse_reconcile_aggregate.py --platform resenhai-expo --triage <fixture>`, validar patch gerado. Aplicar via `screen_flow_mark_pending.py`, validar YAML final tem `status: pending`. **Dependência**: T093.
 
