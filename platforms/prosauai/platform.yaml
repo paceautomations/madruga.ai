@@ -10,6 +10,15 @@ repo:
   epic_branch_prefix: "epic/prosauai/"
   isolation: branch
 tags: [whatsapp, conversational-ai, multi-tenant]
+# Epic 027 — screen-flow-canvas opt-out (Decision #13, FR-005..010).
+# Admin frontend ainda em flight (epic 008-admin-evolution); reabilitar quando estabilizado.
+screen_flow:
+  enabled: false
+  skip_reason: |
+    Admin frontend é evolução futura (epic 008-admin-evolution em flight, ainda não estabilizado).
+    Reabilitar quando admin tiver pelo menos 5 telas estáveis em rota pública navegável.
+    Conversas do usuário são WhatsApp/Chatwoot — não são "screens" do app, ficam permanentemente
+    out-of-scope desse mecanismo.
 testing:
   startup:
     type: docker

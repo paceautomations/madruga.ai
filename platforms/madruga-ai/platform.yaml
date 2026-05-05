@@ -9,6 +9,14 @@ repo:
   base_branch: main
   epic_branch_prefix: "epic/madruga-ai/"
 tags: [architecture, documentation, spec-to-code]
+# Epic 027 — screen-flow-canvas opt-out (Decision #13, FR-005..010).
+# Platform de tooling/orquestração — não há "app de usuário" no sentido tradicional.
+screen_flow:
+  enabled: false
+  skip_reason: |
+    Plataforma de tooling/orquestração — não tem "app de usuário" no sentido tradicional.
+    O portal Astro é interno (visualização de docs do próprio madruga). Caso queira documentar
+    fluxo do portal, reabilitar com base_url=http://localhost:4321 e device_profile=desktop.
 testing:
   startup:
     type: npm
