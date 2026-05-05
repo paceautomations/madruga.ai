@@ -107,7 +107,7 @@ sidebar:
 
 - [X] T025 [P] [US1] Implementar `portal/src/lib/elk-layout.ts` — config ELK `layered`, direction parametrizado por `meta.layout_direction` (DOWN/RIGHT). Pré-computa coords node em build-time, exporta JSON. ELK timeout 30s, warn em >5s (FR-049). Zero `elkjs` no bundle client.
 
-- [ ] T026 [P] [US1] Implementar `portal/src/components/screens/Badge.tsx` — 5 variants visuais (`WIREFRAME`, `AGUARDANDO`, `FALHOU`, `WEB BUILD`, `iOS`/`WEB`) + 1 versão genérica para `vX`. Tokens CSS variables. ~40 LOC.
+- [X] T026 [P] [US1] Implementar `portal/src/components/screens/Badge.tsx` — 5 variants visuais (`WIREFRAME`, `AGUARDANDO`, `FALHOU`, `WEB BUILD`, `iOS`/`WEB`) + 1 versão genérica para `vX`. Tokens CSS variables. ~40 LOC.
 
 - [ ] T027 [P] [US1] Implementar `portal/src/components/screens/Chrome.tsx` — moldura minimal: border-radius + label discreto (`iPhone 15 / 393×852` ou `Desktop / 1440×900`). SEM status bar fake (Decision #15). ~50 LOC.
 
