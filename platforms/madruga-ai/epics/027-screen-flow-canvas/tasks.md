@@ -169,7 +169,7 @@ sidebar:
 
 ### Tests for User Story 3
 
-- [ ] T050 [P] [US3] Criar `tests/unit/test_platform_yaml_screen_flow_lint.py` — pytest cobrindo: (a) `enabled: false` sem `skip_reason` falha (FR-006), (b) `enabled: false` com `capture` populado falha, (c) `enabled: true` sem `capture.base_url` falha (FR-007), (d) `enabled: true` sem `test_user_marker` falha (FR-047), (e) caso válido enabled=false passa, (f) caso válido enabled=true passa.
+- [x] T050 [P] [US3] Criar `tests/unit/test_platform_yaml_screen_flow_lint.py` — pytest cobrindo: (a) `enabled: false` sem `skip_reason` falha (FR-006), (b) `enabled: false` com `capture` populado falha, (c) `enabled: true` sem `capture.base_url` falha (FR-007), (d) `enabled: true` sem `test_user_marker` falha (FR-047), (e) caso válido enabled=false passa, (f) caso válido enabled=true passa. **Implemented at `.specify/scripts/tests/test_platform_yaml_screen_flow_lint.py` (project pytest tree per python.md convention) with 24 cases — direct schema validation via `sfv.validate_platform_screen_flow_block` plus integration with `platform_cli._lint_platform` and live opt-out platform.yaml round-trip. Pre-T051 RED status confirmed: 3 integration tests failed (lint did not yet reject malformed `screen_flow:` blocks).**
 
 ### Implementation for User Story 3
 
