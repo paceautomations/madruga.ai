@@ -1,0 +1,181 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://madruga.ai/schemas/platform-yaml-screen-flow/v1.json",
+  "title": "PlatformScreenFlowConfig",
+  "description": "Bloco `screen_flow` em platform.yaml. Permite plataforma optar in/out da feature L1 opcional (Decision #13).",
+  "type": "object",
+  "required": ["enabled"],
+  "additionalProperties": false,
+  "properties": {
+    "enabled": { "type": "boolean" },
+    "skip_reason": {
+      "type": "string",
+      "minLength": 10,
+      "maxLength": 500,
+      "description": "Obrigatório quando enabled=false (FR-006)."
+    },
+    "capture": {
+      "$ref": "#/$defs/CaptureConfig",
+      "description": "Obrigatório quando enabled=true (FR-007)."
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "enabled": { "const": false } } },
+      "then": {
+        "required": ["skip_reason"],
+        "not": { "required": ["capture"] }
+      }
+    },
+    {
+      "if": { "properties": { "enabled": { "const": true } } },
+      "then": {
+        "required": ["capture"],
+        "not": { "required": ["skip_reason"] }
+      }
+    }
+  ],
+  "$defs": {
+    "CaptureConfig": {
+      "type": "object",
+      "required": [
+        "base_url",
+        "device_profile",
+        "auth",
+        "determinism",
+        "path_rules",
+        "test_user_marker"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "base_url": {
+          "type": "string",
+          "format": "uri",
+          "description": "URL pública do staging (ex: https://dev.resenhai.com)."
+        },
+        "serve": {
+          "$ref": "#/$defs/ServeConfig"
+        },
+        "device_profile": {
+          "type": "string",
+          "enum": ["iphone-15", "desktop"]
+        },
+        "auth": { "$ref": "#/$defs/AuthConfig" },
+        "determinism": { "$ref": "#/$defs/DeterminismConfig" },
+        "expo_web": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "incompatible_deps": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        },
+        "path_rules": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/PathRule" }
+        },
+        "test_user_marker": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 200,
+          "description": "Identificador do test user usado pelo capture (ex: demo+playwright@resenhai.com). Auditoria PII (FR-047)."
+        }
+      }
+    },
+    "ServeConfig": {
+      "type": "object",
+      "required": ["command", "ready_url"],
+      "additionalProperties": false,
+      "properties": {
+        "command": { "type": "string" },
+        "ready_url": { "type": "string", "format": "uri" },
+        "ready_timeout": { "type": "integer", "minimum": 1, "default": 60 }
+      }
+    },
+    "AuthConfig": {
+      "type": "object",
+      "required": [
+        "type",
+        "setup_command",
+        "storage_state_path",
+        "test_user_env_prefix"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["storage_state"]
+        },
+        "setup_command": { "type": "string" },
+        "storage_state_path": { "type": "string" },
+        "test_user_env_prefix": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]*$",
+          "description": "Prefixo CAPS para env vars (ex: RESENHAI → RESENHAI_TEST_EMAIL/_PASSWORD)."
+        }
+      }
+    },
+    "DeterminismConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "freeze_time": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "random_seed": { "type": "integer" },
+        "disable_animations": { "type": "boolean", "default": true },
+        "clear_service_workers": { "type": "boolean", "default": false },
+        "clear_cookies_between_screens": {
+          "type": "boolean",
+          "default": false
+        },
+        "mock_routes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/MockRoute" }
+        }
+      }
+    },
+    "MockRoute": {
+      "type": "object",
+      "required": ["match"],
+      "additionalProperties": false,
+      "properties": {
+        "match": {
+          "type": "string",
+          "description": "Glob ou regex Playwright (ex: **/api/notifications/unread)."
+        },
+        "body": {},
+        "status": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 599,
+          "default": 200
+        }
+      },
+      "anyOf": [
+        { "required": ["body"] },
+        { "required": ["status"] }
+      ]
+    },
+    "PathRule": {
+      "type": "object",
+      "required": ["pattern", "screen_id_template"],
+      "additionalProperties": false,
+      "properties": {
+        "pattern": {
+          "type": "string",
+          "description": "Regex Python válida — validador compila e rejeita sintaxe inválida (FR-010)."
+        },
+        "screen_id_template": {
+          "type": "string",
+          "description": "Template com placeholders {1}, {2} pra grupos da regex."
+        }
+      }
+    }
+  }
+}
