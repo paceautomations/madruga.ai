@@ -17,9 +17,9 @@ def test_load_pipeline_keys():
     assert "quick_cycle" in p
 
 
-def test_l1_has_13_nodes():
-    """L1 pipeline has exactly 13 nodes."""
-    assert len(load_pipeline()["nodes"]) == 13
+def test_l1_has_14_nodes():
+    """L1 pipeline has exactly 14 nodes (epic 027 added business-screen-flow as optional)."""
+    assert len(load_pipeline()["nodes"]) == 14
 
 
 def test_l2_has_12_nodes():
