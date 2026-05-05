@@ -111,7 +111,7 @@ sidebar:
 
 - [X] T027 [P] [US1] Implementar `portal/src/components/screens/Chrome.tsx` — moldura minimal: border-radius + label discreto (`iPhone 15 / 393×852` ou `Desktop / 1440×900`). SEM status bar fake (Decision #15). ~50 LOC.
 
-- [ ] T028 [P] [US1] Implementar `portal/src/components/screens/WireframeBody.tsx` — 10 sub-renderers (heading, text, input, button, link, list, card, image, divider, badge) com paleta wireframe-only (cinza + accent suave) e tipografia distinta (Caveat ou Architects Daughter via Google Fonts preloaded). Decision #14, FR-022. ~150 LOC.
+- [X] T028 [P] [US1] Implementar `portal/src/components/screens/WireframeBody.tsx` — 10 sub-renderers (heading, text, input, button, link, list, card, image, divider, badge) com paleta wireframe-only (cinza + accent suave) e tipografia distinta (Caveat ou Architects Daughter via Google Fonts preloaded). Decision #14, FR-022. ~150 LOC.
 
 - [ ] T029 [US1] Implementar `portal/src/components/screens/ScreenNode.tsx` — custom xyflow node 3-state (wireframe/captured/failed). Memoizado por comparator estrito (`id + selected`). Inclui `aria-label` descrevendo conteúdo (FR-020). Composto de `Chrome.tsx` + `WireframeBody.tsx` ou `<img>` LFS conforme estado. Render badge `FALHOU` com tooltip `failure.reason` quando state=failed (FR-001, US-04 cenário). ~120 LOC. **Dependência**: T026, T027, T028.
 

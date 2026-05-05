@@ -1,0 +1,150 @@
+/* Wireframe body — paleta wireframe-only + tipografia distinta da app real
+   (Decision #14, FR-022). Cores via tokens screen-flow-tokens.css. */
+
+@import url('https://fonts.googleapis.com/css2?family=Architects+Daughter&family=Caveat:wght@500;700&display=swap');
+
+.wireframe-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  font-family: 'Caveat', 'Architects Daughter', system-ui, sans-serif;
+  color: var(--screen-fg);
+  background: var(--screen-bg);
+  height: 100%;
+  overflow: hidden;
+}
+
+.wf-heading {
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.wf-text {
+  font-size: 1.05rem;
+  line-height: 1.4;
+  color: var(--screen-fg);
+  opacity: 0.85;
+}
+
+.wf-input {
+  border: 1.5px dashed var(--screen-muted);
+  border-radius: 6px;
+  padding: 8px 12px;
+  background: transparent;
+  font-family: inherit;
+  font-size: 0.95rem;
+}
+
+.wf-input__placeholder {
+  color: var(--screen-muted);
+}
+
+.wf-button {
+  font-family: inherit;
+  font-size: 1.05rem;
+  border: 1.5px solid var(--screen-fg);
+  border-radius: 6px;
+  padding: 8px 14px;
+  background: transparent;
+  color: var(--screen-fg);
+  cursor: pointer;
+}
+
+.wf-button--primary {
+  background: var(--screen-accent);
+  border-color: var(--screen-accent);
+  color: var(--screen-bg);
+}
+
+.wf-link {
+  color: var(--screen-accent);
+  text-decoration: underline dashed;
+  text-underline-offset: 3px;
+  font-size: 1rem;
+}
+
+.wf-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wf-list__item {
+  border-bottom: 1px dashed var(--screen-muted);
+  padding: 6px 0;
+  font-size: 1rem;
+}
+
+.wf-card {
+  border: 1.5px dashed var(--screen-muted);
+  border-radius: 8px;
+  padding: 12px;
+  background: transparent;
+}
+
+.wf-card__title {
+  font-weight: 700;
+  font-size: 1.1rem;
+  margin-bottom: 4px;
+}
+
+.wf-card__body {
+  font-size: 1rem;
+  opacity: 0.85;
+}
+
+.wf-card__placeholder {
+  color: var(--screen-muted);
+  font-style: italic;
+}
+
+.wf-image {
+  border: 1.5px dashed var(--screen-muted);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 16px;
+  color: var(--screen-muted);
+  min-height: 80px;
+}
+
+.wf-image__icon {
+  font-size: 1.6rem;
+}
+
+.wf-image__caption {
+  font-size: 0.95rem;
+}
+
+.wf-divider {
+  border: none;
+  border-top: 1.5px dashed var(--screen-muted);
+  margin: 4px 0;
+}
+
+.wf-badge {
+  align-self: flex-start;
+  border: 1px solid var(--screen-muted);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 0.85rem;
+  background: transparent;
+}
+
+.wf-badge--success {
+  border-color: var(--edge-success);
+  color: var(--edge-success);
+}
+
+.wf-badge--error {
+  border-color: var(--edge-error);
+  color: var(--edge-error);
+}
