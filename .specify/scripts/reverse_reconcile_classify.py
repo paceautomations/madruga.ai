@@ -77,6 +77,12 @@ _TRIVIAL_SUBJECT = re.compile(
 )
 
 # Layer routing from file paths inside platforms/<p>/
+#
+# Anything under business|engineering|decisions|planning is "platform-owned content"
+# (the docs themselves, not patch targets). For epic 027 this implicitly covers
+# `business/screen-flow.yaml` and `business/shots/*.png` — capture/auto-commit and
+# manual edits to the screen-flow document never trigger reverse-reconcile cascade
+# (FR-038 / US-07). See test_doc_self_edit_no_cascade.py for the locked invariants.
 _LAYER_RE = re.compile(r"^platforms/[^/]+/(business|engineering|decisions|planning)/")
 
 

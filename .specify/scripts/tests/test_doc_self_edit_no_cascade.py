@@ -108,6 +108,38 @@ def test_pure_screen_flow_yaml_edit_is_doc_self_edit():
     assert "1 files" in reason or "platform doc" in reason
 
 
+def test_capture_auto_commit_is_doc_self_edit():
+    """T101 explicit confirmation: a capture run that updates `business/shots/*.png`
+    AND `business/screen-flow.yaml` (typical auto-commit pattern from
+    capture-screens.yml) is classified as doc-self-edit. Even though the PNG is
+    binary, the layer regex catches the entire `business/` subtree."""
+    from reverse_reconcile_classify import _classify_commit
+
+    layer, _ = _classify_commit(
+        {
+            "message": "capture: refresh login screenshot",
+            "files": [
+                "platforms/resenhai-expo/business/shots/login.png",
+                "platforms/resenhai-expo/business/screen-flow.yaml",
+            ],
+        }
+    )
+    assert layer == "doc-self-edit"
+
+
+def test_shots_only_png_is_doc_self_edit():
+    """A delta-only refresh (status flip + PNG only) is also doc-self-edit."""
+    from reverse_reconcile_classify import _classify_commit
+
+    layer, _ = _classify_commit(
+        {
+            "message": "capture: refresh login.png",
+            "files": ["platforms/resenhai-expo/business/shots/login.png"],
+        }
+    )
+    assert layer == "doc-self-edit"
+
+
 def test_multi_doc_layers_only_is_doc_self_edit():
     """A commit touching business + engineering + decisions + planning is still
     doc-self-edit — it never spawns code_items nor screen-flow patches."""

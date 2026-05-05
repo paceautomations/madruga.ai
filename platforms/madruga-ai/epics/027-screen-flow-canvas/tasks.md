@@ -297,7 +297,7 @@ sidebar:
 
 ### Implementation for User Story 7
 
-- [ ] T101 [US7] Validar que classifier existente em `reverse_reconcile_classify.py` cobre arquivos `screen-flow.yaml` (já trata `business/*` como doc-self-edit). Se não cobrir, adicionar regra explícita. Confirmar com `python3 reverse_reconcile_classify.py --files platforms/resenhai-expo/business/screen-flow.yaml`. **Dependência**: T100.
+- [x] T101 [US7] Validar que classifier existente em `reverse_reconcile_classify.py` cobre arquivos `screen-flow.yaml` (já trata `business/*` como doc-self-edit). Se não cobrir, adicionar regra explícita. Confirmar com `python3 reverse_reconcile_classify.py --files platforms/resenhai-expo/business/screen-flow.yaml`. **Dependência**: T100.
 
 - [ ] T102 [US7] Garantir que extensão de `reverse_reconcile_aggregate.py` (T093) RESPEITA classificação `doc-self-edit` antes de aplicar `path_rules` — ou seja, se commit já foi classificado, o módulo screen-flow é skipped. Adicionar guard `if commit.classification == "doc-self-edit": return`. **Dependência**: T093, T101.
 
