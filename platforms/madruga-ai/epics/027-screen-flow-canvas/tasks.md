@@ -245,7 +245,7 @@ sidebar:
 
 ### Implementation for User Story 5
 
-- [ ] T082 [US5] Implementar `portal/src/components/screens/Hotspot.tsx` — badge numerado (1, 2, 3...), outline 1px dashed via tokens, visible por default, position via coords normalizadas 0-1 (FR-027). Emite evento `onActivate(flow)`. ~80 LOC. **Dependência**: T080.
+- [x] T082 [US5] Implementar `portal/src/components/screens/Hotspot.tsx` — badge numerado (1, 2, 3...), outline 1px dashed via tokens, visible por default, position via coords normalizadas 0-1 (FR-027). Emite evento `onActivate(flow)`. ~80 LOC. **Dependência**: T080.
 
 - [ ] T083 [US5] Estender `ScreenFlowCanvas.tsx` (T031) com state `hotspotsVisible` + listener tecla `H` (KeyboardEvent) togglando visibilidade. Toggle <50ms (FR-025). **Dependência**: T031, T082.
 

@@ -1,0 +1,43 @@
+/* Hotspot — numbered overlay used over captured / wireframe screens.
+   Tokens come from screen-flow-tokens.css (FR-043, FR-044). The dashed
+   outline is intentional (FR-024) so hotspots stay visible on top of
+   busy PNG backgrounds. */
+
+.screen-flow-hotspot {
+  position: absolute;
+  display: inline-flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  border: 1px dashed var(--hotspot-outline);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--hotspot-outline) 12%, transparent);
+  cursor: pointer;
+  z-index: 2;
+  transition: opacity 0s; /* Toggle is immediate per FR-025 (<50ms budget). */
+  outline: none;
+  box-sizing: border-box;
+}
+
+.screen-flow-hotspot[data-visible='false'] {
+  display: none;
+}
+
+.screen-flow-hotspot:focus-visible {
+  box-shadow: 0 0 0 2px var(--screen-accent);
+}
+
+.screen-flow-hotspot__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  margin: -10px 0 0 -10px;
+  padding: 0 5px;
+  background: var(--hotspot-outline);
+  color: var(--screen-bg, #ffffff);
+  border-radius: 9px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 1;
+}
