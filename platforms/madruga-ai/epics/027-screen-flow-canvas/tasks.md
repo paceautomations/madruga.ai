@@ -93,7 +93,7 @@ sidebar:
 
 ### Tests for User Story 1 (RED first — fail before implementation)
 
-- [ ] T020 [P] [US1] Criar `portal/src/test/unit/ScreenNode.test.tsx` — teste vitest+RTL com 3 estados (wireframe, captured, failed): renderização, aria-label, classes CSS aplicadas, badge correto. Falha sem `ScreenNode.tsx`.
+- [X] T020 [P] [US1] Criar `portal/src/test/unit/ScreenNode.test.tsx` — teste vitest+RTL com 3 estados (wireframe, captured, failed): renderização, aria-label, classes CSS aplicadas, badge correto. Falha sem `ScreenNode.tsx`.
 
 - [ ] T021 [P] [US1] Criar `portal/src/test/unit/ActionEdge.test.tsx` — teste vitest+RTL: 4 styles (success/error/neutral/modal) renderizam pattern visual distinto (sólido/tracejado/pontilhado), label clicável, aria-label coerente. Falha sem `ActionEdge.tsx`.
 
