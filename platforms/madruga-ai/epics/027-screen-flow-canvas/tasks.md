@@ -119,7 +119,7 @@ sidebar:
 
 - [X] T031 [US1] Implementar `portal/src/components/screens/ScreenFlowCanvas.tsx` — wrapper xyflow com Background dots, Controls non-interactive, MiniMap pannable. Flags fixos: `nodesDraggable=false`, `nodesConnectable=false`, `elementsSelectable`, `onlyRenderVisibleElements`. Keyboard navigation: Tab move foco entre nodes, Enter aciona primeiro hotspot focado (FR-019). ~150 LOC. **Dependência**: T029, T030.
 
-- [ ] T032 [US1] Criar `portal/src/pages/[platform]/screens.astro` — rota SSG via `renderToStaticMarkup` + ilha React `client:visible`. Lê YAML via `screen-flow.ts`, renderiza `ScreenFlowCanvas`. Suporte a `?fixture=true` em dev mode. Falha graciosa quando YAML ausente. **Dependência**: T031, T024.
+- [X] T032 [US1] Criar `portal/src/pages/[platform]/screens.astro` — rota SSG via `renderToStaticMarkup` + ilha React `client:visible`. Lê YAML via `screen-flow.ts`, renderiza `ScreenFlowCanvas`. Suporte a `?fixture=true` em dev mode. Falha graciosa quando YAML ausente. **Dependência**: T031, T024.
 
 - [ ] T033 [P] [US1] Modificar `portal/src/lib/platforms.mjs` — descobrir `screen_flow.enabled` per-platform parseando `platform.yaml`; expor flag pra `routeData.ts`.
 

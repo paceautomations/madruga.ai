@@ -1,0 +1,136 @@
+---
+/**
+ * Screens route (epic 027 — T032).
+ *
+ * SSG page that renders the screen-flow canvas for a single platform.
+ * Astro pre-renders the host markup at build time; the React island
+ * (`ScreenFlowCanvas`) hydrates on `client:visible` so xyflow stays out
+ * of the initial render path (FR-017).
+ *
+ * Behaviour:
+ *   - Discovers all platforms with `screen_flow.enabled === true` and
+ *     emits one static path per platform (FR-016, US-03 cenário 3).
+ *   - Reads `platforms/<name>/business/screen-flow.yaml` via
+ *     `loadScreenFlow` and runs ELK build-time layout via
+ *     `buildPositionedGraph` so the client never imports `elkjs`.
+ *   - Falls back to the dev fixture when `?fixture=true` is appended,
+ *     enabling Phase 2 dogfooding before Phase 4 ships real screenshots.
+ *   - Fails graciously when the YAML is missing: shows an opt-out hint
+ *     instead of throwing during build.
+ *
+ * Wiring overview:
+ *
+ *   discoverPlatforms() ──▶ filter screen_flow.enabled
+ *           │
+ *           ├── getStaticPaths() emits one route per opted-in platform
+ *           │
+ *           └── loadScreenFlow(platform) ──▶ buildPositionedGraph (ELK)
+ *                                                │
+ *                                                └── <ScreenFlowCanvas client:visible />
+ */
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+import ScreenFlowCanvas from '../../components/screens/ScreenFlowCanvas.tsx';
+import { discoverPlatforms } from '../../lib/platforms.mjs';
+import {
+  loadScreenFlow,
+  loadFixtureScreenFlow,
+  buildLayoutGraph,
+  type ScreenFlow,
+} from '../../lib/screen-flow';
+import { buildPositionedGraph } from '../../lib/elk-layout';
+
+export function getStaticPaths() {
+  // Emit a route only for platforms that opted into screen-flow. This
+  // mirrors the sidebar gate in `routeData.ts` (T034) so the URL space
+  // stays consistent with the navigation surface.
+  return discoverPlatforms()
+    .filter((p: any) => p?.screen_flow?.enabled === true)
+    .map((p: any) => ({
+      params: { platform: p.name },
+      props: { platform: p.name },
+    }));
+}
+
+const { platform } = Astro.props as { platform: string };
+
+// `?fixture=true` is honoured at build for dev runs only — production
+// builds ignore the query (Astro pre-renders without query strings) and
+// always read the canonical YAML.
+const fixtureRequested =
+  Astro.url.searchParams.get('fixture') === 'true' && import.meta.env.DEV;
+
+let flow: ScreenFlow | null = null;
+let nodes: any[] = [];
+let edges: any[] = [];
+let loadError: string | null = null;
+
+try {
+  if (fixtureRequested) {
+    flow = loadFixtureScreenFlow();
+  } else {
+    flow = loadScreenFlow(platform);
+  }
+  if (flow) {
+    // ELK runs server-side so the client bundle ships without `elkjs`
+    // (FR-017). When the layered algorithm fails (timeout, cyclic graph
+    // without manual positions) we degrade to the unpositioned graph so
+    // the page still renders something useful.
+    try {
+      const positioned = await buildPositionedGraph(flow);
+      nodes = positioned.nodes;
+      edges = positioned.edges;
+    } catch (elkErr) {
+      const fallback = buildLayoutGraph(flow);
+      nodes = fallback.nodes;
+      edges = fallback.edges;
+      loadError = `Layout fallback: ${
+        elkErr instanceof Error ? elkErr.message : String(elkErr)
+      }`;
+    }
+  }
+} catch (err) {
+  loadError =
+    err instanceof Error
+      ? err.message
+      : `Falha ao carregar screen-flow.yaml: ${String(err)}`;
+}
+---
+
+<StarlightPage frontmatter={{ title: 'Screens', tableOfContents: false }}>
+  {flow ? (
+    <>
+      {loadError ? (
+        <p class="screens-warn" role="alert">{loadError}</p>
+      ) : null}
+      <ScreenFlowCanvas client:visible nodes={nodes} edges={edges} />
+    </>
+  ) : (
+    <section class="screens-empty">
+      <h2>Screen flow indisponível</h2>
+      <p>
+        Esta plataforma ainda não publicou
+        <code>business/screen-flow.yaml</code>. Habilite o bloco
+        <code>screen_flow</code> em <code>platform.yaml</code> e gere o
+        artefato com <code>/madruga:business-screen-flow</code>.
+      </p>
+      {loadError ? <p class="screens-warn"><strong>Detalhe:</strong> {loadError}</p> : null}
+    </section>
+  )}
+</StarlightPage>
+
+<style>
+  .screens-empty {
+    padding: 2rem;
+    border: 1px dashed var(--sl-color-gray-5, #ccc);
+    border-radius: 8px;
+    margin: 2rem 0;
+  }
+  .screens-warn {
+    color: var(--sl-color-orange, #c2410c);
+    font-size: 0.9rem;
+    padding: 0.5rem 1rem;
+    background: var(--sl-color-bg-nav, transparent);
+    border-left: 3px solid currentColor;
+    margin: 0 0 1rem 0;
+  }
+</style>
