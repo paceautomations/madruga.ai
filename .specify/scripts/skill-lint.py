@@ -30,6 +30,7 @@ PIPELINE_SKILLS = {
     "vision",
     "solution-overview",
     "business-process",
+    "business-screen-flow",
     "tech-research",
     "codebase-map",
     "adr",
