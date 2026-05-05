@@ -97,7 +97,7 @@ sidebar:
 
 - [X] T021 [P] [US1] Criar `portal/src/test/unit/ActionEdge.test.tsx` — teste vitest+RTL: 4 styles (success/error/neutral/modal) renderizam pattern visual distinto (sólido/tracejado/pontilhado), label clicável, aria-label coerente. Falha sem `ActionEdge.tsx`.
 
-- [ ] T022 [P] [US1] Criar `portal/src/test/visual/screen-flow-canvas.spec.ts` — Playwright + jest-image-snapshot carregando fixture com 8 telas; gera baseline em light + dark mode (toleração 1px). Falha sem renderer.
+- [X] T022 [P] [US1] Criar `portal/src/test/visual/screen-flow-canvas.spec.ts` — Playwright + jest-image-snapshot carregando fixture com 8 telas; gera baseline em light + dark mode (toleração 1px). Falha sem renderer.
 
 - [ ] T023 [P] [US1] Criar `portal/src/test/unit/Badge.test.tsx` — teste vitest cobrindo 6 variants. Falha sem `Badge.tsx`.
 
