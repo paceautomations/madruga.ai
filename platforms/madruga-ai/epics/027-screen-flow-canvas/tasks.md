@@ -77,7 +77,7 @@ sidebar:
 
 - [x] T016 Criar `portal/src/test/fixtures/screen-flow.example.yaml` — fixture válida cobrindo 8 telas, 10 component types, 4 edge styles, hotspots numerados, mix wireframe/captured. Usado pra fase 2 dogfooding sem depender da fase 4 (Resolved Gray Area da pitch). `schema_version: 1` no topo.
 
-- [ ] T017 Estender `platforms/madruga-ai/testing/journeys.md` (criar se ausente) com Journey J-001 — happy path: portal home → /madruga-ai/business/vision/ retorna 200; assertion final usa `expect_status=200` declarado em `platform.yaml.testing.urls`. Necessário pra Deployment Smoke phase.
+- [x] T017 Estender `platforms/madruga-ai/testing/journeys.md` (criar se ausente) com Journey J-001 — happy path: portal home → /madruga-ai/business/vision/ retorna 200; assertion final usa `expect_status=200` declarado em `platform.yaml.testing.urls`. Necessário pra Deployment Smoke phase.
 
 **Checkpoint**: `python3 -c "import json; json.load(open('.specify/schemas/screen-flow.schema.json'))"` sucesso; `python3 .specify/scripts/dag_executor.py --platform madruga-ai --dry-run` lista 14 nós L1; tokens CSS válidos via `npx stylelint portal/src/styles/screen-flow-tokens.css`.
 
