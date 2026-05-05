@@ -1,5 +1,5 @@
 /**
- * ScreenNode (epic 027 — T029).
+ * ScreenNode (epic 027 — T029 + T085).
  *
  * Custom xyflow node that renders one Screen across the three capture
  * states (FR-001 + data-model E2):
@@ -8,23 +8,34 @@
  *   captured → Chrome + <img> from business/shots/<id>.png + WEB BUILD vX badge
  *   failed   → Chrome + WireframeBody + FALHOU badge with failure.reason tooltip
  *
- * Memoized by id+selected (`memo` with custom comparator) so xyflow's
- * incremental rerenders don't churn nodes when only the camera changes.
+ * Hotspot overlay (T085): for every flow whose `from === screen.id`,
+ * a numbered Hotspot is rendered on top of the chrome body. Coordinates
+ * come either from a captured boundingBox (when the capture script
+ * resolved `[data-testid]` against the live DOM) or from a deterministic
+ * fallback derived from the body component index (FR-027 — coords are
+ * normalized 0-1 so the same overlay survives a profile swap).
+ *
+ * Memoized by (id, selected, screen, profile, flows) — flows churn
+ * shallowly because ScreenFlowCanvas materialises them with useMemo.
  *
  * Accessibility (FR-020): each node exposes `aria-label="Tela <id>: <summary>"`
  * — screen readers can navigate the canvas via keyboard (FR-019).
  */
 import { memo } from 'react';
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
-import type { CaptureProfile, Screen } from '../../lib/screen-flow';
+import type { CaptureProfile, Flow, Screen } from '../../lib/screen-flow';
 import Chrome from './Chrome';
 import WireframeBody from './WireframeBody';
 import Badge, { type BadgeVariant } from './Badge';
+import Hotspot, { type HotspotCoords } from './Hotspot';
+import { useHotspotContext } from './HotspotContext';
 import './ScreenNode.css';
 
 export interface ScreenNodeData {
   screen: Screen;
   profile: CaptureProfile;
+  /** Flows where `from === screen.id`. Populated by ScreenFlowCanvas. */
+  flows?: Flow[];
   /** Optional override label, e.g. `WEB BUILD v9c4f1a2` from app_version. */
   capturedBadgeLabel?: string;
   [key: string]: unknown;
@@ -33,7 +44,7 @@ export interface ScreenNodeData {
 type ScreenNodeFlowNode = Node<ScreenNodeData, 'screen'>;
 
 function ScreenNodeImpl(props: NodeProps<ScreenNodeFlowNode>) {
-  const { screen, profile, capturedBadgeLabel } = props.data;
+  const { screen, profile, capturedBadgeLabel, flows } = props.data;
   const ariaLabel = describeScreen(screen);
   const badgeVariant = pickBadgeVariant(screen);
   const badgeLabel = pickBadgeLabel(screen, capturedBadgeLabel);
@@ -42,6 +53,15 @@ function ScreenNodeImpl(props: NodeProps<ScreenNodeFlowNode>) {
         screen.failure.last_error_message ? ` — ${screen.failure.last_error_message}` : ''
       }`
     : undefined;
+
+  const hotspotCtx = useHotspotContext();
+  const hotspots = (flows ?? [])
+    .map((flow, i) => {
+      const coords = resolveHotspotCoords(screen, flow, i, flows ?? []);
+      if (!coords) return null;
+      return { flow, coords, index: i + 1 };
+    })
+    .filter((h): h is { flow: Flow; coords: HotspotCoords; index: number } => h !== null);
 
   return (
     <div
@@ -58,16 +78,28 @@ function ScreenNodeImpl(props: NodeProps<ScreenNodeFlowNode>) {
         <Badge variant={badgeVariant} label={badgeLabel} title={failureTooltip} />
       </div>
       <Chrome profile={profile} label={screen.title}>
-        {screen.status === 'captured' && screen.image ? (
-          <img
-            className="screen-node__image"
-            src={resolveImageSrc(screen.image)}
-            alt={`Captura da tela ${screen.id}`}
-            draggable={false}
-          />
-        ) : (
-          <WireframeBody body={screen.body} />
-        )}
+        <div className="screen-node__overlay-root">
+          {screen.status === 'captured' && screen.image ? (
+            <img
+              className="screen-node__image"
+              src={resolveImageSrc(screen.image)}
+              alt={`Captura da tela ${screen.id}`}
+              draggable={false}
+            />
+          ) : (
+            <WireframeBody body={screen.body} />
+          )}
+          {hotspots.map(({ flow, coords, index }) => (
+            <Hotspot
+              key={`${flow.from}->${flow.to}-${flow.on}-${index}`}
+              flow={flow}
+              index={index}
+              coords={coords}
+              visible={hotspotCtx.visible}
+              onActivate={hotspotCtx.onActivate}
+            />
+          ))}
+        </div>
       </Chrome>
       <Handle
         type="source"
@@ -79,13 +111,16 @@ function ScreenNodeImpl(props: NodeProps<ScreenNodeFlowNode>) {
 }
 
 // Memo with a strict equality check on (id, selected, status). Other props
-// from xyflow (zIndex, dragging) don't affect the visual output.
+// from xyflow (zIndex, dragging) don't affect the visual output. Flows
+// reference equality is preserved by ScreenFlowCanvas's memo, so adding
+// it here keeps hotspot updates in sync without re-renders for camera moves.
 const ScreenNode = memo(ScreenNodeImpl, (prev, next) => {
   return (
     prev.id === next.id &&
     prev.selected === next.selected &&
     prev.data.screen === next.data.screen &&
-    prev.data.profile === next.data.profile
+    prev.data.profile === next.data.profile &&
+    prev.data.flows === next.data.flows
   );
 });
 
@@ -129,4 +164,53 @@ function resolveImageSrc(image: string): string {
   // If the YAML already provides an absolute URL or `/path`, trust it.
   if (image.startsWith('http') || image.startsWith('/')) return image;
   return image;
+}
+
+/**
+ * Resolve normalized 0-1 coordinates for a hotspot.
+ *
+ * Priority:
+ *   1. Captured boundingBox (future): the capture script will populate
+ *      coords from `[data-testid="<id>"]` and we'll thread them through
+ *      `screen.meta.hotspots` (out of scope for T085 — fallback below
+ *      keeps the renderer useful with fixture-only data).
+ *   2. Body-index fallback: locate the body component matching
+ *      `body.id === flow.on` and project its position by index. This
+ *      keeps hotspots stable across runs without DOM measurement and
+ *      satisfies the visible / clickable / numbered invariants the
+ *      Phase 7 spec covers.
+ */
+function resolveHotspotCoords(
+  screen: Screen,
+  flow: Flow,
+  fallbackIndex: number,
+  allFlows: Flow[],
+): HotspotCoords | null {
+  const bodyIdx = screen.body.findIndex((c) => c.id === flow.on);
+  // If the body component is missing entirely, still emit a hotspot so
+  // the flow remains discoverable, stacked at the bottom of the screen.
+  const total = Math.max(screen.body.length, 1);
+  // Spread overlapping hotspots horizontally when more than one flow
+  // targets the same body component (rare but legal — login OK + login
+  // error both fire on `submit`).
+  const peers = allFlows.filter((f) => f.on === flow.on);
+  const peerIdx = peers.findIndex(
+    (f) => f.from === flow.from && f.to === flow.to,
+  );
+  const peerCount = peers.length;
+
+  const yIdx = bodyIdx >= 0 ? bodyIdx : total - 1;
+  const yCenter = (yIdx + 0.5) / total;
+  const h = 1 / total;
+  // Hotspot height is capped so badges remain compact on tall screens.
+  const cappedH = Math.min(h, 0.18);
+  const y = Math.max(0, Math.min(1 - cappedH, yCenter - cappedH / 2));
+
+  const w = peerCount > 1 ? Math.min(0.5, 1 / peerCount) : 0.6;
+  const offset = peerCount > 1 ? peerIdx * w : 0.2;
+  const x = Math.max(0, Math.min(1 - w, offset));
+
+  return { x, y, w, h: cappedH };
+  // fallbackIndex unused — reserved for future captured-coord ordering.
+  void fallbackIndex;
 }

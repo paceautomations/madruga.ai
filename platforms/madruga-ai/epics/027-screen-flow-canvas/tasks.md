@@ -247,11 +247,11 @@ sidebar:
 
 - [x] T082 [US5] Implementar `portal/src/components/screens/Hotspot.tsx` — badge numerado (1, 2, 3...), outline 1px dashed via tokens, visible por default, position via coords normalizadas 0-1 (FR-027). Emite evento `onActivate(flow)`. ~80 LOC. **Dependência**: T080.
 
-- [ ] T083 [US5] Estender `ScreenFlowCanvas.tsx` (T031) com state `hotspotsVisible` + listener tecla `H` (KeyboardEvent) togglando visibilidade. Toggle <50ms (FR-025). **Dependência**: T031, T082.
+- [x] T083 [US5] Estender `ScreenFlowCanvas.tsx` (T031) com state `hotspotsVisible` + listener tecla `H` (KeyboardEvent) togglando visibilidade. Toggle <50ms (FR-025). **Dependência**: T031, T082.
 
-- [ ] T084 [US5] Estender `ScreenFlowCanvas.tsx` com handler `onHotspotActivate(flow)`: anima edge correspondente via xyflow API (~250ms), em seguida `fitView` com easing pra `flow.to` (~350ms). Total <700ms (FR-026). **Dependência**: T083.
+- [x] T084 [US5] Estender `ScreenFlowCanvas.tsx` com handler `onHotspotActivate(flow)`: anima edge correspondente via xyflow API (~250ms), em seguida `fitView` com easing pra `flow.to` (~350ms). Total <700ms (FR-026). **Dependência**: T083.
 
-- [ ] T085 [US5] Estender `ScreenNode.tsx` (T029) renderizando lista de hotspots derivados dos `flows[]` da tela (componentes com `flow.on === body.id`). Posicionamento via `boundingBox` capturado ou coords declaradas. **Dependência**: T029, T082.
+- [x] T085 [US5] Estender `ScreenNode.tsx` (T029) renderizando lista de hotspots derivados dos `flows[]` da tela (componentes com `flow.on === body.id`). Posicionamento via `boundingBox` capturado ou coords declaradas. **Dependência**: T029, T082.
 
 **Checkpoint**: T080 + T081 verdes; hotspots interativos no `?fixture=true`; tecla H toggla; click navega <700ms.
 
