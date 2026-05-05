@@ -136,6 +136,50 @@ gh run list --workflow=capture-screens.yml -L 5
 gh run view --log-failed     # se falhar
 ```
 
+### 3.1. Configurar GH Secrets para o pilot resenhai (T072)
+
+O workflow `capture-screens.yml` precisa de credenciais do test user da plataforma para reusar o `storageState` Playwright. Para o pilot resenhai, configurar 2 secrets na org `paceautomations`:
+
+```bash
+gh secret set RESENHAI_TEST_EMAIL    --org paceautomations --body "demo+playwright@resenhai.com"
+gh secret set RESENHAI_TEST_PASSWORD --org paceautomations --body "<senha-do-test-user>"
+```
+
+Confirmar que o repo `madruga.ai` tem visibilidade dos secrets:
+
+```bash
+gh secret list --org paceautomations | grep RESENHAI
+```
+
+Para outras plataformas, usar o prefixo declarado em `platform.yaml.screen_flow.capture.auth.test_user_env_prefix` — o workflow lê `<PREFIX>_TEST_EMAIL` e `<PREFIX>_TEST_PASSWORD` do environment.
+
+### 3.2. Storage state setup no resenhai-expo
+
+O `storageState` real é gerado pelo arquivo `e2e/auth.setup.ts` que **já existe** no repo `paceautomations/resenhai-expo`. O workflow assume que o test user é válido e o `setup_command` regenera o JSON quando necessário.
+
+Pré-condição manual (uma vez por janela do epic):
+
+```bash
+# No clone do resenhai-expo
+cd /path/to/resenhai-expo
+RESENHAI_TEST_EMAIL=... RESENHAI_TEST_PASSWORD=... \
+  npx playwright test --project=auth-setup
+git diff e2e/.auth/user.json   # confirmar geração
+```
+
+Se o test user não existir mais no Supabase staging, recriar via console e atualizar `RESENHAI_TEST_PASSWORD` antes de re-rodar o workflow.
+
+### 3.3. Troubleshooting de PNG noise
+
+| Sintoma | Causa provável | Remediation |
+|---------|---------------|-------------|
+| md5 muda entre runs (>20% das telas) | Element não-determinístico não coberto por mocks | Adicionar `mock_route` em `determinism.mock_routes` para a request volátil; OU declarar `[data-volatile]` no app (escalada gradual conforme Decision #8) |
+| `reason: sw_cleanup_failed` recorrente | Service Worker não responde a `unregister()` | Forçar hard-reload antes do cleanup; investigar bug do app — não-fatal mas degrada determinism |
+| `reason: timeout` em telas autenticadas | Auth expirada em meio à corrida | Regenerar `e2e/.auth/user.json` (§3.2) e re-disparar workflow |
+| PNG >500KB rejeitado pelo pre-commit | Imagens decorativas pesadas no DOM real | (a) reduzir viewport, (b) declarar `mock_route` retornando placeholder leve, (c) capturar `clip:` no spec ao invés de `fullPage` (já é default false) |
+| Workflow exits 1 mas YAML committado | ≥1 tela com `status: failed` (esperado per FR-046) | Ler `failure.reason` na YAML, decidir entre re-rodar workflow OU ajustar config |
+| `auth_setup_failed` no log do orchestrator | `<PREFIX>_TEST_EMAIL`/`_PASSWORD` ausente | Configurar GH Secrets (§3.1) ou exportar localmente |
+
 ---
 
 ## 4. Visualizar no portal

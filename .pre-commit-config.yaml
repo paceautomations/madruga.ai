@@ -1,11 +1,13 @@
 # Pre-commit hooks for madruga.ai.
-# Hooks below are placeholders for epic 027-screen-flow-canvas; the actual
-# scripts (`screen_flow_validator.py`, `pre_commit_png_size.py`) land in
-# Phase 2 / Phase 6 of the same epic. Until then `pass_filenames: true`
-# combined with non-existing entries would block commits, so the hooks
-# stay disabled (`stages: [manual]`) and ship enabled in later phases.
 #
-# Fallback when pre-commit framework is unavailable: a bash hook can be
+# Both hooks below are wired into the standard `pre-commit` stages (T068 of
+# epic 027-screen-flow-canvas):
+#   - screen-flow-validator: validates platforms/<p>/business/screen-flow.yaml
+#     against the closed-vocabulary schema (FR-001..FR-049 except retry).
+#   - screen-flow-png-size: rejects committed PNGs > 500KB in business/shots/
+#     (FR-034). Git LFS handles diff/storage; this hook gates size.
+#
+# Fallback when the pre-commit framework is unavailable: a bash hook can be
 # wired manually at `.git/hooks/pre-commit` calling the same scripts —
 # see epic 027 quickstart.md for the recipe.
 
@@ -18,7 +20,6 @@ repos:
         language: system
         files: 'platforms/.*/business/screen-flow\.yaml$'
         pass_filenames: true
-        stages: [manual]
 
       - id: screen-flow-png-size
         name: Reject PNGs larger than 500KB in business/shots (epic 027)
@@ -26,4 +27,3 @@ repos:
         language: system
         files: 'platforms/.*/business/shots/.*\.png$'
         pass_filenames: true
-        stages: [manual]

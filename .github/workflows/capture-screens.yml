@@ -1,0 +1,106 @@
+name: capture-screens
+
+# Captures screen-flow PNGs for the platform passed via workflow_dispatch.
+# Runs the Python orchestrator (`.specify/scripts/capture/screen_capture.py`)
+# which delegates to the Playwright spec (`screen_capture.spec.ts`). Auto-
+# commits the updated YAML + PNGs to the active branch via Git LFS.
+#
+# Implements T069 of epic 027-screen-flow-canvas. Concurrency block (FR-035,
+# Decision #20) serializes simultaneous dispatches per platform so two runs
+# never race-corrupt the YAML.
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: "Platform name (e.g. resenhai)"
+        required: true
+        type: string
+      only_screen:
+        description: "Optional: capture a single screen.id (debug)"
+        required: false
+        type: string
+        default: ""
+
+# Per-platform serial queue. cancel-in-progress=false guarantees the second
+# dispatch waits instead of clobbering the first run mid-flight.
+concurrency:
+  group: capture-screens-${{ github.event.inputs.platform }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30  # FR-045 total
+    env:
+      RESENHAI_TEST_EMAIL: ${{ secrets.RESENHAI_TEST_EMAIL }}
+      RESENHAI_TEST_PASSWORD: ${{ secrets.RESENHAI_TEST_PASSWORD }}
+    steps:
+      - name: Checkout (with LFS)
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install Python deps
+        run: pip install -r requirements.txt
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: portal/package-lock.json
+
+      - name: Install portal deps
+        working-directory: portal
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        working-directory: portal
+        run: npx playwright install --with-deps chromium
+
+      - name: Compute APP_VERSION
+        id: appver
+        run: echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Run capture
+        env:
+          APP_VERSION: ${{ steps.appver.outputs.sha }}
+          MADRUGA_DISPATCH: "1"
+        run: |
+          set -o pipefail
+          ARGS=("${{ inputs.platform }}")
+          if [ -n "${{ inputs.only_screen }}" ]; then
+            ARGS+=("--screen" "${{ inputs.only_screen }}")
+          fi
+          python3 .specify/scripts/capture/screen_capture.py "${ARGS[@]}"
+
+      - name: Auto-commit captured artifacts
+        if: always()
+        run: |
+          set -e
+          git config user.name  "madruga-bot"
+          git config user.email "bot@madruga.ai"
+          git add platforms/${{ inputs.platform }}/business/screen-flow.yaml || true
+          git add platforms/${{ inputs.platform }}/business/shots/ || true
+          if git diff --cached --quiet; then
+            echo "Nothing to commit (no captures changed)."
+            exit 0
+          fi
+          git commit -m "feat(027): capture screen-flow for ${{ inputs.platform }} @ ${{ steps.appver.outputs.sha }}
+
+          Run: ${{ github.run_id }}
+          Trigger: workflow_dispatch
+          Concurrency group: capture-screens-${{ inputs.platform }}"
+          git push origin "${GITHUB_REF#refs/heads/}"

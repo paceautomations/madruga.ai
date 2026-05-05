@@ -33,3 +33,38 @@ testing:
     - EXPO_PUBLIC_POSTHOG_HOST
   env_file: .env.example
   journeys_file: testing/journeys.md
+
+# Screen-flow capture configuration (epic 027 — T071).
+# Pilot platform — captures real screenshots from Expo Web staging at
+# https://dev.resenhai.com via Playwright. Drift detection routes commits
+# touching `app/(auth)/<x>.tsx` etc. into screen-flow.yaml capture.status=pending.
+screen_flow:
+  enabled: true
+  capture:
+    base_url: "https://dev.resenhai.com"
+    device_profile: iphone-15
+    auth:
+      type: storage_state
+      setup_command: "npx playwright test --project=auth-setup"
+      storage_state_path: "e2e/.auth/user.json"
+      test_user_env_prefix: "RESENHAI"
+    determinism:
+      freeze_time: "2026-01-01T12:00:00Z"
+      random_seed: 42
+      disable_animations: true
+      clear_service_workers: true
+      clear_cookies_between_screens: true
+      mock_routes:
+        - match: "**/api/notifications/unread"
+          body:
+            count: 0
+    expo_web:
+      enabled: true
+    path_rules:
+      - pattern: 'app/\(auth\)/(\w+)\.tsx'
+        screen_id_template: '{1}'
+      - pattern: 'app/\(app\)/(\w+)\.tsx'
+        screen_id_template: '{1}'
+      - pattern: 'app/\(app\)/(\w+)/(\w+)\.tsx'
+        screen_id_template: '{1}_{2}'
+    test_user_marker: "demo+playwright@resenhai.com"
