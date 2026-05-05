@@ -315,6 +315,13 @@ def _collect_screen_flow_patches(
     Returns one patch per distinct screen_id, with merged sha_refs + source_files
     across every commit that touched any matching file. Silently returns [] when
     the platform has `screen_flow.enabled: false` or no `path_rules` (FR-039).
+
+    Defense-in-depth (FR-038, US-07): only iterates the ``clusters`` bucket of
+    the triage, never ``doc_self_edits``. Plus, any platform-owned file that
+    leaks into a cluster (regression in classify) is filtered here — the closed
+    loop "edit screen-flow.yaml → reverse-reconcile re-flips it to pending"
+    cannot close even if classify regresses. See
+    test_doc_self_edit_no_cascade.py for the locked invariants.
     """
     if not screen_flow or not screen_flow.get("enabled"):
         return []
@@ -328,7 +335,13 @@ def _collect_screen_flow_patches(
     for commits in clusters.values():
         for commit in commits:
             sha = commit.get("sha")
+            # Defensive guard (T102): even if a doc-self-edit commit somehow lands
+            # in a cluster (classify regression), platform-owned files cannot drive
+            # screen-flow patches. path_rules are scoped to app source paths and
+            # platform-owned paths are explicitly skipped here as belt-and-braces.
             for f in commit.get("files", []):
+                if _is_platform_owned(f):
+                    continue
                 sid = resolve_screen_id_from_rules(f, rules)
                 if not sid:
                     continue

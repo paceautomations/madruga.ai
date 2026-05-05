@@ -266,6 +266,49 @@ def test_mixed_doc_and_app_commit_emits_patch_only_for_app_file(monkeypatch, tmp
     assert result["code_items"][0]["target_file"] == "app/(auth)/login.tsx"
 
 
+def test_t102_guard_blocks_platform_owned_files_even_when_path_rule_matches(monkeypatch, tmp_path):
+    """T102 defensive guard: even if a malformed path_rule WOULD match a
+    platform-owned file (e.g. someone naïvely writes `pattern: '.+\\.md'`),
+    `_is_platform_owned` filters the file out before resolving a screen_id.
+
+    This is belt-and-braces protection against the closed loop:
+    edit `business/screen-flow.yaml` → reverse-reconcile re-flips it to pending.
+    """
+    import reverse_reconcile_aggregate as agg
+
+    repo = _init_repo(tmp_path, [("seed", {"app/(auth)/login.tsx": "x\n"})])
+    monkeypatch.setattr(agg.ensure_repo_mod, "ensure_repo", lambda _p: repo)
+    monkeypatch.setattr(agg.ensure_repo_mod, "load_repo_binding", lambda _p: {"base_branch": "develop"})
+
+    # Adversarial path_rule that would match the doc YAML if guard were absent.
+    bad_rules = [
+        {"pattern": r"platforms/[^/]+/business/(\w+)\.yaml", "screen_id_template": "{1}"},
+    ]
+    monkeypatch.setattr(
+        agg,
+        "_load_platform_screen_flow",
+        lambda _p: {"enabled": True, "capture": {"path_rules": bad_rules}},
+    )
+
+    forced_triage = {
+        "triage": {
+            "doc_self_edits": [],
+            "clusters": {
+                "code": [
+                    {
+                        "sha": "regression",
+                        "message": "doc leaked into clusters",
+                        "files": ["platforms/resenhai/business/screen_flow.yaml"],
+                    }
+                ],
+            },
+        }
+    }
+    result = agg.aggregate("resenhai", forced_triage)
+    # Guard suppresses the patch even though the (adversarial) rule would match.
+    assert result["screen_flow_pending_patches"] == []
+
+
 def test_doc_self_edit_invariant_screen_flow_patches_only_drawn_from_clusters(monkeypatch, tmp_path, fresh_db):
     """Defensive: even if a doc commit is somehow injected directly into the
     triage clusters (regression scenario), the screen-flow path_rules will not
