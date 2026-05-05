@@ -74,6 +74,25 @@ PATH_RULES = [
 ]
 
 
+def _platform_yaml_with_path_rules(rules: list[dict]) -> str:
+    """Render a minimal platform.yaml with a screen_flow block + path_rules.
+
+    Built procedurally to avoid backslash-in-f-string issues on older toolchains
+    (the regex literal `app/\\(auth\\)/...` requires escaping).
+    """
+    lines = [
+        "name: testplat",
+        "screen_flow:",
+        "  enabled: true",
+        "  capture:",
+        "    path_rules:",
+    ]
+    for r in rules:
+        lines.append(f"      - pattern: '{r['pattern']}'")
+        lines.append(f"        screen_id_template: '{r['screen_id_template']}'")
+    return "\n".join(lines) + "\n"
+
+
 def _init_repo_with_commit(tmp_path: Path) -> tuple[Path, str]:
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -112,14 +131,7 @@ def test_e2e_drift_loop_login_screen_flips_to_pending(tmp_path, monkeypatch):
     biz_dir.mkdir(parents=True)
 
     (plat_dir / "platform.yaml").write_text(
-        f"""\
-name: testplat
-screen_flow:
-  enabled: true
-  capture:
-    path_rules:
-{chr(10).join(f"      - pattern: '{r['pattern']}'\n        screen_id_template: '{r['screen_id_template']}'" for r in PATH_RULES)}
-""",
+        _platform_yaml_with_path_rules(PATH_RULES),
         encoding="utf-8",
     )
     yaml_path = biz_dir / "screen-flow.yaml"
@@ -190,15 +202,7 @@ def test_e2e_aggregate_cli_emits_screen_flow_patches_in_json(tmp_path, monkeypat
     fake_root = tmp_path / "fake_repo_root"
     (fake_root / "platforms" / "testplat").mkdir(parents=True)
     (fake_root / "platforms" / "testplat" / "platform.yaml").write_text(
-        f"""\
-name: testplat
-screen_flow:
-  enabled: true
-  capture:
-    path_rules:
-      - pattern: '{PATH_RULES[0]['pattern']}'
-        screen_id_template: '{PATH_RULES[0]['screen_id_template']}'
-""",
+        _platform_yaml_with_path_rules(PATH_RULES),
         encoding="utf-8",
     )
 
