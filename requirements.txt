@@ -1,0 +1,5 @@
+# Runtime Python dependencies for madruga.ai pipeline scripts.
+# Dev/CI extras live in requirements-dev.txt.
+
+pyyaml>=6.0
+jsonschema>=4.0

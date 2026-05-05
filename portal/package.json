@@ -10,7 +10,11 @@
     "prebuild": "npm run prestatus",
     "build": "astro build",
     "preview": "astro preview",
-    "astro": "astro"
+    "astro": "astro",
+    "test:component": "vitest run --dir src/test/unit",
+    "test:visual": "playwright test --config=playwright.config.ts src/test/visual",
+    "test:e2e": "playwright test --config=playwright.config.ts src/test/e2e",
+    "size": "size-limit"
   },
   "dependencies": {
     "@astrojs/react": "^5.0.4",
@@ -30,8 +34,17 @@
     "lodash-es": "^4.18.1"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.0.0",
+    "@playwright/test": "^1.48.0",
+    "@size-limit/preset-app": "^11.0.0",
+    "@testing-library/jest-dom": "^6.0.0",
+    "@testing-library/react": "^16.0.0",
     "@types/js-yaml": "^4.0.9",
     "@types/react": "^19.2.14",
-    "@types/react-dom": "^19.2.3"
+    "@types/react-dom": "^19.2.3",
+    "jest-image-snapshot": "^6.0.0",
+    "jsdom": "^25.0.0",
+    "size-limit": "^11.0.0",
+    "vitest": "^2.0.0"
   }
 }
