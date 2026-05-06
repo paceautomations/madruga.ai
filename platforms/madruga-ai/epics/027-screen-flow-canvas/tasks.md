@@ -71,7 +71,7 @@ sidebar:
 
 - [x] T013 Atualizar `.claude/knowledge/pipeline-dag-knowledge.md` adicionando 14ª linha à tabela L1 (business-screen-flow, optional=YES, gate=human, depends=business-process, output=business/screen-flow.yaml). Manter ordem alfabética dentro do layer business.
 
-- [ ] T014 [P] Criar `.claude/knowledge/screen-flow-vocabulary.md` cobrindo 10 components + 4 edges + 6 badges + 3 capture states com 1 exemplo YAML por entrada (~200-300 linhas). Referência única para autores e renderer (FR-016 do contrato de skill).
+- [x] T014 [P] Criar `.claude/knowledge/screen-flow-vocabulary.md` cobrindo 10 components + 4 edges + 6 badges + 3 capture states com 1 exemplo YAML por entrada (~200-300 linhas). Referência única para autores e renderer (FR-016 do contrato de skill).
 
 - [x] T015 [P] Criar `portal/src/styles/screen-flow-tokens.css` declarando CSS variables: `--screen-bg`, `--screen-fg`, `--screen-accent`, `--screen-muted`, `--edge-success`, `--edge-error`, `--edge-neutral`, `--edge-modal`, `--hotspot-outline`, `--badge-wireframe`, `--badge-captured`, `--badge-failed`. Variantes `[data-theme="dark"]` definidas. Importar em `portal/src/styles/global.css` (FR-043, FR-044).
 
