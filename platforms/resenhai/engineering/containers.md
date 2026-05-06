@@ -45,7 +45,7 @@ graph LR
     Player -->|"HTTPS"| Web
     Mobile -->|"REST PostgREST"| Sup
     Web -->|"REST PostgREST"| Sup
-    Sup -->|"Realtime WS<br/>(canal grupos)"| Mobile
+    Sup -->|"Realtime WS<br/>(canais jogos + grupos +<br/>participantes_grupo)"| Mobile
     Mobile -->|"events (PII-masked)"| PH
     Mobile -.->|"errors 📋"| Sentry
     Mobile -->|"POST OTP / invite"| N8N
@@ -67,8 +67,8 @@ graph LR
 | # | Container | Bounded Context (proprietário) | Technology | Responsabilidade | Protocolo In | Protocolo Out |
 |---|-----------|-------------------------------|------------|------------------|--------------|---------------|
 | 1 | **Mobile App** | Comunidade + Operação + Inteligência | Expo SDK 54 + RN 0.81 + Expo Router 6 + TS 5.9 | UI iOS/Android/Web — Onboarding, jogos, ranking, stats | (gestos do usuário) | REST PostgREST → Supabase; HTTP → n8n; HTTP → PostHog/Sentry/Stripe |
-| 2 | **Web Static** | Comunidade + Operação + Inteligência | Docker + nginx (Hostinger), bundle exportado via `expo export --platform web` | Servir bundle web estático; não-stateful | HTTPS | (cliente faz requests diretos a Supabase/n8n) |
-| 3 | **Supabase BaaS** | Identidade + Comunidade + Operação (estado canônico) | Postgres 15 + RLS + Auth + Storage + Realtime (managed by Supabase) | Schema canônico (15 tabelas + 22 views), 32 RLS policies, OTP, buckets de imagem, Realtime channel `grupos` | REST (PostgREST), gRPC interno, JWT auth | Realtime WS para clientes; trigger calls para Edge Functions |
+| 2 | **Web Static (PWA)** | Comunidade + Operação + Inteligência | Docker + nginx (Hostinger), bundle exportado via `expo export --platform web` + Service Worker (`public/sw.js`) + manifest (`public/manifest.json`) + iOS standalone enforcement (`utils/isStandalone.ts`) — ver [ADR-016](../decisions/ADR-016-pwa-web-client-strategy/) | Servir bundle web estático **como PWA instalável**; SW cacheia bundle, manifest dispara prompt de instalação, `isStandalone.ts` força fullscreen no iOS Safari + viewport CSS dinâmico (`--vh`); não-stateful | HTTPS | (cliente faz requests diretos a Supabase/n8n) |
+| 3 | **Supabase BaaS** | Identidade + Comunidade + Operação (estado canônico) | Postgres 15 + RLS + Auth + Storage + Realtime (managed by Supabase) | Schema canônico (15 tabelas + 22 views), 32 RLS policies, OTP via Phone-to-Email sintético (ver [ADR-013](../decisions/ADR-013-auth-phone-to-email-otp-n8n/)), bucket `images/{user_photo_url,group_photo_url,championship_photo_url}/`, **3 canais Realtime**: `jogos` (driver de invalidate de ranking, hook `useChampionshipGamesRealtime`), `grupos` (metadata), `participantes_grupo` (members) | REST (PostgREST), gRPC interno, JWT auth | Realtime WS para clientes; trigger calls para Edge Functions |
 | 4 | **Edge Function whatsapp-webhook** | Identidade + Comunidade (pipeline) | Deno (Supabase Edge runtime) | Recebe webhook Evolution → valida HMAC → roteia para handlers (`groups-upsert`, `groups-update`, `participants-update`) | HTTPS POST (HMAC) | SQL → Supabase; logs → `whatsapp_events` |
 | 5 | **Edge Function stripe-webhook 📋** | Cobrança | Deno (Supabase Edge runtime) — a criar épico-001 | Receber webhook Stripe → validar signature → ativar/desativar subscription | HTTPS POST (Stripe-Signature) | SQL → Supabase (`subscriptions`) |
 | 6 | **n8n Workflows 📋** | Identidade (transitório) | n8n self-hosted (Easypanel) — **legado, sai com épico-002** | Hoje: Magic Link OTP + Create User For Invite + WhatsappGroup_New/Prod (4 workflows) | HTTPS POST | HTTP → Supabase Auth admin; HTTP → Evolution API |
@@ -82,7 +82,9 @@ graph LR
 | From | To | Protocolo | Padrão | Por quê |
 |------|-----|-----------|--------|---------|
 | Mobile App | Supabase | REST PostgREST + JWT | sync request/response | Operação padrão CRUD; auth via Supabase Auth (ADR-005) |
-| Mobile App | Supabase | Realtime WS | sub/pub | Canal `grupos` (sync de membros + jogos novos no grupo) |
+| Mobile App | Supabase | Realtime WS — canal `jogos` | sub/pub | Sync de jogos novos/editados/deletados no campeonato — driver do invalidate de ranking. Hook `useChampionshipGamesRealtime`. Migration: `20250127000000_enable_realtime_jogos.sql`. |
+| Mobile App | Supabase | Realtime WS — canal `grupos` | sub/pub | Sync de metadata do grupo (nome, foto, descrição). Migration: `20260304000000_enable_realtime_grupos.sql`. |
+| Mobile App | Supabase | Realtime WS — canal `participantes_grupo` | sub/pub | Sync de entrada/saída de membros. Migration: `20260220000000_enable_realtime_participantes_grupo.sql`. |
 | Mobile App | n8n 📋 | HTTPS POST (JSON) | sync | Magic Link OTP + Create User For Invite — sai com épico-002 |
 | Mobile App | PostHog | HTTPS POST (batch) | async fire-and-forget | Eventos de produto, PII-masked |
 | Mobile App | Sentry 📋 | HTTPS POST (batch) | async fire-and-forget | Errors + performance traces |

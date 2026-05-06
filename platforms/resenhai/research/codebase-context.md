@@ -62,8 +62,8 @@ resenhai-expo/
 ├── components/           # Design system + dominio: common/ ui/ header/ resenha/ management/ (~11k LOC / 44 files)
 ├── services/             # Integrações: supabase/{client,auth,database,invites,logging,storage,userStatus,users}, whatsapp/sendMessage, analytics (~4.6k / 12)
 ├── hooks/                # React Query hooks + queryKeys factory (~5.7k / 28 files / 27 hooks)
-├── lib/                  # design-system, validation (1.2k LOC), supabase helpers (~3k / 9 files)
-├── utils/                # logger PII-masking + helpers (~1.4k / 11 files)
+├── lib/                  # design-system, validation (1.2k LOC), supabase helpers + game-rules.ts (regras por modalidade — ADR-015), guest-player.ts (Convidado UUID fixo — ADR-014), queryClient.ts (24h cache persist) (~3k / 9 files)
+├── utils/                # logger PII-masking + isStandalone.ts (PWA enforcement iOS — ADR-016) + helpers (~1.4k / 11 files)
 ├── contexts/             # AppContext.tsx (~1.1k / 3 files)
 ├── providers/            # React Query persist provider (~600 LOC)
 ├── supabase/             # 40 migrations idempotentes + dumps (staging+prod) + functions/whatsapp-webhook (Deno) (~22.7k / 65 files)
@@ -229,6 +229,10 @@ Top 5 por churn em 90 dias (`origin/develop`, excluindo `.cursor/`, `.claude/`, 
 
 ## 14. Observações
 
+- **Phone-to-Email synthetic identifier (ADR-013)** — `services/supabase/auth.ts:phoneToEmail` converte telefone E.164 em email sintético (`{phone}@resenhai.com`) para destravar Supabase Auth nativo; OTP gerado por n8n. n8n é load-bearing — saída exige refator coordenado em épico-002.
+- **Convidado pseudo-user (ADR-014)** — UUID fixo `00000000-0000-0000-0000-000000000001` em `lib/guest-player.ts`; auto-injetado em todo grupo via trigger `add_guest_to_new_group()`; **viola por design** o invariante "4 jogadores distintos" (`canSelectPlayer:166-176` retorna `true` direto para guest). Filtrado de rankings.
+- **Game rules client-side com débito de schema (ADR-015)** — `lib/game-rules.ts:GAME_RULES` declara `numberOfSets: 3` para beach-volei, mas tabela `jogos` é single-set integer (`placar_dupla1/2`). Beach-volei roda hoje como 1-set efetivo até épico-006-multi-set-scoring.
+- **Web é PWA standalone, não browser puro (ADR-016)** — Service Worker (`public/sw.js`), manifest (`public/manifest.json`), fullscreen iOS Safari + viewport CSS dinâmico (`utils/isStandalone.ts`, ~10KB load-bearing).
 - **God-screen `resenha.tsx`** — 2.2k LOC + 18 commits/90d → maior risco da base, combina UI de gestão + fluxo de resenha + regras de campeonato. Candidato a decomposição — `app/(app)/management/resenha.tsx:1-2200`.
 - **DB monolítico `services/supabase/database.ts:1-1598`** — toda camada de acesso a dados num arquivo, sem separação por aggregate (grupos/jogos/users). Quebrar por bounded context vai ajudar `domain-model.md`.
 - **n8n + Edge Functions coexistem (débito de consolidação)** — spec 007 começou em n8n, spec 008 migrou parte para Edge Functions Deno; hoje convivem: Magic Link OTP + Create User For Invite ainda em `n8n_backend/`, webhook WhatsApp já em `supabase/functions/whatsapp-webhook/`. Candidato a ADR de consolidação.

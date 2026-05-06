@@ -63,11 +63,17 @@ classDiagram
     Jogador --> Lado
 ```
 
-**Entities:** `Jogador` — identifica o usuário do produto, mapeia 1:1 com `auth.users` via `handle_new_user` trigger.
+**Entities:** `Jogador` — identifica o usuário do produto, mapeia 1:1 com `auth.users` via `handle_new_user` trigger. Identidade do `auth.users.email` é **sintética**: `{phone}@resenhai.com` (ver [ADR-013](../../decisions/ADR-013-auth-phone-to-email-otp-n8n/)) — o email não é exibido nem usado pelo usuário.
+
+**Variação especial — Convidado** (pseudo-user global, ver [ADR-014](../../decisions/ADR-014-guest-player-pseudo-user/)):
+- `Jogador { user_id = '00000000-0000-0000-0000-000000000001', user_type = 'guest' }` é único globalmente, auto-injetado em todo grupo via trigger `add_guest_to_new_group()`.
+- Filtrado de rankings, lista de membros e seletor de admins.
+- Pode ocupar **múltiplas posições** no mesmo `Jogo` (exceção formal ao invariante #1 do `Jogo`).
 
 **Value Objects:**
 - `Phone` — número WhatsApp normalizado (E.164); validado por Zod schema; imutável; é o identificador secundário do jogador.
 - `Lado` — enum `Direita`/`Esquerda`/`Qualquer lado` (do schema Postgres `Lado`); imutável.
+- `UserType` — enum `'regular' | 'guest'` (coluna `users.user_type`); diferencia jogadores reais do Convidado.
 
 **Invariants:**
 
@@ -75,7 +81,7 @@ classDiagram
 |---|-----------|-----------|---------------|
 | 1 | `telefone único` | Cada `Phone` E.164 corresponde a no máximo 1 jogador ativo | criação + atualização de telefone |
 | 2 | `auth-user-link` | Todo `Jogador` tem 1 row em `auth.users` correspondente | criação (via trigger `handle_new_user`) |
-| 3 | `apelido não-vazio` | `apelido` é obrigatório e mínimo 2 chars | criação + atualização |
+| 3 | `apelido único após normalize` | `apelido` é obrigatório (≥ 2 chars) E único após `normalize_apelido()` (lowercase + remove acentos: `João = joao = JOAO = joão`). Impl: índice único funcional `users_apelido_normalized_idx` + RPC `check_apelido_available` (migration `20250205000000_apelido_case_accent_insensitive`). | criação + atualização |
 
 ### Aggregate: Convite
 
@@ -278,19 +284,31 @@ classDiagram
 **Entities:** `Jogo`.
 
 **Value Objects:**
-- `Dupla` — par `(jogador1Id, jogador2Id)`; imutável; valida que os 2 IDs são distintos.
-- `Placar` — par `(pontosDupla1, pontosDupla2)`; imutável; valida vencedor único.
+- `Dupla` — par `(jogador1Id, jogador2Id)`; imutável; valida que os 2 IDs são distintos (exceto se ambos forem Convidado).
+- `Placar` — par `(pontosDupla1, pontosDupla2)`; imutável; valida vencedor único segundo `Modalidade`.
+- `Modalidade` — enum `'futevolei' | 'beach-tennis' | 'beach-volei'` (coluna `campeonatos.modalidade`, ENUM Postgres `modalidade_esporte`); determina regras de placar via `GAME_RULES` em `lib/game-rules.ts` — ver [ADR-015](../../decisions/ADR-015-game-rules-per-modalidade/).
+
+#### Regras por Modalidade (`GAME_RULES`)
+
+| Modalidade | winningScore | allowDraw | minScoreDifference | numberOfSets |
+|------------|--------------|-----------|--------------------|--------------|
+| futevôlei | 18 | false | 2 | 1 |
+| beach-tennis | 21 | false | 2 | 1 |
+| beach-volei | 21 | false | 2 | **3 (best-of-3)** ⚠️ |
+
+⚠️ **Débito de schema reconhecido**: `jogos.placar_dupla1/2` é single-set integer; `numberOfSets: 3` de beach-volei é **aspiracional** — hoje o jogo é registrado como 1 set agregado. Resolvido em `epic-006-multi-set-scoring` (ver [planning/roadmap.md](../../planning/roadmap/) e [ADR-015](../../decisions/ADR-015-game-rules-per-modalidade/)).
 
 **Invariants:**
 
 | # | Invariante | Descrição | Quando checar |
 |---|-----------|-----------|---------------|
-| 1 | `4 jogadores distintos` | `dupla1.jogador1Id`, `dupla1.jogador2Id`, `dupla2.jogador1Id`, `dupla2.jogador2Id` são 4 UUIDs distintos | registrar |
-| 2 | `placar-tem-vencedor` | `placar.dupla1 != placar.dupla2` (sem empate em areia) | registrar + editar |
+| 1 | `4 jogadores distintos (exceto Convidado)` | `dupla1.jogador1Id`, `dupla1.jogador2Id`, `dupla2.jogador1Id`, `dupla2.jogador2Id` são 4 UUIDs distintos, **exceto** o Convidado (`GUEST_USER_ID`), que pode ocupar de 1 a 4 posições no mesmo Jogo por design — ver [ADR-014](../../decisions/ADR-014-guest-player-pseudo-user/) e [`lib/guest-player.ts:166-176`](../../resenhai-expo/lib/guest-player.ts#L166-L176). | registrar |
+| 2 | `placar-respeita-modalidade` | `placar` válido segundo `GAME_RULES[modalidade]`: `winningScore` atingido por exatamente 1 dupla, `minScoreDifference` respeitado, `allowDraw=false` em todas as 3 modalidades. Validação client-side em `validateGameScore` (ver [ADR-015](../../decisions/ADR-015-game-rules-per-modalidade/)). | registrar + editar |
 | 3 | `placar-positivo` | `placar.dupla1 + placar.dupla2 > 0` | registrar + editar |
-| 4 | `jogadores-são-membros-do-grupo` | Os 4 jogadores são `MembroGrupo` ativos no grupo do jogo | registrar |
+| 4 | `jogadores-são-membros-do-grupo` | Os 4 jogadores (incluindo Convidado, que é auto-membro) são `MembroGrupo` ativos no grupo do jogo | registrar |
 | 5 | `data-jogo-não-futura` | `data_jogo <= now() + 1h` (tolerância pequena para fuso horário) | registrar |
 | 6 | `campeonato-ativo-se-vinculado` | Se `campeonato_id` setado, `campeonato.status IN ('planejado','ativo')` | registrar |
+| 7 | `modalidade-do-campeonato-imutável-pós-1º-jogo` | Após o 1º Jogo registrado em um Campeonato, `campeonatos.modalidade` não pode mudar (regras de placar não podem virar invalidas retroativamente). | edição de Campeonato |
 
 ### Aggregate: Campeonato
 
@@ -553,7 +571,10 @@ classDiagram
 | **Ranking** | Read model derivado de Jogos — view `ranking_geral`/`ranking_por_campeonato` |
 | **Stats** | Read models agregados — winrate, química, sangue frio, attendance, rival saldo |
 | **Hall da Fama** | Histórico de campeões + Reis da Praia mensais — feature 📋 do tier Rei |
-| **Magic Link OTP** | Token de cadastro enviado via WhatsApp; única porta de entrada de novo jogador |
+| **Magic Link OTP** | Código de 6 dígitos enviado via WhatsApp para autenticação; única porta de entrada de novo jogador. Usa identidade sintética `phone-to-email` (ADR-013) e geração via n8n. |
+| **Phone-to-Email** | Conversão `5521999999999` → `5521999999999@resenhai.com` para destravar Supabase Auth (que opera com email) — ver ADR-013. Email sintético nunca exibido ao usuário. |
+| **Convidado** | Pseudo-user global com UUID fixo `00000000-0000-0000-0000-000000000001` (`user_type='guest'`) — auto-injetado em todo grupo, filtrado de rankings, pode ocupar múltiplas posições no mesmo Jogo. Ver ADR-014. |
+| **Modalidade** | Esporte do Campeonato — `'futevolei' | 'beach-tennis' | 'beach-volei'`. Determina regras de placar via `GAME_RULES`. Ver ADR-015. |
 | **Subscription** 📋 | Vínculo `user_id ↔ tier ativo` mediado pelo Stripe |
 | **Tier** | Free (Jogador grátis), Dono (R$ 49,90), Rei (R$ 79,90), Enterprise — definidos no ADR-008 |
 

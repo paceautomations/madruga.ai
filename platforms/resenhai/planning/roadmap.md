@@ -1,10 +1,10 @@
 ---
 title: "Roadmap"
-updated: 2026-05-04
+updated: 2026-05-05
 ---
 # ResenhAI — Delivery Roadmap
 
-> Sequenciamento dos 8 épicos por dependência + risco. Epic 000 retroativo (DONE) + 7 épicos planejados (P1-P3). Última atualização: 2026-05-04.
+> Sequenciamento dos 9 épicos por dependência + risco. Epic 000 retroativo (DONE) + 8 épicos planejados (P1-P3). Última atualização: 2026-05-05.
 
 ---
 
@@ -50,6 +50,7 @@ gantt
     section Pós-MVP
     Epic 006 — Observability             :e6, after e5, 3w
     Epic 007 — Maestro native E2E (opt)  :e7, after e6, 2w
+    Epic 008 — Multi-set scoring         :e8, after e6, 4w
 ```
 
 > **Atenção**: estimativas Shape Up (appetite) — não comprometimento contratual. Janela MVP entre 2026-05-15 e ~2026-08-30 (~15 semanas, ~3.5 meses).
@@ -68,6 +69,29 @@ gantt
 | 5 | 005-database-decomposition | 003, 004 | medium (mock patches em 1695 testes) | 3 sem | Pós-MVP — velocity |
 | 6 | 006-observability | 003 | low | 3 sem | Pós-MVP — operacional |
 | 7 | 007-maestro-native-e2e (opt) | 003 | low | 2 sem | Opcional / futuro |
+| 8 | **008-multi-set-scoring** | 003 | medium (migração de schema `jogos` + dados existentes) | 4 sem | Pós-MVP — fecha débito ADR-015 (beach-volei best-of-3 sets real) |
+
+### Epic 008 — Multi-set scoring (rabbit hole resumido)
+
+**Problema**: [`lib/game-rules.ts:GAME_RULES`](../../resenhai-expo/lib/game-rules.ts#L53-L75) declara `numberOfSets: 3` para beach-volei, mas o schema atual de `jogos` é single-set integer (`placar_dupla1/2`) — beach-volei roda como 1-set efetivo silenciosamente. Reconhecido formalmente em [ADR-015](../decisions/ADR-015-game-rules-per-modalidade/).
+
+**Solução proposta** (Shape Up — não comprometimento):
+- Nova tabela `jogo_sets (jogo_id, set_index, placar_dupla1, placar_dupla2, vencedor)` ou colunas dinâmicas em `jogos`.
+- UI de N sets em `app/(app)/games/add.tsx` baseada em `GAME_RULES[modality].numberOfSets`.
+- Migração de dados legados: cada jogo existente vira `set_index=1`.
+- Trigger de stats reescrito para considerar quem ganhou o **jogo** (best-of), não apenas placar agregado.
+
+**Rabbit holes**:
+- Decidir se `pontos_fairplay` muda quando passar a usar sets reais (provavelmente não — é por jogo, não set).
+- Backfill de `vw_player_*` views.
+- App em produção precisa rodar com schema novo + bundle antigo (rolling deploy).
+
+**Acceptance criteria**:
+- Beach-volei registra placar de 3 sets (best-of-3); jogo é decidido pelo 2º set vencido.
+- Migração 100% reversível em < 5 min.
+- Zero perda de dados em jogos legados.
+
+> Não criar `epics/008-multi-set-scoring/pitch.md` — épicos planejados vivem só aqui no roadmap (CLAUDE.md:194-195).
 
 ---
 
@@ -82,6 +106,7 @@ graph LR
   E003 --> E004["004<br/>resenha-refactor"]
   E003 --> E006["006<br/>observability"]
   E003 --> E007["007<br/>maestro (opt)"]
+  E003 --> E008["008<br/>multi-set-scoring"]
   E004 --> E005["005<br/>db-decomposition"]
   E001 -.->|"cobertura<br/>antes de migração crítica"| E002
 ```

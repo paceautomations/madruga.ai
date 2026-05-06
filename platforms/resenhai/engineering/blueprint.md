@@ -117,9 +117,9 @@ resenhai-expo/
 
 ### Authentication & Authorization
 
-- **Auth**: Supabase Auth nativo + Magic Link OTP via WhatsApp ([ADR-005](../decisions/ADR-005-baas-supabase/), [ADR-006](../decisions/ADR-006-workflow-orchestration-edge-functions/)).
+- **Auth**: Supabase Auth nativo com **Phone-to-Email synthetic identifier** ([ADR-013](../decisions/ADR-013-auth-phone-to-email-otp-n8n/)) — telefone E.164 vira `{phone}@resenhai.com` em `auth.users.email`; OTP de 6 dígitos gerado por n8n (Admin API) e entregue via Evolution API no WhatsApp ([ADR-005](../decisions/ADR-005-baas-supabase/), [ADR-006](../decisions/ADR-006-workflow-orchestration-edge-functions/)).
 - **Authorization**: PostgreSQL Row Level Security (RLS) — 32 policies em produção isolam dados por `grupo_id` ou `user_id` (codebase-context.md §7).
-- **Single porta de entrada**: Magic Link OTP é a única forma de cadastro — cita business-process.md §5.
+- **Single porta de entrada**: Magic Link OTP via WhatsApp é a única forma de cadastro — cita business-process.md §5. Email sintético nunca é exibido ao usuário; sair de n8n requer refator coordenado de `services/supabase/auth.ts:phoneToEmail` (planejado em épico-002).
 
 ### Logging & Observability
 
@@ -182,13 +182,13 @@ Todos os destinos passam por **PII masking** (CLAUDE.md:117-125) — email/phone
 | Store | Tipo | Dados | Tamanho estimado |
 |-------|------|-------|------------------|
 | Supabase Postgres | Relational | 15 tabelas + 22 views (codebase-context.md §7) | `[VALIDAR — extraível via query]` |
-| Supabase Storage | Object | bucket `images/*` (avatares, fotos de jogo/perfil) | `[VALIDAR — extraível]` |
+| Supabase Storage | Object | bucket `images/` com 3 subpastas: `user_photo_url/{phone_id}.jpg` (perfil), `group_photo_url/{grupo_id}.jpg`, `championship_photo_url/{campeonato_id}.jpg` — ver [`services/supabase/storage.ts:139,269`](../../resenhai-expo/services/supabase/storage.ts#L139). RLS: upload restrito a autenticados, leitura pública | `[VALIDAR — tamanho atual extraível]` |
 | Supabase `whatsapp_events` | Audit (Postgres) | webhooks Evolution recebidos, com payload raw | sem TTL atualmente `[VALIDAR — considerar retention 30d]` |
 | Supabase `logs_sistema` | Audit (Postgres) | logs de aplicação | sem TTL `[VALIDAR — retention]` |
 | Supabase `admin_audit_log` | Audit (Postgres) | mutações sensíveis (admin actions) | sem TTL `[VALIDAR — retention]` |
 | Supabase `pending_whatsapp_links` | TTL Postgres | links de convite pendentes | TTL 30min auto-expire |
 | Supabase `convites` | Token (Postgres) | tokens de convite multi-uso | sem TTL formal `[VALIDAR — checar migration `*invite_link_multi_use*`]` |
-| Async storage (cliente) | Cache | persist da TanStack Query — quais queries persistem `[VALIDAR — `~6MB iOS limit`]` | até 6MB |
+| Async storage (cliente) | Cache | persist da TanStack Query — `staleTime=2min`, `gcTime=5min`, persist `maxAge=24h` (1 dia), throttle de save=1s ([`lib/queryClient.ts:31-57`](../../resenhai-expo/lib/queryClient.ts#L31-L57)). Prefetch no `app/(app)/_layout.tsx`: `userProfile`, `ranking`, `members`. Limite iOS ~6MB | até 6MB |
 | PostHog Cloud (US) | Analytics | eventos product (PII-masked) | crescente; sem retention configurada `[VALIDAR]` |
 | Sentry 📋 | Errors | stack traces Hermes + release health | 5k events/mo (free) |
 
@@ -198,7 +198,11 @@ Todos os destinos passam por **PII masking** (CLAUDE.md:117-125) — email/phone
 
 | Termo | Definição |
 |-------|-----------|
-| **Magic Link OTP** | Código de uso único enviado via WhatsApp para autenticação — única porta de entrada de novos usuários |
+| **Magic Link OTP** | Código de 6 dígitos enviado via WhatsApp para autenticação — única porta de entrada. Implementação: identidade `auth.users` é Phone-to-Email sintético (`{phone}@resenhai.com`); OTP gerado por n8n via Admin API. Ver ADR-013. |
+| **Phone-to-Email** | Conversão `5521999999999` → `5521999999999@resenhai.com` em [`services/supabase/auth.ts:39-44`](../../resenhai-expo/services/supabase/auth.ts#L39-L44). Email sintético nunca exibido ao usuário; existe só para destravar Supabase Auth nativo. Ver ADR-013. |
+| **Convidado** | Pseudo-user global (`GUEST_USER_ID = 00000000-0000-0000-0000-000000000001`, `user_type='guest'`) auto-injetado em todo grupo. Pode ocupar múltiplas posições no mesmo Jogo, é filtrado de rankings. Ver ADR-014. |
+| **Modalidade** | Esporte do Campeonato (`'futevolei' | 'beach-tennis' | 'beach-volei'`). Define regras de placar via `GAME_RULES` em [`lib/game-rules.ts`](../../resenhai-expo/lib/game-rules.ts). Ver ADR-015. Beach-volei `numberOfSets=3` é aspiracional até épico-006. |
+| **PWA** | Web client é **Progressive Web App** instalável — Service Worker (`public/sw.js`), manifest, fullscreen iOS Safari (`utils/isStandalone.ts`), viewport CSS dinâmico (`--vh`). Ver ADR-016. |
 | **HMAC** | Validação de assinatura criptográfica em webhooks Evolution (`RESENHAI_WEBHOOK_SECRET`) e Stripe 📋 |
 | **RLS** | Row Level Security — policy SQL no Postgres que filtra acesso por `auth.uid()` ou `grupo_id` |
 | **Edge Function** | Função serverless Deno no Supabase, mesma região do DB |
