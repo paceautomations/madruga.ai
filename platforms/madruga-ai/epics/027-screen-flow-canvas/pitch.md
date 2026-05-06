@@ -1,12 +1,13 @@
 ---
 title: "Epic 027 — Screen Flow Canvas"
 epic: 027-screen-flow-canvas
-status: drafted
+status: shipped
 appetite: 2 weeks
 created: 2026-05-05
 updated: 2026-05-05
 sidebar:
   order: 27
+delivered_at: 2026-05-06
 ---
 
 # Epic 027 — Screen Flow Canvas

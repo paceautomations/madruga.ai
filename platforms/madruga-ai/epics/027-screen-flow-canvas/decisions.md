@@ -1,7 +1,8 @@
 ---
 epic: 027-screen-flow-canvas
 created: 2026-05-05
-updated: 2026-05-05 (T113 + T114: bundle baseline 163.75 KB; size-limit budget locked at 172 KB)
+updated: 2026-05-05
+note: "T113 + T114 — bundle baseline 163.75 KB; size-limit budget locked at 172 KB"
 ---
 # Registro de Decisões — Epic 027
 
