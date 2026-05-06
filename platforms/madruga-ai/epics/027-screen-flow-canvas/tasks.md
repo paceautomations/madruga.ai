@@ -69,7 +69,7 @@ sidebar:
 
 - [x] T012 Atualizar `.specify/pipeline.yaml` para incluir nó L1 `business-screen-flow`: layer=business, gate=human, optional=true, depends_on=[business-process], outputs=`business/screen-flow.yaml`. Posicionar entre `business-process` e `tech-research`. Validar com `python3 .specify/scripts/dag_executor.py --platform madruga-ai --dry-run`.
 
-- [ ] T013 Atualizar `.claude/knowledge/pipeline-dag-knowledge.md` adicionando 14ª linha à tabela L1 (business-screen-flow, optional=YES, gate=human, depends=business-process, output=business/screen-flow.yaml). Manter ordem alfabética dentro do layer business.
+- [x] T013 Atualizar `.claude/knowledge/pipeline-dag-knowledge.md` adicionando 14ª linha à tabela L1 (business-screen-flow, optional=YES, gate=human, depends=business-process, output=business/screen-flow.yaml). Manter ordem alfabética dentro do layer business.
 
 - [ ] T014 [P] Criar `.claude/knowledge/screen-flow-vocabulary.md` cobrindo 10 components + 4 edges + 6 badges + 3 capture states com 1 exemplo YAML por entrada (~200-300 linhas). Referência única para autores e renderer (FR-016 do contrato de skill).
 

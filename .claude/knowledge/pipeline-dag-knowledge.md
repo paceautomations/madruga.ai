@@ -1,12 +1,12 @@
 # Pipeline DAG Knowledge
 
-Reference knowledge file for the madruga.ai pipeline — a **single continuous flow of 25 skills** (L1: 13 platform nodes + L2: 12 per-epic nodes) that takes a platform from conception to implemented, tested code.
+Reference knowledge file for the madruga.ai pipeline — a **single continuous flow of 26 skills** (L1: 14 platform nodes + L2: 12 per-epic nodes) that takes a platform from conception to implemented, tested code.
 
 Skills reference this file to understand node dependencies, gate types, personas, and the uniform contract.
 
 ---
 
-## 1. L1 — Platform Foundation (13 nodes, runs once per platform)
+## 1. L1 — Platform Foundation (14 nodes, runs once per platform)
 
 | ID | Skill | Outputs | Depends | Layer | Gate | Optional |
 |----|-------|---------|---------|-------|------|----------|
@@ -14,6 +14,7 @@ Skills reference this file to understand node dependencies, gate types, personas
 | vision | madruga:vision | business/vision.md | platform-new | business | human | no |
 | solution-overview | madruga:solution-overview | business/solution-overview.md | vision | business | human | no |
 | business-process | madruga:business-process | business/process.md | solution-overview | business | human | no |
+| business-screen-flow | madruga:business-screen-flow | business/screen-flow.yaml | business-process | business | human | YES |
 | tech-research | madruga:tech-research | research/tech-alternatives.md | business-process | research | 1-way-door | no |
 | codebase-map | madruga:codebase-map | research/codebase-context.md | vision | research | auto | YES |
 | adr | madruga:adr | decisions/ADR-*.md (output_pattern) | tech-research | engineering | 1-way-door | no |
