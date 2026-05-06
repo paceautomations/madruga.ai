@@ -2492,16 +2492,24 @@ def test_group_tasks_by_phase_basic():
 
 
 def test_group_tasks_by_phase_splits_large():
-    """Phases with >max_per_phase tasks are split into sub-phases."""
+    """Phases with >max_per_phase tasks are split into BALANCED sub-phases.
+
+    Before fix: 15 tasks (max=12) split 12+3 — left 1 isolated task in last
+    chunk, prone to single-task phase pathology (epic 027 phase-8 was a
+    1-task subphase that crossed dispatch threshold).
+    After fix: math.ceil distributes evenly → n_chunks=2, per_chunk=8 → 8+7.
+    """
     from dag_executor import TaskItem, group_tasks_by_phase
 
     tasks = [TaskItem(f"T{i:03d}", f"task {i}", False, "Phase 1: Big", False) for i in range(1, 16)]
     result = group_tasks_by_phase(tasks, max_per_phase=12)
     assert len(result) == 2
     assert "part 1" in result[0][0]
-    assert len(result[0][1]) == 12
+    assert len(result[0][1]) == 8
     assert "part 2" in result[1][0]
-    assert len(result[1][1]) == 3
+    assert len(result[1][1]) == 7
+    # Total preserved
+    assert sum(len(c[1]) for c in result) == 15
 
 
 def test_group_tasks_by_phase_stable_numbering_with_checked():
@@ -3307,3 +3315,260 @@ def test_slice_spec_for_real_epic_format():
     assert "US1 line" not in sliced
     assert "US3 line" not in sliced
     assert "FR line" not in sliced
+
+
+# ---------------------------------------------------------------------------
+# Permissive User Story regex (epic 027 root-cause: spec used `### US-01`,
+# regex required `### User Story 1` → silent fallback to full 45KB spec).
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "header,expected_n",
+    [
+        # EN ("### User Story N") + H2 back-compat are covered by
+        # test_slice_spec_user_story_h3_format / _h2_back_compat — focus
+        # on the formats the old regex missed:
+        ("### US-01 — leading zero", 1),
+        ("### US-12 — double digit dash", 12),
+        ("### US 1 — space separator", 1),
+        ("### US1 — compact", 1),
+        ("### História de Usuário 1 — PT-BR with accents", 1),
+        ("### Historia de Usuario 1 — PT-BR no accents", 1),
+    ],
+)
+def test_slice_spec_user_story_permissive_formats(header: str, expected_n: int):
+    """Regex accepts US-NN, US N, US1, História — leading zeros normalized.
+
+    Real epic 027 used `### US-01` and old regex (`User Story \\d+`) silently
+    returned full spec. Regression guard.
+    """
+    from dag_executor import _slice_spec_for_user_story
+
+    spec = (
+        "# Spec\n\n"
+        f"{header}\n\nbody-text-of-target-story\n\n"
+        "### User Story 99 — sentinel that ends the slice\nshould-not-appear\n"
+    )
+    sliced = _slice_spec_for_user_story(spec, expected_n)
+    assert sliced is not None, f"slice missed for header {header!r} (n={expected_n})"
+    assert "body-text-of-target-story" in sliced
+    assert "should-not-appear" not in sliced
+
+
+def test_scoped_spec_section_warns_when_slice_misses(tmp_path, caplog):
+    """When kind=user_story but no header matches the regex, log WARN
+    `spec_slice_miss` before falling back to full spec.
+
+    Without this signal the failure is invisible — epic 027 dispatched 5
+    User Story phases with full 45KB spec and only post-mortem caught it.
+    """
+    import logging
+
+    from dag_executor import TaskItem, _scoped_spec_section
+
+    epic_dir = tmp_path / "epic"
+    epic_dir.mkdir()
+    # Spec with a header format the regex CANNOT match (no matching keyword)
+    (epic_dir / "spec.md").write_text("# Spec\n\n## Cenários\n### Caso A\nirrelevant body\n")
+    phase_tasks = [
+        TaskItem("T001", "task", False, "Phase 3: User Story 1", False, us_tag="US1"),
+    ]
+
+    with caplog.at_level(logging.WARNING, logger="dag_executor"):
+        result = _scoped_spec_section(epic_dir, "Phase 3: User Story 1", phase_tasks)
+
+    # Falls back to full spec
+    assert result is not None
+    assert "irrelevant body" in result
+    # AND emits spec_slice_miss warning
+    miss_logs = [r for r in caplog.records if "spec_slice_miss" in r.getMessage()]
+    assert miss_logs, "expected spec_slice_miss warning when slice fails for user_story phase"
+    assert "story=1" in miss_logs[0].getMessage()
+
+
+# ---------------------------------------------------------------------------
+# Balanced phase split (epic 027 phase-8: 13 tasks split 12+1 → 1 task isolated
+# in its own subphase, crossed dispatch threshold). math.ceil distributes evenly.
+# ---------------------------------------------------------------------------
+
+
+def test_group_tasks_by_phase_balanced_split_13_with_max_12():
+    """13 tasks max=12 → [7, 6], not [12, 1]. Eliminates 1-task pathology."""
+    from dag_executor import TaskItem, group_tasks_by_phase
+
+    tasks = [TaskItem(f"T{i:03d}", f"t{i}", False, "Phase X: Big", False) for i in range(13)]
+    result = group_tasks_by_phase(tasks, max_per_phase=12)
+    assert len(result) == 2
+    assert [len(c[1]) for c in result] == [7, 6]
+    assert all("part" in label for label, _ in result)
+
+
+def test_group_tasks_by_phase_balanced_split_25_with_max_12():
+    """25 tasks max=12 → 3 chunks balanced ≤ 9 each (n_chunks=3, per_chunk=9 → 9+9+7)."""
+    from dag_executor import TaskItem, group_tasks_by_phase
+
+    tasks = [TaskItem(f"T{i:03d}", f"t{i}", False, "Phase X: Bigger", False) for i in range(25)]
+    result = group_tasks_by_phase(tasks, max_per_phase=12)
+    assert len(result) == 3
+    sizes = [len(c[1]) for c in result]
+    assert sum(sizes) == 25
+    assert max(sizes) <= 12
+    # Last chunk should not be 1 task in isolation
+    assert sizes[-1] >= 2
+
+
+# ---------------------------------------------------------------------------
+# Autonomous dispatch banner — wait-loop ban + interactive override.
+# Both are prompt-only fixes for epic 027 incidents (phase-13 sentinel-file
+# stall, qa subagent-output stall) and the persistent confusion between
+# "interactive sequential loop" skill bodies and `claude -p` mode.
+# ---------------------------------------------------------------------------
+
+
+def test_autonomous_dispatch_banner_bans_wait_loops():
+    """Banner explicitly forbids `until [ -f sentinel ] do sleep N done` patterns
+    and prescribes `wait $!` / `timeout`.
+    """
+    from dag_executor import _AUTONOMOUS_DISPATCH
+
+    text = _AUTONOMOUS_DISPATCH
+    assert "WAIT-PATTERN BAN" in text
+    assert "until [ -f sentinel" in text
+    assert "wait $!" in text or "timeout" in text
+
+
+def test_autonomous_dispatch_banner_suspends_interactive_skills():
+    """Banner instructs claude to ignore 'sequential loop / interactive
+    questioning' skill-body sections (they describe the manual mode, not -p).
+    """
+    from dag_executor import _AUTONOMOUS_DISPATCH
+
+    text = _AUTONOMOUS_DISPATCH.lower()
+    assert "sequential loop" in text or "interactive" in text
+    assert "suspended" in text
+
+
+# ---------------------------------------------------------------------------
+# Phase classification (epic 027 phase-8: claude reported success=True with
+# 0/1 tasks done, old `if success or all_done` silently classified completed).
+# ---------------------------------------------------------------------------
+
+
+def _run_phase_dispatch(
+    tmp_db,
+    tmp_path,
+    *,
+    dispatch_return: tuple[bool, str | None, str],
+    completed_after: list[str],
+    phase_task_ids: list[str],
+):
+    """Drive _run_implement_phases through one phase with mocked dispatch.
+
+    `dispatch_return` mirrors the real `dispatch_with_retry_async` shape
+    `(success, error, stdout)`. Returns the final pipeline_runs row.
+    """
+    from dag_executor import _run_implement_phases
+    from db_pipeline import upsert_epic, upsert_platform
+
+    upsert_platform(tmp_db, "test-plat")
+    upsert_epic(tmp_db, "test-plat", "001-test", title="Test", status="in_progress", priority=1)
+
+    epic_dir = tmp_path / "platforms" / "test-plat" / "epics" / "001-test"
+    epic_dir.mkdir(parents=True)
+    tasks_md = epic_dir / "tasks.md"
+    tasks_md.write_text(
+        "## Phase 1: Test\n\n" + "\n".join(f"- [ ] {tid} description for {tid}" for tid in phase_task_ids) + "\n"
+    )
+
+    phase_tasks = [_make_task(task_id=tid, description=f"desc {tid}") for tid in phase_task_ids]
+    for t in phase_tasks:
+        t.phase = "Phase 1: Test"
+
+    async def _run():
+        with (
+            patch(
+                "dag_executor.dispatch_with_retry_async",
+                new=AsyncMock(return_value=dispatch_return),
+            ),
+            patch(
+                "dag_executor._verify_phase_completion",
+                return_value=(completed_after, [t for t in phase_task_ids if t not in completed_after]),
+            ),
+            patch("dag_executor._auto_commit_epic"),
+            patch("dag_executor._run_eval_scoring"),
+            # parse_tasks is also called at phase loop start (line ~1309) to
+            # compute still_pending — _verify_phase_completion mock alone
+            # doesn't cover that callsite.
+            patch("dag_executor.parse_tasks", return_value=phase_tasks),
+            patch("dag_executor.mark_task_done", return_value=True),
+        ):
+            return await _run_implement_phases(
+                phases=[("Phase 1: Test", phase_tasks)],
+                tasks_path=tasks_md,
+                epic_dir=epic_dir,
+                platform_name="test-plat",
+                epic_slug="001-test",
+                conn=tmp_db,
+                cwd=tmp_path,
+                trace_id=None,
+                guardrail=None,
+                timeout_per_task=60,
+            )
+
+    asyncio.run(_run())
+
+    return tmp_db.execute(
+        "SELECT status, error FROM pipeline_runs WHERE epic_id='001-test' ORDER BY started_at DESC LIMIT 1"
+    ).fetchone()
+
+
+def test_run_implement_phases_no_op_classified_failed(tmp_db, tmp_path):
+    """Regression: success=True + 0/N tasks done must classify as `failed`
+    (not `completed` as the old `if success or all_done` did).
+    """
+    row = _run_phase_dispatch(
+        tmp_db,
+        tmp_path,
+        dispatch_return=(True, None, "{}"),
+        completed_after=[],
+        phase_task_ids=["T001"],
+    )
+    assert row["status"] == "failed", f"expected failed, got {dict(row)}"
+    assert "phase_completed_no_op" in (row["error"] or ""), row["error"]
+
+
+def test_run_implement_phases_partial_logs_pending_ids(tmp_db, tmp_path, caplog):
+    """Partial completion classifies as `completed` (advance with progress);
+    `phase_result` log line carries the pending IDs."""
+    import logging
+
+    with caplog.at_level(logging.INFO, logger="dag_executor"):
+        row = _run_phase_dispatch(
+            tmp_db,
+            tmp_path,
+            dispatch_return=(False, "some error", "{}"),
+            completed_after=["T001"],
+            phase_task_ids=["T001", "T002", "T003"],
+        )
+
+    assert row["status"] == "completed"
+    assert (row["error"] or "").startswith("partial:")
+    phase_result_logs = [r for r in caplog.records if "phase_result" in r.getMessage()]
+    assert phase_result_logs, "expected phase_result structured log line"
+    msg = phase_result_logs[-1].getMessage()
+    assert "status=completed" in msg
+    assert "T002" in msg and "T003" in msg, f"pending IDs missing from log: {msg}"
+
+
+def test_run_implement_phases_all_done_classified_completed(tmp_db, tmp_path):
+    """Sanity: success=True + N/N done classifies as completed."""
+    row = _run_phase_dispatch(
+        tmp_db,
+        tmp_path,
+        dispatch_return=(True, None, "{}"),
+        completed_after=["T001", "T002"],
+        phase_task_ids=["T001", "T002"],
+    )
+    assert row["status"] == "completed"
+    assert row["error"] is None

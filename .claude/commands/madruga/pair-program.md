@@ -38,7 +38,7 @@ Append em `platforms/<platform>/epics/<NNN>/easter-tracking.md`. Cria com o temp
 
 Cada invocação = um tick. Termina chamando `ScheduleWakeup` com o mesmo prompt (a menos que esteja encerrando — ver passo 5).
 
-1. **Resolve alvo.** Se `epic` vazio, query `epics` table por `status='in_progress'` para a plataforma. Sem epic ativo → não escreve, não agenda, encerra.
+1. **Resolve alvo.** Se `epic` vazio, query `epics` table por `status='in_progress'` para a plataforma. Sem epic ativo → não escreve, não agenda, encerra. Determine **self-ref** lendo `platform.yaml` da plataforma: se `repo.name == "madruga.ai"`, a plataforma é self-ref e o epic roda em `main` por design (sem branch isolation — convenção desde epic 024). Para plataformas externas, branch=main é estado anômalo (ver Error Handling).
 2. **Snapshot** (3 consultas enxutas):
    - `pipeline_runs` → últimas 5 linhas de `(platform, epic)`: `started_at`, `node_id`, `status`, `duration_ms`, erro truncado
    - `ps --ppid <easter-pid>` → subprocessos vivos (pid, etime, stat, cmd)
@@ -122,7 +122,8 @@ Started: <ISO date>
 | Problema | Ação |
 |---|---|
 | Easter não está rodando | `systemctl --user start madruga-easter`, checa startup logs, não agenda próximo tick enquanto ausente |
-| Branch atual é `main` | STOP. L2 só roda em `epic/<platform>/<NNN>` — não escreve, não agenda |
+| Branch atual é `main` em plataforma external | STOP. L2 só roda em `epic/<platform>/<NNN>` — não escreve, não agenda |
+| Branch atual é `main` em plataforma self-ref (`repo.name == "madruga.ai"`) | Healthy — convenção do projeto. Continua observando normalmente. |
 | Epic não existe no DB | `python3 .specify/scripts/post_save.py --reseed --platform <p>` e re-tick |
 | Mesma task falha 3x | Classifica como `critical` — diagnóstico antes de qualquer retry |
 | `claude` exit 1 com stderr vazio | Erro vive no stdout JSON — parse antes de qualquer ação |

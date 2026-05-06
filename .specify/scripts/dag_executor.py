@@ -21,6 +21,7 @@ import asyncio
 import contextvars
 import json
 import logging
+import math
 import os
 import random
 import re
@@ -182,6 +183,15 @@ _AUTONOMOUS_DISPATCH = (
     "- Go straight to generating and SAVING the output file.\n"
     "- Use your best judgment for any decision that would normally require human input.\n"
     "- The output file MUST be written to disk before you finish.\n"
+    "- ANY skill-body section describing a 'sequential loop', 'present one at a time', "
+    "'wait for user answer', or 'interactive questioning' workflow is SUSPENDED. "
+    "Apply the recommended/default option and proceed.\n\n"
+    "WAIT-PATTERN BAN:\n"
+    "Never wait for a background process or SubagentTask using `until [ -f sentinel ] "
+    "|| grep -q ...; do sleep N; done` — a silent inner failure leaves bash polling "
+    "forever and stalls the pipeline. Use `wait $!`, `timeout 60 cmd`, or run "
+    "synchronously. If the process produces a file, chain creation to its exit "
+    "(e.g. `pytest && touch sentinel`) so the loop terminates on failure too.\n"
 )
 
 
@@ -522,14 +532,19 @@ def group_tasks_by_phase(
 
     result: list[tuple[str, list[TaskItem]]] = []
     for phase_label, phase_tasks in phases.items():
-        # Split by total task count so sub-phase numbers are stable
-        if len(phase_tasks) <= max_per_phase:
+        n = len(phase_tasks)
+        # Split by total task count so sub-phase numbers are stable across retries.
+        # Balance chunks via math.ceil so 13 tasks (max=12) becomes part 1: 7,
+        # part 2: 6 — instead of the pathological 12 + 1 (epic 027 phase-8 was
+        # a "1 task isolated" subphase that crossed dispatch threshold).
+        if n <= max_per_phase:
             result.append((phase_label, phase_tasks))
         else:
-            for i in range(0, len(phase_tasks), max_per_phase):
-                chunk = phase_tasks[i : i + max_per_phase]
-                sub_label = f"{phase_label} (part {i // max_per_phase + 1})"
-                result.append((sub_label, chunk))
+            n_chunks = math.ceil(n / max_per_phase)
+            per_chunk = math.ceil(n / n_chunks)
+            for i, start in enumerate(range(0, n, per_chunk)):
+                chunk = phase_tasks[start : start + per_chunk]
+                result.append((f"{phase_label} (part {i + 1})", chunk))
     return result
 
 
@@ -818,10 +833,14 @@ def compose_task_prompt(
 
 
 _PHASE_USER_STORY_RE = re.compile(r"User Story\s+(\d+)", re.IGNORECASE)
-# Match the User Story header at H2 (`##`) or H3 (`###`). Specs in this repo
-# use H3 (under an H2 like `## User Scenarios & Testing`); H2 is supported for
-# back-compat with older or hand-written specs.
-_SPEC_USER_STORY_HEADER_RE = re.compile(r"^#{2,3}\s+User Story\s+(\d+)\b", re.MULTILINE | re.IGNORECASE)
+# Match the User Story header at H2 (`##`) or H3 (`###`). Accepts EN ("User
+# Story 1") and PT-BR ("História de Usuário 1", "Historia de Usuario 1") plus
+# the short form widely used in our specs ("US-01", "US 1", "US1"). The
+# leading-zero consumer (`0*`) normalizes "US-01" → story_n=1.
+_SPEC_USER_STORY_HEADER_RE = re.compile(
+    r"^#{2,3}\s+(?:User\s+Story\s+|US[- ]?|Hist[oó]ria\s+de\s+Usu[aá]rio\s+)0*(\d+)\b",
+    re.MULTILINE | re.IGNORECASE,
+)
 # Slice ends at the next H2 or H3 header — never a deeper header (e.g. `####
 # Acceptance Criteria` inside the US must NOT terminate the slice).
 _SPEC_NEXT_SECTION_RE = re.compile(r"^#{2,3}\s+", re.MULTILINE)
@@ -917,6 +936,16 @@ def _scoped_spec_section(epic_dir: Path, phase_label: str, phase_tasks: list[Tas
                 len(sliced.encode()),
             )
             return sliced
+        # Slice missed — header format diverges from regex. Loud signal so we
+        # catch silent fallbacks early (epic 027 dispatched 5 phases with
+        # full 45KB spec because spec used `### US-01` instead of
+        # `### User Story 1`). See _SPEC_USER_STORY_HEADER_RE.
+        log.warning(
+            "spec_slice_miss phase=%r story=%d — header not found, falling back to full spec (%d bytes)",
+            phase_label,
+            story_n,
+            len(spec_text.encode()),
+        )
     return spec_text
 
 
@@ -1377,66 +1406,70 @@ async def _run_implement_phases(
         phase_completed = len(completed_ids)
         total_completed += phase_completed
 
-        if success or phase_completed == len(still_pending):
+        # Source of truth is tasks.md (via _verify_phase_completion). Subprocess
+        # `success` was previously OR'd with all_done — epic 027 phase-8 reported
+        # success=True with 0/1 tasks done and was silently classified completed.
+        all_done = phase_completed == len(still_pending)
+        any_done = phase_completed > 0
+
+        if all_done:
             consecutive_phase_failures = 0
             # Defensively mark any tasks the agent might have missed
             for tid in completed_ids:
                 mark_task_done(tasks_path, tid)
-            complete_run(
-                conn,
-                run_id,
-                status="completed",
-                tokens_in=metrics.get("tokens_in"),
-                tokens_out=metrics.get("tokens_out"),
-                cost_usd=metrics.get("cost_usd"),
-                duration_ms=metrics.get("duration_ms"),
-            )
-            _run_eval_scoring(conn, platform_name, phase_id, run_id, trace_id, epic_slug, None, metrics)
-            log.info(
-                "Phase '%s' completed: %d/%d tasks done",
-                phase_label,
-                phase_completed,
-                len(still_pending),
-            )
-        elif phase_completed > 0:
-            # Partial completion — some tasks done, continue to next phase
+            phase_status = "completed"
+            phase_error: str | None = None
+        elif any_done:
             consecutive_phase_failures = 0  # partial progress = not stuck
-            complete_run(
-                conn,
-                run_id,
-                status="completed",
-                error=f"partial: {phase_completed}/{len(still_pending)}",
-                tokens_in=metrics.get("tokens_in"),
-                tokens_out=metrics.get("tokens_out"),
-                cost_usd=metrics.get("cost_usd"),
-                duration_ms=metrics.get("duration_ms"),
-            )
-            _run_eval_scoring(conn, platform_name, phase_id, run_id, trace_id, epic_slug, None, metrics)
-            log.warning(
-                "Phase '%s' partial: %d/%d tasks done, still pending: %s",
-                phase_label,
-                phase_completed,
-                len(still_pending),
-                pending_ids,
-            )
+            phase_status = "completed"
+            phase_error = f"partial: {phase_completed}/{len(still_pending)}"
         else:
-            # Zero progress
             consecutive_phase_failures += 1
-            complete_run(conn, run_id, status="failed", error=error)
-            _run_eval_scoring(conn, platform_name, phase_id, run_id, trace_id, epic_slug, None, metrics)
-            log.error("Phase '%s' failed with zero progress: %s", phase_label, error)
-            # Rate limit: break immediately — next phases would fail for the same reason,
-            # burning turns and inflating the circuit-breaker failure count pointlessly.
-            if _is_rate_limit_error(error):
-                log.warning(
-                    "Rate limit detected on phase '%s' — breaking phase loop immediately (not advancing to next phase)",
-                    phase_label,
-                )
-                break
+            phase_status = "failed"
+            if success:
+                # Subprocess success but tasks.md untouched — agent bailed early
+                # or got stuck in a wait pattern. Specific sentinel so easter
+                # retries with a fresh prompt instead of treating it as a code bug.
+                phase_error = f"phase_completed_no_op: claude reported success but 0/{len(still_pending)} tasks done"
+            else:
+                phase_error = error
+
+        complete_run(
+            conn,
+            run_id,
+            status=phase_status,
+            error=phase_error,
+            tokens_in=metrics.get("tokens_in"),
+            tokens_out=metrics.get("tokens_out"),
+            cost_usd=metrics.get("cost_usd"),
+            duration_ms=metrics.get("duration_ms"),
+        )
+        _run_eval_scoring(conn, platform_name, phase_id, run_id, trace_id, epic_slug, None, metrics)
+
+        # grep-friendly for portal/journalctl
+        log.info(
+            "phase_result phase=%r status=%s completed=%d/%d completed_ids=%s pending_ids=%s error=%r",
+            phase_label,
+            phase_status,
+            phase_completed,
+            len(still_pending),
+            completed_ids,
+            pending_ids,
+            phase_error,
+        )
 
         # Auto-commit after each phase with progress to avoid DirtyTreeError on restart
         if phase_completed > 0:
             _auto_commit_epic(cwd, platform_name, epic_slug)
+
+        # Rate limit: break immediately — next phases would fail for the same reason,
+        # burning turns and inflating the circuit-breaker failure count pointlessly.
+        if phase_status == "failed" and _is_rate_limit_error(phase_error):
+            log.warning(
+                "Rate limit detected on phase %r — breaking phase loop immediately",
+                phase_label,
+            )
+            break
 
         if consecutive_phase_failures >= IMPLEMENT_MAX_CONSECUTIVE_FAILURES:
             log.error(
