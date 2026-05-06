@@ -361,17 +361,17 @@ sidebar:
 
 **Purpose**: validar que portal Astro inicia, URLs respondem, screenshots de telas frontend passam, journey J-001 completa.
 
-- [ ] T130 Executar `cd portal && npm run build` — build de produção sem erros. Validar `dist/` populado.
+- [x] T130 Executar `cd portal && npm run build` — build de produção sem erros. Validar `dist/` populado.
 
-- [ ] T131 Executar `python3 .specify/scripts/qa_startup.py --start --platform madruga-ai` — todos os health_checks respondem dentro do `ready_timeout` (30s). Health check: `http://localhost:4321` retorna 200.
+- [x] T131 Executar `python3 .specify/scripts/qa_startup.py --start --platform madruga-ai` — todos os health_checks respondem dentro do `ready_timeout` (30s). Health check: `http://localhost:4321` retorna 200.
 
-- [ ] T132 Executar `python3 .specify/scripts/qa_startup.py --validate-env --platform madruga-ai` — zero `required_env` ausentes (madruga-ai não declara required_env, expectativa: pass).
+- [x] T132 Executar `python3 .specify/scripts/qa_startup.py --validate-env --platform madruga-ai` — zero `required_env` ausentes (madruga-ai não declara required_env, expectativa: pass).
 
-- [ ] T133 Executar `python3 .specify/scripts/qa_startup.py --validate-urls --platform madruga-ai` — todas as URLs declaradas em `testing.urls` acessíveis com `expect_status: 200`. URLs: `http://localhost:4321` (Portal Home), `http://localhost:4321/madruga-ai/business/vision/` (vision doc).
+- [x] T133 Executar `python3 .specify/scripts/qa_startup.py --validate-urls --platform madruga-ai` — todas as URLs declaradas em `testing.urls` acessíveis com `expect_status: 200`. URLs: `http://localhost:4321` (Portal Home), `http://localhost:4321/madruga-ai/business/vision/` (vision doc).
 
-- [ ] T134 Capturar screenshot de cada URL `type: frontend` declarada em `testing.urls` — Portal Home + Plataforma madruga-ai vision doc. Validar conteúdo NÃO é placeholder (presença de elementos esperados).
+- [x] T134 Capturar screenshot de cada URL `type: frontend` declarada em `testing.urls` — Portal Home + Plataforma madruga-ai vision doc. Validar conteúdo NÃO é placeholder (presença de elementos esperados).
 
-- [ ] T135 Executar Journey J-001 (happy path) declarado em `platforms/madruga-ai/testing/journeys.md` — todos os steps com assertions OK. Step exemplo: navegar Portal Home → clicar plataforma madruga-ai → ver vision doc renderizada.
+- [x] T135 Executar Journey J-001 (happy path) declarado em `platforms/madruga-ai/testing/journeys.md` — todos os steps com assertions OK. Step exemplo: navegar Portal Home → clicar plataforma madruga-ai → ver vision doc renderizada.
 
 **Checkpoint final**: portal builda + roda + URLs OK + journey J-001 passa. Epic 027 SHIPPABLE.
 
