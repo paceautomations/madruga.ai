@@ -15,6 +15,8 @@ Started: 2026-05-05T20:41:00Z
 - **"No changes to commit" em fase de US visual** (phase-4): 3 tasks rodaram 19min e o auto-commit não encontrou mudanças. Pode indicar (a) tasks foram só validações/leituras, (b) modelo gerou patches mas não persistiu, (c) tasks já estavam completas em phase-3 e modelo confirmou. Sugestão: skill `speckit.implement` deveria retornar JSON com `files_written: []` para distinguir os 3 casos; hoje só sabemos que git diff = vazio. **Atualização**: o padrão se repetiu em phase-6 (US3 opt-out) e phase-7 (US4 part 1). 3 fases consecutivas de US sem commit é forte sinal de underwriting silencioso.
 - **phase-8 single-task com 25min+ wall**: T073 (1 task isolada) ultrapassou a média de 6 tasks em phase-1 (~4min). Tasks isoladas em phase própria deveriam ser fundidas com phase anterior pra ganhar contexto compartilhado, ou ter timeout customizado menor pra falhar rápido se modelo entrar em loop. Sugestão: dispatcher deveria mergear `task_count==1` phase com a phase anterior na mesma US se houver folga de turns.
 - **phase-8 marcou completed com 0/1 tasks done**: 28min22s investidos, 0 tasks completadas, dispatcher avançou pra phase-9 mesmo assim. Esse é o caso mais grave do padrão "no commit" — task T073 foi pra trás silenciosamente. Sugestão: introduzir threshold `phase_min_completion_rate` (ex: 50%) — abaixo disso, fase é classificada como `failed` em vez de `completed`, e easter pode disparar 1 retry com prompt enxutado antes de prosseguir. Tracking só por `M/N tasks done` no log atual fica invisível em métricas agregadas.
+- **Anti-pattern: sentinel-file polling sem timeout** (incidente phase-13): modelo usou `until [ -f /tmp/test_done ]; do sleep 2; done` esperando que algum processo crie o arquivo após o pytest. Como o spawn do pytest não amarrou criação do sentinel ao exit (ex: `pytest ... && touch /tmp/test_done` em vez de só `pytest > log &`), bash entrou em loop infinito → 26min de pipeline parado. Sugestão hard: skill `speckit.implement` (ou Conventions header) deveria proibir explicitamente esse pattern e indicar `wait $!` ou `timeout NN command` para esperar processos. Sugestão soft: dispatcher checa `ps --ppid <claude-pid>` em cada tick — se filho bash >5min em estado S/D sem mudança em I/O, sinaliza alerta.
+- **phase-8 + phase-13 = sintoma de "wait without timeout"**: ambos os incidentes graves desta rodada vieram do mesmo padrão (modelo aguardando processo bg sem mecanismo de break). Provavelmente também explica os 5 casos de "no commit" (modelo iniciou processo, esperou indefinidamente, atingiu max_turns, dispatcher marcou completed sem o trabalho real). Investigação prioritária: instrumentar `bash` calls dispatched para detectar long-wait patterns proativamente.
 
 ## Melhoria — madruga-ai
 
@@ -22,7 +24,13 @@ Started: 2026-05-05T20:41:00Z
 
 ## Incidents críticos
 
-(nenhum até agora)
+### phase-13 travado em sentinel-file wait sem timeout (2026-05-05 21:53)
+- **Symptom:** phase-13 (Polish & Cross-Cutting, 7 tasks) ultrapassou threshold dinâmico (39:19 > 37.5min). Processo claude (PID 337914) em `do_epoll_wait`, com filho zsh (PID 348715) há 24min em `until [ -f /tmp/test_done ]; do sleep 2; done; rtk read /tmp/test_output.log --tail-lines 30`.
+- **Detection:** tick-50 viu phase em 92% do threshold (34:24/37.5min). Tick-54 confirmou cruzamento (39:19). `cat /proc/<pid>/wchan` retornou `do_epoll_wait`. `ps --ppid` revelou subprocesso zsh em loop infinito.
+- **Root cause:** Modelo iniciou pytest em background com pattern `pytest > /tmp/test_output.log 2>&1 &` esperando que algum processo crie `/tmp/test_done` quando concluir, mas o pattern não amarra criação do sentinel ao exit do pytest. Pytest terminou às 21:27:52 (1330+ linhas em /tmp/test_output.log), mas `/tmp/test_done` nunca foi criado. Bash em loop infinito → claude bloqueado em epoll_wait → 26min desperdiçados.
+- **Fix:** `touch /tmp/test_done` (non-destructive — sinaliza ao bash que pode sair do loop). Bash exited, `rtk read` retornou tail do log pra claude, que processou e completou phase-13 (6/7 tasks). Pipeline desbloqueado, phase-14 já dispatchada. **Não há fix de código** — issue é pattern do modelo.
+- **Test:** N/A (issue de runtime do modelo, não de codebase). Mitigação no madruga.ai: skill `speckit.implement` deveria orientar uso de `wait $!` ou `timeout` em vez de sentinel-file polling. Sugestão registrada em "Melhoria — madruga.ai" abaixo.
+- **Duration lost:** ~26min (de 21:27 quando teste terminou até 21:53 quando intervim)
 
 ## Síntese
 
