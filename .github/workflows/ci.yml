@@ -128,13 +128,19 @@ jobs:
         run: npm install && npm run build
 
   size-budget:
-    # Bundle-size gate for the screen-flow route (FR-040, T070).
+    # Bundle-size gate for the screen-flow route (FR-040, FR-041).
     # Triggers only on PRs touching portal/ to skip docs-only diffs.
-    # Final per-route budget is locked in T113 after the Phase-2 baseline;
-    # the size-limit.config in portal/ holds the placeholder until then so
-    # the gate exists and blocks regressions exceeding the budget.
+    # Per-route budgets are locked at portal/.size-limit.json (T114):
+    #   - screen-flow JS  → 150 kB ungz (baseline 143.11 kB + 5%)
+    #   - screen-flow CSS →  22 kB ungz (baseline 20.64 kB + 5%)
+    #   - control-panel CSS → 12 kB ungz (regression guard, FR-041)
+    # T115 adds JSON capture + a sticky PR comment so reviewers see
+    # the budget delta inline without digging into Action logs.
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -159,7 +165,67 @@ jobs:
         if: steps.scope.outputs.changed == 'true'
         working-directory: portal
         run: npm ci
-      - name: Run size-limit
+      - name: Run size-limit (JSON capture)
+        id: size
         if: steps.scope.outputs.changed == 'true'
         working-directory: portal
-        run: npx size-limit
+        # Capture JSON output even if the step fails so the next
+        # step can still post a PR comment with the breakdown.
+        # `tee` keeps the human-readable log visible in Actions UI.
+        run: |
+          set +e
+          npx size-limit --json | tee size-results.json
+          status=${PIPESTATUS[0]}
+          # Re-run without --json so the failure message lands in the
+          # log surface developers actually read.
+          if [ "$status" -ne 0 ]; then
+            echo "::error::Bundle size exceeded budget — see portal/.size-limit.json for limits"
+            npx size-limit || true
+          fi
+          exit $status
+      - name: Comment size-limit results on PR
+        if: steps.scope.outputs.changed == 'true' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = 'portal/size-results.json';
+            if (!fs.existsSync(path)) {
+              core.warning('size-results.json not found; skipping comment.');
+              return;
+            }
+            const results = JSON.parse(fs.readFileSync(path, 'utf8'));
+            const fmtKB = (b) => b == null ? '—' : `${(b / 1024).toFixed(2)} kB`;
+            const rows = results.map((r) => {
+              const status = r.passed === false ? '❌' : '✅';
+              const limit = r.sizeLimit ?? r.limit ?? null;
+              const delta = (r.size != null && limit != null)
+                ? `${(((r.size - limit) / limit) * 100).toFixed(1)}%`
+                : '—';
+              return `| ${status} ${r.name} | ${fmtKB(r.size)} | ${fmtKB(limit)} | ${delta} |`;
+            }).join('\n');
+            const body = [
+              '## Bundle size — `size-limit` (T115)',
+              '',
+              '| | Size | Limit | Δ vs limit |',
+              '|-|------|-------|------------|',
+              rows,
+              '',
+              '_Budgets at `portal/.size-limit.json`. Baseline locked at T113._',
+            ].join('\n');
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.pull_request.number;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner, repo, issue_number, per_page: 100,
+            });
+            const marker = '## Bundle size — `size-limit` (T115)';
+            const existing = comments.find((c) => c.body && c.body.startsWith(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner, repo, comment_id: existing.id, body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner, repo, issue_number, body,
+              });
+            }
