@@ -42,7 +42,7 @@
  */
 import { test, expect } from '@playwright/test';
 
-const FIXTURE_URL = '/madruga-ai/screens/?fixture=true';
+const FIXTURE_URL = '/resenhai/screens/';
 
 test.describe('Capture → Commit → Render — E2E (FR-042 layer d)', () => {
   test.beforeEach(async ({ page }) => {

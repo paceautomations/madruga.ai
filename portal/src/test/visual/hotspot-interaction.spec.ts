@@ -17,7 +17,10 @@
  */
 import { test, expect } from '@playwright/test';
 
-const FIXTURE_URL = '/madruga-ai/screens/?fixture=true';
+// `?fixture=true` was a no-op via getStaticPaths/SSG. The route now
+// auto-loads the fixture in DEV when no canonical YAML exists for the
+// opted-in platform (resenhai is the only one in v1).
+const FIXTURE_URL = '/resenhai/screens/';
 
 test.describe('Hotspot interaction', () => {
   test.beforeEach(async ({ page }) => {

@@ -53,11 +53,16 @@ export function getStaticPaths() {
 
 const { platform } = Astro.props as { platform: string };
 
-// `?fixture=true` is honoured at build for dev runs only — production
-// builds ignore the query (Astro pre-renders without query strings) and
-// always read the canonical YAML.
-const fixtureRequested =
-  Astro.url.searchParams.get('fixture') === 'true' && import.meta.env.DEV;
+// Fixture fallback: Astro pre-renders pages with `getStaticPaths` and
+// search params are not seen at SSG time, so the historical
+// `?fixture=true` query toggle never reached this code in practice
+// (the empty state always rendered). Two paths now load the fixture:
+//   1. Explicit `SCREEN_FLOW_FIXTURE=true` env var at build time.
+//   2. Dev mode (`import.meta.env.DEV`) with no canonical YAML on disk —
+//      this lets the visual tests + Phase 2 dogfooding work without
+//      having to first run capture against a real platform.
+const fixtureForced =
+  process.env.SCREEN_FLOW_FIXTURE === 'true' || import.meta.env.DEV === true;
 
 let flow: ScreenFlow | null = null;
 let nodes: any[] = [];
@@ -65,10 +70,9 @@ let edges: any[] = [];
 let loadError: string | null = null;
 
 try {
-  if (fixtureRequested) {
+  flow = loadScreenFlow(platform);
+  if (!flow && fixtureForced) {
     flow = loadFixtureScreenFlow();
-  } else {
-    flow = loadScreenFlow(platform);
   }
   if (flow) {
     // ELK runs server-side so the client bundle ships without `elkjs`

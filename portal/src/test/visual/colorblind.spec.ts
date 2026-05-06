@@ -29,10 +29,13 @@
  * keeps it locked).
  */
 import { test, expect } from '@playwright/test';
-import {
-  configureToMatchImageSnapshot,
-  type MatchImageSnapshotOptions,
-} from 'jest-image-snapshot';
+// jest-image-snapshot is CommonJS — use namespace import so Node ESM resolves
+// the named factory without choking on `Named export not found`.
+import jestImageSnapshot from 'jest-image-snapshot';
+import type { MatchImageSnapshotOptions } from 'jest-image-snapshot';
+const { configureToMatchImageSnapshot } = jestImageSnapshot as unknown as {
+  configureToMatchImageSnapshot: (opts: MatchImageSnapshotOptions) => unknown;
+};
 import path from 'node:path';
 import url from 'node:url';
 
@@ -51,7 +54,11 @@ const SNAPSHOT_OPTS: MatchImageSnapshotOptions = {
 
 const toMatchImageSnapshot = configureToMatchImageSnapshot(SNAPSHOT_OPTS);
 
-const FIXTURE_URL = '/madruga-ai/screens/?fixture=true';
+// Resenhai is the only platform with screen_flow.enabled=true; the
+// `[platform]/screens.astro` page falls back to the dev fixture when DEV
+// is true and no canonical YAML exists, so the URL drops the (no-op)
+// query string and points at the route that actually exists.
+const FIXTURE_URL = '/resenhai/screens/';
 
 // Brettel-style colour-blind simulation matrices (sRGB linear).
 // Source: github.com/MaPePeR/jsColorblindSimulator (MIT) — well-known
@@ -169,12 +176,13 @@ test.describe('Edge styles — colour-blind discriminability (FR-021, SC-008)', 
     );
     expect(styles.sort()).toEqual([...ALL_STYLES]);
 
-    const screenshot = await page
-      .locator('[data-testid="screen-flow-canvas"]')
-      .screenshot({ animations: 'disabled' });
-    expect(toMatchImageSnapshot(screenshot, {
-      customSnapshotIdentifier: 'colorblind-deuteranopia',
-    })).toBeTruthy();
+    // jest-image-snapshot is jest-bound; Playwright's `toMatchSnapshot` is
+    // the native equivalent and respects maxDiffPixelRatio.
+    await expect(
+      await page
+        .locator('[data-testid="screen-flow-canvas"]')
+        .screenshot({ animations: 'disabled' }),
+    ).toMatchSnapshot('colorblind-deuteranopia.png', { maxDiffPixelRatio: 0.005 });
   });
 
   test('canvas remains visually parseable with protanopia filter', async ({
@@ -188,11 +196,10 @@ test.describe('Edge styles — colour-blind discriminability (FR-021, SC-008)', 
       canvas.style.filter = 'url(#protanopia)';
     });
 
-    const screenshot = await page
-      .locator('[data-testid="screen-flow-canvas"]')
-      .screenshot({ animations: 'disabled' });
-    expect(toMatchImageSnapshot(screenshot, {
-      customSnapshotIdentifier: 'colorblind-protanopia',
-    })).toBeTruthy();
+    await expect(
+      await page
+        .locator('[data-testid="screen-flow-canvas"]')
+        .screenshot({ animations: 'disabled' }),
+    ).toMatchSnapshot('colorblind-protanopia.png', { maxDiffPixelRatio: 0.005 });
   });
 });

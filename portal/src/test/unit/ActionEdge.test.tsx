@@ -11,9 +11,22 @@
  *
  * RED first: this file fails until ActionEdge.tsx exists.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
+
+// EdgeLabelRenderer renders into a portal whose target only exists inside a
+// full <ReactFlow> instance. Stub it inline so the label JSX is reachable from
+// the test DOM — we still exercise the real ActionEdge logic.
+vi.mock('@xyflow/react', async () => {
+  const actual = await vi.importActual<typeof import('@xyflow/react')>('@xyflow/react');
+  return {
+    ...actual,
+    EdgeLabelRenderer: ({ children }: { children?: unknown }) =>
+      children as JSX.Element,
+  };
+});
+
 import ActionEdge, { type ActionEdgeData } from '../../components/screens/ActionEdge';
 
 type EdgeStyle = ActionEdgeData['style'];
@@ -108,13 +121,19 @@ describe('ActionEdge', () => {
   });
 
   it('renders an accessible label when provided', () => {
-    const { getByText } = renderEdge('success', 'Login OK');
-    expect(getByText('Login OK')).toBeInTheDocument();
+    // EdgeLabelRenderer (xyflow) renders into a portal whose target is created
+    // by the parent <ReactFlow>. Outside a ReactFlow instance the portal target
+    // doesn't exist, but we can still assert the role+aria-label that the
+    // component declares — that's the actual a11y contract (FR-021).
+    const { getByLabelText } = renderEdge('success', 'Login OK');
+    const label = getByLabelText(/Transição success: Login OK/i);
+    expect(label).toBeInTheDocument();
+    expect(label.textContent).toBe('Login OK');
   });
 
   it('omits the label DOM when no label prop is supplied', () => {
-    const { queryByText } = renderEdge('error');
-    expect(queryByText(/Login OK/)).toBeNull();
+    const { queryByLabelText } = renderEdge('error');
+    expect(queryByLabelText(/Transição/i)).toBeNull();
   });
 
   it('matches stroke-dasharray empty/null for solid styles', () => {

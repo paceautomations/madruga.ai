@@ -23,7 +23,7 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
-const FIXTURE_URL = '/madruga-ai/screens/?fixture=true';
+const FIXTURE_URL = '/resenhai/screens/';
 
 test.describe('Screen-flow canvas — accessibility (FR-019, FR-020, SC-008)', () => {
   test.beforeEach(async ({ page }) => {

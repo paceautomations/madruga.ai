@@ -22,8 +22,10 @@ const wireframeScreen: Screen = {
   id: 'login',
   title: 'Login',
   status: 'pending',
+  // heading and button intentionally use distinct words so getByText
+  // queries are unambiguous (T020 ScreenNode wireframe assertions).
   body: [
-    { type: 'heading', text: 'Entrar' },
+    { type: 'heading', text: 'Bem-vindo' },
     { type: 'input', id: 'email', text: 'E-mail' },
     { type: 'button', id: 'submit', text: 'Entrar' },
   ],
