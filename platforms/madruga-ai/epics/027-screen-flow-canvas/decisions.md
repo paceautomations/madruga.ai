@@ -1,7 +1,7 @@
 ---
 epic: 027-screen-flow-canvas
 created: 2026-05-05
-updated: 2026-05-05
+updated: 2026-05-05 (T113 + T114: bundle baseline 163.75 KB; size-limit budget locked at 172 KB)
 ---
 # Registro de Decisões — Epic 027
 
@@ -31,3 +31,5 @@ updated: 2026-05-05
 24. `[2026-05-05 epic-context]` **Bundle budget mensurável** (C1) — size-limit no CI define budget concreto da rota /screens/* após fase 2 baseline (range esperado 700-900KB ungz). Falha de build se exceder. Substitui claim aspiracional "TTI <1.5s" por gate medível (ref: size-limit docs)
 25. `[2026-05-05 epic-context]` **Test pyramid explícito** (C2) — 4 layers: (a) pytest unit 30+ casos validator, (b) RTL+jest component 3-state ScreenNode + 4 ActionEdge styles, (c) Playwright+jest-image-snapshot visual com fixture 8 telas tolerância 1px, (d) 1 spec E2E integração capture→commit→render (ref: test-pyramid pattern)
 26. `[2026-05-05 epic-context]` **Invariante "zero edits externos"** — Nenhum commit em paceautomations/resenhai-expo (ou outro repo bound) é necessário pra epic shippar. Capture é black-box contra staging (dev.resenhai.com). Todos artefatos (YAML, shots, scripts, workflows) vivem em madruga.ai. Resenhai-expo só precisa: (a) manter staging deployado, (b) manter testIDs existentes, (c) prover credenciais de test user via env vars do CI (ref: Decision #8 zero PR externo + Decision #9 testid no YAML)
+27. `[2026-05-05 implement]` **Bundle baseline T113 — screens-route real é ~164 KB ungz, não 700-900 KB** — Medição via `npx size-limit` contra `dist/_astro/ScreenFlowCanvas*.js` (143.11 kB) + `dist/_astro/screens@_@astro*.css` (20.64 kB) = total **163.75 KB ungz**. Estimativa original na pitch.md (700-900 KB) era conservadora — não considerou que xyflow + elkjs já estão no bundle compartilhado de outras rotas (control-panel, observability) e portanto não pesam na rota /screens/* especificamente. Budget enforced = baseline × 1.05 (5% headroom): JS 150 KB + CSS 22 KB. CI gate falha em PR que exceder, garantindo zero regressão silenciosa. Substituiu o placeholder "1 MB" do package.json `size-limit` field. (ref: T113 baseline + portal/.size-limit.json + .github/workflows/ci.yml)
+28. `[2026-05-05 implement]` **Size-limit usa preset `preset-app` mas com `brotli: false` + `gzip: false` per-check** — A medição de bytes no CI usa o tamanho ungz porque é o que o browser realmente baixa do CDN antes do decode (ungz é o budget honesto). Brotli/gzip são propriedades do servidor, não do bundle — incluí-las mascara crescimento do código. `running: false` foi tentado pra evitar dependência do Puppeteer, mas o preset-app já fornece tempos de loading/running úteis para reviewers e o build do CI é Linux ubuntu-latest (Puppeteer estável). Trade-off: +20s de tempo de CI vs visibilidade de tempo de execução em hardware lento (Snapdragon 410). Aceito. (ref: portal/.size-limit.json + size-limit docs)

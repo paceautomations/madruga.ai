@@ -1,0 +1,23 @@
+[
+  {
+    "name": "screen-flow route — JS chunk",
+    "path": "dist/_astro/ScreenFlowCanvas*.js",
+    "limit": "150 kB",
+    "gzip": false,
+    "brotli": false
+  },
+  {
+    "name": "screen-flow route — page CSS",
+    "path": "dist/_astro/screens@_@astro*.css",
+    "limit": "22 kB",
+    "gzip": false,
+    "brotli": false
+  },
+  {
+    "name": "control-panel route — must NOT regress",
+    "path": "dist/_astro/control-panel@_@astro*.css",
+    "limit": "12 kB",
+    "gzip": false,
+    "brotli": false
+  }
+]

@@ -17,14 +17,6 @@
     "size": "size-limit",
     "presize": "npm run build"
   },
-  "size-limit": [
-    {
-      "name": "screen-flow route (placeholder until T113 baseline)",
-      "path": "dist/_astro/*.js",
-      "limit": "1 MB",
-      "gzip": false
-    }
-  ],
   "dependencies": {
     "@astrojs/react": "^5.0.4",
     "@astrojs/starlight": "^0.38.4",
