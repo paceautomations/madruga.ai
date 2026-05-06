@@ -87,10 +87,16 @@ export default function Hotspot({
     height: pct(coords.h),
   };
 
+  // Defense-in-depth: when hidden we drop the tab index so sequential
+  // focus skips the element even if the CSS `display: none` rule is
+  // overridden by user styles. We keep `role="button"` because the
+  // T080 component test asserts the role is queryable through
+  // `getByRole('button', { hidden: true })`, and `aria-hidden=true`
+  // already removes the element from the AT tree.
   return (
     <div
       role="button"
-      tabIndex={0}
+      tabIndex={visible ? 0 : -1}
       className="screen-flow-hotspot"
       data-hotspot-flow={`${flow.from}->${flow.to}`}
       data-hotspot-to={flow.to}
