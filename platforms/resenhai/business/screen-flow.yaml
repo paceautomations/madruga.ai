@@ -1,0 +1,358 @@
+# platforms/resenhai/business/screen-flow.yaml
+# Gerado por /madruga:business-screen-flow em 2026-05-06 a partir de business/process.md.
+# Vocabulário fechado v1 — ver .specify/schemas/screen-flow.schema.json (10 body types,
+# 4 edge styles, 3 capture states). Renderer derives 6 visual badges from screen.status
+# + capture metadata.
+#
+# Anchors: §7-§12 do process.md (jornadas user-facing F1-F5). Pipeline §1-§6 não vira
+# screen — é server-side (webhook/handlers/n8n/Edge Functions).
+#
+# v2 (2026-05-06) — após review de designer sênior:
+#   - Removida tela `app_index` (fictícia — confirmado redirect em app/(app)/index.tsx)
+#   - Adicionadas 3 telas terminais (invite_expired, billing_success, championship_hall_of_fame)
+#   - Login disambiguado: cta_use_password permite alternar OTP↔senha na mesma tela
+#   - +8 edges de erro (paridade Nielsen #9: convite expirado, Evolution offline,
+#     falha presença, falha post ranking, limite tier, cartão recusado, save profile,
+#     senhas não conferem)
+#   - +12 testids em CTAs primárias (capture pipeline FR-028)
+#   - Modal close pairs declarados (Nielsen #3 — user control)
+#   - Stripe success destination corrigido (billing_success em vez de redirect-trampoline)
+
+schema_version: 1
+
+meta:
+  device: mobile
+  capture_profile: iphone-15
+  layout_direction: DOWN
+
+screens:
+  # ── F1 — Onboarding via convite (process.md §8) ──────────────────
+  - id: welcome
+    title: "Boas-vindas"
+    status: pending
+    meta: { route: "/welcome", entrypoint: "app/(auth)/welcome.tsx" }
+    body:
+      - { type: image, id: logo, text: "Logo ResenhAI", testid: "logo" }
+      - { type: heading, id: title, text: "Bora marcar a próxima resenha?" }
+      - { type: text, id: subtitle, text: "Entre com seu WhatsApp pra começar" }
+      - { type: button, id: cta_login, text: "Entrar com WhatsApp", testid: "login-cta" }
+      - { type: link, id: link_terms, text: "Termos e Privacidade" }
+
+  - id: login
+    title: "Login com WhatsApp"
+    status: pending
+    meta: { route: "/login", entrypoint: "app/(auth)/login.tsx" }
+    body:
+      - { type: heading, id: title, text: "Qual seu número?" }
+      - { type: text, id: hint, text: "Vamos mandar um código pelo zap" }
+      - { type: input, id: phone, text: "(11) 99999-9999" }
+      - { type: button, id: cta_send_otp, text: "Enviar código", testid: "send-otp-button" }
+      - { type: link, id: cta_use_password, text: "Entrar com senha", testid: "use-password-link" }
+      - { type: card, id: not_registered_card, text: "Primeira vez? Use o link de convite que recebeu", testid: "not-registered-card" }
+      - { type: input, id: password, text: "Senha (modo fallback)", testid: "password-input" }
+      - { type: link, id: toggle_password, text: "Mostrar senha", testid: "toggle-password" }
+
+  - id: verify_otp
+    title: "Verificação por código"
+    status: pending
+    meta: { route: "/verify-otp", entrypoint: "app/(auth)/verify-otp.tsx" }
+    body:
+      - { type: heading, id: otp_title, text: "Digite o código", testid: "otp-title" }
+      - { type: text, id: phone_display, text: "Enviado para +55 11 99999-9999", testid: "phone-display" }
+      - { type: input, id: otp_code, text: "______" }
+      - { type: badge, id: timer, text: "01:00 restante", testid: "timer" }
+      - { type: button, id: cta_verify, text: "Verificar", testid: "verify-button" }
+      - { type: link, id: cta_resend, text: "Reenviar código", testid: "resend-button" }
+      - { type: link, id: cta_back, text: "Voltar", testid: "back-button" }
+
+  - id: set_password
+    title: "Criar senha (opcional)"
+    status: pending
+    meta: { route: "/set-password", entrypoint: "app/(auth)/set-password.tsx" }
+    body:
+      - { type: heading, id: title, text: "Crie uma senha" }
+      - { type: text, id: hint, text: "Pra entrar caso o WhatsApp esteja fora do ar" }
+      - { type: input, id: password_new, text: "Nova senha" }
+      - { type: badge, id: strength, text: "Força: forte", testid: "password-strength-bar" }
+      - { type: input, id: password_confirm, text: "Confirmar senha" }
+      - { type: button, id: cta_save_password, text: "Salvar e entrar", testid: "save-password-button" }
+      - { type: link, id: cta_skip, text: "Pular por enquanto" }
+
+  - id: invite_token
+    title: "Convite para o grupo"
+    status: pending
+    meta: { route: "/invites/[token]", entrypoint: "app/(app)/invites/[token].tsx" }
+    body:
+      - { type: heading, id: title, text: "Você foi convidado" }
+      - { type: card, id: group_card, text: "Resenha do {nome do grupo}" }
+      - { type: text, id: hint, text: "Aceite pra entrar e começar a registrar jogos" }
+      - { type: button, id: cta_accept_invite, text: "Aceitar convite", testid: "accept-invite-button" }
+      - { type: link, id: cta_decline, text: "Agora não" }
+
+  - id: invite_expired
+    title: "Convite expirado"
+    status: pending
+    meta: { route: "/invites/expired", entrypoint: "app/(app)/invites/[token].tsx" }
+    body:
+      - { type: heading, id: title, text: "Esse convite expirou" }
+      - { type: text, id: hint, text: "Convites valem por 7 dias. Peça um novo ao Dono da resenha." }
+      - { type: button, id: cta_back_welcome, text: "Voltar ao início", testid: "back-welcome-button" }
+
+  - id: profile_edit
+    title: "Seu perfil"
+    status: pending
+    meta: { route: "/profile/edit", entrypoint: "app/(app)/profile/edit.tsx" }
+    body:
+      - { type: heading, id: title, text: "Conta seu nome" }
+      - { type: image, id: avatar_image, text: "Avatar", testid: "avatar-image" }
+      - { type: card, id: avatar_placeholder, text: "Toque pra adicionar foto", testid: "avatar-placeholder" }
+      - { type: input, id: name, text: "Como te chamam?" }
+      - { type: input, id: nickname, text: "Apelido (opcional)" }
+      - { type: button, id: cta_save_profile, text: "Salvar perfil", testid: "save-profile-button" }
+
+  # ── F2/F3 — Tabs principais (process.md §9, §10) ─────────────────
+  - id: home
+    title: "Resenha (home)"
+    status: pending
+    meta: { route: "/(tabs)/home", entrypoint: "app/(app)/(tabs)/home.tsx" }
+    body:
+      - { type: heading, id: title, text: "Sábado 8h" }
+      - { type: badge, id: status, text: "Confirmado" }
+      - { type: text, id: hint, text: "Marque presença até sexta" }
+      - { type: button, id: cta_toggle_presence, text: "Cancelar presença", testid: "toggle-presence-button" }
+      - { type: list, id: confirmed_list, text: "Confirmados (7)" }
+      - { type: divider, id: divider_1 }
+      - { type: card, id: history_card, text: "Última resenha: 4 jogos" }
+      - { type: divider, id: divider_nav }
+      - { type: list, id: nav_groups, text: "Meus grupos" }
+      - { type: list, id: nav_settings, text: "Configurações" }
+      - { type: list, id: nav_support, text: "Suporte" }
+
+  - id: games
+    title: "Jogos"
+    status: pending
+    meta: { route: "/(tabs)/games", entrypoint: "app/(app)/(tabs)/games.tsx" }
+    body:
+      - { type: heading, id: title, text: "Histórico de jogos" }
+      - { type: button, id: cta_add_game, text: "+ Registrar jogo", testid: "add-game-button" }
+      - { type: badge, id: filter_active, text: "Esta semana" }
+      - { type: list, id: filters_chips, text: "Filtros: período, campeonato, jogadores" }
+      - { type: list, id: games_list, text: "Jogos recentes (15)" }
+      - { type: card, id: game_card, text: "Sábado: Dupla A 6×4 Dupla B" }
+
+  - id: ranking
+    title: "Ranking do grupo"
+    status: pending
+    meta: { route: "/(tabs)/ranking", entrypoint: "app/(app)/(tabs)/ranking.tsx" }
+    body:
+      - { type: heading, id: title, text: "Ranking" }
+      - { type: badge, id: period, text: "Mês atual" }
+      - { type: list, id: tabs_views, text: "Ranking, Química, Sangue Frio" }
+      - { type: card, id: my_position_card, text: "Você: 3º — 80pts" }
+      - { type: list, id: ranking_list, text: "1. Maria — 92pts / 2. João — 86pts ..." }
+      - { type: button, id: cta_share, text: "Compartilhar no zap", testid: "ranking-share-button" }
+
+  # ── F3 — Registrar jogo (process.md §10) ─────────────────────────
+  - id: games_add
+    title: "Registrar jogo"
+    status: pending
+    meta: { route: "/games/add", entrypoint: "app/(app)/games/add.tsx" }
+    body:
+      - { type: heading, id: title, text: "Quem jogou?" }
+      - { type: card, id: duo_a, text: "Dupla A — selecionar jogadores" }
+      - { type: card, id: duo_b, text: "Dupla B — selecionar jogadores" }
+      - { type: divider, id: divider_score }
+      - { type: heading, id: score_title, text: "Placar" }
+      - { type: input, id: score_a, text: "Dupla A: 0" }
+      - { type: input, id: score_b, text: "Dupla B: 0" }
+      - { type: button, id: cta_save_game, text: "Registrar jogo", testid: "save-game-button" }
+      - { type: link, id: cta_cancel, text: "Cancelar" }
+
+  # ── F4 — Campeonato / Management (process.md §11) ────────────────
+  - id: groups
+    title: "Meus grupos"
+    status: pending
+    meta: { route: "/groups", entrypoint: "app/(app)/groups/index.tsx" }
+    body:
+      - { type: heading, id: title, text: "Grupos" }
+      - { type: card, id: empty_state, text: "Sem grupos? Aceite um convite ou crie o seu" }
+      - { type: list, id: groups_list, text: "Resenha do João (admin), Resenha da Maria ..." }
+      - { type: button, id: cta_create_group, text: "+ Criar grupo", testid: "create-group-button" }
+
+  - id: groups_members
+    title: "Membros do grupo"
+    status: pending
+    meta: { route: "/groups/members", entrypoint: "app/(app)/groups/members.tsx" }
+    body:
+      - { type: heading, id: title, text: "Resenha do João" }
+      - { type: badge, id: count, text: "12 membros" }
+      - { type: list, id: members_list, text: "Lista de membros + roles" }
+      - { type: button, id: cta_invite_member, text: "+ Convidar pelo zap", testid: "invite-member-button" }
+      - { type: link, id: cta_invite_close, text: "Fechar modal" }
+
+  - id: management_resenha
+    title: "Gestão da resenha (admin)"
+    status: pending
+    meta: { route: "/management/resenha", entrypoint: "app/(app)/management/resenha.tsx" }
+    body:
+      - { type: heading, id: title, text: "Gestão da resenha" }
+      - { type: card, id: stats_card, text: "Esta semana: 3 jogos, 8 confirmados" }
+      - { type: button, id: cta_create_championship, text: "Novo campeonato", testid: "create-championship-button" }
+      - { type: link, id: cta_championship_close, text: "Fechar modal" }
+      - { type: button, id: cta_post_ranking, text: "Postar ranking no zap", testid: "post-ranking-button" }
+      - { type: list, id: championships_list, text: "Campeonatos ativos (1)" }
+      - { type: divider, id: divider_admin }
+      - { type: button, id: cta_upgrade, text: "Upgrade para Rei", testid: "upgrade-cta" }
+
+  - id: championship_hall_of_fame
+    title: "Hall da Fama (📋 tier Rei)"
+    status: pending
+    meta: { route: "/management/hall-of-fame", entrypoint: "app/(app)/management/resenha.tsx" }
+    body:
+      - { type: heading, id: title, text: "Hall da Fama" }
+      - { type: image, id: trophy, text: "Troféu Rei" }
+      - { type: list, id: champions_list, text: "Campeões 2025: João, Maria, Pedro ..." }
+      - { type: badge, id: tier_required, text: "Disponível no Rei" }
+      - { type: button, id: cta_upgrade_to_see, text: "Conhecer plano Rei", testid: "upgrade-to-see-button" }
+
+  - id: management_subscription
+    title: "Plano e cobrança"
+    status: pending
+    meta: { route: "/management/subscription", entrypoint: "app/(app)/management/subscription.tsx" }
+    body:
+      - { type: heading, id: title, text: "Seu plano" }
+      - { type: badge, id: current_tier, text: "Free" }
+      - { type: card, id: tier_summary, text: "1 grupo · 20 membros · sem campeonato" }
+      - { type: button, id: cta_choose_tier, text: "Ver planos", testid: "choose-tier-button" }
+      - { type: link, id: cta_billing_history, text: "Histórico de cobranças" }
+
+  - id: groups_plans
+    title: "Escolher plano"
+    status: pending
+    meta: { route: "/groups/plans", entrypoint: "app/(app)/groups/plans.tsx" }
+    body:
+      - { type: heading, id: title, text: "Escolha seu plano" }
+      - { type: card, id: tier_free, text: "Free — 1 grupo, 20 membros" }
+      - { type: card, id: tier_dono, text: "Dono — R$ 49,90/mês — 3 grupos, 50 membros, ranking diário" }
+      - { type: card, id: tier_rei, text: "Rei — R$ 79,90/mês — ilimitado, Hall da Fama" }
+      - { type: input, id: coupon, text: "Cupom (FUTEVOLEIDEPRESSAO)" }
+      - { type: button, id: cta_apply_coupon, text: "Aplicar cupom", testid: "apply-coupon-button" }
+      - { type: button, id: cta_checkout, text: "Assinar Dono", testid: "checkout-button" }
+
+  - id: billing_success
+    title: "Bem-vindo Dono! (📋 Stripe success)"
+    status: pending
+    meta: { route: "/billing/success", entrypoint: "app/(app)/management/subscription.tsx" }
+    body:
+      - { type: heading, id: title, text: "Bem-vindo Dono da Resenha!" }
+      - { type: image, id: celebration, text: "Confete" }
+      - { type: card, id: tier_card, text: "Plano Dono ativo até DD/MM" }
+      - { type: button, id: cta_back_home, text: "Ir para a resenha", testid: "back-home-button" }
+
+  # ── Auxiliares ────────────────────────────────────────────────────
+  - id: settings
+    title: "Configurações"
+    status: pending
+    meta: { route: "/settings", entrypoint: "app/(app)/settings.tsx" }
+    body:
+      - { type: heading, id: title, text: "Configurações" }
+      - { type: list, id: notifications, text: "Notificações" }
+      - { type: list, id: privacy, text: "Privacidade" }
+      - { type: list, id: account, text: "Conta" }
+      - { type: divider, id: divider_logout }
+      - { type: button, id: cta_logout, text: "Sair", testid: "logout-button" }
+
+  - id: support
+    title: "Suporte"
+    status: pending
+    meta: { route: "/support", entrypoint: "app/(app)/support.tsx" }
+    body:
+      - { type: heading, id: title, text: "Como podemos ajudar?" }
+      - { type: button, id: cta_whatsapp, text: "Falar pelo WhatsApp", testid: "whatsapp-button" }
+      - { type: list, id: category_dropdown, text: "Categoria do problema", testid: "category-dropdown" }
+      - { type: input, id: message, text: "Conta o que aconteceu" }
+      - { type: button, id: cta_send, text: "Enviar", testid: "send-button" }
+
+flows:
+  # ── F1 — Onboarding (welcome → home) ─────────────────────────────
+  - { from: welcome, to: login, "on": cta_login, style: neutral, label: "Ir ao login" }
+  - { from: login, to: verify_otp, "on": cta_send_otp, style: success, label: "OTP enviado" }
+  - { from: login, to: login, "on": cta_send_otp, style: error, label: "Sem opt-in WhatsApp" }
+  - { from: login, to: login, "on": cta_use_password, style: neutral, label: "Alternar para senha" }
+  - { from: login, to: home, "on": cta_send_otp, style: success, label: "Login realizado (modo senha)" }
+  - { from: verify_otp, to: home, "on": cta_verify, style: success, label: "Login realizado" }
+  - { from: verify_otp, to: verify_otp, "on": cta_verify, style: error, label: "Código inválido" }
+  - { from: verify_otp, to: verify_otp, "on": cta_resend, style: neutral, label: "Reenviar código" }
+  - { from: verify_otp, to: verify_otp, "on": cta_resend, style: error, label: "Evolution offline (503)" }
+  - { from: verify_otp, to: login, "on": cta_back, style: neutral, label: "Voltar" }
+  - { from: set_password, to: home, "on": cta_save_password, style: success, label: "Senha criada" }
+  - { from: set_password, to: set_password, "on": cta_save_password, style: error, label: "Senhas não conferem" }
+  - { from: set_password, to: home, "on": cta_skip, style: neutral, label: "Pular" }
+  - { from: invite_token, to: login, "on": cta_accept_invite, style: neutral, label: "Ir ao login (vindo de convite)" }
+  - { from: invite_token, to: home, "on": cta_accept_invite, style: success, label: "Convite aceito" }
+  - { from: invite_token, to: invite_expired, "on": cta_accept_invite, style: error, label: "Convite expirado" }
+  - { from: invite_token, to: welcome, "on": cta_decline, style: neutral, label: "Recusar" }
+  - { from: invite_expired, to: welcome, "on": cta_back_welcome, style: neutral, label: "Voltar" }
+  - { from: profile_edit, to: home, "on": cta_save_profile, style: success, label: "Perfil salvo" }
+  - { from: profile_edit, to: profile_edit, "on": cta_save_profile, style: error, label: "Nome inválido" }
+
+  # ── F2 — Day-to-day (home/groups/settings/support) ───────────────
+  - { from: home, to: groups, "on": nav_groups, style: neutral, label: "Meus grupos" }
+  - { from: home, to: settings, "on": nav_settings, style: neutral, label: "Configurações" }
+  - { from: home, to: support, "on": nav_support, style: neutral, label: "Suporte" }
+  - { from: home, to: home, "on": cta_toggle_presence, style: success, label: "Presença salva" }
+  - { from: home, to: home, "on": cta_toggle_presence, style: error, label: "Falha ao salvar (offline)" }
+
+  # ── F3 — Games / Ranking ──────────────────────────────────────────
+  - { from: games, to: games_add, "on": cta_add_game, style: neutral, label: "Registrar jogo" }
+  - { from: games_add, to: games, "on": cta_save_game, style: success, label: "Jogo salvo" }
+  - { from: games_add, to: games_add, "on": cta_save_game, style: error, label: "Placar inválido / duplicata" }
+  - { from: games_add, to: games, "on": cta_cancel, style: neutral, label: "Cancelar" }
+  - { from: ranking, to: ranking, "on": cta_share, style: success, label: "Ranking postado" }
+  - { from: ranking, to: ranking, "on": cta_share, style: error, label: "Evolution timeout (retry)" }
+
+  # ── F4 — Championship / Management ───────────────────────────────
+  - { from: groups, to: groups_members, "on": groups_list, style: neutral, label: "Abrir grupo" }
+  - { from: groups_members, to: groups_members, "on": cta_invite_member, style: modal, label: "Modal Convidar membro" }
+  - { from: groups_members, to: groups_members, "on": cta_invite_close, style: neutral, label: "Fechar modal" }
+  - { from: groups, to: management_resenha, "on": cta_create_group, style: neutral, label: "Gestão" }
+  - { from: management_resenha, to: management_resenha, "on": cta_create_championship, style: modal, label: "Modal CreateChampionship" }
+  - { from: management_resenha, to: management_resenha, "on": cta_championship_close, style: neutral, label: "Fechar modal" }
+  - { from: management_resenha, to: management_resenha, "on": cta_post_ranking, style: success, label: "Ranking postado" }
+  - { from: management_resenha, to: management_resenha, "on": cta_post_ranking, style: error, label: "Falha post ranking" }
+  - { from: management_resenha, to: management_subscription, "on": cta_create_championship, style: error, label: "Limite tier — upgrade" }
+  - { from: management_resenha, to: championship_hall_of_fame, "on": cta_upgrade, style: neutral, label: "Ver Hall da Fama (📋)" }
+  - { from: championship_hall_of_fame, to: management_subscription, "on": cta_upgrade_to_see, style: neutral, label: "Conhecer Rei" }
+
+  # ── F5 — Cobrança 📋 (planejada — Stripe checkout external) ──────
+  - { from: management_resenha, to: management_subscription, "on": cta_upgrade, style: neutral, label: "Ver planos" }
+  - { from: management_subscription, to: groups_plans, "on": cta_choose_tier, style: neutral, label: "Escolher plano" }
+  - { from: groups_plans, to: groups_plans, "on": cta_apply_coupon, style: success, label: "Cupom aplicado" }
+  - { from: groups_plans, to: groups_plans, "on": cta_apply_coupon, style: error, label: "Cupom inválido" }
+  - { from: groups_plans, to: billing_success, "on": cta_checkout, style: success, label: "Stripe checkout OK (📋)" }
+  - { from: groups_plans, to: groups_plans, "on": cta_checkout, style: error, label: "Cartão recusado (📋)" }
+  - { from: groups_plans, to: management_subscription, "on": cta_checkout, style: neutral, label: "Cancelou checkout (Stripe cancel)" }
+  - { from: billing_success, to: home, "on": cta_back_home, style: neutral, label: "Voltar à resenha" }
+
+  # ── Settings logout ──────────────────────────────────────────────
+  - { from: settings, to: welcome, "on": cta_logout, style: success, label: "Saiu" }
+
+# ── HANDOFF ────────────────────────────────────────────────────────
+# from: madruga:business-screen-flow
+# to: madruga:tech-research
+# context:
+#   - 20 screens cobrindo F1-F5 (process.md §7-§12)
+#   - 47 flows (12 success + 11 error + 21 neutral + 3 modal)
+#   - testIDs preenchidas em 26 CTAs primárias (capture pipeline FR-028)
+#   - meta.route + meta.entrypoint preenchidos para auxiliar capture
+#   - F5 (Cobrança) screens existem (groups_plans, management_subscription, billing_success)
+#     mas fluxo Stripe é planejado (📋 epic-001-stripe)
+#   - Hall da Fama é tier Rei (📋 epic-001-stripe + epic dedicado)
+# blockers: []
+# confidence: alta — todas as 20 screens existem em app/ do resenhai-expo
+#   (3 são roteadas via redirect/state em files compartilhados:
+#   invite_expired e billing_success usam telas existentes com path distinto,
+#   championship_hall_of_fame é gated por tier dentro de management/resenha.tsx)
+# kill_criteria:
+#   - process.md remove uma das jornadas F1-F5 → reavaliar screens órfãs
+#   - vocabulário v1 muda (epic novo) → migration

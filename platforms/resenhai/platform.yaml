@@ -61,10 +61,20 @@ screen_flow:
     expo_web:
       enabled: true
     path_rules:
-      - pattern: 'app/\(auth\)/(\w+)\.tsx'
+      # `[\w-]+` accepts hyphenated filenames (verify-otp.tsx, set-password.tsx).
+      # The aggregator slug-converts hyphens to underscores after substitution,
+      # so `verify-otp.tsx` → `verify_otp` (matches the YAML screen ID).
+      # ORDER MATTERS — first matching rule wins. More specific patterns first.
+      - pattern: 'app/\(app\)/\(tabs\)/([\w-]+)\.tsx'  # (tabs)/home.tsx → home
         screen_id_template: '{1}'
-      - pattern: 'app/\(app\)/(\w+)\.tsx'
+      - pattern: 'app/\(app\)/([\w-]+)/index\.tsx'      # groups/index.tsx → groups
         screen_id_template: '{1}'
-      - pattern: 'app/\(app\)/(\w+)/(\w+)\.tsx'
+      - pattern: 'app/\(app\)/invites/\[token\]\.tsx'   # Expo dynamic route → invite_token
+        screen_id_template: 'invite_token'
+      - pattern: 'app/\(auth\)/([\w-]+)\.tsx'
+        screen_id_template: '{1}'
+      - pattern: 'app/\(app\)/([\w-]+)/([\w-]+)\.tsx'
         screen_id_template: '{1}_{2}'
+      - pattern: 'app/\(app\)/([\w-]+)\.tsx'
+        screen_id_template: '{1}'
     test_user_marker: "demo+playwright@resenhai.com"
