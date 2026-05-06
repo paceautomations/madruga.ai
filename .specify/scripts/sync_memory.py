@@ -26,12 +26,12 @@ import os
 import sys
 from pathlib import Path
 
-# Skip entirely when invoked inside an easter dispatch subprocess. Without this,
-# every Write/Edit inside a dispatched `claude -p` session triggers a Python
-# subprocess via the PostToolUse hook, multiplying latency and causing SQLite
-# WAL contention. The MADRUGA_DISPATCH flag is set by dag_executor._dispatch_env.
-if os.environ.get("MADRUGA_DISPATCH") == "1":
-    sys.exit(0)
+# NOTE: The MADRUGA_DISPATCH guard used to live here at module-import time,
+# but `sys.exit(0)` at import broke pytest collection in dispatched sessions
+# (any test that imported sync_memory aborted the entire pytest run).
+# The guard now lives inside main() — same runtime semantics for the hook
+# (which always invokes via `python3 sync_memory.py`, hitting `__main__`),
+# but the module stays importable from tests.
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -162,6 +162,15 @@ def _is_memory_path(file_path: str) -> bool:
 
 
 def main() -> None:
+    # Skip entirely when invoked inside an easter dispatch subprocess. Without
+    # this, every Write/Edit inside a dispatched `claude -p` session triggers a
+    # Python subprocess via the PostToolUse hook, multiplying latency and causing
+    # SQLite WAL contention. The MADRUGA_DISPATCH flag is set by
+    # dag_executor._dispatch_env. The check lives in main() so the module stays
+    # importable from pytest inside dispatch.
+    if os.environ.get("MADRUGA_DISPATCH") == "1":
+        sys.exit(0)
+
     # When invoked as a PostToolUse hook, stdin contains JSON with tool_input.
     # Filter early: only proceed if the written file is in a memory directory.
     if not sys.stdin.isatty():
