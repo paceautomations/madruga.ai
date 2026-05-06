@@ -295,6 +295,12 @@ def resolve_screen_id_from_rules(file_path: str, rules: list[dict]) -> str | Non
         if not ok:
             continue
         resolved = _TEMPLATE_GROUP_RE.sub(lambda mo: groups[int(mo.group(1)) - 1] or "", template)
+        # File paths often contain hyphens (`verify-otp.tsx`, `set-password.tsx`)
+        # but screen IDs must match `^[a-z][a-z0-9_]{0,63}$` (no hyphens). Slug-
+        # convert hyphens so authors can use `[\w-]+` in path_rules without
+        # manually mapping each hyphenated file. Casing is left as-is so
+        # PascalCase filenames (convention violation) still fail validation.
+        resolved = resolved.replace("-", "_")
         if not _SCREEN_ID_RE.match(resolved):
             log.debug(
                 "screen-flow path_rule pattern %r resolved %r → invalid id %r — skipped",
@@ -307,9 +313,7 @@ def resolve_screen_id_from_rules(file_path: str, rules: list[dict]) -> str | Non
     return None
 
 
-def _collect_screen_flow_patches(
-    triage: dict, platform_id: str, screen_flow: dict | None
-) -> list[dict]:
+def _collect_screen_flow_patches(triage: dict, platform_id: str, screen_flow: dict | None) -> list[dict]:
     """Build deduplicated screen_flow_pending_patches from a triage payload.
 
     Returns one patch per distinct screen_id, with merged sha_refs + source_files
@@ -493,9 +497,7 @@ def aggregate(platform_id: str, triage: dict, branch: str | None = None, db_path
 
     # Screen-flow drift: enrich the work list with patches for `screen_flow_mark_pending.py`.
     # Skipped silently when the platform has `screen_flow.enabled: false` (FR-039).
-    screen_flow_patches = _collect_screen_flow_patches(
-        triage, platform_id, _load_platform_screen_flow(platform_id)
-    )
+    screen_flow_patches = _collect_screen_flow_patches(triage, platform_id, _load_platform_screen_flow(platform_id))
 
     return {
         "platform": platform_id,

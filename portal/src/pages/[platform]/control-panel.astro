@@ -5,6 +5,7 @@ import DashboardCharts from '../../components/dashboard/DashboardCharts.tsx';
 import ExecutionTab from '../../components/dashboard/ExecutionTab.tsx';
 import ObservabilityDashboard from '../../components/observability/ObservabilityDashboard.tsx';
 import { discoverPlatforms, loadStatusData } from '../../lib/platforms.mjs';
+import { loadScreenFlow } from '../../lib/screen-flow';
 
 export function getStaticPaths() {
   const platforms = discoverPlatforms();
@@ -26,9 +27,57 @@ const currentPlatform = platforms.find((p) => p.name === selectedId);
 const repoOrg = currentPlatform?.repo?.org;
 const repoName = currentPlatform?.repo?.name;
 const repoUrl = repoOrg && repoName ? `https://github.com/${repoOrg}/${repoName}` : undefined;
+
+// Screen-flow capture coverage (epic 027 — process improvement #10).
+// Emits a small card BEFORE the tab bar when `screen_flow.enabled: true`.
+let screenFlowCoverage: {
+  total: number;
+  pending: number;
+  captured: number;
+  failed: number;
+  percent: number;
+} | null = null;
+if (currentPlatform?.screen_flow?.enabled) {
+  try {
+    const flow = loadScreenFlow(selectedId);
+    if (flow) {
+      const total = flow.screens.length;
+      const captured = flow.screens.filter((s: any) => s.status === 'captured').length;
+      const pending = flow.screens.filter((s: any) => s.status === 'pending').length;
+      const failed = flow.screens.filter((s: any) => s.status === 'failed').length;
+      screenFlowCoverage = {
+        total,
+        captured,
+        pending,
+        failed,
+        percent: total > 0 ? Math.round((captured / total) * 100) : 0,
+      };
+    }
+  } catch {
+    // YAML missing or invalid — leave coverage null (card will not render)
+  }
+}
 ---
 
 <StarlightPage frontmatter={{ title: `Control Panel`, tableOfContents: false }}>
+
+  {screenFlowCoverage && (
+    <a class="cp-coverage-card" href={`/${selectedId}/screens/`} aria-label="Ver canvas de telas">
+      <div class="cp-coverage-title">
+        Screen Capture Coverage
+        <span class="cp-coverage-pct">{screenFlowCoverage.percent}%</span>
+      </div>
+      <div class="cp-coverage-bar" role="progressbar" aria-valuenow={screenFlowCoverage.percent} aria-valuemin="0" aria-valuemax="100">
+        <div class="cp-coverage-fill" style={`width: ${screenFlowCoverage.percent}%`}></div>
+      </div>
+      <div class="cp-coverage-counts">
+        <span class="cp-count cp-count-captured">✓ {screenFlowCoverage.captured} captured</span>
+        <span class="cp-count cp-count-pending">⏳ {screenFlowCoverage.pending} pending</span>
+        {screenFlowCoverage.failed > 0 && <span class="cp-count cp-count-failed">✗ {screenFlowCoverage.failed} failed</span>}
+        <span class="cp-count cp-count-total">/ {screenFlowCoverage.total} total</span>
+      </div>
+    </a>
+  )}
 
   {/* ── Tab Bar ── */}
   <div class="cp-tab-bar" role="tablist">
@@ -93,6 +142,48 @@ const repoUrl = repoOrg && repoName ? `https://github.com/${repoOrg}/${repoName}
 </script>
 
 <style>
+  /* ── Screen Capture Coverage card (epic 027 — process improvement #10) ── */
+  .cp-coverage-card {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.5rem;
+    background: var(--sl-color-bg-nav);
+    transition: border-color 120ms ease;
+  }
+  .cp-coverage-card:hover { border-color: var(--sl-color-accent); }
+  .cp-coverage-title {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+  }
+  .cp-coverage-pct { color: var(--sl-color-accent); font-variant-numeric: tabular-nums; }
+  .cp-coverage-bar {
+    height: 6px;
+    background: var(--sl-color-gray-5);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 0.5rem;
+  }
+  .cp-coverage-fill {
+    height: 100%;
+    background: var(--sl-color-accent);
+    transition: width 200ms ease;
+  }
+  .cp-coverage-counts {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.75rem;
+    color: var(--sl-color-gray-3);
+  }
+  .cp-count-captured { color: var(--sl-color-green); }
+  .cp-count-failed { color: var(--sl-color-red); }
+
   /* ── Tab Bar ── */
   .cp-tab-bar {
     display: flex;

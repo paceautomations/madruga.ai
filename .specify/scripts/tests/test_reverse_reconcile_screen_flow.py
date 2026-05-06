@@ -109,6 +109,23 @@ def test_resolve_screen_id_template_must_yield_valid_id():
     assert sid is None
 
 
+def test_resolve_screen_id_hyphen_slug_converted():
+    """Hyphenated filenames are slug-converted to underscores so `[\\w-]+` rules
+    can match Expo conventions (verify-otp.tsx, set-password.tsx) without each
+    platform needing an explicit alias mapping. Process improvement #3 from the
+    epic 027 retrospective.
+    """
+    import reverse_reconcile_aggregate as mod
+
+    rules = [{"pattern": r"app/\(auth\)/([\w-]+)\.tsx", "screen_id_template": "{1}"}]
+
+    assert mod.resolve_screen_id_from_rules("app/(auth)/welcome.tsx", rules) == "welcome"
+    assert mod.resolve_screen_id_from_rules("app/(auth)/verify-otp.tsx", rules) == "verify_otp"
+    assert mod.resolve_screen_id_from_rules("app/(auth)/set-password.tsx", rules) == "set_password"
+    # Casing is preserved — uppercase remains a charset violation (returns None)
+    assert mod.resolve_screen_id_from_rules("app/(auth)/Login.tsx", rules) is None
+
+
 # ── Aggregate-level integration ─────────────────────────────────────────────
 
 
@@ -117,10 +134,7 @@ def _make_triage(shas: list[str], files: list[str]) -> dict:
         "triage": {
             "doc_self_edits": [],
             "clusters": {
-                "code": [
-                    {"sha": sha, "message": f"feat: change {i}", "files": files}
-                    for i, sha in enumerate(shas)
-                ]
+                "code": [{"sha": sha, "message": f"feat: change {i}", "files": files} for i, sha in enumerate(shas)]
             },
         }
     }
@@ -132,7 +146,6 @@ def test_aggregate_reads_path_rules_and_emits_screen_flow_patches(monkeypatch, t
     import reverse_reconcile_aggregate as mod
 
     # Stub repo + binding
-
 
     repo = _init_repo(tmp_path, [("feat: edit login", {"app/(auth)/login.tsx": "x\n"})])
     monkeypatch.setattr(mod.ensure_repo_mod, "ensure_repo", lambda _p: repo)
@@ -163,8 +176,6 @@ def test_aggregate_skips_silently_when_screen_flow_disabled(monkeypatch, tmp_pat
     """FR-039 — `screen_flow.enabled: false` ⇒ no patches emitted, nothing logged at error level."""
     import reverse_reconcile_aggregate as mod
 
-
-
     repo = _init_repo(tmp_path, [("feat: edit login", {"app/(auth)/login.tsx": "x\n"})])
     monkeypatch.setattr(mod.ensure_repo_mod, "ensure_repo", lambda _p: repo)
     monkeypatch.setattr(mod.ensure_repo_mod, "load_repo_binding", lambda _p: {"base_branch": "develop"})
@@ -187,8 +198,6 @@ def test_aggregate_skips_when_no_screen_flow_block(monkeypatch, tmp_path):
     """No `screen_flow:` key at all in platform.yaml ⇒ same behaviour as enabled=false."""
     import reverse_reconcile_aggregate as mod
 
-
-
     repo = _init_repo(tmp_path, [("feat: edit auth", {"app/(auth)/welcome.tsx": "x\n"})])
     monkeypatch.setattr(mod.ensure_repo_mod, "ensure_repo", lambda _p: repo)
     monkeypatch.setattr(mod.ensure_repo_mod, "load_repo_binding", lambda _p: {"base_branch": "develop"})
@@ -205,8 +214,6 @@ def test_unmatched_file_follows_normal_flow(monkeypatch, tmp_path):
     """A file that doesn't match any path_rule does NOT emit a screen_flow patch
     AND continues to be aggregated as a normal code_item (FR-039 right-hand clause)."""
     import reverse_reconcile_aggregate as mod
-
-
 
     repo = _init_repo(tmp_path, [("feat: shared util", {"src/lib/utils.ts": "x\n"})])
     monkeypatch.setattr(mod.ensure_repo_mod, "ensure_repo", lambda _p: repo)
@@ -231,8 +238,6 @@ def test_unmatched_file_follows_normal_flow(monkeypatch, tmp_path):
 def test_aggregate_dedupes_repeated_screen_id_with_merged_sha_refs(monkeypatch, tmp_path):
     """Two commits both touching `app/(auth)/login.tsx` collapse to ONE patch with both SHAs."""
     import reverse_reconcile_aggregate as mod
-
-
 
     repo = _init_repo(
         tmp_path,
@@ -271,8 +276,6 @@ def test_aggregate_dedupes_repeated_screen_id_with_merged_sha_refs(monkeypatch, 
 def test_aggregate_emits_patch_per_distinct_screen(monkeypatch, tmp_path):
     """One commit touching two different screens → two distinct patches."""
     import reverse_reconcile_aggregate as mod
-
-
 
     repo = _init_repo(
         tmp_path,

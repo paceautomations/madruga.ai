@@ -116,13 +116,10 @@ def load_capture_config(platform_dir: Path) -> dict[str, Any]:
         )
     capture = sf.get("capture")
     if not capture:
-        raise ValueError(
-            f"Platform {platform_dir.name!r} has enabled=true but no capture block"
-        )
+        raise ValueError(f"Platform {platform_dir.name!r} has enabled=true but no capture block")
     if not capture.get("test_user_marker"):
         raise ValueError(
-            "capture.test_user_marker is required when enabled=true (FR-047) — "
-            f"platform={platform_dir.name!r}"
+            f"capture.test_user_marker is required when enabled=true (FR-047) — platform={platform_dir.name!r}"
         )
     return capture
 
@@ -180,8 +177,7 @@ def validate_env_vars(test_user_env_prefix: str, env: dict[str, str] | None = No
     ]
     if missing:
         raise EnvironmentError(
-            f"auth_setup_failed: missing env vars {missing}. "
-            f"Set them locally or configure GitHub Secrets."
+            f"auth_setup_failed: missing env vars {missing}. Set them locally or configure GitHub Secrets."
         )
 
 
@@ -389,11 +385,82 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     p.add_argument("--screen", help="Capture only this screen id (debug)")
     p.add_argument("--dry-run", action="store_true", help="Skip Playwright invocation")
     p.add_argument(
+        "--check",
+        action="store_true",
+        help="Print pre-flight checklist (config / YAML / env / pending count) and exit. "
+        "Reports each item as ok/missing without running the browser.",
+    )
+    p.add_argument(
+        "--since-pending",
+        action="store_true",
+        help="Capture only screens whose status is `pending` (drift workflow). "
+        "Equivalent to running `--screen X` for every pending screen, but in one call.",
+    )
+    p.add_argument(
         "--platforms-dir",
         default=str(REPO_ROOT / "platforms"),
         help="Override platforms root (tests).",
     )
     return p.parse_args(argv)
+
+
+def run_preflight_check(platform: str, platform_dir: Path, yaml_path: Path) -> int:
+    """`--check` mode: lists each pre-requisite and reports ok/missing.
+
+    Exit codes: 0 if every check passes, 1 if any is missing.
+    Each check emits an NDJSON event so machine consumers can parse the same
+    way as the runtime pipeline.
+    """
+    failures = 0
+
+    def report(name: str, ok: bool, detail: str = "") -> None:
+        nonlocal failures
+        if not ok:
+            failures += 1
+        emit_event(
+            "INFO" if ok else "ERROR",
+            f"check_{name}",
+            ok=ok,
+            detail=detail,
+        )
+
+    # 1. platform.yaml has screen_flow.capture
+    try:
+        capture_config = load_capture_config(platform_dir)
+        report("capture_config", True, "platform.yaml has screen_flow.capture")
+    except (KeyError, FileNotFoundError, ValueError) as exc:
+        report("capture_config", False, f"{exc}")
+        return 1  # nothing else can be checked without config
+
+    # 2. test user env vars present (contract: <PREFIX>_TEST_EMAIL / <PREFIX>_TEST_PASSWORD)
+    prefix = capture_config["auth"]["test_user_env_prefix"]
+    missing = [f"{prefix}_{k}" for k in ("TEST_EMAIL", "TEST_PASSWORD") if not os.environ.get(f"{prefix}_{k}")]
+    report("env_vars", not missing, f"missing: {missing}" if missing else f"prefix={prefix} ok")
+
+    # 3. screen-flow.yaml exists + parses
+    if yaml_path.exists():
+        try:
+            doc = load_screen_flow(yaml_path)
+            screens = doc.get("screens") or []
+            pending = [s for s in screens if s.get("status") == "pending"]
+            captured = [s for s in screens if s.get("status") == "captured"]
+            failed = [s for s in screens if s.get("status") == "failed"]
+            report(
+                "screen_flow_yaml",
+                True,
+                f"total={len(screens)} pending={len(pending)} captured={len(captured)} failed={len(failed)}",
+            )
+        except (OSError, ValueError) as exc:
+            report("screen_flow_yaml", False, f"parse error: {exc}")
+    else:
+        report("screen_flow_yaml", False, f"missing: {yaml_path}")
+
+    # 4. base_url reachability — best-effort, non-blocking. We log the URL
+    # rather than HTTP-pinging it to avoid taking a network dep here.
+    base_url = capture_config.get("base_url")
+    report("base_url_declared", bool(base_url), f"base_url={base_url}")
+
+    return 1 if failures else 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -402,6 +469,9 @@ def main(argv: list[str] | None = None) -> int:
     platform_dir = Path(args.platforms_dir) / args.platform
     yaml_path = platform_dir / "business" / "screen-flow.yaml"
 
+    if args.check:
+        return run_preflight_check(args.platform, platform_dir, yaml_path)
+
     emit_event(
         "INFO",
         "capture_run_init",
@@ -409,6 +479,7 @@ def main(argv: list[str] | None = None) -> int:
         platform=args.platform,
         only_screen=args.screen,
         dry_run=args.dry_run,
+        since_pending=args.since_pending,
     )
 
     try:
@@ -431,6 +502,23 @@ def main(argv: list[str] | None = None) -> int:
         emit_event("ERROR", "screen_flow_yaml_missing", correlation_id=run_id, path=str(yaml_path))
         return 2
 
+    only_screen = args.screen
+    if args.since_pending:
+        try:
+            doc = load_screen_flow(yaml_path)
+            pending_ids = [s["id"] for s in (doc.get("screens") or []) if s.get("status") == "pending"]
+        except (OSError, ValueError) as exc:
+            emit_event("ERROR", "yaml_load_failed", correlation_id=run_id, error=str(exc))
+            return 2
+        if not pending_ids:
+            emit_event("INFO", "no_pending_screens", correlation_id=run_id)
+            return 0
+        # Comma-list — the Playwright spec already filters on SCREEN_FLOW_ONLY
+        # and `_spawn_playwright_runner` accepts a single id; comma-separated
+        # is interpreted by the spec as multi-select.
+        only_screen = ",".join(pending_ids)
+        emit_event("INFO", "since_pending_resolved", correlation_id=run_id, count=len(pending_ids), ids=pending_ids)
+
     if args.dry_run:
         emit_event("INFO", "dry_run_complete", correlation_id=run_id)
         return 0
@@ -438,7 +526,7 @@ def main(argv: list[str] | None = None) -> int:
     rc = _spawn_playwright_runner(
         yaml_path,
         capture_config,
-        only_screen=args.screen,
+        only_screen=only_screen,
     )
     emit_event(
         "INFO" if rc == 0 else "ERROR",

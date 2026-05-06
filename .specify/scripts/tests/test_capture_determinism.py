@@ -117,9 +117,7 @@ def test_two_runs_match_at_least_80_percent_with_tail_of_noise(tmp_path: Path):
 
     matches = sum(1 for sid in screens if a[sid].image_md5 == b[sid].image_md5)
     determinism_ratio = matches / len(screens)
-    assert determinism_ratio >= 0.8, (
-        f"determinism dropped below 80%: {matches}/{len(screens)}"
-    )
+    assert determinism_ratio >= 0.8, f"determinism dropped below 80%: {matches}/{len(screens)}"
 
 
 def test_three_noisy_screens_out_of_ten_breaks_threshold(tmp_path: Path):
@@ -174,10 +172,8 @@ def test_yaml_is_committed_with_mixed_captured_and_failed_status(tmp_path: Path)
         "schema_version": 1,
         "meta": {"device": "mobile", "capture_profile": "iphone-15"},
         "screens": [
-            {"id": "ok", "title": "OK", "status": "pending",
-             "body": [{"type": "heading", "text": "ok"}]},
-            {"id": "broken", "title": "Broken", "status": "pending",
-             "body": [{"type": "heading", "text": "broken"}]},
+            {"id": "ok", "title": "OK", "status": "pending", "body": [{"type": "heading", "text": "ok"}]},
+            {"id": "broken", "title": "Broken", "status": "pending", "body": [{"type": "heading", "text": "broken"}]},
         ],
         "flows": [],
     }
@@ -193,7 +189,9 @@ def test_yaml_is_committed_with_mixed_captured_and_failed_status(tmp_path: Path)
         return {"success": False, "reason": "timeout", "error": "Timeout 30000ms exceeded"}
 
     fail_result = sc.capture_with_retries(
-        "broken", fail_runner, sleep=lambda _s: None,
+        "broken",
+        fail_runner,
+        sleep=lambda _s: None,
     )
 
     sc.apply_capture_result(doc, ok_result, app_version="abc1234")
@@ -213,10 +211,7 @@ def test_load_capture_config_rejects_opted_out_platforms(tmp_path: Path):
     p = tmp_path / "platforms" / "demo"
     p.mkdir(parents=True)
     (p / "platform.yaml").write_text(
-        "name: demo\n"
-        "screen_flow:\n"
-        "  enabled: false\n"
-        "  skip_reason: 'not yet'\n",
+        "name: demo\nscreen_flow:\n  enabled: false\n  skip_reason: 'not yet'\n",
         encoding="utf-8",
     )
     with pytest.raises(KeyError):
@@ -228,12 +223,87 @@ def test_load_capture_config_rejects_missing_test_user_marker(tmp_path: Path):
     p = tmp_path / "platforms" / "demo"
     p.mkdir(parents=True)
     (p / "platform.yaml").write_text(
-        "name: demo\n"
-        "screen_flow:\n"
-        "  enabled: true\n"
-        "  capture:\n"
-        "    base_url: https://example.com\n",
+        "name: demo\nscreen_flow:\n  enabled: true\n  capture:\n    base_url: https://example.com\n",
         encoding="utf-8",
     )
     with pytest.raises(ValueError, match="test_user_marker"):
         sc.load_capture_config(p)
+
+
+# ── Process improvements #7 (--check) and #8 (--since-pending) ─────────────
+
+
+def _make_platform_dir(tmp_path: Path, screens_status: list[str]) -> Path:
+    """Build a minimal platform/<name>/ tree for capture CLI tests."""
+    platform_dir = tmp_path / "platforms" / "demo"
+    (platform_dir / "business").mkdir(parents=True)
+    (platform_dir / "platform.yaml").write_text(
+        "name: demo\n"
+        "screen_flow:\n"
+        "  enabled: true\n"
+        "  capture:\n"
+        "    base_url: https://example.com\n"
+        "    auth: { test_user_env_prefix: DEMO }\n"
+        "    test_user_marker: 'demo+playwright@example.com'\n",
+        encoding="utf-8",
+    )
+    screens_block = "\n".join(
+        f"  - id: s{i}\n    title: S{i}\n    status: {status}\n    body: [{{ type: heading, id: t, text: T }}]"
+        for i, status in enumerate(screens_status)
+    )
+    (platform_dir / "business" / "screen-flow.yaml").write_text(
+        "schema_version: 1\n"
+        "meta: { device: mobile, capture_profile: iphone-15 }\n"
+        f"screens:\n{screens_block}\n"
+        "flows: []\n",
+        encoding="utf-8",
+    )
+    return platform_dir
+
+
+def test_check_mode_passes_with_all_prerequisites(tmp_path: Path, monkeypatch):
+    """`--check` exits 0 when env vars + config + YAML + base_url are all present."""
+    _make_platform_dir(tmp_path, ["pending", "pending"])
+    monkeypatch.setenv("DEMO_TEST_EMAIL", "demo@example.com")
+    monkeypatch.setenv("DEMO_TEST_PASSWORD", "demo")
+    code = sc.main(["demo", "--check", "--platforms-dir", str(tmp_path / "platforms")])
+    assert code == 0
+
+
+def test_check_mode_fails_when_env_vars_missing(tmp_path: Path, monkeypatch):
+    """`--check` exits 1 when test user env vars are absent."""
+    _make_platform_dir(tmp_path, ["pending"])
+    monkeypatch.delenv("DEMO_TEST_EMAIL", raising=False)
+    monkeypatch.delenv("DEMO_TEST_PASSWORD", raising=False)
+    code = sc.main(["demo", "--check", "--platforms-dir", str(tmp_path / "platforms")])
+    assert code == 1
+
+
+def test_since_pending_resolves_only_pending_screens(tmp_path: Path, monkeypatch, capsys):
+    """`--since-pending` enumerates only `status: pending` screens and forwards
+    them as a comma-list to the Playwright runner. Mixed-status YAML must
+    select the pending subset, not all screens.
+    """
+    _make_platform_dir(tmp_path, ["captured", "pending", "pending", "failed", "captured"])
+    monkeypatch.setenv("DEMO_TEST_EMAIL", "demo@example.com")
+    monkeypatch.setenv("DEMO_TEST_PASSWORD", "demo")
+    monkeypatch.setattr(sc, "_spawn_playwright_runner", lambda *a, **kw: 0)
+
+    code = sc.main(["demo", "--since-pending", "--dry-run", "--platforms-dir", str(tmp_path / "platforms")])
+    assert code == 0
+    log = capsys.readouterr().out
+    assert "since_pending_resolved" in log
+    assert '"count": 2' in log
+    assert "s1" in log and "s2" in log
+
+
+def test_since_pending_no_op_when_all_captured(tmp_path: Path, monkeypatch, capsys):
+    """`--since-pending` exits 0 with `no_pending_screens` when all are captured."""
+    _make_platform_dir(tmp_path, ["captured", "captured"])
+    monkeypatch.setenv("DEMO_TEST_EMAIL", "demo@example.com")
+    monkeypatch.setenv("DEMO_TEST_PASSWORD", "demo")
+
+    code = sc.main(["demo", "--since-pending", "--platforms-dir", str(tmp_path / "platforms")])
+    assert code == 0
+    log = capsys.readouterr().out
+    assert "no_pending_screens" in log

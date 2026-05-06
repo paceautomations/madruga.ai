@@ -48,8 +48,16 @@ ID_REGEX = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 # Closed vocabulary mirrored from screen-flow.schema.json — kept here for fast checks
 # without re-walking the schema. Source of truth is the JSON file.
 BODY_TYPES = {
-    "heading", "text", "input", "button", "link", "list",
-    "card", "image", "divider", "badge",
+    "heading",
+    "text",
+    "input",
+    "button",
+    "link",
+    "list",
+    "card",
+    "image",
+    "divider",
+    "badge",
 }
 EDGE_STYLES = {"success", "error", "neutral", "modal"}
 CAPTURE_STATES = {"pending", "captured", "failed"}
@@ -186,8 +194,7 @@ def _check_unique_body_ids(data: dict) -> list[dict]:
                     _finding(
                         "BLOCKER",
                         f"screens[{i}].body[{j}].id",
-                        f"Duplicate body.id {bid!r} within screen "
-                        f"{screen.get('id')!r} (first at body[{seen[bid]}]).",
+                        f"Duplicate body.id {bid!r} within screen {screen.get('id')!r} (first at body[{seen[bid]}]).",
                     )
                 )
             else:
@@ -214,8 +221,7 @@ def _check_flow_refs(data: dict) -> list[dict]:
                 _finding(
                     "BLOCKER",
                     f"flows[{k}].from",
-                    f"flow.from {src_id!r} does not match any declared screen.id. "
-                    f"Available: {declared}",
+                    f"flow.from {src_id!r} does not match any declared screen.id. Available: {declared}",
                 )
             )
         if dst_id and dst_id not in screen_index:
@@ -223,8 +229,7 @@ def _check_flow_refs(data: dict) -> list[dict]:
                 _finding(
                     "BLOCKER",
                     f"flows[{k}].to",
-                    f"flow.to {dst_id!r} does not match any declared screen.id. "
-                    f"Available: {declared}",
+                    f"flow.to {dst_id!r} does not match any declared screen.id. Available: {declared}",
                 )
             )
         # flow.on must reference a body.id of the source screen
@@ -320,9 +325,7 @@ def _check_status_consistency(data: dict) -> list[dict]:
 
 def _jsonschema_findings(data: Any, schema: dict) -> list[dict]:
     if Draft202012Validator is None:
-        return [
-            _finding("BLOCKER", "$", "jsonschema package not installed — cannot validate schema")
-        ]
+        return [_finding("BLOCKER", "$", "jsonschema package not installed — cannot validate schema")]
     validator = Draft202012Validator(schema)
     findings: list[dict] = []
     for err in sorted(validator.iter_errors(data), key=lambda e: list(e.absolute_path)):
@@ -337,6 +340,37 @@ def _jsonschema_findings(data: Any, schema: dict) -> list[dict]:
 # ───────────────────────────────────────────────────────────────────────────────
 
 
+def _check_yaml11_boolean_collision(data: Any) -> list[dict]:
+    """YAML 1.1 treats `on/off/yes/no` as booleans. Unquoted `on: cta_x` in flows
+    parses to ``{True: "cta_x"}`` which then trips JSON Schema with the cryptic
+    message ``"Additional properties not allowed (True was unexpected)"``.
+
+    Detect ``True`` (or other boolean) keys at the flow level and emit an
+    actionable hint pointing the author at the quoting fix.
+    """
+    findings: list[dict] = []
+    if not isinstance(data, dict):
+        return findings
+    flows = data.get("flows")
+    if not isinstance(flows, list):
+        return findings
+    for i, flow in enumerate(flows):
+        if not isinstance(flow, dict):
+            continue
+        if True in flow or False in flow:
+            findings.append(
+                _finding(
+                    "BLOCKER",
+                    f"flows.{i}",
+                    "YAML 1.1 boolean key collision: `on:` parsed as Python True. "
+                    'Quote the key: `"on": cta_xxx` (PyYAML aliases on/off/yes/no '
+                    "to booleans). See screen-flow.yaml flows examples in "
+                    ".claude/commands/madruga/business-screen-flow.md.",
+                )
+            )
+    return findings
+
+
 def validate_screen_flow_dict(data: Any) -> list[dict]:
     """Validate a parsed screen-flow YAML (already loaded as dict).
 
@@ -347,6 +381,8 @@ def validate_screen_flow_dict(data: Any) -> list[dict]:
         return [_finding("BLOCKER", "$", f"Top-level YAML must be a mapping, got {type(data).__name__}")]
 
     findings: list[dict] = []
+    # Run BEFORE jsonschema so the YAML 1.1 hint shows above generic schema errors.
+    findings.extend(_check_yaml11_boolean_collision(data))
     findings.extend(_check_schema_version(data))
     # Run JSON Schema validation regardless — even with bad schema_version it
     # gives more information about other structural issues.
@@ -429,6 +465,57 @@ def validate_file(path: Path, *, mode: str = "screen-flow") -> tuple[int, list[d
     return (1 if blockers else 0), findings
 
 
+_TESTID_RE = re.compile(r"""testID=["']([^"']+)["']""")
+
+
+def scan_source_testids(source_root: Path) -> set[str]:
+    """Walk the bound repo's source files and collect every `testID="..."` string.
+
+    Used by ``--check-testids`` to flag YAML body components whose ``testid``
+    references don't exist in the actual app — silent drift between the spec
+    and reality (capture pipeline FR-028 requires the testID to exist).
+    """
+    found: set[str] = set()
+    if not source_root.exists():
+        return found
+    for ext in ("*.tsx", "*.ts", "*.jsx", "*.js"):
+        for path in source_root.rglob(ext):
+            try:
+                text = path.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            found.update(_TESTID_RE.findall(text))
+    return found
+
+
+def check_testids_against_source(data: dict, source_root: Path) -> list[dict]:
+    """Walk YAML body components and warn when their `testid` is not declared
+    in the source. Best-effort — missing source dir returns []."""
+    actual = scan_source_testids(source_root)
+    if not actual:
+        return []
+    findings: list[dict] = []
+    screens = data.get("screens") or []
+    for s_idx, screen in enumerate(screens):
+        if not isinstance(screen, dict):
+            continue
+        for b_idx, body in enumerate(screen.get("body") or []):
+            if not isinstance(body, dict):
+                continue
+            tid = body.get("testid")
+            if tid and tid not in actual:
+                findings.append(
+                    _finding(
+                        "WARNING",
+                        f"screens.{s_idx}.body.{b_idx}.testid",
+                        f"testid {tid!r} not found in source — capture pipeline (FR-028) "
+                        f'will fail to bind hotspot. Either add `testID="{tid}"` to the '
+                        f"component or remove from YAML.",
+                    )
+                )
+    return findings
+
+
 def _dedupe(findings: list[dict]) -> list[dict]:
     seen: set[tuple] = set()
     out: list[dict] = []
@@ -467,11 +554,24 @@ def main(argv: list[str] | None = None) -> int:
         help="Treat the file as platform.yaml; validate the screen_flow: block",
     )
     parser.add_argument("--json", action="store_true", help="Emit JSON output")
+    parser.add_argument(
+        "--check-testids",
+        metavar="SOURCE_ROOT",
+        help="Path to bound repo source (e.g. ../resenhai-expo). When set, warn "
+        "for every body.testid not found in the source's testID= attributes.",
+    )
     args = parser.parse_args(argv)
 
     path = Path(args.yaml_path)
     mode = "platform-block" if args.platform_block else "screen-flow"
     code, findings = validate_file(path, mode=mode)
+    if args.check_testids and mode == "screen-flow":
+        try:
+            data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+            extra = check_testids_against_source(data, Path(args.check_testids))
+            findings.extend(extra)
+        except (OSError, yaml.YAMLError):
+            pass
     if args.json:
         print(json.dumps({"ok": code == 0, "findings": findings}, indent=2))
     else:

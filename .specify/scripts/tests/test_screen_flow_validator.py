@@ -46,9 +46,7 @@ def _valid_doc() -> dict:
                 "body": [{"type": "heading", "text": "Home"}],
             },
         ],
-        "flows": [
-            {"from": "welcome", "to": "home", "on": "go", "style": "success"}
-        ],
+        "flows": [{"from": "welcome", "to": "home", "on": "go", "style": "success"}],
     }
 
 
@@ -65,10 +63,7 @@ def _normalize_path(p: str) -> str:
 
 def _has_blocker_at(findings: list[dict], path_substring: str) -> bool:
     needle = _normalize_path(path_substring)
-    return any(
-        f["severity"] == "BLOCKER" and needle in _normalize_path(f["path"])
-        for f in findings
-    )
+    return any(f["severity"] == "BLOCKER" and needle in _normalize_path(f["path"]) for f in findings)
 
 
 def _no_blockers(findings: list[dict]) -> bool:
@@ -129,10 +124,7 @@ def test_body_type_outside_vocabulary_rejected():
     doc = _valid_doc()
     doc["screens"][0]["body"][0]["type"] = "video"  # not in 10
     findings = sfv.validate_screen_flow_dict(doc)
-    assert any(
-        f["severity"] == "BLOCKER" and "screens.0.body.0" in f["path"]
-        for f in findings
-    )
+    assert any(f["severity"] == "BLOCKER" and "screens.0.body.0" in f["path"] for f in findings)
 
 
 def test_all_ten_body_types_accepted():
@@ -169,15 +161,15 @@ def test_capture_state_outside_vocabulary_rejected():
 @pytest.mark.parametrize(
     "bad_id",
     [
-        "Login",            # uppercase
-        "welcome-screen",   # hyphen
-        "tela_início",      # unicode
-        "1home",            # leading digit
-        "WELCOME",          # all caps
-        "home v2",          # space
-        "home/v2",          # slash
-        "x" * 65,           # too long
-        "",                 # empty
+        "Login",  # uppercase
+        "welcome-screen",  # hyphen
+        "tela_início",  # unicode
+        "1home",  # leading digit
+        "WELCOME",  # all caps
+        "home v2",  # space
+        "home/v2",  # slash
+        "x" * 65,  # too long
+        "",  # empty
     ],
 )
 def test_screen_id_charset_rejects_invalid(bad_id):
@@ -197,9 +189,9 @@ def test_screen_id_charset_rejects_invalid(bad_id):
         "home",
         "auth_login",
         "screen_a",
-        "a",                # single char
+        "a",  # single char
         "x_1_2_3",
-        "x" * 64,           # max length
+        "x" * 64,  # max length
     ],
 )
 def test_screen_id_charset_accepts_valid(good_id):
@@ -215,10 +207,7 @@ def test_body_id_invalid_charset_rejected():
     doc = _valid_doc()
     doc["screens"][0]["body"][0]["id"] = "Bad-Id"
     findings = sfv.validate_screen_flow_dict(doc)
-    assert any(
-        f["severity"] == "BLOCKER" and "body" in f["path"]
-        for f in findings
-    )
+    assert any(f["severity"] == "BLOCKER" and "body" in f["path"] for f in findings)
 
 
 def test_flow_on_invalid_charset_rejected():
@@ -263,20 +252,14 @@ def test_duplicate_screen_id_rejected():
     doc = _valid_doc()
     doc["screens"].append(deepcopy(doc["screens"][0]))  # duplicate "welcome"
     findings = sfv.validate_screen_flow_dict(doc)
-    assert any(
-        f["severity"] == "BLOCKER" and "Duplicate screen id" in f["message"]
-        for f in findings
-    )
+    assert any(f["severity"] == "BLOCKER" and "Duplicate screen id" in f["message"] for f in findings)
 
 
 def test_duplicate_body_id_rejected():
     doc = _valid_doc()
     doc["screens"][0]["body"].append({"type": "text", "id": "title", "text": "dup"})
     findings = sfv.validate_screen_flow_dict(doc)
-    assert any(
-        f["severity"] == "BLOCKER" and "Duplicate body.id" in f["message"]
-        for f in findings
-    )
+    assert any(f["severity"] == "BLOCKER" and "Duplicate body.id" in f["message"] for f in findings)
 
 
 # ───────────────────────────────────────────────────────────────────────────────
@@ -287,8 +270,7 @@ def test_duplicate_body_id_rejected():
 def test_more_than_100_screens_hard_rejected():
     doc = _valid_doc()
     doc["screens"] = [
-        {"id": f"s{i:03d}", "title": f"S{i}", "status": "pending", "body": [{"type": "heading"}]}
-        for i in range(101)
+        {"id": f"s{i:03d}", "title": f"S{i}", "status": "pending", "body": [{"type": "heading"}]} for i in range(101)
     ]
     doc["flows"] = []
     findings = sfv.validate_screen_flow_dict(doc)
@@ -298,8 +280,7 @@ def test_more_than_100_screens_hard_rejected():
 def test_warns_above_50_screens_but_passes():
     doc = _valid_doc()
     doc["screens"] = [
-        {"id": f"s{i:03d}", "title": f"S{i}", "status": "pending", "body": [{"type": "heading"}]}
-        for i in range(60)
+        {"id": f"s{i:03d}", "title": f"S{i}", "status": "pending", "body": [{"type": "heading"}]} for i in range(60)
     ]
     doc["flows"] = []
     findings = sfv.validate_screen_flow_dict(doc)
@@ -363,9 +344,7 @@ def test_screen_capture_profile_mismatch_rejected():
     doc["screens"][0]["meta"] = {"capture_profile": "desktop"}
     findings = sfv.validate_screen_flow_dict(doc)
     assert any(
-        f["severity"] == "BLOCKER"
-        and _normalize_path(f["path"]) == "screens.0.meta.capture_profile"
-        for f in findings
+        f["severity"] == "BLOCKER" and _normalize_path(f["path"]) == "screens.0.meta.capture_profile" for f in findings
     )
 
 
@@ -397,16 +376,12 @@ def test_yaml_parse_error_returns_blocker():
 
 
 def test_path_rules_invalid_regex_rejected():
-    findings = sfv.validate_path_rules(
-        [{"pattern": "[unclosed", "screen_id_template": "x"}]
-    )
+    findings = sfv.validate_path_rules([{"pattern": "[unclosed", "screen_id_template": "x"}])
     assert any(f["severity"] == "BLOCKER" and "path_rules[0]" in f["path"] for f in findings)
 
 
 def test_path_rules_valid_regex_passes():
-    findings = sfv.validate_path_rules(
-        [{"pattern": r"app/\(auth\)/(\w+)\.tsx", "screen_id_template": "{1}"}]
-    )
+    findings = sfv.validate_path_rules([{"pattern": r"app/\(auth\)/(\w+)\.tsx", "screen_id_template": "{1}"}])
     assert not findings
 
 
@@ -535,3 +510,91 @@ def test_main_platform_block_mode(tmp_path, capsys):
     )
     code = sfv.main([str(p), "--platform-block", "--json"])
     assert code == 0
+
+
+# ── Process improvement #1 — YAML 1.1 boolean collision detection ──────────
+
+
+def test_yaml11_boolean_collision_detected():
+    """Unquoted `on:` parses as Python `True` in YAML 1.1; validator emits an
+    actionable hint pointing to the quoting fix (process improvement #1).
+    """
+    text = (
+        "schema_version: 1\n"
+        "meta: { device: mobile, capture_profile: iphone-15 }\n"
+        "screens:\n"
+        "  - id: a\n    title: A\n    status: pending\n"
+        "    body: [{ type: button, id: x, text: X }]\n"
+        "  - id: b\n    title: B\n    status: pending\n"
+        "    body: [{ type: button, id: y, text: Y }]\n"
+        "flows:\n"
+        "  - { from: a, to: b, on: x, style: neutral }\n"
+    )
+    findings = sfv.validate_yaml_string(text)
+    boolean_collision = [f for f in findings if "boolean" in f["message"].lower() or "True" in f["message"]]
+    assert boolean_collision, "expected YAML 1.1 boolean collision finding"
+    assert "flows.0" in boolean_collision[0]["path"]
+    assert '"on":' in boolean_collision[0]["message"]
+
+
+def test_yaml11_boolean_quoted_passes():
+    """When `"on":` is quoted, the validator does not emit the boolean collision finding."""
+    text = (
+        "schema_version: 1\n"
+        "meta: { device: mobile, capture_profile: iphone-15 }\n"
+        "screens:\n"
+        "  - id: a\n    title: A\n    status: pending\n"
+        "    body: [{ type: button, id: x, text: X }]\n"
+        "  - id: b\n    title: B\n    status: pending\n"
+        "    body: [{ type: button, id: y, text: Y }]\n"
+        "flows:\n"
+        '  - { from: a, to: b, "on": x, style: neutral }\n'
+    )
+    findings = sfv.validate_yaml_string(text)
+    boolean_collision = [f for f in findings if "boolean" in f["message"].lower()]
+    assert not boolean_collision
+
+
+# ── Process improvement #2 — testID source-of-truth validation ─────────────
+
+
+def test_check_testids_against_source_warns_on_missing(tmp_path):
+    """Body components referencing testIDs that do not exist in the bound repo
+    source emit a WARNING (capture pipeline FR-028).
+    """
+    source_root = tmp_path / "src"
+    source_root.mkdir()
+    (source_root / "Button.tsx").write_text('<Pressable testID="real-button" />')
+
+    data = {
+        "screens": [
+            {
+                "id": "a",
+                "body": [
+                    {"type": "button", "id": "x", "testid": "real-button"},
+                    {"type": "button", "id": "y", "testid": "fictional-button"},
+                ],
+            },
+        ],
+    }
+    findings = sfv.check_testids_against_source(data, source_root)
+    assert len(findings) == 1
+    assert findings[0]["severity"] == "WARNING"
+    assert "fictional-button" in findings[0]["message"]
+    assert findings[0]["path"] == "screens.0.body.1.testid"
+
+
+def test_check_testids_returns_empty_when_source_missing(tmp_path):
+    """Best-effort: missing source dir returns no findings (does not block)."""
+    data = {"screens": [{"id": "a", "body": [{"type": "button", "testid": "x"}]}]}
+    findings = sfv.check_testids_against_source(data, tmp_path / "does_not_exist")
+    assert findings == []
+
+
+def test_scan_source_testids_collects_unique(tmp_path):
+    """scan_source_testids deduplicates and walks .tsx/.ts/.jsx/.js files."""
+    (tmp_path / "a.tsx").write_text('testID="alpha" something testID="beta"')
+    (tmp_path / "b.ts").write_text('testID="gamma"')
+    (tmp_path / "c.txt").write_text('testID="ignored"')
+    found = sfv.scan_source_testids(tmp_path)
+    assert found == {"alpha", "beta", "gamma"}

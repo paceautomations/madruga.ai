@@ -136,9 +136,13 @@ screens:
       - { type: list, id: feed, text: "Feed principal" }
 
 flows:
-  - { from: welcome, to: login, on: cta_login, style: neutral, label: "Iniciar login" }
-  - { from: login, to: home, on: cta_submit, style: success, label: "Login OK" }
-  - { from: login, to: login, on: cta_submit, style: error, label: "Credenciais inválidas" }
+  # IMPORTANT: quote `"on":` because YAML 1.1 treats unquoted `on` as a boolean
+  # (alias for `true`). PyYAML is YAML 1.1 — without quotes, `on: cta_login`
+  # parses as `{True: "cta_login"}` and the validator rejects with cryptic
+  # "Additional properties not allowed (True was unexpected)".
+  - { from: welcome, to: login, "on": cta_login, style: neutral, label: "Iniciar login" }
+  - { from: login, to: home, "on": cta_submit, style: success, label: "Login OK" }
+  - { from: login, to: login, "on": cta_submit, style: error, label: "Credenciais inválidas" }
 ```
 
 **Generation rules** (enforce ALL):
